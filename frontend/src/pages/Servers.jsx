@@ -608,7 +608,8 @@ const PairAgentForm = ({ groups, onClose, onClaimed }) => {
         try {
             const res = await api.lookupPairCode(formattedCode);
             setLookupResult(res);
-            if (!name && res.suggested_name) setName(res.suggested_name);
+            const suggestedName = res.system_info?.hostname;
+            if (!name && suggestedName) setName(suggestedName);
         } catch (err) {
             setLookupError(err.message || 'Pair code not found');
         } finally {
@@ -649,6 +650,12 @@ const PairAgentForm = ({ groups, onClose, onClaimed }) => {
     return (
         <form className="server-setup-form" onSubmit={handleClaim}>
             <div className="server-setup-form__body">
+                <div className="pair-instructions">
+                    <p>
+                        On the target machine run <code>serverkit-agent pair</code>. It prints a&nbsp;6-character code — enter it below. Then supply the passphrase you chose when starting pairing.
+                    </p>
+                </div>
+
                 <div className="form-group">
                     <label>Pair code</label>
                     <input
@@ -667,7 +674,7 @@ const PairAgentForm = ({ groups, onClose, onClaimed }) => {
                         style={{ fontFamily: 'monospace', fontSize: '1.25rem', letterSpacing: '0.15em', textAlign: 'center' }}
                         required
                     />
-                    <span className="form-hint">Run <code>serverkit-agent pair</code> on the target machine and read the code from its output (or system tray).</span>
+                    <span className="form-hint">The code is shown in the terminal output or system tray.</span>
                     {lookupError && <div className="error-message" style={{ marginTop: '0.5rem' }}>{lookupError}</div>}
                 </div>
 
@@ -676,7 +683,7 @@ const PairAgentForm = ({ groups, onClose, onClaimed }) => {
                         <div>
                             <strong>Agent found</strong>
                             <p className="success-subtitle">
-                                Hostname: <code>{lookupResult.hostname || 'unknown'}</code><br />
+                                Hostname: <code>{lookupResult.system_info?.hostname || 'unknown'}</code><br />
                                 Fingerprint: <code style={{ fontFamily: 'monospace' }}>{lookupResult.pubkey_fpr}</code>
                             </p>
                             <p className="text-muted" style={{ marginTop: '0.25rem', fontSize: '0.85em' }}>
@@ -705,8 +712,9 @@ const PairAgentForm = ({ groups, onClose, onClaimed }) => {
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="prod-web-01 (optional)"
+                            placeholder={lookupResult?.system_info?.hostname || 'Auto-detected from agent (optional)'}
                         />
+                        <span className="form-hint">Leave blank to use the agent's hostname.</span>
                     </div>
                     <div className="form-group">
                         <label>Group</label>
@@ -790,26 +798,30 @@ Install-ServerKitAgent -Server "${window.location.origin}" -Token "${registratio
             <div className="modal server-setup-modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <div>
-                        <span className="servers-eyebrow">{step === 1 ? 'New agent' : 'Registration ready'}</span>
                         <h2>{step === 1 ? 'Add Server' : (mode === 'pair' ? 'Pair Agent' : 'Install Agent')}</h2>
-                        <p>{step === 1 ? 'Pair an already-running agent with a short code, or generate an install script for a new machine.' : (mode === 'pair' ? 'Enter the 6-char code shown on the agent and your passphrase.' : 'Run one command on the target machine to bring it online.')}</p>
+                        <p>
+                            {step === 2 && mode !== 'pair'
+                                ? 'Run one command on the target machine to bring it online.'
+                                : step === 2
+                                ? 'Enter the 6-char code shown on the agent and your passphrase.'
+                                : 'Connect an existing agent or set up a brand-new machine.'}
+                        </p>
                     </div>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
                 {step === 1 && (
-                    <div className="install-tabs" style={{ padding: '0 1.5rem', marginTop: '0.5rem' }}>
+                    <div className="mode-switcher">
                         <button
                             type="button"
-                            className={`btn ${mode === 'pair' ? 'btn-primary' : 'btn-secondary'}`}
+                            className={`mode-switcher__tab${mode === 'pair' ? ' is-active' : ''}`}
                             onClick={() => setMode('pair')}
-                            style={{ marginRight: '0.5rem' }}
                         >
                             Pair existing agent
                         </button>
                         <button
                             type="button"
-                            className={`btn ${mode === 'install' ? 'btn-primary' : 'btn-secondary'}`}
+                            className={`mode-switcher__tab${mode === 'install' ? ' is-active' : ''}`}
                             onClick={() => setMode('install')}
                         >
                             Install new agent

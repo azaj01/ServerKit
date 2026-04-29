@@ -1,99 +1,82 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AlertTriangle, Info, AlertCircle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
-const iconMap = {
-    danger: AlertTriangle,
-    warning: AlertCircle,
-    info: Info
-};
+const iconMap = { danger: AlertTriangle, warning: AlertCircle, info: Info };
+const iconColor = { danger: 'text-destructive', warning: 'text-yellow-400', info: 'text-blue-400' };
 
 export function ConfirmDialog({
-    isOpen,
-    title,
-    message,
-    details,
-    confirmText = 'Confirm',
-    cancelText = 'Cancel',
-    variant = 'danger',
-    requireConfirmation,
-    confirmationPlaceholder,
-    onConfirm,
-    onCancel
+  isOpen,
+  title,
+  message,
+  details,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  variant = 'danger',
+  requireConfirmation,
+  confirmationPlaceholder,
+  onConfirm,
+  onCancel,
 }) {
-    const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState('');
 
-    // Reset input when dialog opens/closes
-    useEffect(() => {
-        if (isOpen) {
-            setInputValue('');
-        }
-    }, [isOpen]);
+  useEffect(() => { if (isOpen) setInputValue(''); }, [isOpen]);
 
-    if (!isOpen) return null;
+  const Icon = iconMap[variant] || AlertTriangle;
+  const isConfirmDisabled = requireConfirmation && inputValue !== requireConfirmation;
 
-    const Icon = iconMap[variant] || AlertTriangle;
-    const isConfirmDisabled = requireConfirmation && inputValue !== requireConfirmation;
-
-    function handleConfirm() {
-        if (!isConfirmDisabled) {
-            onConfirm();
-        }
-    }
-
-    function handleKeyDown(e) {
-        if (e.key === 'Enter' && !isConfirmDisabled) {
-            handleConfirm();
-        }
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onCancel}>
-            <div className="modal confirm-dialog" onClick={e => e.stopPropagation()}>
-                <div className="confirm-dialog-content">
-                    <div className={`confirm-dialog-icon confirm-dialog-icon-${variant}`}>
-                        <Icon size={32} />
-                    </div>
-                    <h2 className="confirm-dialog-title">{title}</h2>
-                    <p className="confirm-dialog-message">{message}</p>
-                    {details && (
-                        <div className="confirm-dialog-details">
-                            {details}
-                        </div>
-                    )}
-                    {requireConfirmation && (
-                        <div className="confirm-dialog-input">
-                            <label>
-                                Type <strong>{requireConfirmation}</strong> to confirm:
-                            </label>
-                            <input
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder={confirmationPlaceholder || requireConfirmation}
-                                autoFocus
-                            />
-                        </div>
-                    )}
-                </div>
-                <div className="confirm-dialog-actions">
-                    <button
-                        className="btn btn-secondary"
-                        onClick={onCancel}
-                    >
-                        {cancelText}
-                    </button>
-                    <button
-                        className={`btn btn-${variant === 'danger' ? 'danger' : 'primary'}`}
-                        onClick={handleConfirm}
-                        disabled={isConfirmDisabled}
-                    >
-                        {confirmText}
-                    </button>
-                </div>
+  return (
+    <AlertDialog open={isOpen} onOpenChange={(v) => !v && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className={cn('mb-1', iconColor[variant] || 'text-destructive')}>
+              <Icon size={32} />
             </div>
-        </div>
-    );
+            <AlertDialogTitle>{title}</AlertDialogTitle>
+            {message && <AlertDialogDescription>{message}</AlertDialogDescription>}
+            {details && <p className="text-sm text-muted-foreground">{details}</p>}
+            {requireConfirmation && (
+              <div className="w-full text-left mt-2 space-y-1.5">
+                <Label className="text-muted-foreground">
+                  Type <strong className="text-foreground">{requireConfirmation}</strong> to confirm:
+                </Label>
+                <Input
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !isConfirmDisabled && onConfirm()}
+                  placeholder={confirmationPlaceholder || requireConfirmation}
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>{cancelText}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            disabled={isConfirmDisabled}
+            className={cn(variant !== 'danger' && 'bg-primary hover:bg-primary/90')}
+          >
+            {confirmText}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 export default ConfirmDialog;

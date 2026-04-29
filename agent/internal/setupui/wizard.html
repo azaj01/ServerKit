@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ServerKit Agent Setup</title>
+<style>
+  /* Windows 11 Fluent-inspired design system */
+  :root {
+    --accent: #0067c0;
+    --accent-hover: #1a78c9;
+    --accent-pressed: #2f87d1;
+    --bg: #f3f3f3;
+    --bg-mica: #f9f9f9;
+    --layer: #ffffff;
+    --layer-alt: #fbfbfb;
+    --stroke: #e5e5e5;
+    --stroke-soft: #ededed;
+    --text: #1b1b1b;
+    --text-secondary: #5d5d5d;
+    --text-tertiary: #8a8a8a;
+    --success: #0e7c3a;
+    --danger: #c42b1c;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 6px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --radius: 8px;
+    --radius-sm: 4px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #202020;
+      --bg-mica: #2c2c2c;
+      --layer: #2b2b2b;
+      --layer-alt: #323232;
+      --stroke: #3a3a3a;
+      --stroke-soft: #353535;
+      --text: #ffffff;
+      --text-secondary: #c5c5c5;
+      --text-tertiary: #8a8a8a;
+      --accent: #4cc2ff;
+      --accent-hover: #5cc9ff;
+      --accent-pressed: #74cfff;
+      --success: #6ccb5f;
+      --danger: #ff99a4;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100vh;
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg-mica);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+  }
+  input { user-select: text; -webkit-user-select: text; }
+  .app {
+    display: flex; flex-direction: column;
+    height: 100vh;
+    background: var(--bg-mica);
+  }
+
+  /* Title bar (Win11 style, drag region simulated) */
+  .titlebar {
+    height: 40px;
+    display: flex; align-items: center;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--stroke-soft);
+    background: var(--bg-mica);
+    flex-shrink: 0;
+  }
+  .titlebar .title {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    letter-spacing: 0.01em;
+  }
+  .titlebar .icon {
+    width: 16px; height: 16px;
+    background: linear-gradient(135deg, #0067c0, #4cc2ff);
+    border-radius: 3px;
+    margin-right: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white; font-size: 9px; font-weight: 800;
+  }
+
+  /* Content area */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 36px;
+    display: flex; flex-direction: column;
+  }
+
+  /* Page header */
+  .page-title {
+    font-size: 28px; font-weight: 600; line-height: 1.2;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .page-sub {
+    font-size: 14px; color: var(--text-secondary);
+    margin: 0 0 24px; line-height: 1.5;
+    max-width: 520px;
+  }
+
+  /* Card (Layer / Mica) */
+  .card {
+    background: var(--layer);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 12px;
+  }
+  .card + .card { margin-top: 0; }
+
+  /* Form fields */
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block;
+    font-size: 13px; font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .field .desc {
+    font-size: 12px; color: var(--text-secondary);
+    margin-top: 6px; line-height: 1.45;
+  }
+  .input {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    background: var(--layer-alt);
+    border: 1px solid var(--stroke);
+    border-bottom: 1px solid var(--text-tertiary);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: inherit; font-size: 14px;
+    transition: border-color 0.12s;
+    outline: none;
+  }
+  .input:hover { background: var(--layer); }
+  .input:focus {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0;
+  }
+
+  /* Buttons */
+  .actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 20px;
+  }
+  .btn {
+    height: 32px; min-width: 100px;
+    padding: 0 16px;
+    border-radius: var(--radius-sm);
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s, transform 0.05s;
+    border: 1px solid var(--stroke);
+    background: var(--layer);
+    color: var(--text);
+  }
+  .btn:hover { background: var(--layer-alt); }
+  .btn:active { transform: translateY(0.5px); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-primary:active { background: var(--accent-pressed); border-color: var(--accent-pressed); }
+  .btn-primary:disabled {
+    background: var(--stroke); border-color: var(--stroke);
+    color: var(--text-tertiary); cursor: not-allowed;
+  }
+
+  /* InfoBar */
+  .infobar {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    background: rgba(196,43,28,0.08);
+    border: 1px solid rgba(196,43,28,0.25);
+    color: var(--text);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .infobar.success {
+    background: rgba(14,124,58,0.08);
+    border-color: rgba(14,124,58,0.25);
+  }
+  .infobar .ico { font-size: 16px; line-height: 1; flex-shrink: 0; }
+
+  /* Stepper */
+  .steps {
+    display: flex; gap: 0; margin-bottom: 22px;
+    background: var(--layer); border: 1px solid var(--stroke);
+    border-radius: var(--radius); padding: 6px; align-items: center;
+  }
+  .step {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: var(--radius-sm);
+    font-size: 12px; color: var(--text-tertiary);
+    transition: background 0.12s;
+  }
+  .step .num {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--stroke); color: var(--text-secondary);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 11px;
+  }
+  .step.active { color: var(--text); background: var(--layer-alt); }
+  .step.active .num { background: var(--accent); color: white; }
+  .step.done .num { background: var(--success); color: white; }
+  .step.done { color: var(--text-secondary); }
+
+  /* Pair code display */
+  .pair-display {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 16px;
+    background: linear-gradient(135deg, var(--layer-alt), var(--layer));
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius-lg);
+    margin-bottom: 16px;
+  }
+  .pair-label {
+    font-size: 12px; font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+  .pair-code {
+    font-family: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, monospace;
+    font-size: 44px; font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    line-height: 1.1;
+    margin-bottom: 6px;
+    user-select: text; -webkit-user-select: text;
+  }
+  .fingerprint-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-tertiary);
+    margin-top: 8px;
+    font-family: "Cascadia Mono", "Consolas", monospace;
+    word-break: break-all;
+    text-align: center;
+    user-select: text; -webkit-user-select: text;
+  }
+
+  /* Spinner */
+  .progress-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .ring {
+    width: 16px; height: 16px; flex-shrink: 0;
+    border: 2px solid var(--stroke);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Success */
+  .success-hero {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 0;
+  }
+  .success-circle {
+    width: 56px; height: 56px;
+    background: var(--success);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 12px rgba(14,124,58,0.35);
+  }
+  .success-circle svg { width: 28px; height: 28px; color: white; }
+
+  /* Instructions list */
+  .instr {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .instr li {
+    display: flex; align-items: flex-start; gap: 12px;
+    font-size: 13px; color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .instr .bullet {
+    width: 22px; height: 22px; flex-shrink: 0;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    margin-top: -1px;
+  }
+  .instr strong { color: var(--text); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar">
+    <span class="icon">SK</span>
+    <span class="title">ServerKit Agent · Setup</span>
+  </div>
+
+  <div class="content">
+    <!-- Stepper -->
+    <div class="steps" id="stepper">
+      <div class="step active" data-step="1"><span class="num">1</span><span>Connect</span></div>
+      <div class="step" data-step="2"><span class="num">2</span><span>Pair code</span></div>
+      <div class="step" data-step="3"><span class="num">3</span><span>Done</span></div>
+    </div>
+
+    <!-- View 1: Form -->
+    <div id="view-form">
+      <h1 class="page-title">Pair this server</h1>
+      <p class="page-sub">
+        Connect this machine to your ServerKit panel. We'll generate a short
+        code that you'll type into the panel to confirm.
+      </p>
+
+      <div id="form-error" class="infobar hidden">
+        <span class="ico">⚠</span><span id="form-error-text"></span>
+      </div>
+
+      <div class="card">
+        <form id="pair-form" autocomplete="off">
+          <div class="field">
+            <label for="panel">ServerKit panel URL</label>
+            <input id="panel" class="input" type="url" placeholder="https://panel.example.com" required autofocus>
+            <div class="desc">The address you use to log into your ServerKit panel.</div>
+          </div>
+          <div class="field">
+            <label for="passphrase">Passphrase</label>
+            <input id="passphrase" class="input" type="password" placeholder="Pick something memorable" required minlength="4">
+            <div class="desc">You'll type this into the panel along with the pair code. 4+ characters.</div>
+          </div>
+        </form>
+      </div>
+
+      <div class="actions">
+        <button id="quit-btn" class="btn" type="button">Cancel</button>
+        <button id="submit-btn" class="btn btn-primary" type="button">Begin pairing</button>
+      </div>
+    </div>
+
+    <!-- View 2: Waiting / pair code -->
+    <div id="view-waiting" class="hidden">
+      <h1 class="page-title">Enter this code in the panel</h1>
+      <p class="page-sub">
+        The code rotates every minute. As soon as someone in the panel claims
+        this server, this window will continue.
+      </p>
+
+      <div class="pair-display">
+        <div class="pair-label">Pair code</div>
+        <div class="pair-code" id="pair-code">— — — — — —</div>
+        <div class="fingerprint-row">
+          fingerprint: <span id="fingerprint">—</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <ol class="instr">
+          <li><span class="bullet">1</span><div>Open the <strong>ServerKit panel</strong> in your browser.</div></li>
+          <li><span class="bullet">2</span><div>Go to <strong>Servers → Add Server → Pair existing agent</strong>.</div></li>
+          <li><span class="bullet">3</span><div>Enter the <strong>pair code</strong> above and the <strong>passphrase</strong> you just set.</div></li>
+        </ol>
+      </div>
+
+      <div class="progress-row">
+        <span class="ring"></span>
+        <span id="wait-msg">Waiting for the panel to claim this agent…</span>
+      </div>
+
+      <div class="actions">
+        <button id="cancel-btn" class="btn" type="button">Cancel</button>
+      </div>
+    </div>
+
+    <!-- View 3: Success -->
+    <div id="view-success" class="hidden">
+      <div class="success-hero">
+        <div class="success-circle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <h1 class="page-title" style="text-align:center; margin-bottom:4px">All set</h1>
+        <p class="page-sub" id="success-name" style="text-align:center">Your agent is paired with the panel.</p>
+      </div>
+
+      <div class="infobar success">
+        <span class="ico">✓</span>
+        <span>The agent service will start automatically. This server should appear as <strong>Online</strong> in the panel within a few seconds.</span>
+      </div>
+
+      <div class="actions">
+        <button id="close-btn" class="btn btn-primary" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  function setStep(n) {
+    document.querySelectorAll('#stepper .step').forEach(el => {
+      const s = Number(el.dataset.step);
+      el.classList.remove('active', 'done');
+      if (s < n) el.classList.add('done');
+      else if (s === n) el.classList.add('active');
+    });
+  }
+  function show(view) {
+    ['view-form','view-waiting','view-success'].forEach(v => $(v).classList.toggle('hidden', v !== view));
+  }
+  function showError(msg) {
+    $('form-error-text').textContent = msg;
+    $('form-error').classList.remove('hidden');
+  }
+  function clearError() { $('form-error').classList.add('hidden'); }
+
+  let pollTimer = null;
+  async function poll() {
+    try {
+      const r = await fetch('/api/status', { cache: 'no-store' });
+      const s = await r.json();
+      if (s.phase === 'enrolling') {
+        $('wait-msg').textContent = 'Contacting panel…';
+      } else if (s.phase === 'waiting') {
+        $('pair-code').textContent = s.pair_code_short || s.pair_code || '— — — — — —';
+        $('fingerprint').textContent = s.fingerprint || '—';
+        $('wait-msg').textContent = 'Waiting for the panel to claim this agent…';
+        setStep(2);
+        show('view-waiting');
+      } else if (s.phase === 'claimed') {
+        stopPoll();
+        if (s.server_name) {
+          $('success-name').textContent = '"' + s.server_name + '" is paired with the panel.';
+        }
+        setStep(3);
+        show('view-success');
+      } else if (s.phase === 'error') {
+        stopPoll();
+        showError(s.error || 'Pairing failed.');
+        $('submit-btn').disabled = false;
+        $('submit-btn').textContent = 'Try again';
+        setStep(1);
+        show('view-form');
+      }
+    } catch (e) { /* keep polling */ }
+  }
+  function startPoll() { if (!pollTimer) { poll(); pollTimer = setInterval(poll, 1500); } }
+  function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  $('submit-btn').addEventListener('click', async () => {
+    clearError();
+    const panel = $('panel').value.trim();
+    const pass = $('passphrase').value;
+    if (!panel) { showError('Panel URL is required.'); return; }
+    if (pass.length < 4) { showError('Passphrase must be at least 4 characters.'); return; }
+    $('submit-btn').disabled = true;
+    $('submit-btn').textContent = 'Connecting…';
+    try {
+      const r = await fetch('/api/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ panel_url: panel, passphrase: pass })
+      });
+      if (!r.ok) throw new Error((await r.text()) || 'Request failed');
+      setStep(2);
+      show('view-waiting');
+      startPoll();
+    } catch (err) {
+      showError(err.message);
+      $('submit-btn').disabled = false;
+      $('submit-btn').textContent = 'Begin pairing';
+    }
+  });
+
+  $('cancel-btn').addEventListener('click', async () => {
+    await fetch('/api/cancel', { method: 'POST' });
+    stopPoll();
+    setStep(1);
+    show('view-form');
+    $('submit-btn').disabled = false;
+    $('submit-btn').textContent = 'Begin pairing';
+  });
+
+  $('quit-btn').addEventListener('click', async () => {
+    await fetch('/api/close', { method: 'POST' });
+  });
+
+  $('close-btn').addEventListener('click', async () => {
+    await fetch('/api/close', { method: 'POST' });
+  });
+
+  startPoll();
+</script>
+</body>
+</html>

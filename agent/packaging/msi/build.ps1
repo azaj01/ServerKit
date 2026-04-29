@@ -105,14 +105,15 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\par
     # Copy WiX source
     Copy-Item "Product.wxs" "$buildDir\"
 
-    # Create output directory
+    # Create output directory (resolve to absolute path so it survives Push-Location)
     New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+    $absOutputDir = (Resolve-Path $OutputDir).Path
 
     # Build MSI
     Push-Location $buildDir
     try {
         Write-Host "Running WiX build..."
-        wix build Product.wxs -o "$OutputDir\serverkit-agent-$Version-x64.msi" -define Version=$Version
+        wix build Product.wxs -o "$absOutputDir\serverkit-agent-$Version-x64.msi" -define Version=$Version
     }
     finally {
         Pop-Location
@@ -120,7 +121,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\par
 
     Write-Host ""
     Write-Host "MSI built successfully!"
-    Write-Host "Output: $OutputDir\serverkit-agent-$Version-x64.msi"
+    Write-Host "Output: $absOutputDir\serverkit-agent-$Version-x64.msi"
 }
 finally {
     # Cleanup

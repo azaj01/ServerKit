@@ -438,7 +438,7 @@ const Templates = () => {
             {/* Template Detail Modal */}
             {selectedTemplate && (
                 <div className="modal-overlay" onClick={() => setSelectedTemplate(null)}>
-                    <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+                    <div className="modal template-detail-drawer" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <div className="template-detail-header">
                                 <div className="template-icon-large">

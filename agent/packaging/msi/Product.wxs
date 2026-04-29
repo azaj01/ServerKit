@@ -35,6 +35,7 @@
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="ConfigComponent" />
       <ComponentRef Id="TrayAutoStart" />
+      <ComponentRef Id="StartMenuShortcuts" />
     </Feature>
 
   </Package>
@@ -52,6 +53,10 @@
         <Directory Id="AgentDataFolder" Name="Agent" />
       </Directory>
     </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ServerKitStartMenuFolder" Name="ServerKit Agent" />
+    </StandardDirectory>
   </Fragment>
 
   <!-- Components -->
@@ -68,13 +73,14 @@
           DisplayName="ServerKit Agent"
           Description="ServerKit Agent - Remote server management service"
           Type="ownProcess"
-          Start="auto"
+          Start="demand"
           ErrorControl="normal"
           Arguments="start" />
+        <!-- Do NOT start service on install: it has no config (token/server) yet.
+             The setup wizard / `register` command switches it to auto-start once configured. -->
         <ServiceControl
           Id="ServiceControl"
           Name="ServerKitAgent"
-          Start="install"
           Stop="both"
           Remove="uninstall"
           Wait="yes" />
@@ -99,6 +105,35 @@
         Value="&quot;[INSTALLFOLDER]serverkit-agent.exe&quot; tray"
         KeyPath="yes" />
     </Component>
+
+    <!-- Start Menu shortcuts -->
+    <Component Id="StartMenuShortcuts" Directory="ServerKitStartMenuFolder" Guid="B7C8D9E0-F1A2-3456-7890-ABCDEF123456">
+      <Shortcut Id="SetupShortcut"
+        Name="ServerKit Agent Setup"
+        Description="Pair this server with a ServerKit panel"
+        Target="[INSTALLFOLDER]serverkit-agent.exe"
+        Arguments="setup"
+        WorkingDirectory="INSTALLFOLDER"
+        Icon="ServerKitAgentIcon.exe"
+        IconIndex="0" />
+      <Shortcut Id="StatusShortcut"
+        Name="ServerKit Agent Status"
+        Description="Show ServerKit Agent connection status"
+        Target="[INSTALLFOLDER]serverkit-agent.exe"
+        Arguments="status"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveStartMenuFolder" On="uninstall" />
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\ServerKit\Agent"
+        Name="StartMenuShortcuts"
+        Type="integer"
+        Value="1"
+        KeyPath="yes" />
+    </Component>
+
+    <!-- Icon used for shortcut (reuses the agent exe's embedded icon) -->
+    <Icon Id="ServerKitAgentIcon.exe" SourceFile="serverkit-agent.exe" />
   </Fragment>
 
 </Wix>

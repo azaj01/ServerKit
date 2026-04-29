@@ -1,0 +1,57 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+/*
+ * Token bridge: maps Tailwind's semantic color names to ServerKit's existing
+ * CSS custom properties. The `inline` keyword keeps these as runtime CSS vars
+ * so the dark/light theme toggle in _theme-variables.scss continues to work.
+ */
+@theme inline {
+  --color-background: var(--bg-body);
+  --color-foreground: var(--text-primary);
+
+  --color-card: var(--bg-card);
+  --color-card-foreground: var(--text-primary);
+
+  --color-popover: var(--bg-elevated);
+  --color-popover-foreground: var(--text-primary);
+
+  --color-primary: var(--accent-primary);
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: var(--bg-secondary);
+  --color-secondary-foreground: var(--text-primary);
+
+  --color-muted: var(--bg-secondary);
+  --color-muted-foreground: var(--text-tertiary);
+
+  --color-accent: var(--bg-hover);
+  --color-accent-foreground: var(--text-primary);
+
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: var(--border-default);
+  --color-input: var(--border-default);
+  --color-ring: var(--accent-primary);
+  --color-ring-offset: var(--bg-body);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+
+  --radius: 0.5rem;
+
+  /* Accordion animations */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}

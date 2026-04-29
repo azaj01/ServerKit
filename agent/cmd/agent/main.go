@@ -11,6 +11,7 @@ import (
 	"github.com/serverkit/agent/internal/agent"
 	"github.com/serverkit/agent/internal/config"
 	"github.com/serverkit/agent/internal/logger"
+	"github.com/serverkit/agent/internal/setupui"
 	"github.com/serverkit/agent/internal/tray"
 	"github.com/serverkit/agent/internal/updater"
 	"github.com/spf13/cobra"
@@ -43,6 +44,7 @@ enabling remote Docker management, monitoring, and more.`,
 	rootCmd.AddCommand(startCmd())
 	rootCmd.AddCommand(registerCmd())
 	rootCmd.AddCommand(pairCmd())
+	rootCmd.AddCommand(setupCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(configCmd())
@@ -369,6 +371,46 @@ func showStatus() error {
 	// This would require checking a PID file or socket
 
 	return nil
+}
+
+func setupCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "setup",
+		Short: "Open a browser-based pairing wizard (recommended for desktops)",
+		Long: `Launches a small local web server on 127.0.0.1 and opens your default
+browser to a pairing wizard. You enter the panel URL and a passphrase, then
+type the displayed code into the panel UI to claim this server.
+
+This is the easiest way to pair on Windows/macOS desktops. For headless
+servers, use 'serverkit-agent pair' instead.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSetup()
+		},
+	}
+}
+
+func runSetup() error {
+	log := logger.New(config.LoggingConfig{Level: "info"})
+
+	configPath := cfgFile
+	if configPath == "" {
+		configPath = config.DefaultConfigPath()
+	}
+
+	srv := setupui.New(log, configPath)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nCancelling…")
+		cancel()
+	}()
+
+	return srv.Run(ctx)
 }
 
 func trayCmd() *cobra.Command {

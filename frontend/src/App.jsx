@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ResourceTierProvider } from './contexts/ResourceTierContext';
-import { ToastContainer } from './components/Toast';
+import { Toaster } from './components/ui/sonner';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
@@ -272,7 +272,7 @@ function App() {
                     <ResourceTierProvider>
                         <ToastProvider>
                             <AppRoutes />
-                            <ToastContainer />
+                            <Toaster />
                         </ToastProvider>
                     </ResourceTierProvider>
                 </AuthProvider>
