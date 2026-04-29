@@ -66,10 +66,11 @@
     }
 }
 
-.settings-nav-item {
+.settings-nav-item,
+.settings-nav-item.settings-nav-item {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: flex-start !important;
     gap: $space-3;
     padding: $space-3 $space-4;
     background: transparent;

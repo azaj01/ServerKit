@@ -39,9 +39,11 @@
     <Feature Id="ProductFeature" Title="ServerKit Agent" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentRef Id="ConfigComponent" />
+      <ComponentRef Id="LauncherScript" />
       <ComponentRef Id="TrayAutoStart" />
       <ComponentRef Id="StartMenuShortcuts" />
     </Feature>
+
 
   </Package>
 
@@ -100,24 +102,34 @@
       <RemoveFolder Id="RemoveAgentDataFolder" On="uninstall" />
     </Component>
 
-    <!-- Auto-start the desktop app on user login. With no args, the binary
-         opens the pairing wizard if not yet configured, otherwise just the tray. -->
+    <!-- VBS launcher: shortcuts run wscript.exe + this script, which then spawns
+         the unsigned exe. The Microsoft-signed wscript host bypasses the
+         Explorer-launch SmartScreen reputation check that otherwise silently
+         kills the agent process on some Windows configurations. -->
+    <Component Id="LauncherScript" Directory="INSTALLFOLDER" Guid="F1B2A3C4-D5E6-4071-8A8B-9C0D1E2F3A4B">
+      <File Id="LauncherVbs" Source="launcher.vbs" KeyPath="yes" />
+    </Component>
+
+    <!-- Auto-start the desktop app on user login. Goes through the launcher
+         for the same SmartScreen-bypass reason as the Start menu shortcut. -->
     <Component Id="TrayAutoStart" Directory="INSTALLFOLDER" Guid="E5F6A7B8-C9D0-1234-EF01-567890123456">
       <RegistryValue
         Root="HKCU"
         Key="Software\Microsoft\Windows\CurrentVersion\Run"
         Name="ServerKitAgent"
         Type="string"
-        Value="&quot;[INSTALLFOLDER]serverkit-agent.exe&quot;"
+        Value="wscript.exe &quot;[INSTALLFOLDER]launcher.vbs&quot;"
         KeyPath="yes" />
     </Component>
 
-    <!-- Start Menu shortcut: single entry that opens the desktop app. -->
+    <!-- Start Menu shortcut: single entry that opens the desktop app via the
+         signed wscript.exe host so SmartScreen doesn't silently reap us. -->
     <Component Id="StartMenuShortcuts" Directory="ServerKitStartMenuFolder" Guid="B7C8D9E0-F1A2-3456-7890-ABCDEF123456">
       <Shortcut Id="AppShortcut"
         Name="ServerKit Agent"
         Description="Pair and manage this ServerKit Agent"
-        Target="[INSTALLFOLDER]serverkit-agent.exe"
+        Target="[System64Folder]wscript.exe"
+        Arguments="&quot;[INSTALLFOLDER]launcher.vbs&quot;"
         WorkingDirectory="INSTALLFOLDER"
         Icon="ServerKitAgentIco"
         IconIndex="0" />

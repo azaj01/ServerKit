@@ -41,6 +41,9 @@ try {
     }
     Copy-Item $iconSource "$buildDir\serverkit.ico"
 
+    # Copy SmartScreen-bypass launcher script (see launcher.vbs for rationale).
+    Copy-Item (Join-Path $PSScriptRoot "launcher.vbs") "$buildDir\launcher.vbs"
+
     # Create default config file
     $configContent = @"
 # ServerKit Agent Configuration

@@ -11,6 +11,7 @@ import (
 	"image/png"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/lxn/walk"
@@ -113,220 +114,296 @@ type wizardUI struct {
 func (w *wizardUI) show() error {
 	hostname, _ := os.Hostname()
 
+	// Match the user's Windows theme so the wizard sits naturally on top of
+	// whatever the rest of their desktop looks like. The panel's own UI is
+	// light/dark adaptive; the wizard mirrors that.
+	pal := detectThemePalette()
+
 	const (
-		brandPurple  = 0x6366F1
-		errorRed     = 0xDC2626
-		mutedGray    = 0x6B7280
-		subtleGray   = 0x9CA3AF
-		darkText     = 0x111827
-		medText      = 0x374151
-		titleSize    = 14
-		bodySize     = 9
-		smallSize    = 8
-		codeSize     = 32
+		titleSize = 14
+		bodySize  = 9
+		smallSize = 8
+		codeSize  = 32
 	)
+
+	bgDeepBrush := pal.brushBgDeep
+	bgCardBrush := pal.brushBgCard
+
+	textWhite := pal.textHeading
+	textPrimary := pal.textBody
+	textLabel := pal.textLabel
+	textMuted := pal.textMuted
+	textHelper := pal.textHelper
+	indigo := pal.indigo
+	errorRed := pal.errorRed
+	successGr := pal.successGr
 
 	err := (dec.MainWindow{
 		AssignTo:   &w.mw,
 		Title:      "ServerKit Agent",
-		MinSize:    dec.Size{Width: 440, Height: 580},
-		Size:       dec.Size{Width: 440, Height: 580},
-		Layout:     dec.VBox{MarginsZero: false, Margins: dec.Margins{Left: 28, Top: 24, Right: 28, Bottom: 28}, Spacing: 0},
-		Background: dec.SolidColorBrush{Color: walk.RGB(248, 250, 252)},
+		MinSize:    dec.Size{Width: 460, Height: 600},
+		Size:       dec.Size{Width: 460, Height: 600},
+		Layout:     dec.VBox{MarginsZero: false, Margins: dec.Margins{Left: 24, Top: 24, Right: 24, Bottom: 24}, Spacing: 0},
+		Background: bgDeepBrush,
 		Children: []dec.Widget{
-			// ── Brand header ───────────────────────────────────────────────
+			// ── Card surface (lighter than outer bg, simulates the .agent-window block) ──
 			dec.Composite{
-				Layout: dec.HBox{MarginsZero: true, Spacing: 16},
+				Layout:     dec.VBox{MarginsZero: false, Margins: dec.Margins{Left: 24, Top: 24, Right: 24, Bottom: 24}, Spacing: 0},
+				Background: bgCardBrush,
 				Children: []dec.Widget{
-					dec.ImageView{
-						AssignTo: &w.headerImage,
-						MinSize:  dec.Size{Width: 60, Height: 60},
-						MaxSize:  dec.Size{Width: 60, Height: 60},
-						Mode:     dec.ImageViewModeZoom,
-					},
+					// ── Brand header ─────────────────────────────────────────
 					dec.Composite{
-						Layout: dec.VBox{MarginsZero: true, Spacing: 4},
+						Layout:     dec.HBox{MarginsZero: true, Spacing: 16},
+						Background: bgCardBrush,
 						Children: []dec.Widget{
-							dec.VSpacer{},
-							dec.Label{
-								Text:      "Pair this server",
-								Font:      dec.Font{PointSize: titleSize, Bold: true},
-								TextColor: rgbHex(darkText),
+							dec.ImageView{
+								AssignTo: &w.headerImage,
+								MinSize:  dec.Size{Width: 48, Height: 48},
+								MaxSize:  dec.Size{Width: 48, Height: 48},
+								Mode:     dec.ImageViewModeZoom,
+								Background: bgCardBrush,
 							},
-							dec.Label{
-								Text:      "Connect this machine to your ServerKit panel.",
-								Font:      dec.Font{PointSize: bodySize},
-								TextColor: rgbHex(mutedGray),
+							dec.Composite{
+								Layout:     dec.VBox{MarginsZero: true, Spacing: 4},
+								Background: bgCardBrush,
+								Children: []dec.Widget{
+									dec.VSpacer{},
+									dec.Label{
+										Text:      "Pair this server",
+										Font:      dec.Font{PointSize: titleSize, Bold: true, Family: "Segoe UI"},
+										TextColor: rgbHex(textWhite),
+										Background: bgCardBrush,
+									},
+									dec.Label{
+										Text:      "Connect this machine to your ServerKit panel.",
+										Font:      dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+										TextColor: rgbHex(textMuted),
+										Background: bgCardBrush,
+									},
+									dec.VSpacer{},
+								},
 							},
-							dec.VSpacer{},
 						},
 					},
-				},
-			},
 
-			dec.VSpacer{Size: 22},
+					dec.VSpacer{Size: 28},
 
-			// ── Stage 1: connection form ────────────────────────────────────
-			dec.Composite{
-				AssignTo:   &w.formPanel,
-				Layout:     dec.VBox{MarginsZero: false, Margins: dec.Margins{Left: 16, Top: 18, Right: 16, Bottom: 18}, Spacing: 2},
-				Background: dec.SolidColorBrush{Color: walk.RGB(255, 255, 255)},
-				Children: []dec.Widget{
-					// Panel URL
-					dec.Label{
-						Text:      "Panel URL",
-						Font:      dec.Font{Bold: true, PointSize: bodySize},
-						TextColor: rgbHex(medText),
-					},
-					dec.VSpacer{Size: 2},
-					dec.LineEdit{
-						AssignTo:  &w.urlEdit,
-						CueBanner: "https://panel.example.com",
-						MaxLength: 500,
-					},
-					dec.Label{
-						Text:      "The full URL of your ServerKit control panel.",
-						Font:      dec.Font{PointSize: smallSize},
-						TextColor: rgbHex(subtleGray),
-					},
-
-					dec.VSpacer{Size: 12},
-
-					// Passphrase
-					dec.Label{
-						Text:      "Passphrase",
-						Font:      dec.Font{Bold: true, PointSize: bodySize},
-						TextColor: rgbHex(medText),
-					},
-					dec.VSpacer{Size: 2},
-					dec.LineEdit{
-						AssignTo:     &w.passEdit,
-						PasswordMode: true,
-						CueBanner:    "Set in the panel under Add Server",
-						MaxLength:    200,
-					},
-					dec.Label{
-						Text:      "Generated in your panel under Servers → Add Server.",
-						Font:      dec.Font{PointSize: smallSize},
-						TextColor: rgbHex(subtleGray),
-					},
-
-					dec.VSpacer{Size: 12},
-
-					// Server name
-					dec.Label{
-						Text:      "Server name  (optional)",
-						Font:      dec.Font{Bold: true, PointSize: bodySize},
-						TextColor: rgbHex(medText),
-					},
-					dec.VSpacer{Size: 2},
-					dec.LineEdit{
-						AssignTo:  &w.nameEdit,
-						Text:      hostname,
-						CueBanner: "Defaults to hostname",
-					},
-					dec.Label{
-						Text:      "How this machine appears in your panel.",
-						Font:      dec.Font{PointSize: smallSize},
-						TextColor: rgbHex(subtleGray),
-					},
-
-					dec.VSpacer{Size: 14},
-
-					dec.Label{
-						AssignTo:  &w.formErr,
-						TextColor: rgbHex(errorRed),
-						Font:      dec.Font{PointSize: bodySize},
-						Text:      "",
-					},
-					dec.PushButton{
-						AssignTo:  &w.startBtn,
-						Text:      "Connect  →",
-						MinSize:   dec.Size{Height: 36},
-						OnClicked: w.handleConnect,
-					},
-				},
-			},
-
-			// ── Stage 2: pairing code (hidden initially) ──────────────────
-			dec.Composite{
-				AssignTo:   &w.pairPanel,
-				Visible:    false,
-				Layout:     dec.VBox{MarginsZero: false, Margins: dec.Margins{Left: 16, Top: 24, Right: 16, Bottom: 24}, Spacing: 0},
-				Background: dec.SolidColorBrush{Color: walk.RGB(255, 255, 255)},
-				Children: []dec.Widget{
-					dec.Label{
-						Text:      "Open your panel and enter this code:",
-						Font:      dec.Font{PointSize: bodySize},
-						TextColor: rgbHex(mutedGray),
-					},
-					dec.VSpacer{Size: 16},
+					// ── Stage 1: connection form ─────────────────────────────
 					dec.Composite{
-						Layout: dec.HBox{MarginsZero: true},
+						AssignTo:   &w.formPanel,
+						Layout:     dec.VBox{MarginsZero: true, Spacing: 0},
+						Background: bgCardBrush,
 						Children: []dec.Widget{
-							dec.HSpacer{},
+							// Panel URL
 							dec.Label{
-								AssignTo:      &w.codeLabel,
-								Text:          "",
-								Font:          dec.Font{PointSize: codeSize, Bold: true, Family: "Consolas"},
-								TextColor:     rgbHex(brandPurple),
+								Text:       "Panel URL",
+								Font:       dec.Font{Bold: true, PointSize: bodySize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textLabel),
+								Background: bgCardBrush,
+							},
+							dec.VSpacer{Size: 6},
+							dec.LineEdit{
+								AssignTo:  &w.urlEdit,
+								CueBanner: "https://panel.example.com",
+								MaxLength: 500,
+								MinSize:   dec.Size{Height: 28},
+							},
+							dec.VSpacer{Size: 6},
+							dec.Label{
+								Text:       "The full URL of your ServerKit control panel.",
+								Font:       dec.Font{PointSize: smallSize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textHelper),
+								Background: bgCardBrush,
+							},
+
+							dec.VSpacer{Size: 20},
+
+							// Server name
+							dec.Label{
+								Text:       "Server name  (optional)",
+								Font:       dec.Font{Bold: true, PointSize: bodySize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textLabel),
+								Background: bgCardBrush,
+							},
+							dec.VSpacer{Size: 6},
+							dec.LineEdit{
+								AssignTo:  &w.nameEdit,
+								Text:      hostname,
+								CueBanner: "Defaults to hostname",
+								MinSize:   dec.Size{Height: 28},
+							},
+							dec.VSpacer{Size: 6},
+							dec.Label{
+								Text:       "How this machine appears in your panel.",
+								Font:       dec.Font{PointSize: smallSize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textHelper),
+								Background: bgCardBrush,
+							},
+
+							dec.VSpacer{Size: 20},
+
+							// Passphrase
+							dec.Label{
+								Text:       "Passphrase",
+								Font:       dec.Font{Bold: true, PointSize: bodySize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textLabel),
+								Background: bgCardBrush,
+							},
+							dec.VSpacer{Size: 6},
+							dec.LineEdit{
+								AssignTo:     &w.passEdit,
+								PasswordMode: true,
+								CueBanner:    "Set in the panel under Add Server",
+								MaxLength:    200,
+								MinSize:      dec.Size{Height: 28},
+							},
+							dec.VSpacer{Size: 6},
+							dec.Label{
+								Text:       "Generated in your panel under Servers → Add Server.",
+								Font:       dec.Font{PointSize: smallSize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textHelper),
+								Background: bgCardBrush,
+							},
+
+							dec.VSpacer{Size: 20},
+
+							dec.Label{
+								AssignTo:   &w.formErr,
+								TextColor:  rgbHex(errorRed),
+								Font:       dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+								Background: bgCardBrush,
+								Text:       "",
+							},
+							dec.PushButton{
+								AssignTo:  &w.startBtn,
+								Text:      "Connect  →",
+								MinSize:   dec.Size{Height: 36},
+								Font:      dec.Font{PointSize: bodySize, Bold: true, Family: "Segoe UI"},
+								OnClicked: w.handleConnect,
+							},
+						},
+					},
+
+					// ── Stage 2: pairing code (hidden initially) ──────────────
+					// Mirrors the panel's "Add Server → Pair existing agent" drawer:
+					// the user reads the code here and types it into that field.
+					dec.Composite{
+						AssignTo:   &w.pairPanel,
+						Visible:    false,
+						Layout:     dec.VBox{MarginsZero: true, Spacing: 0},
+						Background: bgCardBrush,
+						Children: []dec.Widget{
+							dec.Label{
+								Text:          "On your panel, open Add Server → Pair existing agent.",
+								Font:          dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+								TextColor:     rgbHex(textPrimary),
+								Background:    bgCardBrush,
+							},
+							dec.VSpacer{Size: 4},
+							dec.Label{
+								Text:          "Enter this code in the Pair code field:",
+								Font:          dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+								TextColor:     rgbHex(textMuted),
+								Background:    bgCardBrush,
+							},
+							dec.VSpacer{Size: 24},
+							// Code "field" — visually echoes the panel's letter-spaced
+							// input. We can't render a real bordered box, but a
+							// centered Composite with the card colour at least
+							// gives the code its own dedicated zone.
+							dec.Composite{
+								Layout:     dec.HBox{MarginsZero: true},
+								Background: bgCardBrush,
+								Children: []dec.Widget{
+									dec.HSpacer{},
+									dec.Label{
+										AssignTo:      &w.codeLabel,
+										Text:          "",
+										Font:          dec.Font{PointSize: codeSize, Bold: true, Family: "Consolas"},
+										TextColor:     rgbHex(indigo),
+										Background:    bgCardBrush,
+										TextAlignment: dec.AlignCenter,
+									},
+									dec.HSpacer{},
+								},
+							},
+							dec.VSpacer{Size: 24},
+							dec.Label{
+								AssignTo:      &w.statusLabel,
+								Text:          "Waiting for the panel to claim this server…",
+								Font:          dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+								TextColor:     rgbHex(textHelper),
+								Background:    bgCardBrush,
 								TextAlignment: dec.AlignCenter,
 							},
+							dec.Label{
+								AssignTo:   &w.pairErrLabel,
+								TextColor:  rgbHex(errorRed),
+								Font:       dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+								Background: bgCardBrush,
+								Text:       "",
+							},
+							dec.VSpacer{Size: 20},
+							dec.PushButton{
+								AssignTo:  &w.cancelBtn,
+								Text:      "Cancel",
+								MinSize:   dec.Size{Height: 34},
+								Font:      dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+								OnClicked: w.handleCancel,
+							},
+						},
+					},
+
+					// ── Stage 3: success ─────────────────────────────────────
+					dec.Composite{
+						AssignTo:   &w.donePanel,
+						Visible:    false,
+						Layout:     dec.VBox{MarginsZero: true, Spacing: 10},
+						Background: bgCardBrush,
+						Children: []dec.Widget{
+							dec.Label{
+								AssignTo:   &w.doneTitle,
+								Text:       "Successfully paired",
+								Font:       dec.Font{PointSize: titleSize, Bold: true, Family: "Segoe UI"},
+								TextColor:  rgbHex(successGr),
+								Background: bgCardBrush,
+							},
+							dec.Label{
+								AssignTo:   &w.doneSub,
+								Text:       "",
+								Font:       dec.Font{PointSize: bodySize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textPrimary),
+								Background: bgCardBrush,
+							},
+							dec.VSpacer{Size: 8},
+							dec.PushButton{
+								Text:      "Close",
+								MinSize:   dec.Size{Height: 36},
+								Font:      dec.Font{PointSize: bodySize, Bold: true, Family: "Segoe UI"},
+								OnClicked: func() { w.mw.Close() },
+							},
+						},
+					},
+
+					dec.VSpacer{},
+
+					// Subtle in-card footer mirrors the panel's brand strip.
+					dec.Composite{
+						Layout:     dec.HBox{MarginsZero: true},
+						Background: bgCardBrush,
+						Children: []dec.Widget{
+							dec.HSpacer{},
+							dec.Label{
+								Text:       "ServerKit  •  Pairing wizard",
+								Font:       dec.Font{PointSize: smallSize, Family: "Segoe UI"},
+								TextColor:  rgbHex(textHelper),
+								Background: bgCardBrush,
+							},
 							dec.HSpacer{},
 						},
 					},
-					dec.VSpacer{Size: 16},
-					dec.Label{
-						AssignTo:      &w.statusLabel,
-						Text:          "Waiting for the panel to claim this server…",
-						Font:          dec.Font{PointSize: bodySize},
-						TextColor:     rgbHex(mutedGray),
-						TextAlignment: dec.AlignCenter,
-					},
-					dec.Label{
-						AssignTo:  &w.pairErrLabel,
-						TextColor: rgbHex(errorRed),
-						Font:      dec.Font{PointSize: bodySize},
-						Text:      "",
-					},
-					dec.VSpacer{Size: 16},
-					dec.PushButton{
-						AssignTo:  &w.cancelBtn,
-						Text:      "Cancel",
-						MinSize:   dec.Size{Height: 34},
-						OnClicked: w.handleCancel,
-					},
 				},
 			},
-
-			// ── Stage 3: success ───────────────────────────────────────────
-			dec.Composite{
-				AssignTo:   &w.donePanel,
-				Visible:    false,
-				Layout:     dec.VBox{MarginsZero: false, Margins: dec.Margins{Left: 16, Top: 24, Right: 16, Bottom: 24}, Spacing: 10},
-				Background: dec.SolidColorBrush{Color: walk.RGB(255, 255, 255)},
-				Children: []dec.Widget{
-					dec.Label{
-						AssignTo:  &w.doneTitle,
-						Text:      "Successfully paired",
-						Font:      dec.Font{PointSize: titleSize, Bold: true},
-						TextColor: walk.RGB(16, 185, 129),
-					},
-					dec.Label{
-						AssignTo: &w.doneSub,
-						Text:     "",
-						Font:     dec.Font{PointSize: bodySize},
-					},
-					dec.VSpacer{Size: 8},
-					dec.PushButton{
-						Text:      "Close",
-						MinSize:   dec.Size{Height: 36},
-						OnClicked: func() { w.mw.Close() },
-					},
-				},
-			},
-
-			dec.VSpacer{},
 		},
 	}).Create()
 	if err != nil {
@@ -340,6 +417,8 @@ func (w *wizardUI) show() error {
 		_ = w.headerImage.SetImage(bmp)
 	}
 
+	// Title-bar chrome stays system-default; we're light-themed everywhere
+	// for now to avoid the dark-card / white-input contrast clash.
 	w.mw.Show()
 	// Windows' anti-focus-stealing rule will leave the window invisible behind
 	// the desktop when the agent is launched from the Start menu shortcut.
@@ -451,13 +530,29 @@ func errorPretty(err error) string {
 	return err.Error()
 }
 
-// displayCode prefers the server-formatted code (e.g. "1234-5678") and falls
-// back to the raw code if the panel didn't supply one.
+// displayCode renders the pair code with letter-spacing, mirroring the
+// panel's "Add Server" input field which uses CSS letter-spacing: 0.5em on
+// the same code. Walk Labels don't support letter-spacing as a property, so
+// we fake it by inserting two-space gaps between glyphs of the unformatted
+// code. Result for code "AB12CD" looks like "A  B  1  2  C  D".
 func displayCode(code, formatted string) string {
-	if formatted != "" {
-		return formatted
+	raw := code
+	if raw == "" {
+		raw = formatted
 	}
-	return code
+	clean := strings.ReplaceAll(raw, "-", "")
+	clean = strings.ReplaceAll(clean, " ", "")
+	if clean == "" {
+		return ""
+	}
+	var b strings.Builder
+	for i, r := range clean {
+		if i > 0 {
+			b.WriteString("  ")
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func rgbHex(rgb uint32) walk.Color {

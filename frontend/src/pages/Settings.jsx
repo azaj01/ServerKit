@@ -17,8 +17,9 @@ import ApiSettingsTab from '../components/settings/ApiSettingsTab';
 import MigrationHistoryTab from '../components/settings/MigrationHistoryTab';
 import IconReferenceTab from '../components/settings/IconReferenceTab';
 import AboutTab from '../components/settings/AboutTab';
-import { Activity, Code, Database, Layers } from 'lucide-react';
+import { Activity, Code, Database, Layers, PaintBucket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 const VALID_TABS = ['profile', 'security', 'appearance', 'sidebar', 'whitelabel', 'notifications', 'system', 'users', 'activity', 'site', 'sso', 'api', 'migrations', 'developer', 'about'];
 
@@ -26,6 +27,7 @@ const Settings = () => {
     const [activeTab, setActiveTab] = useTabParam('/settings', VALID_TABS);
     const { isAdmin } = useAuth();
     const [devMode, setDevMode] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (isAdmin) {
@@ -205,6 +207,19 @@ const Settings = () => {
                             >
                                 <Code size={18} />
                                 Icon Reference
+                            </Button>
+                        </>
+                    )}
+                    {import.meta.env.DEV && (
+                        <>
+                            <div className="settings-nav-divider">Local Dev</div>
+                            <Button
+                                variant="ghost"
+                                className="settings-nav-item"
+                                onClick={() => navigate('/style-guide')}
+                            >
+                                <PaintBucket size={18} />
+                                Style Guide
                             </Button>
                         </>
                     )}

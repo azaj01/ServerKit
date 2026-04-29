@@ -603,6 +603,7 @@ const PairAgentForm = ({ groups, onClose, onClaimed }) => {
     async function handleLookup() {
         setLookupError('');
         setLookupResult(null);
+        if (formattedCode.length === 0) return;
         if (formattedCode.length !== 6) {
             setLookupError('Pair code must be 6 characters');
             return;
