@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import ConfigPanel from '../ConfigPanel';
 import { Play, Clock, Webhook, Zap, Copy, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
 const TriggerConfigPanel = ({ node, onChange, onClose, onDelete }) => {
     const { data } = node;
@@ -58,14 +63,14 @@ const TriggerConfigPanel = ({ node, onChange, onClose, onDelete }) => {
             color="#3b82f6"
             onClose={onClose}
             footer={onDelete && (
-                <button className="btn-delete-node" onClick={onDelete}>
+                <Button variant="destructive" size="sm" className="btn-delete-node" onClick={onDelete}>
                     Remove Node
-                </button>
+                </Button>
             )}
         >
             <div className="form-group">
-                <label>Label</label>
-                <input
+                <Label>Label</Label>
+                <Input
                     type="text"
                     value={label}
                     onChange={(e) => onChange({ ...data, label: e.target.value })}
@@ -73,7 +78,7 @@ const TriggerConfigPanel = ({ node, onChange, onClose, onDelete }) => {
             </div>
 
             <div className="form-group">
-                <label>Trigger Type</label>
+                <Label>Trigger Type</Label>
                 <div className="trigger-type-grid">
                     {triggerTypes.map(({ id, icon: Icon, label: typeLabel, desc }) => (
                         <button
@@ -92,19 +97,14 @@ const TriggerConfigPanel = ({ node, onChange, onClose, onDelete }) => {
             <div className="form-group">
                 <label className="toggle-label">
                     <span>Enabled</span>
-                    <button
-                        className={`toggle-switch ${isActive ? 'active' : ''}`}
-                        onClick={toggleActive}
-                    >
-                        <span className="toggle-knob" />
-                    </button>
+                    <Switch checked={isActive} onCheckedChange={toggleActive} />
                 </label>
             </div>
 
             {triggerType === 'cron' && (
                 <div className="form-group">
-                    <label>Cron Expression</label>
-                    <input
+                    <Label>Cron Expression</Label>
+                    <Input
                         type="text"
                         className="font-mono"
                         value={triggerConfig.cron || '0 * * * *'}
@@ -119,19 +119,19 @@ const TriggerConfigPanel = ({ node, onChange, onClose, onDelete }) => {
 
             {triggerType === 'webhook' && (
                 <div className="form-group">
-                    <label>Webhook URL</label>
+                    <Label>Webhook URL</Label>
                     {webhookUrl ? (
                         <>
                             <div className="input-with-action">
-                                <input
+                                <Input
                                     type="text"
                                     value={webhookUrl}
                                     readOnly
                                     className="input-readonly font-mono"
                                 />
-                                <button className="input-action-btn" onClick={copyWebhookUrl} title="Copy URL">
+                                <Button variant="ghost" size="icon" className="input-action-btn" onClick={copyWebhookUrl} title="Copy URL">
                                     {copied ? <Check size={14} /> : <Copy size={14} />}
-                                </button>
+                                </Button>
                             </div>
                             <span className="form-hint">
                                 Send a POST request to this URL to trigger the workflow. Request body is available as <code>context.body</code>.
@@ -147,17 +147,22 @@ const TriggerConfigPanel = ({ node, onChange, onClose, onDelete }) => {
 
             {triggerType === 'event' && (
                 <div className="form-group">
-                    <label>System Event</label>
-                    <select
+                    <Label>System Event</Label>
+                    <Select
                         value={triggerConfig.eventType || 'health_check_failed'}
-                        onChange={(e) => handleConfigChange('eventType', e.target.value)}
+                        onValueChange={(value) => handleConfigChange('eventType', value)}
                     >
-                        <option value="health_check_failed">Health Check Failed</option>
-                        <option value="high_cpu">High CPU Usage (&gt;80%)</option>
-                        <option value="high_memory">High Memory Usage (&gt;80%)</option>
-                        <option value="git_push">Git Push Received</option>
-                        <option value="app_stopped">Application Stopped</option>
-                    </select>
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="health_check_failed">Health Check Failed</SelectItem>
+                            <SelectItem value="high_cpu">High CPU Usage (&gt;80%)</SelectItem>
+                            <SelectItem value="high_memory">High Memory Usage (&gt;80%)</SelectItem>
+                            <SelectItem value="git_push">Git Push Received</SelectItem>
+                            <SelectItem value="app_stopped">Application Stopped</SelectItem>
+                        </SelectContent>
+                    </Select>
                     <span className="form-hint">
                         Event data is available as <code>context.event_data</code> in scripts and conditions.
                     </span>

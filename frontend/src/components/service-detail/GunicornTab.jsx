@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 const GunicornTab = ({ appId }) => {
     const toast = useToast();
@@ -43,11 +45,11 @@ const GunicornTab = ({ appId }) => {
         <div>
             <div className="section-header">
                 <h3>Gunicorn Configuration</h3>
-                <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                <Button onClick={handleSave} disabled={saving}>
                     {saving ? 'Saving...' : 'Save'}
-                </button>
+                </Button>
             </div>
-            <textarea
+            <Textarea
                 className="code-editor"
                 value={config}
                 onChange={(e) => setConfig(e.target.value)}

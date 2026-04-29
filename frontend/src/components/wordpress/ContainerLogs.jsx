@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, X, Download } from 'lucide-react';
 import wordpressApi from '../../services/wordpress';
+import { Button } from '@/components/ui/button';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
 const ContainerLogs = ({ projectId, envId, onClose }) => {
     const [logs, setLogs] = useState([]);
@@ -59,33 +61,35 @@ const ContainerLogs = ({ projectId, envId, onClose }) => {
                     <span>Container Logs</span>
                 </div>
                 <div className="container-logs-controls">
-                    <select
-                        value={service}
-                        onChange={e => setService(e.target.value)}
-                        className="logs-service-select"
-                    >
-                        <option value="wordpress">WordPress</option>
-                        <option value="db">MySQL</option>
-                    </select>
-                    <select
-                        value={lines}
-                        onChange={e => setLines(Number(e.target.value))}
-                        className="logs-lines-select"
-                    >
-                        <option value={50}>50 lines</option>
-                        <option value={100}>100 lines</option>
-                        <option value={500}>500 lines</option>
-                    </select>
-                    <button className="btn btn-ghost btn-sm" onClick={loadLogs} title="Refresh">
+                    <Select value={service} onValueChange={setService}>
+                        <SelectTrigger className="logs-service-select">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="wordpress">WordPress</SelectItem>
+                            <SelectItem value="db">MySQL</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={String(lines)} onValueChange={(v) => setLines(Number(v))}>
+                        <SelectTrigger className="logs-lines-select">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="50">50 lines</SelectItem>
+                            <SelectItem value="100">100 lines</SelectItem>
+                            <SelectItem value="500">500 lines</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Button variant="ghost" size="sm" onClick={loadLogs} title="Refresh">
                         <RefreshIcon />
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={handleDownload} title="Download">
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleDownload} title="Download">
                         <Download size={14} />
-                    </button>
+                    </Button>
                     {onClose && (
-                        <button className="btn btn-ghost btn-sm" onClick={onClose}>
+                        <Button variant="ghost" size="sm" onClick={onClose}>
                             <X size={14} />
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>

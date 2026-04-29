@@ -1,6 +1,9 @@
 import React from 'react';
 import { Database } from 'lucide-react';
 import ConfigPanel from '../ConfigPanel';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
 const dbTypeConfig = {
     mysql: { color: '#00758f', defaultPort: 3306 },
@@ -34,8 +37,8 @@ const DatabaseConfigPanel = ({ node, onChange, onClose }) => {
             onClose={onClose}
         >
             <div className="form-group">
-                <label>Name</label>
-                <input
+                <Label>Name</Label>
+                <Input
                     type="text"
                     value={data.name || ''}
                     onChange={(e) => handleChange('name', e.target.value)}
@@ -44,34 +47,44 @@ const DatabaseConfigPanel = ({ node, onChange, onClose }) => {
             </div>
 
             <div className="form-group">
-                <label>Type</label>
-                <select
+                <Label>Type</Label>
+                <Select
                     value={data.type || 'mysql'}
-                    onChange={(e) => handleChange('type', e.target.value)}
+                    onValueChange={(value) => handleChange('type', value)}
                 >
-                    <option value="mysql">MySQL</option>
-                    <option value="postgresql">PostgreSQL</option>
-                    <option value="mongodb">MongoDB</option>
-                    <option value="redis">Redis</option>
-                </select>
+                    <SelectTrigger>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="mysql">MySQL</SelectItem>
+                        <SelectItem value="postgresql">PostgreSQL</SelectItem>
+                        <SelectItem value="mongodb">MongoDB</SelectItem>
+                        <SelectItem value="redis">Redis</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             <div className="form-group">
-                <label>Status</label>
-                <select
+                <Label>Status</Label>
+                <Select
                     value={data.status || 'stopped'}
-                    onChange={(e) => handleChange('status', e.target.value)}
+                    onValueChange={(value) => handleChange('status', value)}
                 >
-                    <option value="stopped">Stopped</option>
-                    <option value="running">Running</option>
-                    <option value="error">Error</option>
-                </select>
+                    <SelectTrigger>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="stopped">Stopped</SelectItem>
+                        <SelectItem value="running">Running</SelectItem>
+                        <SelectItem value="error">Error</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             <div className="form-row">
                 <div className="form-group">
-                    <label>Host</label>
-                    <input
+                    <Label>Host</Label>
+                    <Input
                         type="text"
                         value={data.host || ''}
                         onChange={(e) => handleChange('host', e.target.value)}
@@ -80,8 +93,8 @@ const DatabaseConfigPanel = ({ node, onChange, onClose }) => {
                 </div>
 
                 <div className="form-group">
-                    <label>Port</label>
-                    <input
+                    <Label>Port</Label>
+                    <Input
                         type="number"
                         value={data.port || dbTypeConfig[dbType]?.defaultPort || 3306}
                         onChange={(e) => handleChange('port', parseInt(e.target.value) || '')}
@@ -91,8 +104,8 @@ const DatabaseConfigPanel = ({ node, onChange, onClose }) => {
 
             {data.size && (
                 <div className="form-group">
-                    <label>Size</label>
-                    <input
+                    <Label>Size</Label>
+                    <Input
                         type="text"
                         value={data.size}
                         disabled

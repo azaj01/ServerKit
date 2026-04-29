@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { GitCommit, Rocket, Copy, CheckCircle } from 'lucide-react';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const CommitList = ({ commits, currentCommit, onDeploy, onCreateDev, loading = false }) => {
     const [actionLoading, setActionLoading] = useState({});
@@ -89,25 +92,26 @@ const CommitList = ({ commits, currentCommit, onDeploy, onCreateDev, loading = f
 
                         <div className="commit-actions">
                             {!isCurrent && (
-                                <button
-                                    className="btn btn-primary btn-sm"
+                                <Button
+                                    size="sm"
                                     onClick={() => handleDeploy(commit)}
                                     disabled={isDeploying}
                                     title="Deploy this commit"
                                 >
                                     <Rocket size={12} />
                                     {isDeploying ? 'Deploying...' : 'Deploy'}
-                                </button>
+                                </Button>
                             )}
-                            <button
-                                className="btn btn-secondary btn-sm"
+                            <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => setShowDevModal(commit)}
                                 disabled={isCreatingDev}
                                 title="Create dev environment from this commit"
                             >
                                 <Copy size={12} />
                                 {isCreatingDev ? 'Creating...' : 'Create Dev'}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 );
@@ -143,45 +147,45 @@ const CreateDevModal = ({ commit, onClose, onCreate, loading }) => {
 
     return (
         <Modal open={true} onClose={onClose} title="Create Dev Environment">
-                    <p className="hint">
-                        Create a development environment with code from commit{' '}
-                        <code>{commit.sha.substring(0, 7)}</code>
-                    </p>
-                    <p className="commit-message-preview">"{commit.message}"</p>
+            <p className="hint">
+                Create a development environment with code from commit{' '}
+                <code>{commit.sha.substring(0, 7)}</code>
+            </p>
+            <p className="commit-message-preview">"{commit.message}"</p>
 
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group">
-                            <label>Environment Name</label>
-                            <input
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleChange}
-                                placeholder="dev-abc1234"
-                            />
-                        </div>
+            <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                    <Label>Environment Name</Label>
+                    <Input
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        placeholder="dev-abc1234"
+                    />
+                </div>
 
-                        <div className="form-group">
-                            <label>Domain (optional)</label>
-                            <input
-                                type="text"
-                                name="domain"
-                                value={formData.domain}
-                                onChange={handleChange}
-                                placeholder="dev.example.com"
-                            />
-                            <span className="form-hint">Leave empty to auto-generate</span>
-                        </div>
+                <div className="form-group">
+                    <Label>Domain (optional)</Label>
+                    <Input
+                        type="text"
+                        name="domain"
+                        value={formData.domain}
+                        onChange={handleChange}
+                        placeholder="dev.example.com"
+                    />
+                    <span className="form-hint">Leave empty to auto-generate</span>
+                </div>
 
-                        <div className="modal-actions">
-                            <button type="button" className="btn btn-secondary" onClick={onClose}>
-                                Cancel
-                            </button>
-                            <button type="submit" className="btn btn-primary" disabled={loading}>
-                                {loading ? 'Creating...' : 'Create Environment'}
-                            </button>
-                        </div>
-                    </form>
+                <div className="modal-actions">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" disabled={loading}>
+                        {loading ? 'Creating...' : 'Create Environment'}
+                    </Button>
+                </div>
+            </form>
         </Modal>
     );
 };

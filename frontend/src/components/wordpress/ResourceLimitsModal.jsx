@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Cpu, HardDrive, AlertTriangle } from 'lucide-react';
+import { HardDrive, AlertTriangle } from 'lucide-react';
 import Spinner from '../Spinner';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const PRESETS = {
     low: { memory: '256M', cpus: '0.25', db_memory: '256M', db_cpus: '0.25' },
@@ -43,95 +46,105 @@ const ResourceLimitsModal = ({ environment, currentLimits, onClose, onApply }) =
 
     return (
         <Modal open={true} onClose={onClose} title="Resource Limits" className="resource-limits-modal">
-                <form onSubmit={handleSubmit}>
-                    <div className="resource-limits-env-name">{envName}</div>
+            <form onSubmit={handleSubmit}>
+                <div className="resource-limits-env-name">{envName}</div>
 
-                    <div className="resource-limits-presets">
-                        <span className="resource-limits-presets-label">Presets:</span>
-                        {Object.entries(PRESETS).map(([key]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                className="btn btn-ghost btn-sm resource-preset-btn"
-                                onClick={() => applyPreset(key)}
-                            >
-                                {key.charAt(0).toUpperCase() + key.slice(1)}
-                            </button>
-                        ))}
-                    </div>
+                <div className="resource-limits-presets">
+                    <span className="resource-limits-presets-label">Presets:</span>
+                    {Object.entries(PRESETS).map(([key]) => (
+                        <Button
+                            key={key}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="resource-preset-btn"
+                            onClick={() => applyPreset(key)}
+                        >
+                            {key.charAt(0).toUpperCase() + key.slice(1)}
+                        </Button>
+                    ))}
+                </div>
 
-                    <div className="resource-limits-section">
-                        <h4>
-                            <HardDrive size={14} />
-                            WordPress Container
-                        </h4>
-                        <div className="resource-limits-row">
-                            <label>Memory</label>
-                            <select
-                                value={limits.memory}
-                                onChange={e => handleChange('memory', e.target.value)}
-                            >
+                <div className="resource-limits-section">
+                    <h4>
+                        <HardDrive size={14} />
+                        WordPress Container
+                    </h4>
+                    <div className="resource-limits-row">
+                        <Label>Memory</Label>
+                        <Select value={limits.memory} onValueChange={v => handleChange('memory', v)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
                                 {MEMORY_OPTIONS.map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                                 ))}
-                            </select>
-                        </div>
-                        <div className="resource-limits-row">
-                            <label>CPU Cores</label>
-                            <select
-                                value={limits.cpus}
-                                onChange={e => handleChange('cpus', e.target.value)}
-                            >
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="resource-limits-row">
+                        <Label>CPU Cores</Label>
+                        <Select value={limits.cpus} onValueChange={v => handleChange('cpus', v)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
                                 {CPU_OPTIONS.map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                                 ))}
-                            </select>
-                        </div>
+                            </SelectContent>
+                        </Select>
                     </div>
+                </div>
 
-                    <div className="resource-limits-section">
-                        <h4>
-                            <HardDrive size={14} />
-                            Database Container
-                        </h4>
-                        <div className="resource-limits-row">
-                            <label>Memory</label>
-                            <select
-                                value={limits.db_memory}
-                                onChange={e => handleChange('db_memory', e.target.value)}
-                            >
+                <div className="resource-limits-section">
+                    <h4>
+                        <HardDrive size={14} />
+                        Database Container
+                    </h4>
+                    <div className="resource-limits-row">
+                        <Label>Memory</Label>
+                        <Select value={limits.db_memory} onValueChange={v => handleChange('db_memory', v)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
                                 {MEMORY_OPTIONS.filter((_, i) => i < 5).map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                                 ))}
-                            </select>
-                        </div>
-                        <div className="resource-limits-row">
-                            <label>CPU Cores</label>
-                            <select
-                                value={limits.db_cpus}
-                                onChange={e => handleChange('db_cpus', e.target.value)}
-                            >
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="resource-limits-row">
+                        <Label>CPU Cores</Label>
+                        <Select value={limits.db_cpus} onValueChange={v => handleChange('db_cpus', v)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
                                 {CPU_OPTIONS.filter((_, i) => i < 4).map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                                 ))}
-                            </select>
-                        </div>
+                            </SelectContent>
+                        </Select>
                     </div>
+                </div>
 
-                    <div className="resource-limits-warning">
-                        <AlertTriangle size={14} />
-                        <span>Applying resource limits will restart the environment containers.</span>
-                    </div>
+                <div className="resource-limits-warning">
+                    <AlertTriangle size={14} />
+                    <span>Applying resource limits will restart the environment containers.</span>
+                </div>
 
-                    <div className="modal-actions">
-                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? <><Spinner size="sm" /> Applying...</> : 'Apply Limits'}
-                        </button>
-                    </div>
-                </form>
+                <div className="modal-actions">
+                    <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" disabled={loading}>
+                        {loading ? <><Spinner size="sm" /> Applying...</> : 'Apply Limits'}
+                    </Button>
+                </div>
+            </form>
         </Modal>
     );
 };

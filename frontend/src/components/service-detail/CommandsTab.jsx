@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import api from '../../services/api';
 
 const CommandsTab = ({ appId, appType }) => {
@@ -43,32 +45,32 @@ const CommandsTab = ({ appId, appType }) => {
 
             <div className="quick-commands">
                 {quickCommands.map(({ label, cmd }) => (
-                    <button
+                    <Button
                         key={cmd}
-                        className="btn btn-secondary btn-sm"
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleRun(cmd)}
                         disabled={running}
                     >
                         {label}
-                    </button>
+                    </Button>
                 ))}
             </div>
 
             <div className="command-input">
-                <input
+                <Input
                     type="text"
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
                     placeholder="Enter command..."
                     onKeyDown={(e) => e.key === 'Enter' && handleRun()}
                 />
-                <button
-                    className="btn btn-primary"
+                <Button
                     onClick={() => handleRun()}
                     disabled={running}
                 >
                     {running ? 'Running...' : 'Run'}
-                </button>
+                </Button>
             </div>
 
             {output && (

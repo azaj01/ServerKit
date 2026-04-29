@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
 import { GitBranch, Link, Unlink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const GitConnectForm = ({ gitStatus, onConnect, onDisconnect }) => {
     const [formData, setFormData] = useState({
@@ -103,14 +108,14 @@ const GitConnectForm = ({ gitStatus, onConnect, onDisconnect }) => {
                 </div>
 
                 <div className="git-connected-actions">
-                    <button
-                        className="btn btn-danger-outline"
+                    <Button
+                        variant="destructive"
                         onClick={handleDisconnect}
                         disabled={loading}
                     >
                         <Unlink size={14} />
                         {loading ? 'Disconnecting...' : 'Disconnect'}
-                    </button>
+                    </Button>
                 </div>
             </div>
         );
@@ -127,8 +132,8 @@ const GitConnectForm = ({ gitStatus, onConnect, onDisconnect }) => {
 
             <form onSubmit={handleConnect}>
                 <div className="form-group">
-                    <label>Repository URL *</label>
-                    <input
+                    <Label>Repository URL *</Label>
+                    <Input
                         type="text"
                         name="repoUrl"
                         value={formData.repoUrl}
@@ -139,8 +144,8 @@ const GitConnectForm = ({ gitStatus, onConnect, onDisconnect }) => {
                 </div>
 
                 <div className="form-group">
-                    <label>Branch</label>
-                    <input
+                    <Label>Branch</Label>
+                    <Input
                         type="text"
                         name="branch"
                         value={formData.branch}
@@ -150,11 +155,11 @@ const GitConnectForm = ({ gitStatus, onConnect, onDisconnect }) => {
                 </div>
 
                 <div className="form-group">
-                    <label>Tracked Paths (one per line)</label>
-                    <textarea
+                    <Label>Tracked Paths (one per line)</Label>
+                    <Textarea
                         value={formData.paths.join('\n')}
                         onChange={handlePathsChange}
-                        placeholder="wp-content/themes&#10;wp-content/plugins"
+                        placeholder={"wp-content/themes\nwp-content/plugins"}
                         rows={3}
                     />
                     <span className="form-hint">
@@ -164,21 +169,22 @@ const GitConnectForm = ({ gitStatus, onConnect, onDisconnect }) => {
 
                 <div className="form-group">
                     <label className="checkbox-label">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             name="autoDeploy"
                             checked={formData.autoDeploy}
-                            onChange={handleChange}
+                            onCheckedChange={(checked) =>
+                                setFormData(prev => ({ ...prev, autoDeploy: checked }))
+                            }
                         />
                         <span>Enable auto-deploy on push</span>
                     </label>
                 </div>
 
                 <div className="form-actions">
-                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                    <Button type="submit" disabled={loading}>
                         <Link size={14} />
                         {loading ? 'Connecting...' : 'Connect Repository'}
-                    </button>
+                    </Button>
                 </div>
             </form>
         </div>

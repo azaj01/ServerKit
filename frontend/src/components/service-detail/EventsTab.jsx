@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useDeployments } from '../../hooks/useDeployments';
 import { getDeployStatus, formatRelativeTime, formatDuration } from '../../utils/serviceTypes';
 
@@ -15,7 +17,7 @@ const EventsTab = ({ appId }) => {
             <div className="events-tab__empty">
                 <h3>Failed to load events</h3>
                 <p>{error}</p>
-                <button className="btn btn-secondary" onClick={reload}>Retry</button>
+                <Button variant="outline" onClick={reload}>Retry</Button>
             </div>
         );
     }
@@ -37,7 +39,7 @@ const EventsTab = ({ appId }) => {
         <div className="events-tab">
             <div className="events-tab__header">
                 <h3>Deployment Events</h3>
-                <button className="btn btn-secondary btn-sm" onClick={reload}>Refresh</button>
+                <Button variant="outline" size="sm" onClick={reload}>Refresh</Button>
             </div>
 
             <div className="events-tab__timeline">

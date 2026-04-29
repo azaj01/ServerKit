@@ -1,6 +1,9 @@
 import React from 'react';
 import { Globe } from 'lucide-react';
 import ConfigPanel from '../ConfigPanel';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
 const DomainConfigPanel = ({ node, onChange, onClose }) => {
     const data = node?.data || {};
@@ -25,8 +28,8 @@ const DomainConfigPanel = ({ node, onChange, onClose }) => {
             onClose={onClose}
         >
             <div className="form-group">
-                <label>Domain Name</label>
-                <input
+                <Label>Domain Name</Label>
+                <Input
                     type="text"
                     value={data.name || ''}
                     onChange={(e) => handleChange('name', e.target.value)}
@@ -36,21 +39,26 @@ const DomainConfigPanel = ({ node, onChange, onClose }) => {
             </div>
 
             <div className="form-group">
-                <label>SSL Status</label>
-                <select
+                <Label>SSL Status</Label>
+                <Select
                     value={data.ssl || 'none'}
-                    onChange={(e) => handleChange('ssl', e.target.value)}
+                    onValueChange={(value) => handleChange('ssl', value)}
                 >
-                    <option value="none">No SSL</option>
-                    <option value="valid">Valid Certificate</option>
-                    <option value="expired">Expired Certificate</option>
-                </select>
+                    <SelectTrigger>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">No SSL</SelectItem>
+                        <SelectItem value="valid">Valid Certificate</SelectItem>
+                        <SelectItem value="expired">Expired Certificate</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             {data.ssl === 'valid' && (
                 <div className="form-group">
-                    <label>SSL Expiry Date</label>
-                    <input
+                    <Label>SSL Expiry Date</Label>
+                    <Input
                         type="date"
                         value={data.sslExpiry || ''}
                         onChange={(e) => handleChange('sslExpiry', e.target.value)}
@@ -60,14 +68,19 @@ const DomainConfigPanel = ({ node, onChange, onClose }) => {
             )}
 
             <div className="form-group">
-                <label>DNS Status</label>
-                <select
+                <Label>DNS Status</Label>
+                <Select
                     value={data.dnsStatus || 'pending'}
-                    onChange={(e) => handleChange('dnsStatus', e.target.value)}
+                    onValueChange={(value) => handleChange('dnsStatus', value)}
                 >
-                    <option value="pending">Pending Propagation</option>
-                    <option value="propagated">Propagated</option>
-                </select>
+                    <SelectTrigger>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="pending">Pending Propagation</SelectItem>
+                        <SelectItem value="propagated">Propagated</SelectItem>
+                    </SelectContent>
+                </Select>
                 <span className="form-hint">DNS record propagation status</span>
             </div>
         </ConfigPanel>

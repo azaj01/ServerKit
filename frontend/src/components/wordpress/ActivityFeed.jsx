@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Database, GitBranch, Lock, Unlock, Trash2, Play, Square, RefreshCw, Camera, AlertCircle } from 'lucide-react';
 import wordpressApi from '../../services/wordpress';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const ACTION_ICONS = {
     create: Play,
@@ -17,18 +20,18 @@ const ACTION_ICONS = {
     restarted: RefreshCw
 };
 
-const ACTION_COLORS = {
+const ACTION_BADGE_VARIANTS = {
     create: 'success',
     deploy: 'info',
-    promote: 'primary',
+    promote: 'default',
     sync: 'info',
     lock: 'warning',
-    unlock: 'default',
-    destroy: 'danger',
+    unlock: 'secondary',
+    destroy: 'destructive',
     snapshot_created: 'info',
     snapshot_restored: 'warning',
     started: 'success',
-    stopped: 'default',
+    stopped: 'secondary',
     restarted: 'info'
 };
 
@@ -77,10 +80,10 @@ const ActivityFeed = ({ projectId, envId, limit = 20, compact = false }) => {
             <div className="activity-feed">
                 {[1, 2, 3].map(i => (
                     <div key={i} className="activity-item-skeleton">
-                        <div className="skeleton" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+                        <Skeleton className="h-8 w-8 rounded-full" />
                         <div style={{ flex: 1 }}>
-                            <div className="skeleton" style={{ width: '60%', height: 14, marginBottom: 6 }} />
-                            <div className="skeleton" style={{ width: '40%', height: 12 }} />
+                            <Skeleton className="h-3.5 w-3/5 mb-1.5" />
+                            <Skeleton className="h-3 w-2/5" />
                         </div>
                     </div>
                 ))}
@@ -100,7 +103,7 @@ const ActivityFeed = ({ projectId, envId, limit = 20, compact = false }) => {
         <div className={`activity-feed ${compact ? 'compact' : ''}`}>
             {activities.map(activity => {
                 const Icon = ACTION_ICONS[activity.action] || AlertCircle;
-                const colorClass = ACTION_COLORS[activity.action] || 'default';
+                const colorClass = ACTION_BADGE_VARIANTS[activity.action] || 'secondary';
 
                 return (
                     <div key={activity.id} className="activity-item">
@@ -118,19 +121,19 @@ const ActivityFeed = ({ projectId, envId, limit = 20, compact = false }) => {
                         <div className="activity-meta">
                             <span className="activity-time">{formatRelativeTime(activity.created_at)}</span>
                             {activity.status === 'failed' && (
-                                <span className="activity-status-badge failed">Failed</span>
+                                <Badge variant="destructive">Failed</Badge>
                             )}
                             {activity.status === 'running' && (
-                                <span className="activity-status-badge running">Running</span>
+                                <Badge variant="info">Running</Badge>
                             )}
                         </div>
                     </div>
                 );
             })}
             {total > activities.length && !compact && (
-                <button className="btn btn-ghost btn-sm activity-load-more" onClick={loadActivities}>
+                <Button variant="ghost" size="sm" className="activity-load-more" onClick={loadActivities}>
                     Load more
-                </button>
+                </Button>
             )}
         </div>
     );

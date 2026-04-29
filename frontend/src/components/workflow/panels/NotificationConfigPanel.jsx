@@ -1,6 +1,10 @@
 import React from 'react';
 import ConfigPanel from '../ConfigPanel';
 import { Bell, MessageSquare, Mail, Slack, Send, Globe } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 const NotificationConfigPanel = ({ node, onChange, onClose, onDelete }) => {
     const { data } = node;
@@ -22,14 +26,14 @@ const NotificationConfigPanel = ({ node, onChange, onClose, onDelete }) => {
             color="#818cf8"
             onClose={onClose}
             footer={onDelete && (
-                <button className="btn-delete-node" onClick={onDelete}>
+                <Button variant="destructive" size="sm" className="btn-delete-node" onClick={onDelete}>
                     Remove Node
-                </button>
+                </Button>
             )}
         >
             <div className="form-group">
-                <label>Label</label>
-                <input
+                <Label>Label</Label>
+                <Input
                     type="text"
                     value={label}
                     onChange={(e) => onChange({ ...data, label: e.target.value })}
@@ -37,7 +41,7 @@ const NotificationConfigPanel = ({ node, onChange, onClose, onDelete }) => {
             </div>
 
             <div className="form-group">
-                <label>Channel</label>
+                <Label>Channel</Label>
                 <div className="channel-grid">
                     {channels.map(({ id, icon: Icon, label: chLabel }) => (
                         <button
@@ -53,8 +57,8 @@ const NotificationConfigPanel = ({ node, onChange, onClose, onDelete }) => {
             </div>
 
             <div className="form-group">
-                <label>Message Template</label>
-                <textarea
+                <Label>Message Template</Label>
+                <Textarea
                     value={message}
                     onChange={(e) => onChange({ ...data, message: e.target.value })}
                     placeholder={'Build finished for {{workflow_name}}\\nExit code: ${build.returncode}'}

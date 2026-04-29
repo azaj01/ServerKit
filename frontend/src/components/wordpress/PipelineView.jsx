@@ -8,6 +8,8 @@ import {
 import EnvironmentStatusBadge from './EnvironmentStatusBadge';
 import { HealthDot } from './HealthStatusPanel';
 import DiskUsageBar from './DiskUsageBar';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const PipelineView = ({
     pipeline,
@@ -39,9 +41,6 @@ const PipelineView = ({
     const devEnv = environments.find(e => e.environment_type === 'development');
     const stagingEnv = environments.find(e => e.environment_type === 'staging');
     const multidevEnvs = environments.filter(e => e.environment_type === 'multidev');
-
-    // Pipeline order: Dev -> Staging -> Production
-    const pipelineEnvs = [devEnv, stagingEnv].filter(Boolean);
 
     return (
         <div className="pipeline-view">
@@ -140,26 +139,28 @@ const PipelineView = ({
             <div className="pipeline-sync-row">
                 {devEnv && (
                     <div className="pipeline-sync-action">
-                        <button
-                            className="btn btn-ghost btn-sm"
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => onSync?.(devEnv)}
                             title="Pull production data into development"
                         >
                             <ArrowDownLeft size={14} />
                             Pull from Prod
-                        </button>
+                        </Button>
                     </div>
                 )}
                 {stagingEnv && (
                     <div className="pipeline-sync-action">
-                        <button
-                            className="btn btn-ghost btn-sm"
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => onSync?.(stagingEnv)}
                             title="Pull production data into staging"
                         >
                             <ArrowDownLeft size={14} />
                             Pull from Prod
-                        </button>
+                        </Button>
                     </div>
                 )}
             </div>
@@ -168,34 +169,40 @@ const PipelineView = ({
             {onCompare && (devEnv || stagingEnv) && production && (
                 <div className="pipeline-compare-row">
                     {devEnv && (
-                        <button
-                            className="btn btn-ghost btn-sm pipeline-compare-btn"
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="pipeline-compare-btn"
                             onClick={() => onCompare(devEnv, production)}
                             title="Compare development vs production"
                         >
                             <GitCompare size={14} />
                             Compare vs Prod
-                        </button>
+                        </Button>
                     )}
                     {stagingEnv && (
-                        <button
-                            className="btn btn-ghost btn-sm pipeline-compare-btn"
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="pipeline-compare-btn"
                             onClick={() => onCompare(stagingEnv, production)}
                             title="Compare staging vs production"
                         >
                             <GitCompare size={14} />
                             Compare vs Prod
-                        </button>
+                        </Button>
                     )}
                     {devEnv && stagingEnv && (
-                        <button
-                            className="btn btn-ghost btn-sm pipeline-compare-btn"
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="pipeline-compare-btn"
                             onClick={() => onCompare(devEnv, stagingEnv)}
                             title="Compare development vs staging"
                         >
                             <GitCompare size={14} />
                             Dev vs Staging
-                        </button>
+                        </Button>
                     )}
                 </div>
             )}
@@ -210,13 +217,14 @@ const PipelineView = ({
                             <span className="pipeline-section-count">{multidevEnvs.length}</span>
                         )}
                     </h4>
-                    <button
-                        className="btn btn-ghost btn-sm"
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={onCreateMultidev}
                     >
                         <Plus size={14} />
                         New Multidev
-                    </button>
+                    </Button>
                 </div>
                 {multidevEnvs.length > 0 ? (
                     <div className="pipeline-multidev-grid">
@@ -244,10 +252,10 @@ const PipelineView = ({
                         <GitBranch size={24} />
                         <p>No multidev environments yet</p>
                         <span>Create branch-based environments for feature development and testing</span>
-                        <button className="btn btn-primary btn-sm" onClick={onCreateMultidev}>
+                        <Button size="sm" onClick={onCreateMultidev}>
                             <Plus size={14} />
                             Create Multidev
-                        </button>
+                        </Button>
                     </div>
                 )}
             </div>
@@ -299,11 +307,10 @@ const PipelineCard = ({
         <div className={`pipeline-card ${isProduction ? 'production' : ''} ${env.is_locked ? 'locked' : ''}`}>
             <div className="pipeline-card-header">
                 {onBulkToggle && !isProduction && (
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         className="pipeline-card-checkbox"
                         checked={bulkSelected || false}
-                        onChange={() => onBulkToggle(env.id)}
+                        onCheckedChange={() => onBulkToggle(env.id)}
                     />
                 )}
                 <EnvironmentStatusBadge
@@ -315,12 +322,14 @@ const PipelineCard = ({
                     <HealthDot status={healthStatus} size={8} />
                 )}
                 <div className="pipeline-card-menu-wrapper">
-                    <button
-                        className="btn btn-ghost btn-sm pipeline-card-menu-btn"
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="pipeline-card-menu-btn"
                         onClick={() => setShowMenu(!showMenu)}
                     >
                         <MoreVertical size={14} />
-                    </button>
+                    </Button>
                     {showMenu && (
                         <div className="pipeline-card-menu" onMouseLeave={() => setShowMenu(false)}>
                             {isRunning ? (
@@ -413,12 +422,9 @@ const PipelineCard = ({
                         <ExternalLink size={12} /> Visit
                     </a>
                 )}
-                <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => onViewLogs?.(env)}
-                >
+                <Button variant="ghost" size="sm" onClick={() => onViewLogs?.(env)}>
                     <FileText size={12} /> Logs
-                </button>
+                </Button>
             </div>
 
             {env.is_locked && env.locked_reason && (
@@ -482,7 +488,6 @@ const MultidevCard = ({
         return date.toLocaleDateString();
     }
 
-    // Determine best promote target
     const promoteTarget = devEnv || stagingEnv || production;
 
     return (
@@ -499,12 +504,13 @@ const MultidevCard = ({
                     )}
                 </div>
                 <div className="multidev-card-menu-wrapper">
-                    <button
-                        className="btn btn-ghost btn-sm"
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setShowMenu(!showMenu)}
                     >
                         <MoreVertical size={14} />
-                    </button>
+                    </Button>
                     {showMenu && (
                         <div className="pipeline-card-menu" onMouseLeave={() => setShowMenu(false)}>
                             {isRunning ? (
@@ -580,20 +586,21 @@ const MultidevCard = ({
                         <ExternalLink size={12} /> Visit
                     </a>
                 )}
-                <button
-                    className="btn btn-ghost btn-sm"
+                <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => promoteTarget && onPromote?.(env, promoteTarget)}
                     disabled={!promoteTarget}
                     title={promoteTarget ? `Promote to ${promoteTarget.environment_type || 'production'}` : 'No target environment'}
                 >
                     <ArrowRight size={12} /> Promote
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={() => onViewLogs?.(env)}>
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => onViewLogs?.(env)}>
                     <FileText size={12} />
-                </button>
-                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => onDelete?.(env)}>
+                </Button>
+                <Button variant="destructive" size="icon" onClick={() => onDelete?.(env)}>
                     <Trash2 size={12} />
-                </button>
+                </Button>
             </div>
             {env.is_locked && env.locked_reason && (
                 <div className="pipeline-card-lock-banner">

@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, Loader, CheckCircle, XCircle, Server, Database, Globe, Box, ExternalLink } from 'lucide-react';
+import { Loader, CheckCircle, XCircle, Server, Database, Globe, Box, ExternalLink } from 'lucide-react';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
 
 const nodeTypeConfig = {
     dockerApp: { icon: Server, label: 'Docker App', color: '#2496ed' },
@@ -115,9 +116,9 @@ const DeploymentProgressModal = ({ isDeploying, results, nodes, onClose }) => {
 
                 <div className="deployment-modal-footer">
                     {isComplete && (
-                        <button className="btn btn-primary" onClick={onClose}>
+                        <Button variant="default" onClick={onClose}>
                             {hasErrors ? 'Close' : 'Done'}
-                        </button>
+                        </Button>
                     )}
                 </div>
         </Modal>

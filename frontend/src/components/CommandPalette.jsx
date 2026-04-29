@@ -1,6 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import {
+    CommandDialog,
+    CommandInput,
+    CommandList,
+    CommandEmpty,
+    CommandGroup,
+    CommandItem,
+} from '@/components/ui/command';
 
 const STATIC_PAGES = [
     { label: 'Services', path: '/services', category: 'Pages', keywords: 'apps containers' },
@@ -59,16 +67,12 @@ function scoreItem(item, query) {
 const CommandPalette = ({ open, onClose }) => {
     const [query, setQuery] = useState('');
     const [dynamicItems, setDynamicItems] = useState([]);
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const inputRef = useRef(null);
-    const listRef = useRef(null);
     const navigate = useNavigate();
 
     // Fetch dynamic items (services/containers + servers) when opened
     useEffect(() => {
         if (!open) return;
         setQuery('');
-        setSelectedIndex(0);
 
         let cancelled = false;
         async function fetchDynamic() {
@@ -85,7 +89,7 @@ const CommandPalette = ({ open, onClose }) => {
                         });
                     });
                 }
-            } catch {}
+            } catch (_e) {} // eslint-disable-line no-empty
             try {
                 const serverData = await api.getServers();
                 const servers = serverData?.servers || serverData || [];
@@ -99,18 +103,11 @@ const CommandPalette = ({ open, onClose }) => {
                         });
                     });
                 }
-            } catch {}
+            } catch (_e) {} // eslint-disable-line no-empty
             if (!cancelled) setDynamicItems(items);
         }
         fetchDynamic();
         return () => { cancelled = true; };
-    }, [open]);
-
-    // Focus input when opened
-    useEffect(() => {
-        if (open && inputRef.current) {
-            requestAnimationFrame(() => inputRef.current?.focus());
-        }
     }, [open]);
 
     const allItems = useMemo(() => [...STATIC_PAGES, ...dynamicItems], [dynamicItems]);
@@ -124,99 +121,46 @@ const CommandPalette = ({ open, onClose }) => {
             .slice(0, 20);
     }, [query, allItems]);
 
-    // Reset selected index when results change
-    useEffect(() => {
-        setSelectedIndex(0);
-    }, [results]);
-
     const handleSelect = useCallback((item) => {
         navigate(item.path);
         onClose();
     }, [navigate, onClose]);
 
-    const handleKeyDown = useCallback((e) => {
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setSelectedIndex(prev => Math.max(prev - 1, 0));
-        } else if (e.key === 'Enter' && results[selectedIndex]) {
-            e.preventDefault();
-            handleSelect(results[selectedIndex]);
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            onClose();
-        }
-    }, [results, selectedIndex, handleSelect, onClose]);
-
-    // Scroll selected item into view
-    useEffect(() => {
-        if (!listRef.current) return;
-        const selected = listRef.current.children[selectedIndex];
-        if (selected) selected.scrollIntoView({ block: 'nearest' });
-    }, [selectedIndex]);
-
-    if (!open) return null;
-
     // Group results by category
-    const grouped = {};
-    results.forEach(item => {
-        if (!grouped[item.category]) grouped[item.category] = [];
-        grouped[item.category].push(item);
-    });
-
-    let flatIndex = -1;
+    const grouped = useMemo(() => {
+        const groups = {};
+        results.forEach(item => {
+            if (!groups[item.category]) groups[item.category] = [];
+            groups[item.category].push(item);
+        });
+        return groups;
+    }, [results]);
 
     return (
-        <div className="command-palette-overlay" onClick={onClose}>
-            <div className="command-palette" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Command palette">
-                <div className="command-palette__input-wrapper">
-                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" strokeWidth="2">
-                        <circle cx="11" cy="11" r="8"/>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={query}
-                        onChange={e => setQuery(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Search pages, services, servers..."
-                        className="command-palette__input"
-                        autoComplete="off"
-                        spellCheck="false"
-                    />
-                    <kbd className="command-palette__kbd">ESC</kbd>
-                </div>
-                <div className="command-palette__results" ref={listRef}>
-                    {results.length === 0 ? (
-                        <div className="command-palette__empty">No results found</div>
-                    ) : (
-                        Object.entries(grouped).map(([category, items]) => (
-                            <div key={category} className="command-palette__group">
-                                <div className="command-palette__group-label">{category}</div>
-                                {items.map(item => {
-                                    flatIndex++;
-                                    const idx = flatIndex;
-                                    return (
-                                        <button
-                                            key={`${item.category}-${item.path}-${item.label}`}
-                                            className={`command-palette__item ${idx === selectedIndex ? 'command-palette__item--active' : ''}`}
-                                            onClick={() => handleSelect(item)}
-                                            onMouseEnter={() => setSelectedIndex(idx)}
-                                        >
-                                            <span className="command-palette__item-label">{item.label}</span>
-                                            <span className="command-palette__item-path">{item.path}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-        </div>
+        <CommandDialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+            <CommandInput
+                placeholder="Search pages, services, servers..."
+                value={query}
+                onValueChange={setQuery}
+            />
+            <CommandList>
+                <CommandEmpty>No results found</CommandEmpty>
+                {Object.entries(grouped).map(([category, items]) => (
+                    <CommandGroup key={category} heading={category}>
+                        {items.map(item => (
+                            <CommandItem
+                                key={`${item.category}-${item.path}-${item.label}`}
+                                value={`${item.label} ${item.path} ${item.keywords || ''}`}
+                                onSelect={() => handleSelect(item)}
+                            >
+                                <span className="command-palette__item-label">{item.label}</span>
+                                <span className="command-palette__item-path">{item.path}</span>
+                            </CommandItem>
+                        ))}
+                    </CommandGroup>
+                ))}
+            </CommandList>
+        </CommandDialog>
     );
 };
 

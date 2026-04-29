@@ -1,6 +1,10 @@
 import React from 'react';
 import { Box } from 'lucide-react';
 import ConfigPanel from '../ConfigPanel';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
 const serviceTypeConfig = {
     redis: { color: '#dc382d', defaultPort: 6379 },
@@ -34,8 +38,8 @@ const ServiceConfigPanel = ({ node, onChange, onClose }) => {
             onClose={onClose}
         >
             <div className="form-group">
-                <label>Name</label>
-                <input
+                <Label>Name</Label>
+                <Input
                     type="text"
                     value={data.name || ''}
                     onChange={(e) => handleChange('name', e.target.value)}
@@ -44,33 +48,43 @@ const ServiceConfigPanel = ({ node, onChange, onClose }) => {
             </div>
 
             <div className="form-group">
-                <label>Service Type</label>
-                <select
+                <Label>Service Type</Label>
+                <Select
                     value={data.serviceType || 'redis'}
-                    onChange={(e) => handleChange('serviceType', e.target.value)}
+                    onValueChange={(value) => handleChange('serviceType', value)}
                 >
-                    <option value="redis">Redis</option>
-                    <option value="memcached">Memcached</option>
-                    <option value="rabbitmq">RabbitMQ</option>
-                    <option value="queue">Queue</option>
-                </select>
+                    <SelectTrigger>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="redis">Redis</SelectItem>
+                        <SelectItem value="memcached">Memcached</SelectItem>
+                        <SelectItem value="rabbitmq">RabbitMQ</SelectItem>
+                        <SelectItem value="queue">Queue</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             <div className="form-group">
-                <label>Status</label>
-                <select
+                <Label>Status</Label>
+                <Select
                     value={data.status || 'stopped'}
-                    onChange={(e) => handleChange('status', e.target.value)}
+                    onValueChange={(value) => handleChange('status', value)}
                 >
-                    <option value="stopped">Stopped</option>
-                    <option value="running">Running</option>
-                    <option value="error">Error</option>
-                </select>
+                    <SelectTrigger>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="stopped">Stopped</SelectItem>
+                        <SelectItem value="running">Running</SelectItem>
+                        <SelectItem value="error">Error</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             <div className="form-group">
-                <label>Port</label>
-                <input
+                <Label>Port</Label>
+                <Input
                     type="number"
                     value={data.port || serviceTypeConfig[serviceType]?.defaultPort || 6379}
                     onChange={(e) => handleChange('port', parseInt(e.target.value) || '')}
@@ -78,8 +92,8 @@ const ServiceConfigPanel = ({ node, onChange, onClose }) => {
             </div>
 
             <div className="form-group">
-                <label>Description</label>
-                <textarea
+                <Label>Description</Label>
+                <Textarea
                     value={data.description || ''}
                     onChange={(e) => handleChange('description', e.target.value)}
                     placeholder="Service description..."

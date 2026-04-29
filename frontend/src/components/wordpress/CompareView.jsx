@@ -3,6 +3,7 @@ import { GitCompare, Check, X, Minus, RefreshCw } from 'lucide-react';
 import wordpressApi from '../../services/wordpress';
 import Spinner from '../Spinner';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
 
 const CompareView = ({ projectId, envA, envB, onClose }) => {
     const [comparison, setComparison] = useState(null);
@@ -33,107 +34,107 @@ const CompareView = ({ projectId, envA, envB, onClose }) => {
 
     return (
         <Modal open={true} onClose={onClose} title="Compare Environments" size="xl">
-                <div className="compare-header">
-                    <div className={`compare-env-pill ${envAType}`}>
-                        <span className="compare-env-type">{envAType}</span>
-                        <span className="compare-env-name">{envA?.name || 'Environment A'}</span>
-                    </div>
-                    <GitCompare size={16} className="compare-vs-icon" />
-                    <div className={`compare-env-pill ${envBType}`}>
-                        <span className="compare-env-type">{envBType}</span>
-                        <span className="compare-env-name">{envB?.name || 'Environment B'}</span>
-                    </div>
-                    <button className="btn btn-ghost btn-sm" onClick={loadComparison} disabled={loading}>
-                        <RefreshCw size={14} />
-                    </button>
+            <div className="compare-header">
+                <div className={`compare-env-pill ${envAType}`}>
+                    <span className="compare-env-type">{envAType}</span>
+                    <span className="compare-env-name">{envA?.name || 'Environment A'}</span>
                 </div>
+                <GitCompare size={16} className="compare-vs-icon" />
+                <div className={`compare-env-pill ${envBType}`}>
+                    <span className="compare-env-type">{envBType}</span>
+                    <span className="compare-env-name">{envB?.name || 'Environment B'}</span>
+                </div>
+                <Button variant="ghost" size="sm" onClick={loadComparison} disabled={loading}>
+                    <RefreshCw size={14} />
+                </Button>
+            </div>
 
-                <div className="compare-body">
-                    {loading && (
-                        <div className="compare-loading">
-                            <Spinner size="md" />
-                            <span>Comparing environments...</span>
-                        </div>
-                    )}
+            <div className="compare-body">
+                {loading && (
+                    <div className="compare-loading">
+                        <Spinner size="md" />
+                        <span>Comparing environments...</span>
+                    </div>
+                )}
 
-                    {error && (
-                        <div className="compare-error">
-                            <p>{error}</p>
-                            <button className="btn btn-primary btn-sm" onClick={loadComparison}>
-                                Retry
-                            </button>
-                        </div>
-                    )}
+                {error && (
+                    <div className="compare-error">
+                        <p>{error}</p>
+                        <Button size="sm" onClick={loadComparison}>
+                            Retry
+                        </Button>
+                    </div>
+                )}
 
-                    {!loading && !error && comparison && (
-                        <>
-                            {/* Version Comparison */}
-                            <CompareSection title="Versions">
-                                <CompareRow
-                                    label="WordPress"
-                                    valueA={comparison.env_a?.wp_version}
-                                    valueB={comparison.env_b?.wp_version}
-                                />
-                                <CompareRow
-                                    label="PHP"
-                                    valueA={comparison.env_a?.php_version}
-                                    valueB={comparison.env_b?.php_version}
-                                />
-                                <CompareRow
-                                    label="Active Theme"
-                                    valueA={comparison.env_a?.active_theme}
-                                    valueB={comparison.env_b?.active_theme}
-                                />
+                {!loading && !error && comparison && (
+                    <>
+                        {/* Version Comparison */}
+                        <CompareSection title="Versions">
+                            <CompareRow
+                                label="WordPress"
+                                valueA={comparison.env_a?.wp_version}
+                                valueB={comparison.env_b?.wp_version}
+                            />
+                            <CompareRow
+                                label="PHP"
+                                valueA={comparison.env_a?.php_version}
+                                valueB={comparison.env_b?.php_version}
+                            />
+                            <CompareRow
+                                label="Active Theme"
+                                valueA={comparison.env_a?.active_theme}
+                                valueB={comparison.env_b?.active_theme}
+                            />
+                        </CompareSection>
+
+                        {/* Plugins Comparison */}
+                        {comparison.plugins && (
+                            <CompareSection
+                                title="Plugins"
+                                summary={getPluginSummary(comparison.plugins)}
+                            >
+                                {comparison.plugins.map(plugin => (
+                                    <CompareRow
+                                        key={plugin.name}
+                                        label={plugin.name}
+                                        valueA={plugin.version_a || (plugin.in_a ? 'Installed' : null)}
+                                        valueB={plugin.version_b || (plugin.in_b ? 'Installed' : null)}
+                                        status={plugin.status}
+                                    />
+                                ))}
+                                {comparison.plugins.length === 0 && (
+                                    <div className="compare-empty-row">No plugin data available</div>
+                                )}
                             </CompareSection>
+                        )}
 
-                            {/* Plugins Comparison */}
-                            {comparison.plugins && (
-                                <CompareSection
-                                    title="Plugins"
-                                    summary={getPluginSummary(comparison.plugins)}
-                                >
-                                    {comparison.plugins.map(plugin => (
-                                        <CompareRow
-                                            key={plugin.name}
-                                            label={plugin.name}
-                                            valueA={plugin.version_a || (plugin.in_a ? 'Installed' : null)}
-                                            valueB={plugin.version_b || (plugin.in_b ? 'Installed' : null)}
-                                            status={plugin.status}
-                                        />
-                                    ))}
-                                    {comparison.plugins.length === 0 && (
-                                        <div className="compare-empty-row">No plugin data available</div>
-                                    )}
-                                </CompareSection>
-                            )}
+                        {/* Themes Comparison */}
+                        {comparison.themes && (
+                            <CompareSection
+                                title="Themes"
+                                summary={getThemeSummary(comparison.themes)}
+                            >
+                                {comparison.themes.map(theme => (
+                                    <CompareRow
+                                        key={theme.name}
+                                        label={theme.name}
+                                        valueA={theme.version_a || (theme.in_a ? 'Installed' : null)}
+                                        valueB={theme.version_b || (theme.in_b ? 'Installed' : null)}
+                                        status={theme.status}
+                                    />
+                                ))}
+                                {comparison.themes.length === 0 && (
+                                    <div className="compare-empty-row">No theme data available</div>
+                                )}
+                            </CompareSection>
+                        )}
+                    </>
+                )}
+            </div>
 
-                            {/* Themes Comparison */}
-                            {comparison.themes && (
-                                <CompareSection
-                                    title="Themes"
-                                    summary={getThemeSummary(comparison.themes)}
-                                >
-                                    {comparison.themes.map(theme => (
-                                        <CompareRow
-                                            key={theme.name}
-                                            label={theme.name}
-                                            valueA={theme.version_a || (theme.in_a ? 'Installed' : null)}
-                                            valueB={theme.version_b || (theme.in_b ? 'Installed' : null)}
-                                            status={theme.status}
-                                        />
-                                    ))}
-                                    {comparison.themes.length === 0 && (
-                                        <div className="compare-empty-row">No theme data available</div>
-                                    )}
-                                </CompareSection>
-                            )}
-                        </>
-                    )}
-                </div>
-
-                <div className="modal-actions">
-                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                </div>
+            <div className="modal-actions">
+                <Button variant="outline" onClick={onClose}>Close</Button>
+            </div>
         </Modal>
     );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, HelpCircle } from 'lucide-react';
 import Spinner from '../Spinner';
+import { Button } from '@/components/ui/button';
 
 const STATUS_CONFIG = {
     healthy: { icon: CheckCircle, color: 'green', label: 'Healthy' },
@@ -62,7 +63,6 @@ const HealthStatusPanel = ({ projectId, environments, api, compact = false }) =>
     }
 
     if (compact) {
-        // Return just dots for pipeline cards
         return null; // Dots are rendered directly via HealthDot export
     }
 
@@ -84,10 +84,10 @@ const HealthStatusPanel = ({ projectId, environments, api, compact = false }) =>
                     <Activity size={16} />
                     Environment Health
                 </h4>
-                <button className="btn btn-ghost btn-sm" onClick={loadHealth}>
+                <Button variant="ghost" size="sm" onClick={loadHealth}>
                     <RefreshCw size={12} />
                     Refresh
-                </button>
+                </Button>
             </div>
 
             <div className="health-panel-grid">

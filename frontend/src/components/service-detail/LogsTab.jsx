@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../../services/api';
 import { useLogsDrawer } from '../../contexts/LogsDrawerContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 
 const LOG_LEVELS = ['all', 'error', 'warn', 'info', 'debug'];
 
@@ -57,7 +60,6 @@ const LogsTab = ({ app }) => {
         if (!rawLogs) return [];
         let lines = rawLogs.split('\n');
 
-        // Level filter
         if (levelFilter !== 'all') {
             lines = lines.filter(line => {
                 const lower = line.toLowerCase();
@@ -69,7 +71,6 @@ const LogsTab = ({ app }) => {
             });
         }
 
-        // Search filter
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             lines = lines.filter(line => line.toLowerCase().includes(term));
@@ -112,7 +113,7 @@ const LogsTab = ({ app }) => {
                             <circle cx="11" cy="11" r="8"/>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                         </svg>
-                        <input
+                        <Input
                             type="text"
                             placeholder="Search logs..."
                             value={searchTerm}
@@ -146,36 +147,37 @@ const LogsTab = ({ app }) => {
                 </div>
                 <div className="logs-toolbar__right">
                     <label className="logs-toolbar__toggle">
-                        <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} />
+                        <Switch checked={autoScroll} onCheckedChange={setAutoScroll} />
                         <span>Auto-scroll</span>
                     </label>
                     <label className="logs-toolbar__toggle">
-                        <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+                        <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
                         <span>Live</span>
                     </label>
                     <div className="logs-toolbar__divider" />
-                    <button className="btn btn-ghost btn-sm" onClick={handleCopy} title="Copy logs">
+                    <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy logs">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                         </svg>
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={handleDownload} title="Download logs">
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={handleDownload} title="Download logs">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="7 10 12 15 17 10"/>
                             <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={loadLogs} title="Refresh">
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={loadLogs} title="Refresh">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polyline points="23 4 23 10 17 10"/>
                             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
                         </svg>
-                    </button>
+                    </Button>
                     <div className="logs-toolbar__divider" />
-                    <button
-                        className="btn btn-ghost btn-sm"
+                    <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => openDrawer({
                             name: app.name,
                             containerId: app.id,
@@ -188,7 +190,7 @@ const LogsTab = ({ app }) => {
                             <line x1="12" y1="17" x2="12" y2="22"/>
                             <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
                         </svg>
-                    </button>
+                    </Button>
                 </div>
             </div>
 

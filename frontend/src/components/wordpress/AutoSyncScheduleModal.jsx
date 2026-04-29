@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import Spinner from '../Spinner';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 const SCHEDULE_PRESETS = [
     { label: 'Daily at 3 AM', value: '0 3 * * *' },
@@ -85,96 +89,91 @@ const AutoSyncScheduleModal = ({ environment, prodId, onClose, api }) => {
 
     return (
         <Modal open={true} onClose={onClose} title="Auto-Sync Schedule" className="auto-sync-modal">
-                {loading ? (
-                    <div className="auto-sync-loading">
-                        <Spinner size="sm" />
-                        <span>Loading schedule...</span>
-                    </div>
-                ) : (
-                    <div className="auto-sync-body">
-                        <div className="auto-sync-env-name">{envName}</div>
-
-                        <div className="auto-sync-toggle">
-                            <label className="auto-sync-toggle-label">
-                                <span>Enable Auto-Sync from Production</span>
-                                <button
-                                    className={`toggle-switch ${enabled ? 'active' : ''}`}
-                                    onClick={() => setEnabled(!enabled)}
-                                >
-                                    <span className="toggle-switch-slider" />
-                                </button>
-                            </label>
-                            <p className="auto-sync-description">
-                                Automatically sync this environment from production on a schedule.
-                            </p>
-                        </div>
-
-                        {enabled && (
-                            <>
-                                <div className="form-group">
-                                    <label>Schedule</label>
-                                    <div className="auto-sync-presets">
-                                        {SCHEDULE_PRESETS.map(preset => (
-                                            <label key={preset.value} className="radio-label">
-                                                <input
-                                                    type="radio"
-                                                    name="schedule-preset"
-                                                    checked={selectedPreset === preset.value}
-                                                    onChange={() => handlePresetChange(preset.value)}
-                                                />
-                                                <span className="radio-content">
-                                                    <strong>{preset.label}</strong>
-                                                    {preset.value !== 'custom' && (
-                                                        <span className="auto-sync-cron-display">{preset.value}</span>
-                                                    )}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {selectedPreset === 'custom' && (
-                                    <div className="form-group">
-                                        <label>Custom Cron Expression</label>
-                                        <input
-                                            type="text"
-                                            value={customCron}
-                                            onChange={e => handleCustomCronChange(e.target.value)}
-                                            placeholder="0 3 * * *"
-                                            className="auto-sync-cron-input"
-                                        />
-                                        <span className="form-hint">
-                                            Format: minute hour day-of-month month day-of-week
-                                        </span>
-                                    </div>
-                                )}
-
-                                {nextRuns.length > 0 && (
-                                    <div className="auto-sync-next-runs">
-                                        <h5>Next Scheduled Runs</h5>
-                                        <ul>
-                                            {nextRuns.map((run, i) => (
-                                                <li key={i}>
-                                                    <RefreshCw size={10} />
-                                                    <span>{formatDateTime(run)}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                )}
-
-                <div className="modal-actions">
-                    <button className="btn btn-secondary" onClick={onClose} disabled={saving}>
-                        Cancel
-                    </button>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={saving || loading}>
-                        {saving ? <><Spinner size="sm" /> Saving...</> : 'Save Schedule'}
-                    </button>
+            {loading ? (
+                <div className="auto-sync-loading">
+                    <Spinner size="sm" />
+                    <span>Loading schedule...</span>
                 </div>
+            ) : (
+                <div className="auto-sync-body">
+                    <div className="auto-sync-env-name">{envName}</div>
+
+                    <div className="auto-sync-toggle">
+                        <label className="auto-sync-toggle-label">
+                            <span>Enable Auto-Sync from Production</span>
+                            <Switch checked={enabled} onCheckedChange={setEnabled} />
+                        </label>
+                        <p className="auto-sync-description">
+                            Automatically sync this environment from production on a schedule.
+                        </p>
+                    </div>
+
+                    {enabled && (
+                        <>
+                            <div className="form-group">
+                                <Label>Schedule</Label>
+                                <div className="auto-sync-presets">
+                                    {SCHEDULE_PRESETS.map(preset => (
+                                        <label key={preset.value} className="radio-label">
+                                            <input
+                                                type="radio"
+                                                name="schedule-preset"
+                                                checked={selectedPreset === preset.value}
+                                                onChange={() => handlePresetChange(preset.value)}
+                                            />
+                                            <span className="radio-content">
+                                                <strong>{preset.label}</strong>
+                                                {preset.value !== 'custom' && (
+                                                    <span className="auto-sync-cron-display">{preset.value}</span>
+                                                )}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {selectedPreset === 'custom' && (
+                                <div className="form-group">
+                                    <Label>Custom Cron Expression</Label>
+                                    <Input
+                                        type="text"
+                                        value={customCron}
+                                        onChange={e => handleCustomCronChange(e.target.value)}
+                                        placeholder="0 3 * * *"
+                                        className="auto-sync-cron-input"
+                                    />
+                                    <span className="form-hint">
+                                        Format: minute hour day-of-month month day-of-week
+                                    </span>
+                                </div>
+                            )}
+
+                            {nextRuns.length > 0 && (
+                                <div className="auto-sync-next-runs">
+                                    <h5>Next Scheduled Runs</h5>
+                                    <ul>
+                                        {nextRuns.map((run, i) => (
+                                            <li key={i}>
+                                                <RefreshCw size={10} />
+                                                <span>{formatDateTime(run)}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
+            <div className="modal-actions">
+                <Button variant="outline" onClick={onClose} disabled={saving}>
+                    Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={saving || loading}>
+                    {saving ? <><Spinner size="sm" /> Saving...</> : 'Save Schedule'}
+                </Button>
+            </div>
         </Modal>
     );
 };

@@ -3,6 +3,10 @@ import { Shield, Plus, Trash2, Star, Edit3, Save } from 'lucide-react';
 import wordpressApi from '../../services/wordpress';
 import Spinner from '../Spinner';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const SanitizationProfileForm = ({ onClose, onProfilesChange }) => {
     const [profiles, setProfiles] = useState([]);
@@ -73,49 +77,50 @@ const SanitizationProfileForm = ({ onClose, onProfilesChange }) => {
 
     return (
         <Modal open={true} onClose={onClose} title="Sanitization Profiles" size="lg">
-                <div className="sanitization-profiles-body">
-                    {loading ? (
-                        <div className="sanitization-loading">
-                            <Spinner size="md" />
-                        </div>
-                    ) : (
-                        <>
-                            <div className="sanitization-profile-list">
-                                {profiles.map(profile => (
-                                    <ProfileCard
-                                        key={profile.id}
-                                        profile={profile}
-                                        onEdit={() => { setEditingProfile(profile); setShowCreateForm(false); }}
-                                        onDelete={() => handleDelete(profile.id)}
-                                        onSetDefault={() => handleSetDefault(profile.id)}
-                                    />
-                                ))}
-                            </div>
-
-                            {!showCreateForm && !editingProfile && (
-                                <button
-                                    className="btn btn-primary btn-sm sanitization-add-btn"
-                                    onClick={() => setShowCreateForm(true)}
-                                >
-                                    <Plus size={14} />
-                                    Create Custom Profile
-                                </button>
-                            )}
-
-                            {(showCreateForm || editingProfile) && (
-                                <ProfileEditor
-                                    profile={editingProfile}
-                                    onSave={handleSaveProfile}
-                                    onCancel={() => { setEditingProfile(null); setShowCreateForm(false); }}
+            <div className="sanitization-profiles-body">
+                {loading ? (
+                    <div className="sanitization-loading">
+                        <Spinner size="md" />
+                    </div>
+                ) : (
+                    <>
+                        <div className="sanitization-profile-list">
+                            {profiles.map(profile => (
+                                <ProfileCard
+                                    key={profile.id}
+                                    profile={profile}
+                                    onEdit={() => { setEditingProfile(profile); setShowCreateForm(false); }}
+                                    onDelete={() => handleDelete(profile.id)}
+                                    onSetDefault={() => handleSetDefault(profile.id)}
                                 />
-                            )}
-                        </>
-                    )}
-                </div>
+                            ))}
+                        </div>
 
-                <div className="modal-actions">
-                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                </div>
+                        {!showCreateForm && !editingProfile && (
+                            <Button
+                                size="sm"
+                                className="sanitization-add-btn"
+                                onClick={() => setShowCreateForm(true)}
+                            >
+                                <Plus size={14} />
+                                Create Custom Profile
+                            </Button>
+                        )}
+
+                        {(showCreateForm || editingProfile) && (
+                            <ProfileEditor
+                                profile={editingProfile}
+                                onSave={handleSaveProfile}
+                                onCancel={() => { setEditingProfile(null); setShowCreateForm(false); }}
+                            />
+                        )}
+                    </>
+                )}
+            </div>
+
+            <div className="modal-actions">
+                <Button variant="outline" onClick={onClose}>Close</Button>
+            </div>
         </Modal>
     );
 };
@@ -130,17 +135,17 @@ const ProfileCard = ({ profile, onEdit, onDelete, onSetDefault }) => (
             </div>
             <div className="sanitization-profile-card-actions">
                 {!profile.is_default && (
-                    <button className="btn btn-ghost btn-sm" onClick={onSetDefault} title="Set as default">
+                    <Button variant="ghost" size="sm" onClick={onSetDefault} title="Set as default">
                         <Star size={12} />
-                    </button>
+                    </Button>
                 )}
-                <button className="btn btn-ghost btn-sm" onClick={onEdit} title="Edit">
+                <Button variant="ghost" size="sm" onClick={onEdit} title="Edit">
                     <Edit3 size={12} />
-                </button>
+                </Button>
                 {!profile.is_builtin && (
-                    <button className="btn btn-ghost btn-sm btn-danger" onClick={onDelete} title="Delete">
+                    <Button variant="ghost" size="sm" onClick={onDelete} title="Delete">
                         <Trash2 size={12} />
-                    </button>
+                    </Button>
                 )}
             </div>
         </div>
@@ -223,8 +228,8 @@ const ProfileEditor = ({ profile, onSave, onCancel }) => {
             <h4>{profile ? 'Edit Profile' : 'Create Profile'}</h4>
 
             <div className="form-group">
-                <label>Profile Name *</label>
-                <input
+                <Label>Profile Name *</Label>
+                <Input
                     type="text"
                     value={name}
                     onChange={e => setName(e.target.value)}
@@ -235,8 +240,8 @@ const ProfileEditor = ({ profile, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-                <label>Description</label>
-                <input
+                <Label>Description</Label>
+                <Input
                     type="text"
                     value={description}
                     onChange={e => setDescription(e.target.value)}
@@ -245,45 +250,40 @@ const ProfileEditor = ({ profile, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-                <label>Data Sanitization</label>
+                <Label>Data Sanitization</Label>
                 <div className="checkbox-group">
                     <label className="checkbox-label">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={config.anonymize_emails || false}
-                            onChange={() => handleConfigToggle('anonymize_emails')}
+                            onCheckedChange={() => handleConfigToggle('anonymize_emails')}
                         />
                         <span>Anonymize email addresses</span>
                     </label>
                     <label className="checkbox-label">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={config.anonymize_names || false}
-                            onChange={() => handleConfigToggle('anonymize_names')}
+                            onCheckedChange={() => handleConfigToggle('anonymize_names')}
                         />
                         <span>Anonymize user names</span>
                     </label>
                     <label className="checkbox-label">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={config.reset_passwords || false}
-                            onChange={() => handleConfigToggle('reset_passwords')}
+                            onCheckedChange={() => handleConfigToggle('reset_passwords')}
                         />
                         <span>Reset all passwords</span>
                     </label>
                     <label className="checkbox-label">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={config.strip_payment_data || false}
-                            onChange={() => handleConfigToggle('strip_payment_data')}
+                            onCheckedChange={() => handleConfigToggle('strip_payment_data')}
                         />
                         <span>Strip WooCommerce payment data</span>
                     </label>
                     <label className="checkbox-label">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={config.remove_transients || false}
-                            onChange={() => handleConfigToggle('remove_transients')}
+                            onCheckedChange={() => handleConfigToggle('remove_transients')}
                         />
                         <span>Remove transients</span>
                     </label>
@@ -291,8 +291,8 @@ const ProfileEditor = ({ profile, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-                <label>Truncate Tables (comma-separated)</label>
-                <input
+                <Label>Truncate Tables (comma-separated)</Label>
+                <Input
                     type="text"
                     value={truncateInput}
                     onChange={e => setTruncateInput(e.target.value)}
@@ -302,8 +302,8 @@ const ProfileEditor = ({ profile, onSave, onCancel }) => {
             </div>
 
             <div className="form-group">
-                <label>Exclude Tables (comma-separated)</label>
-                <input
+                <Label>Exclude Tables (comma-separated)</Label>
+                <Input
                     type="text"
                     value={excludeInput}
                     onChange={e => setExcludeInput(e.target.value)}
@@ -313,12 +313,12 @@ const ProfileEditor = ({ profile, onSave, onCancel }) => {
             </div>
 
             <div className="sanitization-editor-actions">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={onCancel}>
+                <Button type="button" variant="outline" size="sm" onClick={onCancel}>
                     Cancel
-                </button>
-                <button type="submit" className="btn btn-primary btn-sm" disabled={saving || !name.trim()}>
+                </Button>
+                <Button type="submit" size="sm" disabled={saving || !name.trim()}>
                     {saving ? <><Spinner size="sm" /> Saving...</> : <><Save size={14} /> Save Profile</>}
-                </button>
+                </Button>
             </div>
         </form>
     );

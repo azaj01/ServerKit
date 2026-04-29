@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Play, Clock, X } from 'lucide-react';
+import { Play, Clock } from 'lucide-react';
 import Spinner from '../Spinner';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const QUICK_COMMANDS = [
     { label: 'Plugin List', command: 'wp plugin list --format=table' },
@@ -93,94 +95,96 @@ const WpCliTerminal = ({ environment, prodId, onClose, api }) => {
 
     return (
         <Modal open={true} onClose={onClose} title={`WP-CLI - ${envName}`} className="wpcli-terminal-modal">
-                <div className="wpcli-quick-actions">
-                    {QUICK_COMMANDS.map(qc => (
+            <div className="wpcli-quick-actions">
+                {QUICK_COMMANDS.map(qc => (
+                    <Button
+                        key={qc.command}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => executeCommand(qc.command)}
+                        disabled={executing}
+                    >
+                        {qc.label}
+                    </Button>
+                ))}
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowHistory(!showHistory)}
+                    title="Command history"
+                >
+                    <Clock size={12} />
+                </Button>
+            </div>
+
+            {showHistory && history.length > 0 && (
+                <div className="wpcli-history">
+                    {history.slice(0, 10).map((cmd, i) => (
                         <button
-                            key={qc.command}
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => executeCommand(qc.command)}
-                            disabled={executing}
+                            key={i}
+                            className="wpcli-history-item"
+                            onClick={() => {
+                                setCommand(cmd);
+                                setShowHistory(false);
+                                inputRef.current?.focus();
+                            }}
                         >
-                            {qc.label}
+                            <code>{cmd}</code>
                         </button>
                     ))}
-                    <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setShowHistory(!showHistory)}
-                        title="Command history"
-                    >
-                        <Clock size={12} />
-                    </button>
                 </div>
+            )}
 
-                {showHistory && history.length > 0 && (
-                    <div className="wpcli-history">
-                        {history.slice(0, 10).map((cmd, i) => (
-                            <button
-                                key={i}
-                                className="wpcli-history-item"
-                                onClick={() => {
-                                    setCommand(cmd);
-                                    setShowHistory(false);
-                                    inputRef.current?.focus();
-                                }}
-                            >
-                                <code>{cmd}</code>
-                            </button>
-                        ))}
+            <div className="wpcli-output" ref={outputRef}>
+                {output.length === 0 && (
+                    <div className="wpcli-output-empty">
+                        Enter a WP-CLI command below or use the quick actions above.
                     </div>
                 )}
+                {output.map((entry, i) => (
+                    <div key={i} className={`wpcli-output-entry ${entry.type}`}>
+                        {entry.type === 'command' && (
+                            <div className="wpcli-output-command">
+                                <span className="wpcli-prompt">$</span>
+                                <code>{entry.text}</code>
+                            </div>
+                        )}
+                        {entry.type === 'output' && (
+                            <pre className="wpcli-output-text">{entry.text}</pre>
+                        )}
+                        {entry.type === 'error' && (
+                            <pre className="wpcli-output-error">{entry.text}</pre>
+                        )}
+                    </div>
+                ))}
+                {executing && (
+                    <div className="wpcli-executing">
+                        <Spinner size="sm" />
+                        <span>Executing...</span>
+                    </div>
+                )}
+            </div>
 
-                <div className="wpcli-output" ref={outputRef}>
-                    {output.length === 0 && (
-                        <div className="wpcli-output-empty">
-                            Enter a WP-CLI command below or use the quick actions above.
-                        </div>
-                    )}
-                    {output.map((entry, i) => (
-                        <div key={i} className={`wpcli-output-entry ${entry.type}`}>
-                            {entry.type === 'command' && (
-                                <div className="wpcli-output-command">
-                                    <span className="wpcli-prompt">$</span>
-                                    <code>{entry.text}</code>
-                                </div>
-                            )}
-                            {entry.type === 'output' && (
-                                <pre className="wpcli-output-text">{entry.text}</pre>
-                            )}
-                            {entry.type === 'error' && (
-                                <pre className="wpcli-output-error">{entry.text}</pre>
-                            )}
-                        </div>
-                    ))}
-                    {executing && (
-                        <div className="wpcli-executing">
-                            <Spinner size="sm" />
-                            <span>Executing...</span>
-                        </div>
-                    )}
-                </div>
-
-                <div className="wpcli-input-row">
-                    <span className="wpcli-prompt">$</span>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={command}
-                        onChange={e => setCommand(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="wp plugin list --format=table"
-                        disabled={executing}
-                        className="wpcli-input"
-                    />
-                    <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => executeCommand(command)}
-                        disabled={executing || !command.trim()}
-                    >
-                        <Play size={12} />
-                    </button>
-                </div>
+            <div className="wpcli-input-row">
+                <span className="wpcli-prompt">$</span>
+                <Input
+                    ref={inputRef}
+                    type="text"
+                    value={command}
+                    onChange={e => setCommand(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="wp plugin list --format=table"
+                    disabled={executing}
+                    className="wpcli-input"
+                />
+                <Button
+                    size="sm"
+                    onClick={() => executeCommand(command)}
+                    disabled={executing || !command.trim()}
+                >
+                    <Play size={12} />
+                </Button>
+            </div>
         </Modal>
     );
 };

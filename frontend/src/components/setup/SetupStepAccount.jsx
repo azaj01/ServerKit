@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Info } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const SetupStepAccount = ({ onComplete }) => {
     const [email, setEmail] = useState('');
@@ -77,8 +80,8 @@ const SetupStepAccount = ({ onComplete }) => {
 
                 <form onSubmit={handleLogin}>
                     <div className="form-group">
-                        <label htmlFor="email">Email</label>
-                        <input
+                        <Label htmlFor="email">Email</Label>
+                        <Input
                             type="email"
                             id="email"
                             value={email}
@@ -90,8 +93,8 @@ const SetupStepAccount = ({ onComplete }) => {
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <input
+                        <Label htmlFor="password">Password</Label>
+                        <Input
                             type="password"
                             id="password"
                             value={password}
@@ -136,8 +139,8 @@ const SetupStepAccount = ({ onComplete }) => {
 
             <form onSubmit={handleRegister}>
                 <div className="form-group">
-                    <label htmlFor="email">Admin Email</label>
-                    <input
+                    <Label htmlFor="email">Admin Email</Label>
+                    <Input
                         type="email"
                         id="email"
                         value={email}
@@ -149,8 +152,8 @@ const SetupStepAccount = ({ onComplete }) => {
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="username">Username</label>
-                    <input
+                    <Label htmlFor="username">Username</Label>
+                    <Input
                         type="text"
                         id="username"
                         value={username}
@@ -161,8 +164,8 @@ const SetupStepAccount = ({ onComplete }) => {
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="password">Password</label>
-                    <input
+                    <Label htmlFor="password">Password</Label>
+                    <Input
                         type="password"
                         id="password"
                         value={password}
@@ -173,8 +176,8 @@ const SetupStepAccount = ({ onComplete }) => {
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="confirmPassword">Confirm Password</label>
-                    <input
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
                         type="password"
                         id="confirmPassword"
                         value={confirmPassword}

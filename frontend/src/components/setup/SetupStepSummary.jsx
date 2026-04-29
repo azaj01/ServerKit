@@ -1,6 +1,7 @@
 import React from 'react';
 import { useResourceTier } from '../../contexts/ResourceTierContext';
 import { Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const USE_CASE_LABELS = {
     wordpress: 'WordPress Sites',
@@ -78,9 +79,9 @@ const SetupStepSummary = ({ accountInfo, useCases, onFinish }) => {
                     {useCases && useCases.length > 0 ? (
                         <div className="summary-tags">
                             {useCases.map((uc) => (
-                                <span key={uc} className="summary-tag">
+                                <Badge key={uc} variant="secondary">
                                     {USE_CASE_LABELS[uc] || uc}
-                                </span>
+                                </Badge>
                             ))}
                         </div>
                     ) : (

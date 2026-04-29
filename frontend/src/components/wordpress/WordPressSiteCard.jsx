@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, Settings, Copy, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { Button } from '@/components/ui/button';
 
 const WordPressSiteCard = ({ site, onDelete }) => {
     const navigate = useNavigate();
@@ -87,39 +88,44 @@ const WordPressSiteCard = ({ site, onDelete }) => {
             </div>
 
             <div className="wp-site-card-footer">
-                <button
-                    className="btn btn-ghost btn-sm"
+                <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={handleVisitSite}
                     disabled={!site.url}
                     title="Visit Site"
                 >
                     <ExternalLink size={14} />
                     Visit
-                </button>
-                <button
-                    className="btn btn-ghost btn-sm"
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={handleOpenDashboard}
                     disabled={!site.url}
                     title="Open Dashboard"
                 >
                     <Settings size={14} />
                     Dashboard
-                </button>
-                <button
-                    className="btn btn-ghost btn-sm"
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={handleManage}
                     title="Manage Site"
                 >
                     <Copy size={14} />
                     Manage
-                </button>
-                <button
-                    className="btn btn-ghost btn-sm btn-danger"
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={handleDelete}
                     title="Delete Site"
+                    className="text-destructive hover:text-destructive"
                 >
                     <Trash2 size={14} />
-                </button>
+                </Button>
             </div>
 
             <ConfirmDialog

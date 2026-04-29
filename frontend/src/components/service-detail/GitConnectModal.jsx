@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import Modal from '../Modal';
 
 const GitConnectModal = ({ appId, deployConfig, onClose, onSaved }) => {
@@ -74,86 +79,82 @@ const GitConnectModal = ({ appId, deployConfig, onClose, onSaved }) => {
 
     return (
         <Modal open={true} onClose={onClose} title={deployConfig ? 'Edit Repository' : 'Connect Repository'}>
-                <form className="git-connect-modal__form" onSubmit={handleSubmit}>
-                    <div className="git-connect-modal__field">
-                        <label>Repository URL</label>
-                        <input
-                            type="text"
-                            value={repoUrl}
-                            onChange={(e) => setRepoUrl(e.target.value)}
-                            placeholder="https://github.com/user/repo.git"
-                            required
-                        />
-                        {provider && (
-                            <span className="settings-hint" style={{ marginTop: '4px', display: 'block' }}>
-                                Detected: {provider}
-                            </span>
-                        )}
-                    </div>
+            <form className="git-connect-modal__form" onSubmit={handleSubmit}>
+                <div className="git-connect-modal__field">
+                    <Label>Repository URL</Label>
+                    <Input
+                        type="text"
+                        value={repoUrl}
+                        onChange={(e) => setRepoUrl(e.target.value)}
+                        placeholder="https://github.com/user/repo.git"
+                        required
+                    />
+                    {provider && (
+                        <span className="settings-hint" style={{ marginTop: '4px', display: 'block' }}>
+                            Detected: {provider}
+                        </span>
+                    )}
+                </div>
 
-                    <div className="git-connect-modal__field">
-                        <label>Branch</label>
-                        <input
-                            type="text"
-                            value={branch}
-                            onChange={(e) => setBranch(e.target.value)}
-                            placeholder="main"
-                        />
-                    </div>
+                <div className="git-connect-modal__field">
+                    <Label>Branch</Label>
+                    <Input
+                        type="text"
+                        value={branch}
+                        onChange={(e) => setBranch(e.target.value)}
+                        placeholder="main"
+                    />
+                </div>
 
-                    <div className="git-connect-modal__toggle">
-                        <div className="git-connect-modal__toggle-label">
-                            Auto-deploy on push
-                            <span>Automatically deploy when new commits are pushed to the branch.</span>
-                        </div>
-                        <label className="toggle">
-                            <input
-                                type="checkbox"
-                                checked={autoDeploy}
-                                onChange={(e) => setAutoDeploy(e.target.checked)}
-                            />
-                            <span className="toggle-slider"></span>
-                        </label>
+                <div className="git-connect-modal__toggle">
+                    <div className="git-connect-modal__toggle-label">
+                        Auto-deploy on push
+                        <span>Automatically deploy when new commits are pushed to the branch.</span>
                     </div>
+                    <Switch
+                        checked={autoDeploy}
+                        onCheckedChange={setAutoDeploy}
+                    />
+                </div>
 
-                    <div className="git-connect-modal__field">
-                        <label>Pre-deploy Script (optional)</label>
-                        <textarea
-                            value={preDeployScript}
-                            onChange={(e) => setPreDeployScript(e.target.value)}
-                            placeholder="Commands to run before deployment..."
-                        />
-                    </div>
+                <div className="git-connect-modal__field">
+                    <Label>Pre-deploy Script (optional)</Label>
+                    <Textarea
+                        value={preDeployScript}
+                        onChange={(e) => setPreDeployScript(e.target.value)}
+                        placeholder="Commands to run before deployment..."
+                    />
+                </div>
 
-                    <div className="git-connect-modal__field">
-                        <label>Post-deploy Script (optional)</label>
-                        <textarea
-                            value={postDeployScript}
-                            onChange={(e) => setPostDeployScript(e.target.value)}
-                            placeholder="Commands to run after deployment..."
-                        />
-                    </div>
+                <div className="git-connect-modal__field">
+                    <Label>Post-deploy Script (optional)</Label>
+                    <Textarea
+                        value={postDeployScript}
+                        onChange={(e) => setPostDeployScript(e.target.value)}
+                        placeholder="Commands to run after deployment..."
+                    />
+                </div>
 
-                    <div className="git-connect-modal__actions">
-                        {deployConfig && (
-                            <button
-                                type="button"
-                                className="btn btn-danger"
-                                onClick={handleDisconnect}
-                                disabled={saving}
-                                style={{ marginRight: 'auto' }}
-                            >
-                                Disconnect
-                            </button>
-                        )}
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>
-                            {saving ? 'Saving...' : deployConfig ? 'Save Changes' : 'Connect'}
-                        </button>
-                    </div>
-                </form>
+                <div className="git-connect-modal__actions">
+                    {deployConfig && (
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={handleDisconnect}
+                            disabled={saving}
+                            style={{ marginRight: 'auto' }}
+                        >
+                            Disconnect
+                        </Button>
+                    )}
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" disabled={saving}>
+                        {saving ? 'Saving...' : deployConfig ? 'Save Changes' : 'Connect'}
+                    </Button>
+                </div>
+            </form>
         </Modal>
     );
 };

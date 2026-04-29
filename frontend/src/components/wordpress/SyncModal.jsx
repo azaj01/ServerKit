@@ -3,6 +3,11 @@ import { ArrowDownLeft, Shield } from 'lucide-react';
 import wordpressApi from '../../services/wordpress';
 import Spinner from '../Spinner';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const SyncModal = ({ environment, productionName, onClose, onSync }) => {
     const [syncType, setSyncType] = useState('database');
@@ -23,7 +28,6 @@ const SyncModal = ({ environment, productionName, onClose, onSync }) => {
         try {
             const data = await wordpressApi.getSanitizationProfiles();
             setProfiles(data.profiles || []);
-            // Auto-select default profile
             const defaultProfile = (data.profiles || []).find(p => p.is_default);
             if (defaultProfile) {
                 setConfig(prev => ({
@@ -66,146 +70,150 @@ const SyncModal = ({ environment, productionName, onClose, onSync }) => {
 
     return (
         <Modal open={true} onClose={onClose} title="Sync from Production">
-                <form onSubmit={handleSubmit}>
-                    <div className="sync-direction">
-                        <div className="promote-env-pill production">
-                            <span className="promote-env-type">Production</span>
-                            <span className="promote-env-name">{productionName}</span>
-                        </div>
-                        <ArrowDownLeft size={20} className="promote-arrow" />
-                        <div className={`promote-env-pill ${envType}`}>
-                            <span className="promote-env-type">{envType}</span>
-                            <span className="promote-env-name">{environment.name}</span>
-                        </div>
+            <form onSubmit={handleSubmit}>
+                <div className="sync-direction">
+                    <div className="promote-env-pill production">
+                        <span className="promote-env-type">Production</span>
+                        <span className="promote-env-name">{productionName}</span>
                     </div>
-
-                    <div className="form-group">
-                        <label>Sync Type</label>
-                        <div className="radio-group">
-                            <label className="radio-label">
-                                <input
-                                    type="radio"
-                                    name="syncType"
-                                    value="database"
-                                    checked={syncType === 'database'}
-                                    onChange={e => setSyncType(e.target.value)}
-                                />
-                                <div className="radio-content">
-                                    <strong>Database Only</strong>
-                                    <span>Pull production database into this environment</span>
-                                </div>
-                            </label>
-                            <label className="radio-label">
-                                <input
-                                    type="radio"
-                                    name="syncType"
-                                    value="files"
-                                    checked={syncType === 'files'}
-                                    onChange={e => setSyncType(e.target.value)}
-                                />
-                                <div className="radio-content">
-                                    <strong>Files Only</strong>
-                                    <span>Pull production files (wp-content) into this environment</span>
-                                </div>
-                            </label>
-                            <label className="radio-label">
-                                <input
-                                    type="radio"
-                                    name="syncType"
-                                    value="full"
-                                    checked={syncType === 'full'}
-                                    onChange={e => setSyncType(e.target.value)}
-                                />
-                                <div className="radio-content">
-                                    <strong>Full Sync</strong>
-                                    <span>Pull both database and files from production</span>
-                                </div>
-                            </label>
-                        </div>
+                    <ArrowDownLeft size={20} className="promote-arrow" />
+                    <div className={`promote-env-pill ${envType}`}>
+                        <span className="promote-env-type">{envType}</span>
+                        <span className="promote-env-name">{environment.name}</span>
                     </div>
+                </div>
 
-                    {(syncType === 'database' || syncType === 'full') && (
-                        <>
-                            <div className="form-group">
-                                <label className="checkbox-label">
-                                    <input
-                                        type="checkbox"
-                                        checked={config.sanitize}
-                                        onChange={e => handleConfigChange('sanitize', e.target.checked)}
-                                    />
-                                    <span>Sanitize data (anonymize emails, reset passwords)</span>
-                                </label>
+                <div className="form-group">
+                    <Label>Sync Type</Label>
+                    <div className="radio-group">
+                        <label className="radio-label">
+                            <input
+                                type="radio"
+                                name="syncType"
+                                value="database"
+                                checked={syncType === 'database'}
+                                onChange={e => setSyncType(e.target.value)}
+                            />
+                            <div className="radio-content">
+                                <strong>Database Only</strong>
+                                <span>Pull production database into this environment</span>
                             </div>
+                        </label>
+                        <label className="radio-label">
+                            <input
+                                type="radio"
+                                name="syncType"
+                                value="files"
+                                checked={syncType === 'files'}
+                                onChange={e => setSyncType(e.target.value)}
+                            />
+                            <div className="radio-content">
+                                <strong>Files Only</strong>
+                                <span>Pull production files (wp-content) into this environment</span>
+                            </div>
+                        </label>
+                        <label className="radio-label">
+                            <input
+                                type="radio"
+                                name="syncType"
+                                value="full"
+                                checked={syncType === 'full'}
+                                onChange={e => setSyncType(e.target.value)}
+                            />
+                            <div className="radio-content">
+                                <strong>Full Sync</strong>
+                                <span>Pull both database and files from production</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
 
-                            {config.sanitize && profiles.length > 0 && (
-                                <div className="form-group">
-                                    <label>
-                                        <Shield size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
-                                        Sanitization Profile
-                                    </label>
-                                    <select
-                                        value={config.sanitization_profile_id}
-                                        onChange={e => handleConfigChange('sanitization_profile_id', e.target.value)}
-                                    >
-                                        <option value="">Manual configuration</option>
+                {(syncType === 'database' || syncType === 'full') && (
+                    <>
+                        <div className="form-group">
+                            <label className="checkbox-label">
+                                <Checkbox
+                                    checked={config.sanitize}
+                                    onCheckedChange={v => handleConfigChange('sanitize', v)}
+                                />
+                                <span>Sanitize data (anonymize emails, reset passwords)</span>
+                            </label>
+                        </div>
+
+                        {config.sanitize && profiles.length > 0 && (
+                            <div className="form-group">
+                                <Label>
+                                    <Shield size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
+                                    Sanitization Profile
+                                </Label>
+                                <Select
+                                    value={config.sanitization_profile_id}
+                                    onValueChange={v => handleConfigChange('sanitization_profile_id', v)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Manual configuration" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">Manual configuration</SelectItem>
                                         {profiles.map(p => (
-                                            <option key={p.id} value={p.id}>
+                                            <SelectItem key={p.id} value={String(p.id)}>
                                                 {p.name}{p.is_default ? ' (default)' : ''}{p.is_builtin ? '' : ' (custom)'}
-                                            </option>
+                                            </SelectItem>
                                         ))}
-                                    </select>
-                                    {config.sanitization_profile_id && (
-                                        <span className="form-hint">
-                                            {profiles.find(p => String(p.id) === config.sanitization_profile_id)?.description || ''}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="form-group">
-                                <label>Exclude Tables (comma-separated, optional)</label>
-                                <input
-                                    type="text"
-                                    value={config.exclude_tables}
-                                    onChange={e => handleConfigChange('exclude_tables', e.target.value)}
-                                    placeholder="wp_users, wp_usermeta"
-                                />
-                                <span className="form-hint">Tables to skip during sync</span>
+                                    </SelectContent>
+                                </Select>
+                                {config.sanitization_profile_id && (
+                                    <span className="form-hint">
+                                        {profiles.find(p => String(p.id) === config.sanitization_profile_id)?.description || ''}
+                                    </span>
+                                )}
                             </div>
+                        )}
 
-                            <div className="form-group">
-                                <label>Truncate Tables (comma-separated, optional)</label>
-                                <input
-                                    type="text"
-                                    value={config.truncate_tables}
-                                    onChange={e => handleConfigChange('truncate_tables', e.target.value)}
-                                    placeholder="wp_actionscheduler_actions, wp_actionscheduler_logs"
-                                />
-                                <span className="form-hint">Tables to empty (structure kept, data removed)</span>
-                            </div>
-                        </>
-                    )}
-
-                    <div className="sync-warning">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M12 8v4M12 16h.01" />
-                        </svg>
-                        <div>
-                            <strong>This will overwrite data</strong>
-                            <p>The current {syncType === 'files' ? 'files' : syncType === 'database' ? 'database' : 'database and files'} in this environment will be replaced with production data. A snapshot will be created before syncing.</p>
+                        <div className="form-group">
+                            <Label>Exclude Tables (comma-separated, optional)</Label>
+                            <Input
+                                type="text"
+                                value={config.exclude_tables}
+                                onChange={e => handleConfigChange('exclude_tables', e.target.value)}
+                                placeholder="wp_users, wp_usermeta"
+                            />
+                            <span className="form-hint">Tables to skip during sync</span>
                         </div>
-                    </div>
 
-                    <div className="modal-actions">
-                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? <><Spinner size="sm" /> Syncing...</> : 'Sync Now'}
-                        </button>
+                        <div className="form-group">
+                            <Label>Truncate Tables (comma-separated, optional)</Label>
+                            <Input
+                                type="text"
+                                value={config.truncate_tables}
+                                onChange={e => handleConfigChange('truncate_tables', e.target.value)}
+                                placeholder="wp_actionscheduler_actions, wp_actionscheduler_logs"
+                            />
+                            <span className="form-hint">Tables to empty (structure kept, data removed)</span>
+                        </div>
+                    </>
+                )}
+
+                <div className="sync-warning">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 8v4M12 16h.01" />
+                    </svg>
+                    <div>
+                        <strong>This will overwrite data</strong>
+                        <p>The current {syncType === 'files' ? 'files' : syncType === 'database' ? 'database' : 'database and files'} in this environment will be replaced with production data. A snapshot will be created before syncing.</p>
                     </div>
-                </form>
+                </div>
+
+                <div className="modal-actions">
+                    <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" disabled={loading}>
+                        {loading ? <><Spinner size="sm" /> Syncing...</> : 'Sync Now'}
+                    </Button>
+                </div>
+            </form>
         </Modal>
     );
 };

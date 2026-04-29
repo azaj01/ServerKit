@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Square, Play, RefreshCw, ArrowDownLeft, X } from 'lucide-react';
 import Spinner from '../Spinner';
+import { Button } from '@/components/ui/button';
 
 const BulkActionsBar = ({ selectedIds, environments, prodId, onClear, onExecute, api }) => {
     const [executing, setExecuting] = useState(false);
@@ -39,20 +40,21 @@ const BulkActionsBar = ({ selectedIds, environments, prodId, onClear, onExecute,
                         {confirmAction === 'stop' && `Stop ${selectedIds.length} environment(s)?`}
                         {confirmAction === 'sync' && `Sync ${selectedIds.length} environment(s) from production?`}
                     </span>
-                    <button
-                        className="btn btn-primary btn-sm"
+                    <Button
+                        size="sm"
                         onClick={() => executeAction(confirmAction)}
                         disabled={executing}
                     >
                         {executing ? <Spinner size="sm" /> : 'Confirm'}
-                    </button>
-                    <button
-                        className="btn btn-ghost btn-sm"
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setConfirmAction(null)}
                         disabled={executing}
                     >
                         Cancel
-                    </button>
+                    </Button>
                 </div>
             ) : (
                 <>
@@ -62,50 +64,56 @@ const BulkActionsBar = ({ selectedIds, environments, prodId, onClear, onExecute,
                     </div>
 
                     <div className="bulk-actions-buttons">
-                        <button
-                            className="btn btn-ghost btn-sm"
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleAction('start')}
                             disabled={executing}
                             title="Start Selected"
                         >
                             <Play size={12} />
                             Start
-                        </button>
-                        <button
-                            className="btn btn-ghost btn-sm"
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleAction('stop')}
                             disabled={executing}
                             title="Stop Selected"
                         >
                             <Square size={12} />
                             Stop
-                        </button>
-                        <button
-                            className="btn btn-ghost btn-sm"
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleAction('restart')}
                             disabled={executing}
                             title="Restart Selected"
                         >
                             <RefreshCw size={12} />
                             Restart
-                        </button>
-                        <button
-                            className="btn btn-ghost btn-sm"
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleAction('sync')}
                             disabled={executing}
                             title="Sync from Production"
                         >
                             <ArrowDownLeft size={12} />
                             Sync from Prod
-                        </button>
+                        </Button>
                     </div>
 
-                    <button
-                        className="btn btn-ghost btn-sm bulk-actions-clear"
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="bulk-actions-clear"
                         onClick={onClear}
                     >
                         <X size={12} />
-                    </button>
+                    </Button>
                 </>
             )}
         </div>

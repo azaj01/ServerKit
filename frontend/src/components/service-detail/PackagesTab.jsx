@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const PackagesTab = ({ appId }) => {
     const toast = useToast();
@@ -57,21 +59,21 @@ const PackagesTab = ({ appId }) => {
         <div>
             <div className="section-header">
                 <h3>Installed Packages</h3>
-                <button className="btn btn-secondary btn-sm" onClick={handleFreeze}>
+                <Button variant="outline" size="sm" onClick={handleFreeze}>
                     Freeze to requirements.txt
-                </button>
+                </Button>
             </div>
 
             <form className="install-form" onSubmit={handleInstall}>
-                <input
+                <Input
                     type="text"
                     value={newPackage}
                     onChange={(e) => setNewPackage(e.target.value)}
                     placeholder="Package name (e.g., requests, flask==2.0.0)"
                 />
-                <button type="submit" className="btn btn-primary" disabled={installing}>
+                <Button type="submit" disabled={installing}>
                     {installing ? 'Installing...' : 'Install'}
-                </button>
+                </Button>
             </form>
 
             <div className="packages-list">

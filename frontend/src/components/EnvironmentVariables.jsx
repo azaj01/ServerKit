@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import Modal from './Modal';
 
 const EnvironmentVariables = ({ appId }) => {
@@ -141,7 +146,6 @@ const EnvironmentVariables = ({ appId }) => {
     async function handleExport(includeSecrets = true) {
         try {
             const data = await api.exportEnvFile(appId, includeSecrets);
-            // Download as file
             const blob = new Blob([data.content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -234,7 +238,7 @@ const EnvironmentVariables = ({ appId }) => {
                 <h3>Environment Variables</h3>
                 <div className="header-actions">
                     {envVars.length > 0 && (
-                        <button className="btn btn-secondary btn-sm" onClick={toggleShowAll} title={allVisible ? 'Hide all values' : 'Show all values'}>
+                        <Button variant="outline" size="sm" onClick={toggleShowAll} title={allVisible ? 'Hide all values' : 'Show all values'}>
                             {allVisible ? (
                                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -247,27 +251,27 @@ const EnvironmentVariables = ({ appId }) => {
                                 </svg>
                             )}
                             {allVisible ? 'Hide All' : 'Show All'}
-                        </button>
+                        </Button>
                     )}
-                    <button className="btn btn-secondary btn-sm" onClick={() => setShowImportModal(true)}>
+                    <Button variant="outline" size="sm" onClick={() => setShowImportModal(true)}>
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
                         </svg>
                         Import
-                    </button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleExport(true)}>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleExport(true)}>
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                         </svg>
                         Export
-                    </button>
-                    <button className="btn btn-secondary btn-sm" onClick={handleShowHistory}>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleShowHistory}>
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                             <circle cx="12" cy="12" r="10"/>
                             <polyline points="12 6 12 12 16 14"/>
                         </svg>
                         History
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -278,14 +282,14 @@ const EnvironmentVariables = ({ appId }) => {
             {/* Add new variable form */}
             <form className="env-add-form" onSubmit={handleAdd}>
                 <div className="env-form-row">
-                    <input
+                    <Input
                         type="text"
                         value={newKey}
                         onChange={(e) => setNewKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
                         placeholder="KEY_NAME"
                         className="env-key-input"
                     />
-                    <input
+                    <Input
                         type={newIsSecret ? 'password' : 'text'}
                         value={newValue}
                         onChange={(e) => setNewValue(e.target.value)}
@@ -293,21 +297,20 @@ const EnvironmentVariables = ({ appId }) => {
                         className="env-value-input"
                     />
                     <label className="env-secret-toggle" title="Mark as secret">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={newIsSecret}
-                            onChange={(e) => setNewIsSecret(e.target.checked)}
+                            onCheckedChange={setNewIsSecret}
                         />
                         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" strokeWidth="2">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                         </svg>
                     </label>
-                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                    <Button type="submit" disabled={saving}>
                         Add
-                    </button>
+                    </Button>
                 </div>
-                <input
+                <Input
                     type="text"
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
@@ -319,7 +322,7 @@ const EnvironmentVariables = ({ appId }) => {
             {/* Filter */}
             {envVars.length > 5 && (
                 <div className="env-filter">
-                    <input
+                    <Input
                         type="text"
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
@@ -422,7 +425,7 @@ const EnvironmentVariables = ({ appId }) => {
 
                             {editingId === envVar.id ? (
                                 <div className="env-edit-row">
-                                    <input
+                                    <Input
                                         type="text"
                                         value={editValue}
                                         onChange={(e) => setEditValue(e.target.value)}
@@ -432,12 +435,12 @@ const EnvironmentVariables = ({ appId }) => {
                                             if (e.key === 'Escape') cancelEditing();
                                         }}
                                     />
-                                    <button className="btn btn-primary btn-sm" onClick={() => handleUpdate(envVar.key)}>
+                                    <Button size="sm" onClick={() => handleUpdate(envVar.key)}>
                                         Save
-                                    </button>
-                                    <button className="btn btn-secondary btn-sm" onClick={cancelEditing}>
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={cancelEditing}>
                                         Cancel
-                                    </button>
+                                    </Button>
                                 </div>
                             ) : (
                                 <div className="env-value">
@@ -457,91 +460,87 @@ const EnvironmentVariables = ({ appId }) => {
             {envVars.length > 0 && (
                 <div className="env-footer">
                     <span className="env-count">{envVars.length} variable{envVars.length !== 1 ? 's' : ''}</span>
-                    <button className="btn btn-danger btn-sm" onClick={handleClearAll}>
+                    <Button variant="destructive" size="sm" onClick={handleClearAll}>
                         Clear All
-                    </button>
+                    </Button>
                 </div>
             )}
 
             {/* Import Modal */}
             <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title="Import Environment Variables">
-                            <p className="hint">Paste your .env file content below or upload a file.</p>
+                <p className="hint">Paste your .env file content below or upload a file.</p>
 
-                            <div className="import-file-upload">
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    accept=".env,.txt"
-                                    onChange={handleFileUpload}
-                                    style={{ display: 'none' }}
-                                />
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    Choose File
-                                </button>
-                            </div>
+                <div className="import-file-upload">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept=".env,.txt"
+                        onChange={handleFileUpload}
+                        style={{ display: 'none' }}
+                    />
+                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                        Choose File
+                    </Button>
+                </div>
 
-                            <textarea
-                                value={importContent}
-                                onChange={(e) => setImportContent(e.target.value)}
-                                placeholder="DATABASE_URL=postgres://...&#10;API_KEY=your-api-key&#10;DEBUG=false"
-                                rows={10}
-                                className="import-textarea"
-                            />
+                <Textarea
+                    value={importContent}
+                    onChange={(e) => setImportContent(e.target.value)}
+                    placeholder={"DATABASE_URL=postgres://...\nAPI_KEY=your-api-key\nDEBUG=false"}
+                    rows={10}
+                    className="import-textarea"
+                />
 
-                            <label className="checkbox-label">
-                                <input
-                                    type="checkbox"
-                                    checked={importOverwrite}
-                                    onChange={(e) => setImportOverwrite(e.target.checked)}
-                                />
-                                <span>Overwrite existing variables with same keys</span>
-                            </label>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setShowImportModal(false)}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-primary" onClick={handleImport} disabled={saving}>
-                                {saving ? 'Importing...' : 'Import'}
-                            </button>
-                        </div>
+                <label className="checkbox-label">
+                    <Checkbox
+                        checked={importOverwrite}
+                        onCheckedChange={setImportOverwrite}
+                    />
+                    <span>Overwrite existing variables with same keys</span>
+                </label>
+                <div className="modal-footer">
+                    <Button variant="outline" onClick={() => setShowImportModal(false)}>
+                        Cancel
+                    </Button>
+                    <Button onClick={handleImport} disabled={saving}>
+                        {saving ? 'Importing...' : 'Import'}
+                    </Button>
+                </div>
             </Modal>
 
             {/* History Modal */}
             <Modal open={showHistoryModal} onClose={() => setShowHistoryModal(false)} title="Change History" size="lg">
-                            {history.length === 0 ? (
-                                <p className="hint">No changes recorded yet.</p>
-                            ) : (
-                                <table className="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Key</th>
-                                            <th>Action</th>
-                                            <th>Changed At</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {history.map((h, idx) => (
-                                            <tr key={idx}>
-                                                <td className="mono">{h.key}</td>
-                                                <td>
-                                                    <span className={`badge badge-${h.action === 'created' ? 'success' : h.action === 'deleted' ? 'danger' : 'warning'}`}>
-                                                        {h.action}
-                                                    </span>
-                                                </td>
-                                                <td>{new Date(h.changed_at).toLocaleString()}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setShowHistoryModal(false)}>
-                                Close
-                            </button>
-                        </div>
+                {history.length === 0 ? (
+                    <p className="hint">No changes recorded yet.</p>
+                ) : (
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Action</th>
+                                <th>Changed At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {history.map((h, idx) => (
+                                <tr key={idx}>
+                                    <td className="mono">{h.key}</td>
+                                    <td>
+                                        <Badge variant={h.action === 'created' ? 'success' : h.action === 'deleted' ? 'destructive' : 'warning'}>
+                                            {h.action}
+                                        </Badge>
+                                    </td>
+                                    <td>{new Date(h.changed_at).toLocaleString()}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+                <div className="modal-footer">
+                    <Button variant="outline" onClick={() => setShowHistoryModal(false)}>
+                        Close
+                    </Button>
+                </div>
             </Modal>
         </div>
     );

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
 import Modal from '../Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const CreateSiteModal = ({ onClose, onCreate }) => {
     const [formData, setFormData] = useState({
@@ -59,91 +62,92 @@ const CreateSiteModal = ({ onClose, onCreate }) => {
 
     return (
         <Modal open={true} onClose={onClose} title="Create WordPress Site">
-                {error && <div className="error-message">{error}</div>}
+            {error && <div className="error-message">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                    <Label>Site Name *</Label>
+                    <Input
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleNameChange}
+                        placeholder="My WordPress Site"
+                        required
+                    />
+                </div>
+
+                <div className="form-group">
+                    <Label>Domain</Label>
+                    <Input
+                        type="text"
+                        name="domain"
+                        value={formData.domain}
+                        onChange={handleChange}
+                        placeholder="example.com"
+                    />
+                    <span className="form-hint">Leave empty to use a local development URL</span>
+                </div>
+
+                <div className="form-row">
                     <div className="form-group">
-                        <label>Site Name *</label>
-                        <input
+                        <Label>Admin Username *</Label>
+                        <Input
                             type="text"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleNameChange}
-                            placeholder="My WordPress Site"
+                            name="adminUser"
+                            value={formData.adminUser}
+                            onChange={handleChange}
+                            placeholder="admin"
                             required
                         />
                     </div>
 
                     <div className="form-group">
-                        <label>Domain</label>
-                        <input
-                            type="text"
-                            name="domain"
-                            value={formData.domain}
+                        <Label>Admin Email *</Label>
+                        <Input
+                            type="email"
+                            name="adminEmail"
+                            value={formData.adminEmail}
                             onChange={handleChange}
-                            placeholder="example.com"
-                        />
-                        <span className="form-hint">Leave empty to use a local development URL</span>
-                    </div>
-
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>Admin Username *</label>
-                            <input
-                                type="text"
-                                name="adminUser"
-                                value={formData.adminUser}
-                                onChange={handleChange}
-                                placeholder="admin"
-                                required
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Admin Email *</label>
-                            <input
-                                type="email"
-                                name="adminEmail"
-                                value={formData.adminEmail}
-                                onChange={handleChange}
-                                placeholder="admin@example.com"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label>Database Name</label>
-                        <input
-                            type="text"
-                            name="dbName"
-                            value={formData.dbName}
-                            onChange={handleChange}
-                            placeholder="wp_mysite"
+                            placeholder="admin@example.com"
+                            required
                         />
                     </div>
+                </div>
 
-                    <div className="form-group">
-                        <label className="checkbox-label">
-                            <input
-                                type="checkbox"
-                                name="createDatabase"
-                                checked={formData.createDatabase}
-                                onChange={handleChange}
-                            />
-                            <span>Create database automatically</span>
-                        </label>
-                    </div>
+                <div className="form-group">
+                    <Label>Database Name</Label>
+                    <Input
+                        type="text"
+                        name="dbName"
+                        value={formData.dbName}
+                        onChange={handleChange}
+                        placeholder="wp_mysite"
+                    />
+                </div>
 
-                    <div className="modal-actions">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create Site'}
-                        </button>
-                    </div>
-                </form>
+                <div className="form-group">
+                    <label className="checkbox-label">
+                        <Checkbox
+                            name="createDatabase"
+                            checked={formData.createDatabase}
+                            onCheckedChange={(checked) =>
+                                setFormData(prev => ({ ...prev, createDatabase: checked }))
+                            }
+                        />
+                        <span>Create database automatically</span>
+                    </label>
+                </div>
+
+                <div className="modal-actions">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" disabled={loading}>
+                        {loading ? 'Creating...' : 'Create Site'}
+                    </Button>
+                </div>
+            </form>
         </Modal>
     );
 };

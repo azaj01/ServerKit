@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../services/api';
+import { Input } from '@/components/ui/input';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
 const ShellTab = ({ appId, appName }) => {
     const [containers, setContainers] = useState([]);
@@ -81,17 +83,21 @@ const ShellTab = ({ appId, appName }) => {
                 <div className="shell-tab__header">
                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Container Shell</span>
                     {containers.length > 1 && (
-                        <select
+                        <Select
                             value={selectedContainer || ''}
-                            onChange={(e) => setSelectedContainer(e.target.value)}
-                            style={{ fontSize: '12px' }}
+                            onValueChange={setSelectedContainer}
                         >
-                            {containers.map(c => (
-                                <option key={c.Id} value={c.Id}>
-                                    {c.Names?.[0]?.replace(/^\//, '') || c.Id.substring(0, 12)}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger style={{ fontSize: '12px' }}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {containers.map(c => (
+                                    <SelectItem key={c.Id} value={c.Id}>
+                                        {c.Names?.[0]?.replace(/^\//, '') || c.Id.substring(0, 12)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     )}
                 </div>
 
@@ -112,7 +118,7 @@ const ShellTab = ({ appId, appName }) => {
 
                 <form className="shell-tab__input-row" onSubmit={handleExec}>
                     <span className="shell-tab__prompt">$</span>
-                    <input
+                    <Input
                         className="shell-tab__input"
                         type="text"
                         value={command}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLogsDrawer } from '../contexts/LogsDrawerContext';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import socketService from '../services/socket';
 import api from '../services/api';
 
@@ -24,7 +26,6 @@ const LogsDrawer = () => {
         setLines([]);
         let cancelled = false;
 
-        // Load initial log batch
         async function loadInitial() {
             try {
                 let data;
@@ -41,7 +42,6 @@ const LogsDrawer = () => {
         }
         loadInitial();
 
-        // Subscribe to real-time log_line events
         socketService.connect();
         if (service.logPath) {
             socketService.subscribeLogs(service.logPath);
@@ -111,11 +111,16 @@ const LogsDrawer = () => {
                     <span className="logs-drawer__service-name">{service.name}</span>
                     <span className="logs-drawer__last-line">{lastLine}</span>
                     <div className="logs-drawer__collapsed-actions">
-                        <button className="btn-icon" onClick={(e) => { e.stopPropagation(); closeDrawer(); }} title="Close">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => { e.stopPropagation(); closeDrawer(); }}
+                            title="Close"
+                        >
                             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                             </svg>
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -136,25 +141,25 @@ const LogsDrawer = () => {
                 </div>
                 <div className="logs-drawer__header-right">
                     <label className="logs-drawer__toggle">
-                        <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} />
+                        <Switch checked={autoScroll} onCheckedChange={setAutoScroll} />
                         <span>Auto-scroll</span>
                     </label>
-                    <button className="btn-icon" onClick={() => setLines([])} title="Clear">
+                    <Button variant="ghost" size="icon" onClick={() => setLines([])} title="Clear">
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                             <polyline points="3 6 5 6 21 6"/>
                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                         </svg>
-                    </button>
-                    <button className="btn-icon" onClick={collapseDrawer} title="Collapse">
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={collapseDrawer} title="Collapse">
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                             <polyline points="6 9 12 15 18 9"/>
                         </svg>
-                    </button>
-                    <button className="btn-icon" onClick={closeDrawer} title="Close">
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={closeDrawer} title="Close">
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
                             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
-                    </button>
+                    </Button>
                 </div>
             </div>
 
