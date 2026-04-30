@@ -44,6 +44,7 @@ export const ipc = {
     health: () => get('/health'),
     status: () => get('/status'),
     metricsHistory: () => get('/metrics/history'),
+    events: (since = 0) => get(`/events${since ? `?since=${since}` : ''}`),
     connection: () => get('/connection'),
     logs: (lines = 200) => get(`/logs?lines=${lines}`),
     restart: () => post('/restart'),

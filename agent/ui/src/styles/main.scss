@@ -319,3 +319,121 @@ a {
         font-size: 12px;
     }
 }
+
+// ─── Filter chips ────────────────────────────────────────────────────────
+
+.filter-group {
+    display: flex;
+    gap: 4px;
+}
+
+.chip {
+    background: $bg-card;
+    border: 1px solid $border-default;
+    color: $text-secondary;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-transform: capitalize;
+    transition: all 120ms;
+
+    &:hover {
+        color: $text-primary;
+        border-color: $border-active;
+    }
+
+    &--active {
+        background: $bg-elevated;
+        color: $text-primary;
+        border-color: $border-active;
+    }
+}
+
+// ─── Activity timeline ───────────────────────────────────────────────────
+
+.card--padded {
+    padding: 0;
+    overflow: hidden;
+}
+
+.event-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.event {
+    display: grid;
+    grid-template-columns: 32px 1fr auto;
+    gap: $space-md;
+    padding: 14px 18px;
+    border-bottom: 1px solid $border-subtle;
+    align-items: flex-start;
+
+    &:last-child {
+        border-bottom: none;
+    }
+
+    &__icon {
+        width: 32px;
+        height: 32px;
+        border-radius: $radius-sm;
+        display: grid;
+        place-items: center;
+        background: $bg-elevated;
+        color: $text-secondary;
+        flex-shrink: 0;
+    }
+
+    &__body {
+        min-width: 0;
+    }
+
+    &__msg {
+        color: $text-primary;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    &__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        margin-top: 4px;
+        font-size: 11px;
+        color: $text-tertiary;
+    }
+
+    &__meta-item {
+        word-break: break-all;
+
+        strong {
+            font-weight: 600;
+            color: $text-secondary;
+            margin-right: 4px;
+        }
+    }
+
+    &__time {
+        font-size: 11px;
+        color: $text-tertiary;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    &--warn {
+        .event__icon {
+            background: rgba($warning, 0.1);
+            color: $warning;
+        }
+    }
+
+    &--error {
+        .event__icon {
+            background: rgba($danger, 0.1);
+            color: $danger;
+        }
+    }
+}

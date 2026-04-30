@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/serverkit/agent/internal/config"
+	"github.com/serverkit/agent/internal/events"
 	"github.com/serverkit/agent/internal/logger"
 )
 
@@ -18,6 +19,7 @@ type StatusProvider interface {
 	GetMetricsHistory() []MetricSample
 	GetConnectionInfo() ConnectionInfo
 	GetRecentLogs(lines int) []string
+	GetEvents(since int64) []events.Event
 	Restart() error
 }
 
@@ -126,6 +128,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/status", handlers.HandleStatus)
 	mux.HandleFunc("/metrics", handlers.HandleMetrics)
 	mux.HandleFunc("/metrics/history", handlers.HandleMetricsHistory)
+	mux.HandleFunc("/events", handlers.HandleEvents)
 	mux.HandleFunc("/connection", handlers.HandleConnection)
 	mux.HandleFunc("/logs", handlers.HandleLogs)
 	mux.HandleFunc("/restart", handlers.HandleRestart)

@@ -63,6 +63,27 @@ func (h *Handlers) HandleMetricsHistory(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// HandleEvents returns the agent's recent activity events. Optional `since`
+// query param (unix milliseconds) makes the endpoint cheap to poll: clients
+// pass the timestamp of the most recent event they've seen and only get
+// new ones back.
+func (h *Handlers) HandleEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var since int64
+	if s := r.URL.Query().Get("since"); s != "" {
+		if parsed, err := strconv.ParseInt(s, 10, 64); err == nil {
+			since = parsed
+		}
+	}
+	evs := h.provider.GetEvents(since)
+	h.writeJSON(w, map[string]interface{}{
+		"events": evs,
+	})
+}
+
 // HandleConnection returns WebSocket connection information
 func (h *Handlers) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

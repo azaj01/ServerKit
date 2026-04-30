@@ -51,3 +51,8 @@ export function useConnection(intervalMs = 5000) {
     const { data, error } = usePolling(ipc.connection, intervalMs);
     return { connection: data, error };
 }
+
+export function useEvents(intervalMs = 3000) {
+    const { data, error } = usePolling(() => ipc.events(0), intervalMs);
+    return { events: data?.events || [], error };
+}

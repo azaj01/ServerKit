@@ -20,6 +20,7 @@ import (
 	"github.com/serverkit/agent/internal/auth"
 	"github.com/serverkit/agent/internal/config"
 	"github.com/serverkit/agent/internal/docker"
+	"github.com/serverkit/agent/internal/events"
 	"github.com/serverkit/agent/internal/ipc"
 	"github.com/serverkit/agent/internal/logger"
 	"github.com/serverkit/agent/internal/metrics"
@@ -40,6 +41,7 @@ type Agent struct {
 	terminal *terminal.Manager
 	ipc      *ipc.Server
 	sampler  *metricSampler
+	events   *events.Store
 
 	// Active subscriptions
 	subscriptions map[string]context.CancelFunc
@@ -90,6 +92,15 @@ func New(cfg *config.Config, log *logger.Logger) (*Agent, error) {
 		log.Info("Terminal/PTY support enabled")
 	}
 
+	// Persist the event store next to the existing config so it survives
+	// service restarts. Falls back to in-memory only if we can't infer a
+	// data directory (shouldn't happen on a normal install).
+	dataDir := ""
+	if cfg.Logging.File != "" {
+		dataDir = filepath.Dir(cfg.Logging.File)
+	}
+	eventStore := events.NewStore(200, events.DefaultPath(dataDir))
+
 	agent := &Agent{
 		cfg:           cfg,
 		log:           log,
@@ -99,6 +110,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Agent, error) {
 		metrics:       metricsCollector,
 		terminal:      termManager,
 		sampler:       newMetricSampler(300), // 5 min @ 1 Hz
+		events:        eventStore,
 		subscriptions: make(map[string]context.CancelFunc),
 		handlers:      make(map[string]CommandHandler),
 		startTime:     time.Now(),
@@ -188,6 +200,9 @@ func (a *Agent) Run(ctx context.Context) error {
 		"version", Version,
 		"features", fmt.Sprintf("docker=%v metrics=%v ipc=%v", a.cfg.Features.Docker, a.cfg.Features.Metrics, a.cfg.IPC.Enabled),
 	)
+	a.events.Append(events.KindServiceStart, events.SeverityInfo,
+		"Agent service started",
+		map[string]interface{}{"version": Version})
 
 	// Verify Docker connection if enabled
 	if a.docker != nil {
@@ -224,11 +239,20 @@ func (a *Agent) Run(ctx context.Context) error {
 		go a.samplerLoop(ctx)
 	}
 
+	// Watch WS connection state and emit Activity events on transitions.
+	// Polling at 1 Hz is fine — the activity tab is a human-readable
+	// timeline, not a real-time monitor.
+	go a.connectionWatcher(ctx)
+
 	// Wait for context cancellation or restart request
 	select {
 	case <-ctx.Done():
+		a.events.Append(events.KindServiceStop, events.SeverityInfo,
+			"Agent stopping (signal)", nil)
 	case <-a.restartCh:
 		a.log.Info("Restart requested")
+		a.events.Append(events.KindRestartRequested, events.SeverityInfo,
+			"Restart requested via IPC", nil)
 	}
 
 	// Cleanup
@@ -337,6 +361,41 @@ func abs(x int64) int64 {
 		return -x
 	}
 	return x
+}
+
+// connectionWatcher polls the WS connection flag and emits Activity events
+// on each transition. Avoids dragging events.Store into the ws package or
+// adding a new callback API for one consumer.
+func (a *Agent) connectionWatcher(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	prev := false
+	first := true
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := a.ws.IsConnected()
+			if now == prev && !first {
+				continue
+			}
+			first = false
+			if now {
+				a.events.Append(events.KindWSConnected, events.SeverityInfo,
+					"Connected to panel",
+					map[string]interface{}{"url": a.cfg.Server.URL})
+			} else if prev {
+				// Only log disconnect after we'd previously been up — avoids
+				// a spurious "lost connection" on cold-start before the
+				// first connect ever succeeds.
+				a.events.Append(events.KindWSDisconnected, events.SeverityWarn,
+					"Connection lost", nil)
+			}
+			prev = now
+		}
+	}
 }
 
 // heartbeatLoop sends periodic heartbeats
@@ -1362,6 +1421,15 @@ func (a *Agent) GetMetricsHistory() []ipc.MetricSample {
 		return []ipc.MetricSample{}
 	}
 	return a.sampler.snapshot()
+}
+
+// GetEvents returns recent activity events newer than `since` (unix ms).
+// Pass 0 to get all events currently held in the ring buffer.
+func (a *Agent) GetEvents(since int64) []events.Event {
+	if a.events == nil {
+		return []events.Event{}
+	}
+	return a.events.Snapshot(since)
 }
 
 // GetConnectionInfo returns WebSocket connection information for the IPC API
