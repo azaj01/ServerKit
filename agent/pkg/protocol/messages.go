@@ -322,6 +322,7 @@ const (
 	// `cloudflared tunnel login` (approach A from the design notes).
 	// Status reflects "is binary installed AND has cert.pem".
 	ActionCloudflaredStatus       = "cloudflared:status"
+	ActionCloudflaredLogin        = "cloudflared:login"
 	ActionCloudflaredTunnelList   = "cloudflared:tunnel:list"
 	ActionCloudflaredTunnelCreate = "cloudflared:tunnel:create"
 	ActionCloudflaredTunnelRoute  = "cloudflared:tunnel:route"

@@ -2269,6 +2269,18 @@ def remote_cloudflared_status(server_id):
     return _agent_result(result)
 
 
+@servers_bp.route('/<server_id>/cloudflared/login', methods=['POST'])
+@jwt_required()
+@developer_required
+def remote_cloudflared_login(server_id):
+    """Start `cloudflared tunnel login` on the agent. Returns
+    {job_id, channel}; the panel subscribes to the corresponding
+    Socket.IO room and renders the auth_url the agent surfaces."""
+    user_id = get_jwt_identity()
+    result = RemoteCloudflaredService.login(server_id, user_id=user_id)
+    return _agent_result(result)
+
+
 @servers_bp.route('/<server_id>/cloudflared/tunnels', methods=['GET'])
 @jwt_required()
 def remote_cloudflared_list(server_id):

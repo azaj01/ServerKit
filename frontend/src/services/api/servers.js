@@ -370,6 +370,15 @@ export async function getRemoteCloudflaredStatus(serverId) {
     return this.request(`/servers/${serverId}/cloudflared/status`);
 }
 
+// Triggers `cloudflared tunnel login` on the agent. Returns
+// {job_id, channel}; subscribe via JobProgressModal to receive the
+// auth URL, then watch for the done event when cert.pem lands.
+export async function startRemoteCloudflaredLogin(serverId) {
+    return this.request(`/servers/${serverId}/cloudflared/login`, {
+        method: 'POST'
+    });
+}
+
 export async function getRemoteCloudflaredTunnels(serverId) {
     return this.request(`/servers/${serverId}/cloudflared/tunnels`);
 }

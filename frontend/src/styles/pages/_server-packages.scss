@@ -228,6 +228,47 @@
     }
 }
 
+// Cloudflared login flow: surfaces the auth URL the agent captures
+// from `cloudflared tunnel login` so the user can authorise from
+// their own browser.
+.cloudflared-login-prompt {
+    p {
+        margin: 0 0 0.75rem;
+    }
+}
+
+.cloudflared-login-card {
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--card);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    &--success {
+        border-color: var(--success, #16a34a);
+        background: color-mix(in srgb, var(--success, #16a34a) 8%, transparent);
+    }
+
+    &--error {
+        border-color: var(--destructive, #ef4444);
+        background: color-mix(in srgb, var(--destructive, #ef4444) 8%, transparent);
+    }
+
+    &__actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    &__hint {
+        font-size: 0.85rem;
+        color: var(--muted-foreground);
+        margin: 0;
+    }
+}
+
 // Shared by JobProgressModal — kept here because Packages is its primary
 // consumer. Services tab logs use a different component path.
 .job-progress-modal {

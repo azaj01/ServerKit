@@ -194,3 +194,15 @@ func (j *Job) Replay() []Event {
 // Done returns a channel closed when the job emits a final event with
 // Phase == PhaseDone. Useful for tests.
 func (j *Job) Done() <-chan struct{} { return j.done }
+
+// HasTerminated reports whether a Done event has already been emitted.
+// Useful for handler shutdown paths that want to avoid double-emitting
+// a final terminator if their primary loop already pushed one.
+func (j *Job) HasTerminated() bool {
+	select {
+	case <-j.done:
+		return true
+	default:
+		return false
+	}
+}

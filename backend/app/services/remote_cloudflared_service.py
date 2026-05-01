@@ -67,3 +67,12 @@ class RemoteCloudflaredService:
             params={'ref': ref},
             user_id=user_id, timeout=30.0,
         )
+
+    @staticmethod
+    def login(server_id: str, user_id: Optional[int] = None) -> Dict[str, Any]:
+        # Returns {job_id, channel} immediately; the panel subscribes to
+        # the matching Socket.IO room for the auth_url + completion event.
+        return RemoteCloudflaredService._send(
+            server_id, 'cloudflared:login',
+            user_id=user_id, timeout=10.0,
+        )

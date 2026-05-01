@@ -996,6 +996,9 @@ const CloudflaredTab = ({ serverId, serverStatus }) => {
     const [routeHostname, setRouteHostname] = useState('');
     const [routing, setRouting] = useState(false);
 
+    // Login flow: { channel, authUrl, status: 'starting'|'awaiting'|'done'|'error', error, certPath }
+    const [login, setLogin] = useState(null);
+
     const loadStatus = useCallback(async () => {
         try {
             const s = await api.getRemoteCloudflaredStatus(serverId);
@@ -1088,6 +1091,65 @@ const CloudflaredTab = ({ serverId, serverStatus }) => {
         }
     }
 
+    // Triggers `cloudflared tunnel login` on the agent and subscribes
+    // to the streaming auth flow. The first event carries the auth URL
+    // we surface as a clickable button; the final event flips us back
+    // to ready state once cert.pem appears.
+    async function handleStartLogin() {
+        try {
+            const res = await api.startRemoteCloudflaredLogin(serverId);
+            const channel = res?.channel || `job:${res?.job_id}`;
+            setLogin({ channel, status: 'starting', authUrl: null, error: null, certPath: null });
+
+            // Reuse the live socket service to subscribe to the
+            // server_stream room. We don't open the JobProgressModal
+            // because the login flow needs a different shape (a single
+            // big "Open URL" CTA, not a log tail).
+            const { default: socketService } = await import('../services/socket');
+            if (!socketService.socket) socketService.connect();
+            const sock = socketService.socket;
+            if (!sock) {
+                setLogin(null);
+                toast.error('Socket not available');
+                return;
+            }
+            const room = `server_${serverId}_${channel}`;
+            const onStream = (msg) => {
+                if (msg?.channel !== channel) return;
+                const ev = msg.data || {};
+                const url = ev?.extra?.auth_url;
+                if (url) {
+                    setLogin((cur) => cur ? { ...cur, status: 'awaiting', authUrl: url } : cur);
+                }
+                if (ev.phase === 'done') {
+                    if (ev.error) {
+                        setLogin((cur) => cur ? { ...cur, status: 'error', error: ev.error } : cur);
+                        toast.error(`Login failed: ${ev.error}`);
+                    } else {
+                        setLogin((cur) => cur ? { ...cur, status: 'done', certPath: ev?.extra?.cert_path } : cur);
+                        toast.success('Cloudflare login complete');
+                        // Refresh capabilities + status so the tab unlocks
+                        // without a manual reload.
+                        api.refreshRemoteCapabilities(serverId).catch(() => {});
+                        loadStatus();
+                        loadTunnels();
+                    }
+                    sock.off('server_stream', onStream);
+                    sock.emit('leave_room', { room });
+                }
+            };
+            sock.emit('join_room', { room });
+            sock.on('server_stream', onStream);
+        } catch (err) {
+            toast.error(err.message || 'Failed to start login');
+            setLogin(null);
+        }
+    }
+
+    function handleCancelLogin() {
+        setLogin(null);
+    }
+
     if (serverStatus !== 'online') {
         return (
             <div className="offline-notice">
@@ -1139,12 +1201,19 @@ const CloudflaredTab = ({ serverId, serverStatus }) => {
                                 Cloudflare docs
                             </a>.
                         </>
+                    ) : login ? (
+                        <CloudflaredLoginCard login={login} onCancel={handleCancelLogin} />
                     ) : (
-                        <>
-                            On the server, run <code>sudo cloudflared tunnel login</code>. A browser
-                            window will open and ask you to pick a Cloudflare zone. After that, click
-                            Refresh here.
-                        </>
+                        <div className="cloudflared-login-prompt">
+                            <p>
+                                Cloudflare needs you to authorise this agent once. Click{' '}
+                                <strong>Login</strong> below — we&apos;ll start the OAuth flow on the
+                                server and surface the URL for you to open in your browser. Once you
+                                authorise, the agent picks up the cert.pem automatically and the
+                                rest of this tab unlocks.
+                            </p>
+                            <Button onClick={handleStartLogin}>Login to Cloudflare</Button>
+                        </div>
                     )}
                 </div>
             )}
@@ -1271,6 +1340,71 @@ const CloudflaredTab = ({ serverId, serverStatus }) => {
             />
         </div>
     );
+};
+
+// CloudflaredLoginCard renders the in-flight OAuth login state. The
+// agent has spawned `cloudflared tunnel login` on the server and is
+// streaming progress on a job channel; we render either a spinner
+// (while we wait for the URL), the Open-in-Browser CTA (once the URL
+// arrives), or a final success/error message.
+const CloudflaredLoginCard = ({ login, onCancel }) => {
+    if (!login) return null;
+    if (login.status === 'starting') {
+        return (
+            <div className="cloudflared-login-card">
+                <p>Asking the agent to start the Cloudflare login flow…</p>
+                <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+            </div>
+        );
+    }
+    if (login.status === 'awaiting' && login.authUrl) {
+        return (
+            <div className="cloudflared-login-card">
+                <p>
+                    <strong>Step 1 / 2:</strong> open the following URL in your browser, sign in
+                    to Cloudflare, and pick the zone you want to associate with this agent.
+                </p>
+                <div className="cloudflared-login-card__actions">
+                    <a
+                        href={login.authUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-primary"
+                    >
+                        Open Cloudflare login
+                    </a>
+                    <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => navigator.clipboard?.writeText(login.authUrl)}
+                    >
+                        Copy URL
+                    </button>
+                </div>
+                <p className="cloudflared-login-card__hint">
+                    <strong>Step 2 / 2:</strong> waiting for the agent to receive cert.pem from
+                    Cloudflare. This page will refresh automatically once authorisation completes.
+                </p>
+                <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+            </div>
+        );
+    }
+    if (login.status === 'done') {
+        return (
+            <div className="cloudflared-login-card cloudflared-login-card--success">
+                Authenticated. Refreshing…
+            </div>
+        );
+    }
+    if (login.status === 'error') {
+        return (
+            <div className="cloudflared-login-card cloudflared-login-card--error">
+                <strong>Login failed:</strong> {login.error || 'unknown error'}
+                <Button variant="outline" size="sm" onClick={onCancel}>Dismiss</Button>
+            </div>
+        );
+    }
+    return null;
 };
 
 const MetricsTab = ({ serverId, metrics }) => {

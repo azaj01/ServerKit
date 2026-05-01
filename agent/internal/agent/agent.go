@@ -279,6 +279,7 @@ func (a *Agent) registerHandlers() {
 	// capabilities probe, so the panel can distinguish "binary
 	// installed but not logged in" from "not installed at all."
 	a.handlers[protocol.ActionCloudflaredStatus] = a.handleCloudflaredStatus
+	a.handlers[protocol.ActionCloudflaredLogin] = a.handleCloudflaredLogin
 	a.handlers[protocol.ActionCloudflaredTunnelList] = a.handleCloudflaredTunnelList
 	a.handlers[protocol.ActionCloudflaredTunnelCreate] = a.handleCloudflaredTunnelCreate
 	a.handlers[protocol.ActionCloudflaredTunnelRoute] = a.handleCloudflaredTunnelRoute

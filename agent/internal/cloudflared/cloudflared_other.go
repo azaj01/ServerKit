@@ -23,3 +23,6 @@ func (stubManager) Create(ctx context.Context, _ CreateRequest) (*Tunnel, error)
 }
 func (stubManager) Route(ctx context.Context, _ RouteRequest) error { return errUnsupported }
 func (stubManager) Delete(ctx context.Context, _ string) error      { return errUnsupported }
+func (stubManager) Login(ctx context.Context) (<-chan LoginEvent, error) {
+	return nil, errUnsupported
+}
