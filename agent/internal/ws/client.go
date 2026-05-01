@@ -20,6 +20,13 @@ import (
 	"github.com/serverkit/agent/pkg/protocol"
 )
 
+// Version is the agent version string surfaced in the User-Agent
+// header. Defaults to "dev"; main.go's init() mirrors the ldflags-set
+// main.Version into this when a release build runs.
+var Version = "dev"
+
+func agentVersion() string { return Version }
+
 // MessageHandler is the callback fired on inbound packets. Aliased to the
 // transport package so ws.Client implements transport.Transport without
 // adapter glue.
@@ -133,7 +140,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	headers := http.Header{}
 	headers.Set("X-Agent-ID", c.auth.AgentID())
 	headers.Set("X-API-Key-Prefix", c.auth.GetAPIKeyPrefix())
-	headers.Set("User-Agent", fmt.Sprintf("ServerKit-Agent/%s", "dev"))
+	headers.Set("User-Agent", fmt.Sprintf("ServerKit-Agent/%s", agentVersion()))
 	// Bypass ngrok's interstitial / browser-warning behaviour for free-tier
 	// tunnels. Harmless when the panel isn't behind ngrok.
 	headers.Set("ngrok-skip-browser-warning", "true")

@@ -34,6 +34,13 @@ import (
 	"github.com/serverkit/agent/pkg/protocol"
 )
 
+// Version is the agent version string surfaced in the User-Agent
+// header. Defaults to "dev"; main.go's init() mirrors the ldflags-set
+// main.Version into this on release builds. Was previously a hardcoded
+// "dev" literal which made the panel display "ServerKit-Agent-Poll/dev"
+// regardless of the actual built version.
+var Version = "dev"
+
 // Client is the polling-mode transport. Mirrors the surface of ws.Client
 // so agent.Agent doesn't need to know which transport is wired up.
 type Client struct {
@@ -378,7 +385,7 @@ func (c *Client) postJSON(ctx context.Context, path, token string, body interfac
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ServerKit-Agent-Poll/dev")
+	req.Header.Set("User-Agent", "ServerKit-Agent-Poll/"+Version)
 	if token != "" {
 		req.Header.Set("X-Session-Token", token)
 	}

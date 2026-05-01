@@ -23,26 +23,72 @@ from app.models.plugin import InstalledPlugin
 
 logger = logging.getLogger(__name__)
 
-# Resolve paths relative to the backend directory
+# Resolve paths relative to the backend directory.
 # __file__ = backend/app/services/plugin_service.py
 # _APP_DIR = backend/app/
 # _BACKEND_ROOT = backend/
 # _PROJECT_ROOT = ServerKit/
+#
+# Both targets are env-var overridable. The defaults work for native dev
+# (backend run from a checkout). They break in Docker because the backend
+# image only contains /app — the host's frontend directory isn't mounted —
+# so dockerized panels MUST set SERVERKIT_FRONTEND_PLUGINS_DIR (and bind
+# mount the corresponding host folder) when installing plugins that ship
+# a frontend.
 _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _BACKEND_ROOT = os.path.dirname(_APP_DIR)
 _PROJECT_ROOT = os.path.dirname(_BACKEND_ROOT)
-BACKEND_PLUGINS_DIR = os.path.join(_APP_DIR, 'plugins')
-FRONTEND_PLUGINS_DIR = os.path.join(_PROJECT_ROOT, 'frontend', 'src', 'plugins')
+
+BACKEND_PLUGINS_DIR = os.environ.get(
+    'SERVERKIT_BACKEND_PLUGINS_DIR',
+    os.path.join(_APP_DIR, 'plugins'),
+)
+FRONTEND_PLUGINS_DIR = os.environ.get(
+    'SERVERKIT_FRONTEND_PLUGINS_DIR',
+    os.path.join(_PROJECT_ROOT, 'frontend', 'src', 'plugins'),
+)
 
 
-def _ensure_dirs():
-    os.makedirs(BACKEND_PLUGINS_DIR, exist_ok=True)
-    os.makedirs(FRONTEND_PLUGINS_DIR, exist_ok=True)
-    # Ensure __init__.py exists in backend plugins dir
+def _ensure_backend_dir():
+    """Create the backend plugin dir; raise a useful error if we can't."""
+    try:
+        os.makedirs(BACKEND_PLUGINS_DIR, exist_ok=True)
+    except OSError as e:
+        raise ValueError(
+            f"Cannot create backend plugin directory at {BACKEND_PLUGINS_DIR}: {e}. "
+            f"Set SERVERKIT_BACKEND_PLUGINS_DIR to a writable path."
+        )
     init_path = os.path.join(BACKEND_PLUGINS_DIR, '__init__.py')
     if not os.path.exists(init_path):
         with open(init_path, 'w') as f:
             f.write('')
+
+
+def _ensure_frontend_dir():
+    """Create the frontend plugin dir on demand. Called only when a plugin
+    actually ships frontend content — plugins without frontends never need
+    this directory and shouldn't fail just because it doesn't exist (a
+    common case in Docker)."""
+    try:
+        os.makedirs(FRONTEND_PLUGINS_DIR, exist_ok=True)
+    except OSError as e:
+        raise ValueError(
+            f"This plugin ships a frontend, but the panel can't write to "
+            f"the frontend plugin directory ({FRONTEND_PLUGINS_DIR}): {e}.\n\n"
+            f"If the panel runs in Docker, this is expected — the container "
+            f"sees only /app, not the host's frontend folder. Two fixes:\n"
+            f"  • Bind-mount the host's frontend/src/plugins into the "
+            f"container and set SERVERKIT_FRONTEND_PLUGINS_DIR to that path.\n"
+            f"  • Or run the backend natively for plugin development.\n\n"
+            f"You can also install the backend half only by stripping the "
+            f"frontend/ folder from the plugin zip, but the UI half won't load."
+        )
+
+
+def _ensure_dirs():
+    """Backwards-compatible eager init for backend dir only. Frontend dir is
+    lazy now — see _ensure_frontend_dir."""
+    _ensure_backend_dir()
 
 
 def _resolve_github_url(url):
@@ -157,17 +203,45 @@ def install_from_url(url, user_id=None):
 
 
 def install_from_path(path, user_id=None):
-    """Install a plugin from a local directory.
+    """Install a plugin from a local directory on the panel host.
 
     Useful during plugin development: point at the working tree, install,
     iterate. Internally we zip the folder in memory and reuse the same
     install pipeline as URL/upload installs so behavior is identical.
+
+    Note: "local" here means local to the *panel backend*, not to the
+    user's browser. If the backend runs in Docker, browser-host paths
+    won't resolve — the user should either bind-mount their plugin
+    source into the container or use install_from_zip via the upload
+    endpoint instead.
     """
     if not path:
         raise ValueError('path is required')
+
+    raw = path
+
+    # Windows path on a non-Windows panel host is the most common
+    # foot-gun (typical case: backend in Docker, dev on Windows). Detect
+    # and reject with a helpful message before os.path.abspath turns it
+    # into garbage like /app/C:\Users\...
+    if os.name != 'nt' and len(path) >= 3 and path[1:3] == ':\\':
+        raise ValueError(
+            f"'{raw}' looks like a Windows path, but the panel backend is "
+            f"running on {os.name!r} (likely a Linux container). The folder "
+            f"install runs on the panel host's filesystem, not your browser's. "
+            f"Either bind-mount your plugin source into the backend container, "
+            f"or use 'Upload Zip' instead."
+        )
+
     path = os.path.abspath(os.path.expanduser(path))
     if not os.path.isdir(path):
-        raise ValueError(f'Not a directory: {path}')
+        raise ValueError(
+            f"Not a directory: {path}\n"
+            f"This path is resolved on the panel backend ({os.name!r}), not "
+            f"your browser. If the backend runs in Docker, the path must "
+            f"exist inside the container — bind-mount the source folder or "
+            f"use 'Upload Zip'."
+        )
     if not os.path.exists(os.path.join(path, 'plugin.json')):
         raise ValueError(f'No plugin.json in {path}')
 
@@ -270,17 +344,30 @@ def _install_from_buffer(buf, source_url, source_type, user_id=None):
     db.session.commit()
 
     try:
-        # Extract backend files
-        backend_dest = os.path.join(BACKEND_PLUGINS_DIR, slug)
-        frontend_dest = os.path.join(FRONTEND_PLUGINS_DIR, slug)
-
+        # First pass — figure out what the archive contains. This lets us
+        # bail early with a useful error if the plugin needs a frontend
+        # dir we can't write to (the dockerized panel case).
         has_backend = False
         has_frontend = False
+        for member in zf.namelist():
+            rel = member[len(prefix):] if prefix else member
+            if not rel or rel.endswith('/'):
+                continue
+            if rel.startswith('backend/'):
+                has_backend = True
+            elif rel.startswith('frontend/'):
+                has_frontend = True
+
+        if has_frontend:
+            _ensure_frontend_dir()  # raises with a helpful message on failure
+
+        backend_dest = os.path.join(BACKEND_PLUGINS_DIR, slug)
+        frontend_dest = os.path.join(FRONTEND_PLUGINS_DIR, slug)
 
         # Clean old install
         if os.path.exists(backend_dest):
             shutil.rmtree(backend_dest)
-        if os.path.exists(frontend_dest):
+        if has_frontend and os.path.exists(frontend_dest):
             shutil.rmtree(frontend_dest)
 
         for member in zf.namelist():
@@ -290,14 +377,12 @@ def _install_from_buffer(buf, source_url, source_type, user_id=None):
                 continue
 
             if rel_path.startswith('backend/'):
-                has_backend = True
                 out_path = os.path.join(backend_dest, rel_path[len('backend/'):])
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
                 with zf.open(member) as src, open(out_path, 'wb') as dst:
                     dst.write(src.read())
 
             elif rel_path.startswith('frontend/'):
-                has_frontend = True
                 out_path = os.path.join(frontend_dest, rel_path[len('frontend/'):])
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
                 with zf.open(member) as src, open(out_path, 'wb') as dst:
@@ -407,7 +492,18 @@ def _regenerate_frontend_manifest():
 
     This file tells the frontend which plugins are installed and where
     their components/styles live so Vite can include them.
+
+    Best-effort: if the frontend dir doesn't exist (e.g. a pure backend
+    plugin install where no frontend was ever extracted, or a Docker
+    panel without the bind mount), we just log and move on rather than
+    failing the install.
     """
+    if not os.path.isdir(FRONTEND_PLUGINS_DIR):
+        logger.info(
+            f'Skipping frontend manifest regeneration: '
+            f'{FRONTEND_PLUGINS_DIR} does not exist'
+        )
+        return
     manifest_path = os.path.join(FRONTEND_PLUGINS_DIR, 'plugins-manifest.json')
 
     plugins = InstalledPlugin.query.filter(

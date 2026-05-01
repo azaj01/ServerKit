@@ -16,8 +16,10 @@ import (
 	"github.com/serverkit/agent/internal/config"
 	"github.com/serverkit/agent/internal/logger"
 	"github.com/serverkit/agent/internal/setupui"
+	pollclient "github.com/serverkit/agent/internal/transport/poll"
 	"github.com/serverkit/agent/internal/tray"
 	"github.com/serverkit/agent/internal/updater"
+	wsclient "github.com/serverkit/agent/internal/ws"
 	"github.com/spf13/cobra"
 )
 
@@ -27,14 +29,16 @@ var (
 	GitCommit = "unknown"
 )
 
-// Mirror Version into the agent package at startup so /status reports the
-// real version. ldflags set main.Version but the IPC reads agent.Version
-// — they're two distinct package-level vars and were silently drifting,
-// which is why the UI showed "vdev" while `serverkit-agent version`
-// correctly printed "1.6.10".
+// Mirror Version into every package that surfaces it in user-visible
+// strings. ldflags set main.Version, but the agent / ws / poll packages
+// each have their own Version var — they were silently drifting, which
+// is why the panel UI displayed "ServerKit-Agent-Poll/dev" even when
+// `serverkit-agent version` correctly printed the build tag.
 func init() {
 	if Version != "dev" {
 		agent.Version = Version
+		wsclient.Version = Version
+		pollclient.Version = Version
 	}
 }
 

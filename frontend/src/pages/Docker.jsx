@@ -1,12 +1,20 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useRef, createContext, useContext } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import TargetPicker from '../components/TargetPicker';
+import LogToolbar from '../components/log-viewer/LogToolbar';
+import LogContent from '../components/log-viewer/LogContent';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+    Box, Layers, HardDrive, Network as NetworkIcon, Search, X, RefreshCw,
+    Trash2, Play, Square, RotateCw, Terminal as TerminalLucide, FileText,
+    Cpu,
+} from 'lucide-react';
 
 // Server context for Docker operations
 const ServerContext = createContext({ serverId: 'local', serverName: 'Local' });
@@ -219,12 +227,6 @@ const Docker = () => {
         { id: 'networks', label: 'Networks' }
     ];
 
-    function handleServerChange(e) {
-        const serverId = e.target.value;
-        const server = servers.find(s => s.id === serverId) || { id: 'local', name: 'Local' };
-        setSelectedServer(server);
-    }
-
     const serverContextValue = {
         serverId: selectedServer.id,
         serverName: selectedServer.name,
@@ -233,23 +235,13 @@ const Docker = () => {
 
     return (
         <ServerContext.Provider value={serverContextValue}>
-        <div className="page-container docker-page-new">
-            <div className="docker-page-header">
-                <div className="docker-page-title">
-                    <h2>Docker Management</h2>
-                    <div className="docker-page-subtitle">Manage Containers, Images, and Networks</div>
+        <div className="page-container docker-page-new dx-page">
+            <div className="page-header">
+                <div className="page-header-content">
+                    <h1>Docker</h1>
+                    <p className="page-description">Manage containers, images, networks, and volumes</p>
                 </div>
-                <div className="docker-page-actions">
-                    <div className="server-selector">
-                        <ServerSelectorIcon />
-                        <select value={selectedServer.id} onChange={handleServerChange}>
-                            {servers.map(server => (
-                                <option key={server.id} value={server.id} disabled={server.status === 'offline'}>
-                                    {server.name} {server.status === 'offline' ? '(Offline)' : ''}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                <div className="page-header-actions">
                     {activeTab === 'containers' && <RunContainerButton />}
                     {activeTab === 'images' && <PullImageButton />}
                     {activeTab === 'networks' && <CreateNetworkButton />}
@@ -257,72 +249,92 @@ const Docker = () => {
                 </div>
             </div>
 
-            <div className="docker-stats-row">
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Containers</div>
-                    <div className="docker-stat-value">{stats.containers.total}</div>
-                    <div className="docker-stat-meta">
-                        <span className="docker-stat-running">{stats.containers.running} Running</span>
-                        <span className="docker-stat-stopped">{stats.containers.stopped} Stopped</span>
-                    </div>
+            <div className="lv-header">
+                <div className="lv-header-target">
+                    <span className="lv-header-label">Server</span>
+                    <TargetPicker
+                        feature="docker"
+                        value={selectedServer.id === 'local'
+                            ? { kind: 'local' }
+                            : { kind: 'agent', server_id: selectedServer.id, name: selectedServer.name }}
+                        onChange={(v) => {
+                            if (v.kind === 'local') setSelectedServer({ id: 'local', name: 'Local (this server)' });
+                            else setSelectedServer({ id: v.server_id, name: v.name });
+                        }}
+                    />
                 </div>
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Images</div>
-                    <div className="docker-stat-value">{stats.images.total}</div>
-                    <div className="docker-stat-meta">{stats.images.size} Disk Usage</div>
-                </div>
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Volumes</div>
-                    <div className="docker-stat-value">{stats.volumes.total}</div>
-                    <div className="docker-stat-meta">Persistent Data</div>
-                </div>
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Networks</div>
-                    <div className="docker-stat-value">{stats.networks.total}</div>
-                    <div className="docker-stat-meta">Bridge / Host / None</div>
+                <div className="lv-header-stats">
+                    <PruneButton onPruned={loadStats} />
                 </div>
             </div>
 
-            <div className="docker-panel">
-                <div className="docker-panel-header">
-                    <div className="docker-panel-tabs">
-                        {tabs.map(tab => (
-                            <div
-                                key={tab.id}
-                                className={`docker-panel-tab ${activeTab === tab.id ? 'active' : ''}`}
-                                onClick={() => setActiveTab(tab.id)}
-                            >
-                                {tab.label}
-                            </div>
-                        ))}
-                    </div>
-                    <div className="docker-panel-actions">
-                        <PruneButton onPruned={loadStats} />
+            <div className="dx-stats-row">
+                <div className="dx-stat" data-kind="containers">
+                    <div className="dx-stat-icon"><Box size={18} /></div>
+                    <div className="dx-stat-body">
+                        <div className="dx-stat-label">Containers</div>
+                        <div className="dx-stat-value">{stats.containers.total}</div>
+                        <div className="dx-stat-meta">
+                            <span className="dx-pill running"><span className="dot" />{stats.containers.running} running</span>
+                            <span className="dx-pill stopped"><span className="dot" />{stats.containers.stopped} stopped</span>
+                        </div>
                     </div>
                 </div>
+                <div className="dx-stat" data-kind="images">
+                    <div className="dx-stat-icon"><Layers size={18} /></div>
+                    <div className="dx-stat-body">
+                        <div className="dx-stat-label">Images</div>
+                        <div className="dx-stat-value">{stats.images.total}</div>
+                        <div className="dx-stat-meta">
+                            <span className="dx-stat-sub">{stats.images.size} on disk</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="dx-stat" data-kind="volumes">
+                    <div className="dx-stat-icon"><HardDrive size={18} /></div>
+                    <div className="dx-stat-body">
+                        <div className="dx-stat-label">Volumes</div>
+                        <div className="dx-stat-value">{stats.volumes.total}</div>
+                        <div className="dx-stat-meta">
+                            <span className="dx-stat-sub">Persistent data</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="dx-stat" data-kind="networks">
+                    <div className="dx-stat-icon"><NetworkIcon size={18} /></div>
+                    <div className="dx-stat-body">
+                        <div className="dx-stat-label">Networks</div>
+                        <div className="dx-stat-value">{stats.networks.total}</div>
+                        <div className="dx-stat-meta">
+                            <span className="dx-stat-sub">Bridge · Host · None</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                <div className="docker-panel-content">
-                    {activeTab === 'containers' && <ContainersTab onStatsChange={loadStats} />}
-                    {activeTab === 'compose' && <ComposeTab onStatsChange={loadStats} />}
-                    {activeTab === 'images' && <ImagesTab onStatsChange={loadStats} />}
-                    {activeTab === 'networks' && <NetworksTab onStatsChange={loadStats} />}
-                    {activeTab === 'volumes' && <VolumesTab onStatsChange={loadStats} />}
-                </div>
+            <div className="dx-tabs">
+                {tabs.map(tab => (
+                    <button
+                        key={tab.id}
+                        className={`dx-tab ${activeTab === tab.id ? 'active' : ''}`}
+                        onClick={() => setActiveTab(tab.id)}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="dx-panel">
+                {activeTab === 'containers' && <ContainersTab onStatsChange={loadStats} />}
+                {activeTab === 'compose' && <ComposeTab onStatsChange={loadStats} />}
+                {activeTab === 'images' && <ImagesTab onStatsChange={loadStats} />}
+                {activeTab === 'networks' && <NetworksTab onStatsChange={loadStats} />}
+                {activeTab === 'volumes' && <VolumesTab onStatsChange={loadStats} />}
             </div>
         </div>
         </ServerContext.Provider>
     );
 };
-
-// Server Selector Icon
-const ServerSelectorIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-        <line x1="6" y1="6" x2="6.01" y2="6"/>
-        <line x1="6" y1="18" x2="6.01" y2="18"/>
-    </svg>
-);
 
 // Action Buttons
 const RunContainerButton = () => {
@@ -413,24 +425,8 @@ const PruneButton = ({ onPruned }) => {
     );
 };
 
-// Resource Bar Component
-const ResourceBar = ({ label, value, color }) => {
-    const numValue = parseFloat(value) || 0;
-    return (
-        <div className="docker-res-container">
-            <span className="docker-res-label">{label}</span>
-            <div className="docker-res-track">
-                <div
-                    className="docker-res-fill"
-                    style={{ width: `${Math.min(numValue, 100)}%`, backgroundColor: color }}
-                />
-            </div>
-            <span className="docker-res-value">{numValue.toFixed(0)}%</span>
-        </div>
-    );
-};
-
-// Icon Actions
+// Icon Action button used by remaining (legacy) tabs (Images, Networks, Volumes).
+// Containers tab now renders cards with full action buttons inline.
 const IconAction = ({ title, onClick, color, children, disabled }) => (
     <button
         className="docker-icon-action"
@@ -443,49 +439,7 @@ const IconAction = ({ title, onClick, color, children, disabled }) => (
     </button>
 );
 
-// Icons
-const LogsIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-    </svg>
-);
-
-const TerminalIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="4 17 10 11 4 5"/>
-        <line x1="12" y1="19" x2="20" y2="19"/>
-    </svg>
-);
-
-const RestartIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="23 4 23 10 17 10"/>
-        <polyline points="1 20 1 14 7 14"/>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-    </svg>
-);
-
-const StopIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="6" width="12" height="12"/>
-    </svg>
-);
-
-const PlayIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <polygon points="5 3 19 12 5 21 5 3"/>
-    </svg>
-);
-
-const TrashIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-    </svg>
-);
+const TrashIcon = () => <Trash2 size={14} />;
 
 // Containers Tab
 const ContainersTab = ({ onStatsChange }) => {
@@ -609,7 +563,17 @@ const ContainersTab = ({ onStatsChange }) => {
         return ports.length > 0 ? ports : ['-'];
     }
 
+    const [statusFilter, setStatusFilter] = useState('all');
+
+    const counts = useMemo(() => {
+        const c = { all: containers.length, running: 0, stopped: 0 };
+        containers.forEach(x => { if (x.state === 'running') c.running++; else c.stopped++; });
+        return c;
+    }, [containers]);
+
     const filteredContainers = containers.filter(c => {
+        if (statusFilter === 'running' && c.state !== 'running') return false;
+        if (statusFilter === 'stopped' && c.state === 'running') return false;
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
         return c.name?.toLowerCase().includes(search) ||
@@ -618,122 +582,167 @@ const ContainersTab = ({ onStatsChange }) => {
     });
 
     if (loading) {
-        return <div className="docker-loading">Loading containers...</div>;
+        return <div className="lv-content-loading" style={{ padding: 60 }}>Loading containers…</div>;
     }
 
     return (
-        <div>
-            <div className="docker-table-header">
-                <label className="docker-filter-toggle">
-                    <input
-                        type="checkbox"
-                        checked={showAll}
-                        onChange={(e) => setShowAll(e.target.checked)}
-                    />
-                    Show stopped
-                </label>
-                <Input
-                    type="text"
-                    className="docker-search"
-                    placeholder="Search ID or Name..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+        <div className="dx-tab-pane">
+            <div className="dx-tab-toolbar">
+                <div className="proc-filter-chips">
+                    {[
+                        { id: 'all', label: 'All', count: counts.all },
+                        { id: 'running', label: 'Running', count: counts.running },
+                        { id: 'stopped', label: 'Stopped', count: counts.stopped },
+                    ].map(c => (
+                        <button
+                            key={c.id}
+                            className={`filter-chip ${statusFilter === c.id ? 'active' : ''}`}
+                            onClick={() => setStatusFilter(c.id)}
+                            disabled={c.id !== 'all' && c.count === 0}
+                        >
+                            <span>{c.label}</span>
+                            <span className="filter-chip-count">{c.count}</span>
+                        </button>
+                    ))}
+                </div>
+                <div className="dx-tab-toolbar-right">
+                    <div className="lv-search-field" style={{ minWidth: 240 }}>
+                        <Search size={13} className="lv-search-field-icon" />
+                        <input
+                            type="text"
+                            placeholder="Filter name or image…"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        {searchTerm && (
+                            <button className="lv-search-field-clear" onClick={() => setSearchTerm('')}>
+                                <X size={11} />
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        className="lv-icon-btn"
+                        onClick={loadContainers}
+                        title="Refresh"
+                    >
+                        <RefreshCw size={13} className={loading ? 'spinning' : ''} />
+                    </button>
+                </div>
             </div>
 
             {filteredContainers.length === 0 ? (
-                <div className="docker-empty">
-                    <h3>No containers</h3>
-                    <p>Run your first container to get started.</p>
+                <div className="lv-empty-hint" style={{ padding: 60, minHeight: 240 }}>
+                    <Box size={32} />
+                    <p>{containers.length === 0 ? 'No containers yet. Run your first one.' : 'No containers match the current filters.'}</p>
                 </div>
             ) : (
-                <table className="docker-table">
-                    <thead>
-                        <tr>
-                            <th>Container</th>
-                            <th>Image</th>
-                            <th>Status</th>
-                            <th>Bindings</th>
-                            <th>Resources</th>
-                            <th className="text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredContainers.map(container => {
-                            const stats = parseStats(containerStats[container.id]);
-                            const isRunning = container.state === 'running';
-                            const ports = formatPorts(container.ports);
-
-                            return (
-                                <tr key={container.id}>
-                                    <td>
-                                        <span className="docker-container-name">{container.name}</span>
-                                        <span className="docker-container-id">{container.id?.substring(0, 9)}</span>
-                                    </td>
-                                    <td>
-                                        <span className="docker-image-tag">{container.image}</span>
-                                    </td>
-                                    <td>
-                                        <span className={`docker-status-pill ${isRunning ? 'running' : 'exited'}`}>
-                                            <span className="docker-status-dot" />
-                                            {isRunning ? 'Running' : 'Exited'}
-                                        </span>
-                                        <div className="docker-status-detail">{container.status}</div>
-                                    </td>
-                                    <td>
-                                        <span className={`docker-ports ${!isRunning ? 'faded' : ''}`}>
-                                            {Array.isArray(ports) ? ports.map((p, i) => (
-                                                <span key={i}>{p}{i < ports.length - 1 && <br />}</span>
-                                            )) : ports}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className={!isRunning ? 'faded' : ''}>
-                                            <ResourceBar
-                                                label="CPU"
-                                                value={stats.cpu}
-                                                color={stats.cpu > 50 ? '#F59E0B' : '#6366F1'}
-                                            />
-                                            <ResourceBar
-                                                label="RAM"
-                                                value={stats.memory}
-                                                color="#10B981"
-                                            />
+                <div className="dx-container-grid">
+                    {filteredContainers.map(container => {
+                        const stats = parseStats(containerStats[container.id]);
+                        const isRunning = container.state === 'running';
+                        const ports = formatPorts(container.ports);
+                        return (
+                            <div
+                                key={container.id}
+                                className={`dx-container-card ${isRunning ? 'is-running' : 'is-stopped'}`}
+                                onClick={() => setSelectedContainer(container)}
+                            >
+                                <div className="dx-card-head">
+                                    <div className="dx-card-title">
+                                        <span className={`dx-status-dot ${isRunning ? 'running' : 'stopped'}`} />
+                                        <h4 title={container.name}>{container.name}</h4>
+                                    </div>
+                                    <span className={`dx-status-pill ${isRunning ? 'running' : 'stopped'}`}>
+                                        {isRunning ? 'Running' : 'Exited'}
+                                    </span>
+                                </div>
+                                <div className="dx-card-image">
+                                    <Layers size={11} />
+                                    <span title={container.image}>{container.image}</span>
+                                </div>
+                                <div className="dx-card-detail">{container.status}</div>
+                                {isRunning && Array.isArray(ports) && ports[0] !== '-' && (
+                                    <div className="dx-card-ports">
+                                        {ports.slice(0, 3).map((p, i) => (
+                                            <span key={i} className="dx-port-pill">{p}</span>
+                                        ))}
+                                        {ports.length > 3 && <span className="dx-port-more">+{ports.length - 3}</span>}
+                                    </div>
+                                )}
+                                {isRunning && (
+                                    <div className="dx-card-resources">
+                                        <div className="dx-res">
+                                            <span className="dx-res-label"><Cpu size={10} /> CPU</span>
+                                            <div className="dx-res-track">
+                                                <div className="dx-res-fill cpu" style={{ width: `${Math.min(stats.cpu, 100)}%` }} />
+                                            </div>
+                                            <span className="dx-res-value">{stats.cpu.toFixed(1)}%</span>
                                         </div>
-                                    </td>
-                                    <td className="docker-actions-cell">
-                                        <IconAction title="Logs" onClick={() => setSelectedContainer(container)}>
-                                            <LogsIcon />
-                                        </IconAction>
-                                        {isRunning && (
-                                            <>
-                                                <IconAction title="Terminal" onClick={() => setExecContainer(container)}>
-                                                    <TerminalIcon />
-                                                </IconAction>
-                                                <IconAction title="Restart" onClick={() => handleAction(container.id, 'restart')}>
-                                                    <RestartIcon />
-                                                </IconAction>
-                                                <IconAction title="Stop" onClick={() => handleAction(container.id, 'stop')} color="#EF4444">
-                                                    <StopIcon />
-                                                </IconAction>
-                                            </>
-                                        )}
-                                        {!isRunning && (
-                                            <>
-                                                <IconAction title="Start" onClick={() => handleAction(container.id, 'start')} color="#10B981">
-                                                    <PlayIcon />
-                                                </IconAction>
-                                                <IconAction title="Delete" onClick={() => handleAction(container.id, 'remove')} color="#EF4444">
-                                                    <TrashIcon />
-                                                </IconAction>
-                                            </>
-                                        )}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                        <div className="dx-res">
+                                            <span className="dx-res-label">RAM</span>
+                                            <div className="dx-res-track">
+                                                <div className="dx-res-fill mem" style={{ width: `${Math.min(stats.memory, 100)}%` }} />
+                                            </div>
+                                            <span className="dx-res-value">{stats.memory.toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="dx-card-actions" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        className="svc-action-btn ghost"
+                                        onClick={() => setSelectedContainer(container)}
+                                        title="Logs"
+                                    >
+                                        <FileText size={12} /> Logs
+                                    </button>
+                                    {isRunning && (
+                                        <>
+                                            <button
+                                                className="svc-action-btn ghost"
+                                                onClick={() => setExecContainer(container)}
+                                                title="Exec"
+                                            >
+                                                <TerminalLucide size={12} /> Exec
+                                            </button>
+                                            <button
+                                                className="svc-action-btn"
+                                                onClick={() => handleAction(container.id, 'restart')}
+                                                title="Restart"
+                                            >
+                                                <RotateCw size={12} /> Restart
+                                            </button>
+                                            <button
+                                                className="svc-action-btn"
+                                                onClick={() => handleAction(container.id, 'stop')}
+                                                title="Stop"
+                                            >
+                                                <Square size={12} /> Stop
+                                            </button>
+                                        </>
+                                    )}
+                                    {!isRunning && (
+                                        <>
+                                            <button
+                                                className="svc-action-btn primary"
+                                                onClick={() => handleAction(container.id, 'start')}
+                                                title="Start"
+                                            >
+                                                <Play size={12} /> Start
+                                            </button>
+                                            <button
+                                                className="svc-action-btn danger"
+                                                onClick={() => handleAction(container.id, 'remove')}
+                                                title="Remove"
+                                            >
+                                                <Trash2 size={12} /> Remove
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             )}
 
             {selectedContainer && (
@@ -1581,13 +1590,27 @@ const ContainerLogsModal = ({ container, onClose }) => {
     const [logs, setLogs] = useState('');
     const [loading, setLoading] = useState(true);
     const [tail, setTail] = useState(200);
+    const [searchPattern, setSearchPattern] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
+    const [autoRefresh, setAutoRefresh] = useState(false);
+    const [showLineNumbers, setShowLineNumbers] = useState(true);
+    const [wrapLines, setWrapLines] = useState(true);
+    const contentRef = useRef(null);
+    const intervalRef = useRef(null);
 
     useEffect(() => {
         loadLogs();
-    }, [container, tail]);
+    }, [container, tail]); // eslint-disable-line
 
-    async function loadLogs() {
-        setLoading(true);
+    useEffect(() => {
+        if (autoRefresh) {
+            intervalRef.current = setInterval(() => loadLogs(false), 3000);
+        }
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [autoRefresh, tail]); // eslint-disable-line
+
+    async function loadLogs(showSpinner = true) {
+        if (showSpinner) setLoading(true);
         try {
             let data;
             if (isRemote) {
@@ -1596,7 +1619,10 @@ const ContainerLogsModal = ({ container, onClose }) => {
             } else {
                 data = await api.getContainerLogs(container.id, tail);
             }
-            setLogs(data.logs || 'No logs available');
+            setLogs(data.logs || '');
+            if (autoRefresh && contentRef.current) {
+                contentRef.current.scrollTop = contentRef.current.scrollHeight;
+            }
         } catch (err) {
             setLogs('Failed to load logs: ' + (err.message || 'Unknown error'));
         } finally {
@@ -1604,34 +1630,90 @@ const ContainerLogsModal = ({ container, onClose }) => {
         }
     }
 
+    function handleDownload() {
+        if (!logs) return;
+        const blob = new Blob([logs], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${container.name}-${Date.now()}.log`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Logs: {container.name}</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-                <div className="modal-body">
-                    <div className="logs-controls flex items-center gap-2 mb-2">
-                        <label>Lines:</label>
-                        <select value={tail} onChange={(e) => setTail(Number(e.target.value))} className="py-2 px-2">
-                            <option value={50}>50</option>
-                            <option value={100}>100</option>
-                            <option value={200}>200</option>
-                            <option value={500}>500</option>
-                            <option value={1000}>1000</option>
-                        </select>
+        <>
+            <div className="preview-drawer-backdrop" onClick={onClose} />
+            <aside className="preview-drawer">
+                <header className="preview-drawer-header">
+                    <Box size={20} style={{ color: 'var(--accent-primary)' }} />
+                    <div className="preview-drawer-title">
+                        <h3>{container.name}</h3>
+                        <p className="preview-drawer-path">{container.image} · {container.id?.substring(0, 12)}</p>
                     </div>
-                    <pre className="log-viewer">{loading ? 'Loading...' : logs}</pre>
+                    <button className="preview-drawer-close" onClick={onClose}>
+                        <X size={18} />
+                    </button>
+                </header>
+
+                <div className="preview-drawer-meta">
+                    <div className="meta-item">
+                        <span className="meta-label">Status</span>
+                        <span className="meta-value">{container.state || container.status}</span>
+                    </div>
+                    <div className="meta-item">
+                        <span className="meta-label">Image</span>
+                        <span className="meta-value mono">{container.image}</span>
+                    </div>
+                    <div className="meta-item meta-item-wide">
+                        <span className="meta-label">ID</span>
+                        <span className="meta-value mono">{container.id}</span>
+                    </div>
+                    {container.ports && (
+                        <div className="meta-item meta-item-wide">
+                            <span className="meta-label">Ports</span>
+                            <span className="meta-value mono">{container.ports || '—'}</span>
+                        </div>
+                    )}
                 </div>
-                <div className="modal-actions">
-                    <Button variant="outline" onClick={loadLogs} disabled={loading}>
-                        {loading ? 'Loading...' : 'Refresh'}
-                    </Button>
-                    <Button onClick={onClose}>Close</Button>
+
+                <LogToolbar
+                    searchPattern={searchPattern}
+                    onSearchChange={setSearchPattern}
+                    onSearchSubmit={() => setAppliedSearch(searchPattern)}
+                    onSearchClear={() => { setSearchPattern(''); setAppliedSearch(''); }}
+                    lineCount={tail}
+                    onLineCountChange={(n) => setTail(n)}
+                    autoRefresh={autoRefresh}
+                    onAutoRefreshToggle={() => setAutoRefresh(!autoRefresh)}
+                    showLineNumbers={showLineNumbers}
+                    onToggleLineNumbers={() => setShowLineNumbers(!showLineNumbers)}
+                    wrapLines={wrapLines}
+                    onToggleWrap={() => setWrapLines(!wrapLines)}
+                    isFullscreen={false}
+                    onToggleFullscreen={() => {}}
+                    onRefresh={() => loadLogs()}
+                    onDownload={handleDownload}
+                    onClear={() => {}}
+                    onScrollToBottom={() => {
+                        if (contentRef.current) contentRef.current.scrollTop = contentRef.current.scrollHeight;
+                    }}
+                    canAct={true}
+                />
+
+                <div className="preview-drawer-body">
+                    <LogContent
+                        ref={contentRef}
+                        content={logs}
+                        loading={loading}
+                        emptyMessage="No log output."
+                        showLineNumbers={showLineNumbers}
+                        wrapLines={wrapLines}
+                        searchPattern={appliedSearch}
+                    />
                 </div>
-            </div>
-        </div>
+            </aside>
+        </>
     );
 };
 

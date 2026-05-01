@@ -259,9 +259,11 @@ const Marketplace = () => {
                             {installSource === 'path' && (
                                 <>
                                     <p className="text-muted">
-                                        Absolute path to a plugin folder on the panel host (must contain
-                                        <code> plugin.json</code>). Useful for plugin development —
-                                        edit, install, repeat.
+                                        Absolute path to a plugin folder <strong>on the panel host</strong>
+                                        — not on your local machine. If the backend runs in Docker, the
+                                        path must exist inside the container (bind-mount the folder, or
+                                        use <em>Upload Zip</em> instead). Folder must contain
+                                        <code> plugin.json</code>.
                                     </p>
                                     <div className="plugin-install-row">
                                         <Input

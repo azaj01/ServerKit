@@ -735,3 +735,365 @@
         }
     }
 }
+
+// ============================================
+// DOCKER REDESIGN (dx-*)
+// ============================================
+.dx-page {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+}
+
+.dx-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: $space-3;
+}
+
+.dx-stat {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-4;
+    background: $bg-card;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    @include transition(all);
+
+    &:hover {
+        border-color: $border-hover;
+        transform: translateY(-1px);
+        box-shadow: $shadow-md;
+    }
+
+    &[data-kind='containers'] .dx-stat-icon { color: #3b82f6; background: rgba(59, 130, 246, 0.12); }
+    &[data-kind='images']     .dx-stat-icon { color: #8b5cf6; background: rgba(139, 92, 246, 0.12); }
+    &[data-kind='volumes']    .dx-stat-icon { color: #10b981; background: rgba(16, 185, 129, 0.12); }
+    &[data-kind='networks']   .dx-stat-icon { color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+}
+
+.dx-stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: $radius-md;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dx-stat-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.dx-stat-label {
+    font-size: 9px;
+    font-weight: $font-weight-semibold;
+    color: $text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.dx-stat-value {
+    font-size: $font-size-2xl;
+    font-weight: $font-weight-semibold;
+    color: $text-primary;
+    line-height: 1;
+}
+
+.dx-stat-meta {
+    display: flex;
+    gap: $space-2;
+    margin-top: 2px;
+    flex-wrap: wrap;
+}
+
+.dx-stat-sub {
+    font-size: $font-size-xs;
+    color: $text-tertiary;
+}
+
+.dx-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border-radius: $radius-full;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    background: $bg-tertiary;
+    color: $text-secondary;
+
+    .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: $text-tertiary;
+    }
+
+    &.running {
+        background: fade($success, 12%);
+        color: $success;
+        .dot { background: $success; }
+    }
+    &.stopped {
+        background: $bg-tertiary;
+        color: $text-tertiary;
+    }
+}
+
+// ─── Tabs (replaces docker-panel-tabs) ──────────
+.dx-tabs {
+    display: flex;
+    gap: $space-1;
+    padding: 4px;
+    background: $bg-card;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.dx-tab {
+    background: transparent;
+    border: none;
+    padding: 8px $space-4;
+    border-radius: $radius-md;
+    color: $text-secondary;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    cursor: pointer;
+    white-space: nowrap;
+    @include transition(all);
+
+    &:hover { background: $bg-hover; color: $text-primary; }
+    &.active {
+        background: $accent-glow;
+        color: $accent-primary;
+    }
+}
+
+.dx-panel {
+    background: $bg-card;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    overflow: hidden;
+    min-height: 400px;
+}
+
+.dx-tab-pane {
+    padding: $space-3;
+}
+
+.dx-tab-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: $space-3;
+    padding-bottom: $space-3;
+    margin-bottom: $space-3;
+    border-bottom: 1px solid $border-subtle;
+    flex-wrap: wrap;
+}
+
+.dx-tab-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex-wrap: wrap;
+}
+
+// ─── Container card grid ─────────────────────────
+.dx-container-grid {
+    display: grid;
+    gap: $space-3;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.dx-container-card {
+    position: relative;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    padding: $space-3 $space-4 $space-4;
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    cursor: pointer;
+    @include transition(all);
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+        background: $border-default;
+    }
+
+    &.is-running::before { background: $success; }
+    &.is-stopped::before { background: $text-tertiary; }
+
+    &:hover {
+        border-color: $border-hover;
+        transform: translateY(-2px);
+        box-shadow: $shadow-md;
+    }
+}
+
+.dx-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: $space-2;
+}
+
+.dx-card-title {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    min-width: 0;
+    flex: 1;
+
+    h4 {
+        margin: 0;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+        @include truncate();
+    }
+}
+
+.dx-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+
+    &.running { background: $success; box-shadow: 0 0 0 3px fade($success, 16%); }
+    &.stopped { background: $text-tertiary; }
+}
+
+.dx-status-pill {
+    display: inline-flex;
+    padding: 1px 8px;
+    border-radius: $radius-full;
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: $bg-tertiary;
+    color: $text-tertiary;
+
+    &.running { background: fade($success, 14%); color: $success; }
+    &.stopped { background: $bg-tertiary; color: $text-tertiary; }
+}
+
+.dx-card-image {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: $text-tertiary;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+
+    span { @include truncate(); }
+    svg { color: #8b5cf6; flex-shrink: 0; }
+}
+
+.dx-card-detail {
+    font-size: $font-size-xs;
+    color: $text-secondary;
+    @include truncate();
+}
+
+.dx-card-ports {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.dx-port-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    background: $bg-tertiary;
+    border-radius: $radius-sm;
+    font-family: $font-mono;
+    font-size: 10px;
+    color: $text-secondary;
+    @include truncate();
+    max-width: 220px;
+}
+
+.dx-port-more {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    background: $bg-tertiary;
+    border-radius: $radius-sm;
+    font-size: 10px;
+    color: $text-tertiary;
+}
+
+.dx-card-resources {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: $space-1;
+}
+
+.dx-res {
+    display: grid;
+    grid-template-columns: 50px 1fr 50px;
+    gap: $space-2;
+    align-items: center;
+}
+
+.dx-res-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: $text-tertiary;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: $font-weight-semibold;
+}
+
+.dx-res-track {
+    height: 4px;
+    background: $border-default;
+    border-radius: $radius-sm;
+    overflow: hidden;
+}
+
+.dx-res-fill {
+    height: 100%;
+    @include transition(width);
+
+    &.cpu { background: $accent-primary; }
+    &.mem { background: #10b981; }
+}
+
+.dx-res-value {
+    text-align: right;
+    font-family: $font-mono;
+    font-size: 10px;
+    color: $text-secondary;
+}
+
+.dx-card-actions {
+    display: flex;
+    gap: $space-1;
+    flex-wrap: wrap;
+    padding-top: $space-2;
+    margin-top: auto;
+    border-top: 1px solid $border-subtle;
+}
+
