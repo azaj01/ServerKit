@@ -546,6 +546,7 @@ func (a *Agent) connectionWatcher(ctx context.Context) {
 			// nothing; the panel just rewrites the same row.
 			if a.ws.IsConnected() {
 				a.sendCapabilities()
+				a.sendSystemInfo(ctx)
 			}
 			resendTicks++
 			// After ~60 seconds (12 ticks at 5s), back the cadence off
@@ -566,6 +567,7 @@ func (a *Agent) connectionWatcher(ctx context.Context) {
 					"Connected to panel",
 					map[string]interface{}{"url": a.cfg.Server.URL})
 				a.sendCapabilities()
+				a.sendSystemInfo(ctx)
 			} else if prev {
 				// Only log disconnect after we'd previously been up — avoids
 				// a spurious "lost connection" on cold-start before the
@@ -576,6 +578,68 @@ func (a *Agent) connectionWatcher(ctx context.Context) {
 			prev = now
 		}
 	}
+}
+
+// sendSystemInfo collects the host's system info (CPU, memory, disk,
+// hostname, OS, kernel) and pushes it to the panel as a typed
+// SystemInfoMessage so it lands in update_system_info → DB. The agent
+// previously only answered system:info synchronously, which meant the
+// panel never persisted the values — Overview would show "N/A" for
+// CPU/memory/disk whenever the page was loaded against a server whose
+// info hadn't been queried yet (or if the query timed out).
+//
+// Also surfaces the agent's local IPv4 (first non-loopback) so the
+// panel can show *which* host is reporting in, separate from the
+// public IP it sees on the inbound connection.
+func (a *Agent) sendSystemInfo(ctx context.Context) {
+	if a.metrics == nil {
+		return
+	}
+	infoCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	info, err := a.metrics.GetSystemInfo(infoCtx)
+	if err != nil || info == nil {
+		a.log.Debug("system info collect failed", "error", err)
+		return
+	}
+	// Build the protocol shape — different field names than the metrics
+	// package's SystemInfo (CPUCores vs CPUThreads, etc.). Send the
+	// most useful subset and let the panel's update_system_info pick
+	// the keys it cares about.
+	payload := protocol.SystemInfoMessage{
+		Message: protocol.NewMessage(protocol.TypeSystemInfo, auth.GenerateNonce()),
+		Info: protocol.SystemInfo{
+			Hostname:      info.Hostname,
+			OS:            info.OS,
+			OSVersion:     info.PlatformVersion,
+			Architecture:  info.Architecture,
+			CPUCores:      info.CPUThreads, // surface threads as "cores" — matches the panel's existing column
+			TotalMemory:   info.TotalMemory,
+			TotalDisk:     info.TotalDisk,
+			DockerVersion: a.dockerVersion(),
+			AgentVersion:  Version,
+		},
+	}
+	if err := a.ws.Send(payload); err != nil {
+		a.log.Debug("system info send failed", "error", err)
+	}
+}
+
+// dockerVersion returns the running Docker daemon version, or "" if
+// docker isn't reachable (which the capability probe already
+// surfaces). Best-effort — we don't want a dockerd hiccup to block
+// system_info delivery.
+func (a *Agent) dockerVersion() string {
+	if a.docker == nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	v, err := a.docker.Version(ctx)
+	if err != nil {
+		return ""
+	}
+	return v
 }
 
 // sendCapabilities ships the cached capability probe to the panel.

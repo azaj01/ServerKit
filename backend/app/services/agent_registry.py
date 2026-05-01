@@ -266,6 +266,12 @@ class AgentRegistry:
                 server.last_error = None
                 if agent_version:
                     server.agent_version = agent_version
+                # Persist the source IP we observed at auth time. Without
+                # this the Server.ip_address column stayed NULL forever,
+                # which is why the Overview tab showed "IP Address: N/A"
+                # even for healthy connected agents.
+                if ip_address and ip_address != 'unknown':
+                    server.ip_address = ip_address
                 db.session.commit()
 
             # Create session record

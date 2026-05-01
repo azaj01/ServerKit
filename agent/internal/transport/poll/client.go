@@ -335,6 +335,24 @@ func (c *Client) Send(msg interface{}) error {
 			return nil
 		}
 	}
+	// Typed SystemInfoMessage path — the agent ships these on connect
+	// and on a periodic cadence so the panel can persist CPU/memory/
+	// disk/docker info. Round-trip through JSON to extract the inner
+	// info field without a struct dependency in this layer.
+	if sm, ok := msg.(protocol.SystemInfoMessage); ok {
+		buf, err := json.Marshal(sm.Info)
+		if err != nil {
+			return err
+		}
+		var raw map[string]interface{}
+		if err := json.Unmarshal(buf, &raw); err != nil {
+			return err
+		}
+		c.hbMu.Lock()
+		c.sysInfo = raw
+		c.hbMu.Unlock()
+		return nil
+	}
 	// Capabilities arrive as a typed struct (CapabilitiesMessage), not
 	// a map — round-trip through JSON to lift the inner fields out
 	// without growing this layer a Go-typed dependency on the
