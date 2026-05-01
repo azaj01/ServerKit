@@ -235,6 +235,13 @@ func (c *Client) pollOnce(ctx context.Context) error {
 		return fmt.Errorf("no session")
 	}
 
+	// Don't drain the system_info / capabilities buffers here. They
+	// get refreshed by the agent every 5–60s anyway, and if /poll
+	// fails (tunnel reconnect, transient 5xx) the previous behaviour
+	// was to silently lose the payload — the panel would then show
+	// "none reported" until the next sendCapabilities tick. Re-sending
+	// the same payload on every /poll is cheap and the panel's
+	// update_capabilities is idempotent (pure overwrite).
 	c.hbMu.Lock()
 	body := map[string]interface{}{}
 	if c.hbMetrics != nil {
@@ -242,11 +249,9 @@ func (c *Client) pollOnce(ctx context.Context) error {
 	}
 	if c.sysInfo != nil {
 		body["system_info"] = c.sysInfo
-		c.sysInfo = nil
 	}
 	if c.caps != nil {
 		body["capabilities"] = c.caps
-		c.caps = nil
 	}
 	c.hbMu.Unlock()
 

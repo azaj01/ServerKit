@@ -756,7 +756,19 @@ class AgentRegistry:
         up in feature-gated target pickers.
         """
         if not isinstance(payload, dict):
+            logger.warning("update_capabilities ignored non-dict payload for %s: %r", server_id, type(payload))
             return
+        # Diagnostic trace — the panel showing "none reported" while
+        # the agent insists it's pushing means one of these layers is
+        # dropping the message. Log the top-level keys + inner caps
+        # count once per call so we can see which it is.
+        logger.info(
+            "update_capabilities for %s: top_keys=%s inner_caps=%s sudo=%r",
+            server_id,
+            sorted(payload.keys()),
+            len(payload.get('capabilities') or {}),
+            payload.get('sudo'),
+        )
         caps = payload.get('capabilities') or {}
         # Coerce values to bool — agents are trusted but defensive
         # casting protects the API consumer (UI) from malformed types.
@@ -862,23 +874,38 @@ class AgentRegistry:
     # ==================== System Info ====================
 
     def update_system_info(self, server_id: str, info: dict):
-        """Update server system information from agent"""
+        """Update server system information from agent.
+
+        The agent now pushes system_info every 5–60 seconds, so any
+        single transient probe failure (e.g. Docker briefly
+        unreachable, gopsutil WMI hiccup) shouldn't wipe a previously
+        good value out of the row. We only overwrite when the new
+        payload carries a truthy value.
+        """
+        def _coalesce(current, new):
+            # Treat 0 / "" / None as "the agent didn't probe this" — keep
+            # the existing column rather than overwriting with junk.
+            if new in (None, "", 0):
+                return current
+            return new
+
         try:
             server = Server.query.get(server_id)
-            if server:
-                server.hostname = info.get('hostname', server.hostname)
-                server.os_type = info.get('os', server.os_type)
-                server.os_version = info.get('os_version', server.os_version)
-                server.platform = info.get('platform', server.platform)
-                server.architecture = info.get('architecture', server.architecture)
-                server.cpu_cores = info.get('cpu_cores', server.cpu_cores)
-                server.cpu_model = info.get('cpu_model', server.cpu_model)
-                server.total_memory = info.get('total_memory', server.total_memory)
-                server.total_disk = info.get('total_disk', server.total_disk)
-                server.docker_version = info.get('docker_version', server.docker_version)
-                server.agent_version = info.get('agent_version', server.agent_version)
-                db.session.commit()
-        except Exception as e:
+            if not server:
+                return
+            server.hostname = _coalesce(server.hostname, info.get('hostname'))
+            server.os_type = _coalesce(server.os_type, info.get('os'))
+            server.os_version = _coalesce(server.os_version, info.get('os_version'))
+            server.platform = _coalesce(server.platform, info.get('platform'))
+            server.architecture = _coalesce(server.architecture, info.get('architecture'))
+            server.cpu_cores = _coalesce(server.cpu_cores, info.get('cpu_cores'))
+            server.cpu_model = _coalesce(server.cpu_model, info.get('cpu_model'))
+            server.total_memory = _coalesce(server.total_memory, info.get('total_memory'))
+            server.total_disk = _coalesce(server.total_disk, info.get('total_disk'))
+            server.docker_version = _coalesce(server.docker_version, info.get('docker_version'))
+            server.agent_version = _coalesce(server.agent_version, info.get('agent_version'))
+            db.session.commit()
+        except Exception:
             logger.exception("Error updating system info")
             db.session.rollback()
 
