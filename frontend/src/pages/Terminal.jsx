@@ -18,7 +18,7 @@ const Terminal = () => {
     const [activeTab, setActiveTab] = useTabParam('/terminal', VALID_TABS);
 
     return (
-        <div className="page terminal-page">
+        <div className="page-container terminal-page">
             <div className="page-header">
                 <div>
                     <h1>Terminal & Logs</h1>

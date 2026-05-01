@@ -566,7 +566,7 @@ function Git() {
     }
 
     return (
-        <div className="git-page">
+        <div className="page-container git-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Git Server</h1>

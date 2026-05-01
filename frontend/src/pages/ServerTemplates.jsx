@@ -126,7 +126,7 @@ const ServerTemplates = () => {
     if (loading) return <Spinner />;
 
     return (
-        <div className="server-templates-page">
+        <div className="page-container server-templates-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Server Templates</h1>

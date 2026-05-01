@@ -23,6 +23,7 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 
 const CHART_COLORS = [
@@ -246,8 +247,8 @@ const FleetMonitor = () => {
                 </div>
             </div>
 
-            <div className="tabs-container">
-                <div className="tabs">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList>
                     {[
                         { key: 'overview', icon: Layers, label: 'Overview' },
                         { key: 'comparison', icon: BarChart3, label: 'Comparison' },
@@ -255,17 +256,13 @@ const FleetMonitor = () => {
                         { key: 'anomalies', icon: TrendingUp, label: 'Anomalies & Forecast' },
                         { key: 'search', icon: Search, label: 'Fleet Search' },
                     ].map(tab => (
-                        <button
-                            key={tab.key}
-                            className={`tab ${activeTab === tab.key ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab.key)}
-                        >
+                        <TabsTrigger key={tab.key} value={tab.key}>
                             <tab.icon size={18} />
                             {tab.label}
-                        </button>
+                        </TabsTrigger>
                     ))}
-                </div>
-            </div>
+                </TabsList>
+            </Tabs>
 
             <div className="tab-content mt-6">
                 {/* ==================== Overview Heatmap ==================== */}

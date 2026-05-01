@@ -180,7 +180,7 @@ const Servers = () => {
 
     if (loading) {
         return (
-            <div className="servers-page servers-page--loading">
+            <div className="page-container servers-page servers-page--loading">
                 <div className="servers-loading-card">
                     <ServerIcon />
                     <span>Scanning fleet...</span>
@@ -194,7 +194,7 @@ const Servers = () => {
     const someVisibleSelected = visibleIds.some(id => selectedIds.has(id));
 
     return (
-        <div className="servers-page">
+        <div className="page-container servers-page">
             <header className="servers-header">
                 <div className="servers-header__title">
                     <h1>Servers</h1>

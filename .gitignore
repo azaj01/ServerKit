@@ -107,3 +107,4 @@ APP_IMPROVEMENTS.md
 # in so CI builds don't have to install cairo/Pillow.
 !agent/internal/setupui/serverkit.ico
 !agent/internal/setupui/serverkit_header.png
+docs/PLAN_AGENT_FLEET.md

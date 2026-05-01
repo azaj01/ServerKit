@@ -237,7 +237,7 @@ function FTPServer() {
     const activeServer = status?.active_server;
 
     return (
-        <div className="ftp-server">
+        <div className="page-container ftp-server">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>FTP Server</h1>

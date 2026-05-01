@@ -166,7 +166,7 @@ const Docker = () => {
 
     if (!dockerStatus?.installed) {
         return (
-            <div className="page docker-page">
+            <div className="page-container docker-page">
                 <div className="page-header">
                     <div className="page-header-content">
                         <h1>Docker</h1>
@@ -233,7 +233,7 @@ const Docker = () => {
 
     return (
         <ServerContext.Provider value={serverContextValue}>
-        <div className="docker-page-new">
+        <div className="page-container docker-page-new">
             <div className="docker-page-header">
                 <div className="docker-page-title">
                     <h2>Docker Management</h2>

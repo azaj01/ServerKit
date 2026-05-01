@@ -294,14 +294,14 @@ const Templates = () => {
 
     if (loading) {
         return (
-            <div className="page">
+            <div className="page-container">
                 <div className="loading">Loading templates...</div>
             </div>
         );
     }
 
     return (
-        <div className="page templates-page">
+        <div className="page-container templates-page">
             <div className="page-header">
                 <h1>App Templates</h1>
                 <p className="page-description">One-click deployment for popular self-hosted applications</p>

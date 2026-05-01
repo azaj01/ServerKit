@@ -166,7 +166,7 @@ const ServerDetail = () => {
     ];
 
     return (
-        <div className="server-detail-page">
+        <div className="page-container server-detail-page">
             <div className="page-breadcrumb">
                 <Link to="/servers">Servers</Link>
                 <span className="breadcrumb-separator">/</span>

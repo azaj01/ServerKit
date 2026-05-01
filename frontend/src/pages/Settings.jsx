@@ -38,7 +38,7 @@ const Settings = () => {
     }, [isAdmin]);
 
     return (
-        <div className="page settings-page">
+        <div className="page-container settings-page">
             <div className="page-header">
                 <div>
                     <h1>Settings</h1>

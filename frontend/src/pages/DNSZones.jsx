@@ -173,7 +173,7 @@ const DNSZones = () => {
     if (loading) return <Spinner />;
 
     return (
-        <div className="dns-zones-page">
+        <div className="page-container dns-zones-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>DNS Zones</h1>

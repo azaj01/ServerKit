@@ -166,7 +166,7 @@ const SSLCertificates = () => {
 
     if (loading) {
         return (
-            <div className="ssl-page">
+            <div className="page-container ssl-page">
                 <header className="top-bar">
                     <div>
                         <h1>SSL Certificates</h1>
@@ -204,7 +204,7 @@ const SSLCertificates = () => {
     const certbotInstalled = status?.certbot_installed ?? false;
 
     return (
-        <div className="ssl-page">
+        <div className="page-container ssl-page">
             <header className="top-bar">
                 <div>
                     <h1>SSL Certificates</h1>

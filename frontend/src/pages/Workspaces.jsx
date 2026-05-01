@@ -104,7 +104,7 @@ const Workspaces = () => {
     if (loading) return <Spinner />;
 
     return (
-        <div className="workspaces-page">
+        <div className="page-container workspaces-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Workspaces</h1>

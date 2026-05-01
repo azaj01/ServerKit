@@ -64,7 +64,7 @@ function WordPress() {
 
     if (loading) {
         return (
-            <div className="docker-page-new wordpress-page">
+            <div className="page-container wordpress-page">
                 <div className="page-header">
                     <div className="page-header-content">
                         <h1>WordPress</h1>
@@ -102,7 +102,7 @@ function WordPress() {
     // Lite tier with no sites -> resource gate
     if (sites.length === 0 && isLiteTier) {
         return (
-            <div className="docker-page-new wordpress-page">
+            <div className="page-container wordpress-page">
                 <ResourceGate feature="wordpress_create">
                     <div />
                 </ResourceGate>
@@ -111,7 +111,7 @@ function WordPress() {
     }
 
     return (
-        <div className="docker-page-new wordpress-page">
+        <div className="page-container wordpress-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>WordPress</h1>

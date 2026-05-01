@@ -115,7 +115,7 @@ const ServiceDetail = () => {
     const availableTabs = getTabsForType(service.app_type);
 
     return (
-        <div className="svc-detail">
+        <div className="page-container svc-detail">
             {/* Breadcrumb */}
             <div className="svc-detail__breadcrumb">
                 <Link to="/services">Services</Link>

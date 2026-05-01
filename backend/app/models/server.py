@@ -361,7 +361,13 @@ class ServerMetrics(db.Model):
     """Historical metrics from servers"""
     __tablename__ = 'server_metrics'
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    # SQLite only autoincrements when the column type is exactly INTEGER
+    # PRIMARY KEY (rowid alias). With BigInteger every insert failed with
+    # "NOT NULL constraint failed: server_metrics.id" and no metrics ever
+    # got stored — exactly the silent dashboard-zeroes symptom we just
+    # tracked down. Integer caps at ~2.1B rows which at 1 sample/sec is
+    # ~68 years per server, plenty.
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     server_id = db.Column(db.String(36), db.ForeignKey('servers.id'), nullable=False, index=True)
 
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)

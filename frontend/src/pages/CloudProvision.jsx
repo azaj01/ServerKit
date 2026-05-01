@@ -90,7 +90,7 @@ const CloudProvision = () => {
     if (loading) return <Spinner />;
 
     return (
-        <div className="cloud-provision-page">
+        <div className="page-container cloud-provision-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Cloud Provisioning</h1>

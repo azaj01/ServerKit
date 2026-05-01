@@ -121,7 +121,7 @@ const Marketplace = () => {
     const installedIds = new Set(myExtensions.map(e => e.extension_id));
 
     return (
-        <div className="marketplace-page">
+        <div className="page-container marketplace-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Marketplace</h1>

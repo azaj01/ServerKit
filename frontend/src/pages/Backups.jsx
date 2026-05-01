@@ -365,7 +365,7 @@ const Backups = () => {
     }
 
     return (
-        <div className="page backups-page">
+        <div className="page-container backups-page">
             <div className="page-header">
                 <div>
                     <h1>Backups</h1>

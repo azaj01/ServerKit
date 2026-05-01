@@ -31,6 +31,7 @@ import { StatCard, StatsGrid } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const AgentFleet = () => {
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -209,8 +210,8 @@ const AgentFleet = () => {
                 </div>
             </div>
 
-            <div className="tabs-container">
-                <div className="tabs">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList>
                     {[
                         { key: 'dashboard', icon: Activity, label: 'Dashboard' },
                         { key: 'versions', icon: Package, label: 'Versions' },
@@ -219,11 +220,7 @@ const AgentFleet = () => {
                         { key: 'discovery', icon: Search, label: 'Discovery' },
                         { key: 'approvals', icon: Shield, label: 'Approvals' },
                     ].map(tab => (
-                        <button
-                            key={tab.key}
-                            className={`tab ${activeTab === tab.key ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab.key)}
-                        >
+                        <TabsTrigger key={tab.key} value={tab.key}>
                             <tab.icon size={18} />
                             {tab.label}
                             {tab.key === 'approvals' && pendingServers.length > 0 && (
@@ -232,10 +229,10 @@ const AgentFleet = () => {
                             {tab.key === 'queue' && queuedCommands.length > 0 && (
                                 <Badge variant="warning" className="ml-2">{queuedCommands.length}</Badge>
                             )}
-                        </button>
+                        </TabsTrigger>
                     ))}
-                </div>
-            </div>
+                </TabsList>
+            </Tabs>
 
             <div className="tab-content mt-6">
                 {/* ==================== Dashboard ==================== */}

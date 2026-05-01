@@ -160,7 +160,7 @@ const Domains = () => {
     }
 
     return (
-        <div>
+        <div className="page-container">
             <header className="top-bar">
                 <div>
                     <h1>Domains & SSL</h1>

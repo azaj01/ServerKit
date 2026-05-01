@@ -118,7 +118,7 @@ const StatusPages = () => {
     if (loading) return <Spinner />;
 
     return (
-        <div className="status-pages-page">
+        <div className="page-container status-pages-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Status Pages</h1>

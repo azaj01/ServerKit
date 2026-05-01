@@ -50,6 +50,11 @@ type AuthConfig struct {
 	KeyFile   string `yaml:"key_file"`
 	APIKey    string `yaml:"api_key,omitempty"`    // Not saved to config file
 	APISecret string `yaml:"api_secret,omitempty"` // Not saved to config file
+	// LoadError is populated by Load() when LoadCredentials() failed.
+	// Surfaced in agent startup logs so "service runs but every /connect
+	// returns 400 missing fields" reports become trivial to diagnose
+	// (means the key file couldn't be decrypted under any known key).
+	LoadError string `yaml:"-"`
 }
 
 // FeaturesConfig controls enabled features
@@ -180,10 +185,14 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	// Load credentials from secure storage
+	// Load credentials from secure storage. We don't fail loading the
+	// config if creds are missing — that's normal pre-pairing — but we
+	// stash the error on the config so callers running with cfg.Agent.ID
+	// set (i.e. should-be-paired) can detect "creds went missing"
+	// scenarios that would otherwise silently produce empty auth fields
+	// and 400s on every connect attempt.
 	if err := cfg.LoadCredentials(); err != nil {
-		// Credentials may not exist yet (before registration)
-		// This is not an error
+		cfg.Auth.LoadError = err.Error()
 	}
 
 	return cfg, nil
@@ -263,7 +272,12 @@ func (c *Config) SaveCredentials() error {
 	return nil
 }
 
-// LoadCredentials loads API credentials from secure storage
+// LoadCredentials loads API credentials from secure storage. Tries the
+// current key derivation first, then falls back to the legacy (pre-1.6.14)
+// key that included USERNAME. If the legacy key is what worked, we
+// transparently re-encrypt under the current scheme so the next load
+// uses the host-stable key — required for the SCM-launched service
+// (running as SYSTEM) to read credentials paired by a user-context wizard.
 func (c *Config) LoadCredentials() error {
 	keyPath := c.Auth.KeyFile
 	if keyPath == "" {
@@ -275,8 +289,7 @@ func (c *Config) LoadCredentials() error {
 		return fmt.Errorf("failed to read key file: %w", err)
 	}
 
-	// Decrypt credentials
-	decrypted, err := decryptCredentials(data)
+	decrypted, usedLegacy, err := decryptCredentialsWithMigration(data)
 	if err != nil {
 		return fmt.Errorf("failed to decrypt credentials: %w", err)
 	}
@@ -295,6 +308,13 @@ func (c *Config) LoadCredentials() error {
 
 	c.Auth.APIKey = apiKey
 	c.Auth.APISecret = apiSecret
+
+	// Migrate creds onto the host-only key so the next service start
+	// (which may run as a different user / SYSTEM) can decrypt them.
+	// Best-effort: failure here doesn't block this run.
+	if usedLegacy {
+		_ = c.SaveCredentials()
+	}
 
 	return nil
 }
@@ -335,10 +355,17 @@ func defaultAllowedPaths() []string {
 	return []string{"/var/lib/serverkit", "/var/serverkit"}
 }
 
-// getMachineKey generates a machine-specific encryption key
+// getMachineKey generates a machine-specific encryption key.
+//
+// Stable across user contexts on the same host. The previous derivation
+// included USERNAME, which meant credentials encrypted by a user-context
+// pairing wizard (juanh) were undecryptable by the SYSTEM-context service
+// — agent service started up with empty credentials, every /connect
+// returned 400 "Missing required fields". This was masked for years
+// because the agent was never actually running as a real Windows service
+// (the SCM dispatcher only landed in 1.6.13). Now that it is, the key
+// must be host-stable, not user-stable.
 func getMachineKey() []byte {
-	// Use machine-specific data to derive key
-	// This makes the credentials only decryptable on this machine
 	hostname, _ := os.Hostname()
 
 	var machineID string
@@ -348,7 +375,28 @@ func getMachineKey() []byte {
 			machineID = string(data)
 		}
 	} else if runtime.GOOS == "windows" {
-		// On Windows, use a combination of hostname and username
+		machineID = os.Getenv("COMPUTERNAME")
+	}
+
+	combined := fmt.Sprintf("serverkit-agent:%s:%s", hostname, machineID)
+	hash := sha256.Sum256([]byte(combined))
+	return hash[:]
+}
+
+// getMachineKeyLegacyV1 is the pre-1.6.14 derivation (Windows: included
+// USERNAME). Kept solely so already-paired agents can decrypt their old
+// key file once, re-encrypt under the stable v2 key, and never need it
+// again. Drop after a few releases.
+func getMachineKeyLegacyV1() []byte {
+	hostname, _ := os.Hostname()
+
+	var machineID string
+	if runtime.GOOS == "linux" {
+		data, err := os.ReadFile("/etc/machine-id")
+		if err == nil {
+			machineID = string(data)
+		}
+	} else if runtime.GOOS == "windows" {
 		machineID = os.Getenv("COMPUTERNAME") + os.Getenv("USERNAME")
 	}
 
@@ -379,31 +427,46 @@ func encryptCredentials(plaintext []byte) ([]byte, error) {
 	return []byte(base64.StdEncoding.EncodeToString(ciphertext)), nil
 }
 
+// decryptCredentials tries the current (host-only) machine key first,
+// then falls back to the legacy v1 key (host + username) so credentials
+// paired before 1.6.14 still load. The bool return indicates whether the
+// legacy fallback was used — callers re-encrypt under the stable v2 key
+// so the migration only happens once.
 func decryptCredentials(data []byte) ([]byte, error) {
-	key := getMachineKey()
+	plaintext, _, err := decryptCredentialsWithMigration(data)
+	return plaintext, err
+}
 
+func decryptCredentialsWithMigration(data []byte) (plaintext []byte, usedLegacy bool, err error) {
 	ciphertext, err := base64.StdEncoding.DecodeString(string(data))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
+	if pt, err2 := tryDecrypt(ciphertext, getMachineKey()); err2 == nil {
+		return pt, false, nil
+	}
+	if pt, err2 := tryDecrypt(ciphertext, getMachineKeyLegacyV1()); err2 == nil {
+		return pt, true, nil
+	}
+	return nil, false, fmt.Errorf("decryption failed with both current and legacy machine keys")
+}
+
+func tryDecrypt(ciphertext, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
-
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
 	}
-
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
 		return nil, fmt.Errorf("ciphertext too short")
 	}
-
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	return gcm.Open(nil, nonce, ciphertext, nil)
+	nonce, body := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	return gcm.Open(nil, nonce, body, nil)
 }
 
 func splitFirst(s string, sep byte) []string {

@@ -238,7 +238,7 @@ function Firewall() {
     }
 
     return (
-        <div className="firewall-page">
+        <div className="page-container firewall-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Firewall</h1>

@@ -120,7 +120,7 @@ const AgentPlugins = () => {
     if (loading) return <Spinner />;
 
     return (
-        <div className="agent-plugins-page">
+        <div className="page-container agent-plugins-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Agent Plugins</h1>

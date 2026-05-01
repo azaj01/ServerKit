@@ -232,7 +232,7 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="dashboard-page">
+        <div className="page-container dashboard-page">
             {/* Top Bar */}
             <div className="top-bar">
                 <div className="server-identity">

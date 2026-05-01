@@ -47,7 +47,7 @@ const Security = () => {
     }
 
     return (
-        <div className="page security-page">
+        <div className="page-container security-page">
             <div className="page-header">
                 <div>
                     <h1>Security</h1>
@@ -56,7 +56,7 @@ const Security = () => {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="tabs-nav tabs-nav-scrollable">
+                <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="firewall">Firewall</TabsTrigger>
                     <TabsTrigger value="fail2ban">Fail2ban</TabsTrigger>

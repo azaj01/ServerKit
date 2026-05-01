@@ -43,7 +43,7 @@ const Databases = () => {
     }
 
     return (
-        <div>
+        <div className="page-container">
             <header className="top-bar">
                 <div>
                     <h1>Databases</h1>

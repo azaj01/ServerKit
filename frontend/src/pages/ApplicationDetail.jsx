@@ -116,7 +116,7 @@ const ApplicationDetail = () => {
     const isRunning = app.status === 'running';
 
     return (
-        <div className="app-detail-page">
+        <div className="page-container app-detail-page">
             {/* Top Bar with Breadcrumbs and Actions */}
             <div className="app-detail-topbar">
                 <div className="app-detail-breadcrumbs">
@@ -201,7 +201,7 @@ const ApplicationDetail = () => {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="app-detail-tabs">
+                <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="environment">Environment</TabsTrigger>
                     {isPythonApp && (

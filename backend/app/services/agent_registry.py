@@ -94,6 +94,13 @@ class AgentRegistry:
         self._lock = threading.Lock()
         # SocketIO instance (set by init_socketio)
         self._socketio = None
+        # Flask app, captured so background threads can re-enter the
+        # app context. Without this, _handle_agent_timeout (and any
+        # other DB-touching code in _check_heartbeats) raises
+        # "Working outside of application context" the moment it tries
+        # to query — which is why timed-out agents stayed stuck at
+        # status=connecting in the DB instead of flipping to offline.
+        self._app = None
         # Heartbeat check thread
         self._heartbeat_thread = None
         self._stop_heartbeat = threading.Event()
@@ -101,6 +108,17 @@ class AgentRegistry:
     def init_socketio(self, socketio):
         """Initialize with SocketIO instance"""
         self._socketio = socketio
+        # Capture the current Flask app reference for the background
+        # heartbeat thread. current_app is a context-local proxy and
+        # only works inside a request/app context, but flask.current_app._get_current_object()
+        # gives us the underlying object we can stash.
+        from flask import current_app
+        try:
+            self._app = current_app._get_current_object()
+        except RuntimeError:
+            # Called outside an app context (e.g. during testing) —
+            # heartbeat checker will skip DB operations gracefully.
+            self._app = None
         # Start heartbeat checker
         self._start_heartbeat_checker()
 
@@ -129,8 +147,21 @@ class AgentRegistry:
                         if now - agent.last_heartbeat > timeout:
                             dead_agents.append(server_id)
 
-                for server_id in dead_agents:
-                    self._handle_agent_timeout(server_id)
+                # Wrap DB access in an app context — the timeout
+                # handler queries Server / AgentSession and commits.
+                # In a thread there's no implicit context.
+                if dead_agents and self._app is not None:
+                    with self._app.app_context():
+                        for server_id in dead_agents:
+                            self._handle_agent_timeout(server_id)
+                elif dead_agents:
+                    # No app captured (test environment); just remove
+                    # from in-memory registry without touching DB.
+                    for server_id in dead_agents:
+                        with self._lock:
+                            agent = self._agents.pop(server_id, None)
+                            if agent:
+                                self._socket_to_server.pop(agent.socket_id, None)
 
             except Exception as e:
                 logger.error("Error in heartbeat checker: %s", e)

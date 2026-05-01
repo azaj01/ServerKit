@@ -139,7 +139,7 @@ function Downloads() {
 
     if (loading) {
         return (
-            <div className="page downloads-page">
+            <div className="page-container downloads-page">
                 <div className="page-header">
                     <h1>Downloads</h1>
                 </div>
@@ -152,7 +152,7 @@ function Downloads() {
     }
 
     return (
-        <div className="page downloads-page">
+        <div className="page-container downloads-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>ServerKit Agent Downloads</h1>

@@ -105,11 +105,8 @@
     }
 }
 
-// Page placeholder
-.page {
-    font-size: $font-size-2xl;
-    color: $text-secondary;
-}
+// .page is a legacy alias for .page-container — kept for any stragglers, no styling.
+// New pages should use .page-container directly.
 
 // Loading state (full-page spinner)
 .loading {

@@ -297,6 +297,18 @@ func agentMainLoop(parentCtx context.Context) error {
 		"mode", map[bool]string{true: "service", false: "cli"}[isWindowsService()],
 	)
 
+	// Loud warning if credentials failed to decrypt. Without surfacing
+	// this, the agent would proceed with empty APIKey/APISecret and
+	// every panel /connect would 400 "Missing required fields" — which
+	// is exactly the silent failure mode that hid this bug for years.
+	if cfg.Auth.LoadError != "" && cfg.Agent.ID != "" {
+		log.Error("Failed to load credentials — agent cannot authenticate. "+
+			"Re-pair the agent (Actions → Open wizard) to regenerate the key file.",
+			"error", cfg.Auth.LoadError,
+			"key_file", cfg.Auth.KeyFile,
+		)
+	}
+
 	// Single-instance enforcement for the service. Multiple "start"
 	// invocations would fight for IPC port 19780 and the SCM-launched
 	// service would lose to a manually-started one (or vice versa) with

@@ -192,7 +192,7 @@ const CronJobs = () => {
     }
 
     return (
-        <div className="page cron-page">
+        <div className="page-container cron-page">
             <div className="page-header">
                 <div>
                     <h1>Cron Jobs</h1>

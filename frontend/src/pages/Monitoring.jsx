@@ -149,7 +149,7 @@ const Monitoring = () => {
     }
 
     return (
-        <div className="page monitoring-page">
+        <div className="page-container monitoring-page">
             <div className="page-header">
                 <div>
                     <h1>Monitoring & Alerts</h1>

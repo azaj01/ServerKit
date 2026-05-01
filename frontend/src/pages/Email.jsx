@@ -453,7 +453,7 @@ function Email() {
 
     // ── Render ──
 
-    if (loading) return <div className="email-page"><div className="page-loading"><Spinner /></div></div>;
+    if (loading) return <div className="page-container email-page"><div className="page-loading"><Spinner /></div></div>;
 
     const isInstalled = status?.installed;
 
@@ -481,7 +481,7 @@ function Email() {
     );
 
     return (
-        <div className="email-page">
+        <div className="page-container email-page">
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>Email Server</h1>

@@ -141,7 +141,7 @@ const Applications = () => {
     }
 
     return (
-        <div className="docker-page-new">
+        <div className="page-container docker-page-new">
             <div className="docker-page-header">
                 <div className="docker-page-title">
                     <h2>Applications</h2>

@@ -134,7 +134,7 @@ const Services = () => {
     }
 
     return (
-        <div className="services-page">
+        <div className="page-container services-page">
             <div className="services-page__header">
                 <div>
                     <h1>Services</h1>

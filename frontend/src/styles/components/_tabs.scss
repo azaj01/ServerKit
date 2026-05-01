@@ -44,9 +44,21 @@
         color: $text-primary;
     }
 
-    &.active {
+    &.active,
+    &[data-state="active"] {
         color: $accent-primary;
         border-bottom-color: $accent-primary;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid $accent-primary;
+        outline-offset: 2px;
+        border-radius: $radius-sm;
     }
 }
 
