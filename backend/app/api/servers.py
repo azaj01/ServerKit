@@ -277,7 +277,15 @@ def get_server(server_id):
         return jsonify({'error': 'Server not found'}), 404
 
     result = server.to_dict(include_metrics=True)
-    result['is_connected'] = agent_registry.is_agent_connected(server.id)
+    # Surface the live transport so the UI can disable / banner features
+    # that don't work when the agent is on the polling fallback (live
+    # logs, real-time metrics fan-out, terminal). Possible values:
+    #   "ws"   — long-lived Socket.IO connection, all features work
+    #   "poll" — REST polling fallback, streams unavailable
+    #   None   — agent not connected
+    agent = agent_registry.get_agent(server.id)
+    result['is_connected'] = agent is not None
+    result['transport'] = agent.transport if agent else None
 
     return jsonify(result)
 

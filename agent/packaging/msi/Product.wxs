@@ -28,10 +28,31 @@
     <Property Id="ARPPRODUCTICON" Value="ServerKitAgentIco" />
     <Property Id="ARPHELPLINK" Value="https://github.com/jhd3197/ServerKit" />
 
-    <!-- Upgrade handling -->
+    <!-- Upgrade handling.
+         AllowSameVersionUpgrades=yes lets a rebuild of the same version
+         replace itself cleanly — handy during fast iteration where every
+         dev build is "1.6.7" until tagged.
+         Schedule=afterInstallInitialize uninstalls the old product right
+         after the new install begins, before any files are written, so
+         file replacement and ServiceControl Remove run in the right order. -->
     <MajorUpgrade
+      AllowSameVersionUpgrades="yes"
       DowngradeErrorMessage="A newer version of [ProductName] is already installed."
       Schedule="afterInstallInitialize" />
+
+    <!-- Close any user-context serverkit-agent.exe processes (tray, wizard
+         window) before the install validates file usage. The Windows
+         service is handled by ServiceControl below; this covers the
+         non-service instances. Without this, a running tray pins the .exe
+         and Windows defers replacement to next reboot — which is why
+         users were seeing "installed but still old version" reports. -->
+    <util:CloseApplication
+      Id="CloseAgentExe"
+      Target="serverkit-agent.exe"
+      CloseMessage="yes"
+      TerminateProcess="5"
+      RebootPrompt="no"
+      ElevatedCloseMessage="yes" />
 
     <!-- Media -->
     <MediaTemplate EmbedCab="yes" />
@@ -181,7 +202,41 @@
       Impersonate="yes"
       Return="asyncNoWait" />
 
+    <!-- Hard-stop the service before file replacement. ServiceControl
+         already stops the service during a clean upgrade, but if the
+         service is hung or in a weird state, an ungraceful sc.exe stop
+         is a faster, more reliable cleanup. Errors are ignored — if
+         the service doesn't exist (fresh install) or already stopped,
+         that's fine.
+         deferred + impersonate=no = runs in the elevated installer
+         context, which is what you need to control services. -->
+    <CustomAction Id="StopServiceForce"
+      Directory="INSTALLFOLDER"
+      ExeCommand='[System64Folder]sc.exe stop ServerKitAgent'
+      Execute="deferred"
+      Impersonate="no"
+      Return="ignore" />
+
+    <!-- Final safety net: kill any serverkit-agent.exe still running
+         (the service if sc stop didn't take, the tray if CloseApplication
+         missed it, a ghosted wizard window). /T kills the process tree.
+         Must be deferred + elevated to reach SYSTEM-context children. -->
+    <CustomAction Id="TaskkillAgent"
+      Directory="INSTALLFOLDER"
+      ExeCommand='[System64Folder]taskkill.exe /F /IM serverkit-agent.exe /T'
+      Execute="deferred"
+      Impersonate="no"
+      Return="ignore" />
+
     <InstallExecuteSequence>
+      <!-- Order: stop service → kill any lingering processes → MSI
+           replaces files. Both run only on install/upgrade, not on
+           uninstall (where ServiceControl already handles teardown).
+           InstallFiles is the standard action that writes our exe. -->
+      <Custom Action="StopServiceForce" Before="InstallFiles"
+        Condition="NOT REMOVE" />
+      <Custom Action="TaskkillAgent" After="StopServiceForce"
+        Condition="NOT REMOVE" />
       <Custom Action="LaunchApp" After="InstallFinalize"
         Condition="NOT Installed AND NOT REMOVE" />
     </InstallExecuteSequence>

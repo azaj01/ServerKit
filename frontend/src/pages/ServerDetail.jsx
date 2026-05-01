@@ -202,6 +202,14 @@ const ServerDetail = () => {
                         )}
                     </div>
                 </div>
+                {server.transport === 'poll' && (
+                    <div className="server-detail-header__transport-banner">
+                        <strong>Limited mode:</strong> this agent connected via the REST polling
+                        fallback because the WebSocket link couldn't be established cleanly.
+                        Heartbeats and one-shot commands work; live logs, real-time metrics, and
+                        terminal sessions are unavailable until the WS link is restored.
+                    </div>
+                )}
                 <div className="server-detail-header__actions">
                     <Button variant="outline" onClick={handlePingServer}>
                         <RefreshIcon /> Ping

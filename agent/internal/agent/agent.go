@@ -25,6 +25,8 @@ import (
 	"github.com/serverkit/agent/internal/logger"
 	"github.com/serverkit/agent/internal/metrics"
 	"github.com/serverkit/agent/internal/terminal"
+	"github.com/serverkit/agent/internal/transport"
+	"github.com/serverkit/agent/internal/transport/poll"
 	"github.com/serverkit/agent/internal/updater"
 	"github.com/serverkit/agent/internal/ws"
 	"github.com/serverkit/agent/pkg/protocol"
@@ -35,7 +37,10 @@ type Agent struct {
 	cfg      *config.Config
 	log      *logger.Logger
 	auth     *auth.Authenticator
-	ws       *ws.Client
+	// ws is the active transport — either the WS client directly or the
+	// fallback Manager that wraps WS+poll. Named "ws" for compatibility
+	// with the dozens of existing call sites in this file.
+	ws       transport.Transport
 	docker   *docker.Client
 	metrics  *metrics.Collector
 	terminal *terminal.Manager
@@ -65,8 +70,13 @@ func New(cfg *config.Config, log *logger.Logger) (*Agent, error) {
 	// Create authenticator
 	authenticator := auth.New(cfg.Agent.ID, cfg.Auth.APIKey, cfg.Auth.APISecret)
 
-	// Create WebSocket client
+	// Build the transport: a Manager wrapping the WS client (primary) and
+	// a polling client (fallback for tunnels that mangle WS frames). The
+	// Manager presents the same Transport surface as the bare WS client
+	// did, so the rest of the agent doesn't care which is active.
 	wsClient := ws.NewClient(cfg.Server, authenticator, log)
+	pollClient := poll.NewClient(cfg.Server, authenticator, log)
+	transportClient := transport.NewManager(wsClient, pollClient, log)
 
 	// Create Docker client if enabled
 	var dockerClient *docker.Client
@@ -105,7 +115,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Agent, error) {
 		cfg:           cfg,
 		log:           log,
 		auth:          authenticator,
-		ws:            wsClient,
+		ws:            transportClient,
 		docker:        dockerClient,
 		metrics:       metricsCollector,
 		terminal:      termManager,
@@ -120,8 +130,10 @@ func New(cfg *config.Config, log *logger.Logger) (*Agent, error) {
 	// Register command handlers
 	agent.registerHandlers()
 
-	// Set WebSocket message handler
-	wsClient.SetHandler(agent.handleMessage)
+	// Install the message handler on the transport (manager fans this
+	// out to both backends so a fallback switch doesn't drop the
+	// binding).
+	transportClient.SetHandler(agent.handleMessage)
 
 	// Create IPC server if enabled
 	if cfg.IPC.Enabled {
@@ -1349,6 +1361,7 @@ func (a *Agent) GetStatus() ipc.AgentStatus {
 		ServerURL:  a.cfg.Server.URL,
 		Uptime:     int64(time.Since(a.startTime).Seconds()),
 		Version:    Version,
+		Transport:  string(a.ws.Mode()),
 	}
 
 	// Collect current metrics if available

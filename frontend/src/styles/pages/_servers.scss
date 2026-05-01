@@ -2754,6 +2754,7 @@
     padding: $space-5 0 $space-5;
     margin-bottom: $space-5;
     border-bottom: 1px solid $border-subtle;
+    flex-wrap: wrap;
 
     &__main {
         display: flex;
@@ -2761,6 +2762,23 @@
         gap: $space-4;
         min-width: 0;
         flex: 1;
+    }
+
+    &__transport-banner {
+        flex-basis: 100%;
+        margin-top: $space-3;
+        padding: $space-3 $space-4;
+        background: rgba(79, 70, 229, 0.08);
+        border: 1px solid rgba(99, 102, 241, 0.4);
+        border-radius: $radius-md;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+        line-height: 1.5;
+
+        strong {
+            color: $text-primary;
+            margin-right: $space-2;
+        }
     }
 
     &__avatar {

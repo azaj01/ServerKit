@@ -11,12 +11,20 @@ const (
 	detachedProcess = 0x00000008
 )
 
-// detachedProcessAttrs returns SysProcAttr that fully detaches the spawned
-// process from the parent. Used when the tray spawns a fresh `serverkit-agent
-// --repair` to relaunch the wizard: the tray must keep running independently.
+// detachedProcessAttrs returns SysProcAttr that detaches the spawned process
+// from the parent without smothering its UI. Used when the tray spawns a
+// fresh `serverkit-agent setup` to relaunch the wizard.
+//
+// HideWindow MUST be false here. STARTUPINFO.wShowWindow propagates to the
+// child's first top-level window via SW_SHOWDEFAULT, so HideWindow:true
+// (which sets SW_HIDE) was leaving the wizard window invisible until the
+// user manually called ShowWindow from outside — exactly the "Start Menu
+// blank, CLI works" inconsistency users reported in 1.6.2. The agent .exe
+// is built as a GUI subsystem so there's no console window to hide; the
+// flag was redundant from the start.
 func detachedProcessAttrs() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{
-		HideWindow:    true,
+		HideWindow:    false,
 		CreationFlags: createNoWindow | detachedProcess,
 	}
 }

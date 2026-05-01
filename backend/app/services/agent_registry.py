@@ -24,7 +24,14 @@ from app.models.server import Server, ServerMetrics, ServerCommand, AgentSession
 
 @dataclass
 class ConnectedAgent:
-    """Represents a connected agent"""
+    """Represents a connected agent.
+
+    transport='ws'   — long-lived Socket.IO connection. socket_id is the sid.
+    transport='poll' — REST long-poll fallback. socket_id is a synthesized
+                       "poll-<token>" that uniquely identifies the poll
+                       session; outbound_queue holds commands waiting to be
+                       handed back on the next /poll request.
+    """
     server_id: str
     socket_id: str
     session_token: str
@@ -32,6 +39,9 @@ class ConnectedAgent:
     last_heartbeat: datetime
     ip_address: str
     agent_version: str
+    transport: str = 'ws'
+    # Polling-mode only: commands queued for the next /poll response.
+    outbound_queue: Queue = field(default_factory=Queue)
     # Pending commands waiting for response
     pending_commands: Dict[str, 'PendingCommand'] = field(default_factory=dict)
 
@@ -164,10 +174,16 @@ class AgentRegistry:
         server_id: str,
         socket_id: str,
         ip_address: str,
-        agent_version: str = None
+        agent_version: str = None,
+        transport: str = 'ws'
     ) -> str:
         """
         Register a newly connected agent.
+
+        transport='ws' is the existing Socket.IO path; 'poll' is the REST
+        long-poll fallback used when WS-incompatible tunnels (free-tier
+        ngrok, cf quick tunnels) corrupt frames. The two share storage
+        and the command-routing path differs only in send_command.
 
         Returns: session_token
         """
@@ -180,7 +196,8 @@ class AgentRegistry:
             connected_at=datetime.utcnow(),
             last_heartbeat=datetime.utcnow(),
             ip_address=ip_address,
-            agent_version=agent_version or 'unknown'
+            agent_version=agent_version or 'unknown',
+            transport=transport,
         )
 
         with self._lock:
@@ -413,20 +430,27 @@ class AgentRegistry:
         with self._lock:
             agent.pending_commands[command_id] = pending
 
-        # Send command via WebSocket
+        # Hand the command to the agent. WS agents get an immediate emit;
+        # polling agents get the command pushed onto their outbound queue
+        # where it sits until the next /api/v1/agent/poll request drains
+        # it. Both paths block below on pending.result_queue.get(timeout).
+        command_payload = {
+            'type': 'command',
+            'id': command_id,
+            'action': action,
+            'params': params or {},
+            'timeout': int(timeout * 1000)
+        }
         try:
-            self._socketio.emit(
-                'command',
-                {
-                    'type': 'command',
-                    'id': command_id,
-                    'action': action,
-                    'params': params or {},
-                    'timeout': int(timeout * 1000)
-                },
-                room=agent.socket_id,
-                namespace='/agent'
-            )
+            if agent.transport == 'poll':
+                agent.outbound_queue.put(command_payload)
+            else:
+                self._socketio.emit(
+                    'command',
+                    command_payload,
+                    room=agent.socket_id,
+                    namespace='/agent'
+                )
 
             # Update command status
             command_record.status = 'running'
@@ -470,6 +494,70 @@ class AgentRegistry:
             db.session.rollback()
 
         return result
+
+    # ==================== Polling Transport Support ====================
+
+    def get_agent_by_token(self, session_token: str) -> Optional[ConnectedAgent]:
+        """Look up an agent by its session token. Used by polling endpoints
+        which don't have a socket id and authenticate every request via
+        the token instead."""
+        if not session_token:
+            return None
+        with self._lock:
+            for agent in self._agents.values():
+                if agent.session_token == session_token:
+                    return agent
+        return None
+
+    def drain_outbound(self, agent: 'ConnectedAgent', max_wait_s: float, max_items: int = 16):
+        """Pull queued commands for a polling-mode agent. Long-polls up to
+        max_wait_s for the FIRST command, then drains anything else
+        already queued without further blocking. Returns a list (possibly
+        empty if max_wait_s elapsed with no work)."""
+        items = []
+        try:
+            first = agent.outbound_queue.get(timeout=max_wait_s)
+            items.append(first)
+        except Empty:
+            return items
+        # Drain anything else already queued, no blocking
+        for _ in range(max_items - 1):
+            try:
+                items.append(agent.outbound_queue.get_nowait())
+            except Empty:
+                break
+        return items
+
+    def deliver_result_by_token(self, session_token: str, result: dict) -> bool:
+        """Polling-side equivalent of handle_command_result. Returns True
+        when the result was matched to a pending command and delivered."""
+        agent = self.get_agent_by_token(session_token)
+        if not agent:
+            return False
+        command_id = result.get('command_id')
+        if not command_id or not isinstance(command_id, str) or len(command_id) > 64:
+            return False
+        with self._lock:
+            pending = agent.pending_commands.get(command_id)
+        if not pending:
+            return False
+        pending.result_queue.put({
+            'success': result.get('success', False),
+            'data': result.get('data'),
+            'error': result.get('error'),
+            'duration': result.get('duration')
+        })
+        return True
+
+    def unregister_by_token(self, session_token: str, reason: str = 'disconnect'):
+        """Polling-side equivalent of unregister_agent — used when the
+        agent posts /disconnect or when the polling session times out."""
+        agent = self.get_agent_by_token(session_token)
+        if not agent:
+            return
+        self.unregister_agent(agent.socket_id, reason=reason)
+
+    # ==================== Command Result Handling (WS) ====================
 
     def handle_command_result(self, socket_id: str, result: dict):
         """Handle command result from agent"""

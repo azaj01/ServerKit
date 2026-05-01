@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Power,
     Square,
@@ -69,6 +70,7 @@ function ActionRow({ icon: Icon, title, desc, action, label = 'Run', danger }) {
 
 export default function Actions() {
     const { status } = useStatus(5000);
+    const navigate = useNavigate();
     const dashboardUrl = status?.server_url
         ? status.server_url.replace(/^wss?:\/\//, 'https://').replace(/\/agent$/, '')
         : '';
@@ -131,8 +133,8 @@ export default function Actions() {
                 <ActionRow
                     icon={KeyRound}
                     title="Re-pair this server"
-                    desc="Launches the pairing wizard. Useful when the panel URL changes (e.g. switching tunnels) or to rotate credentials."
-                    action={local.repair}
+                    desc="Reopens the pairing wizard in this window. Useful when the panel URL changes (e.g. switching tunnels) or to rotate credentials."
+                    action={async () => { navigate('/pair'); }}
                     label="Open wizard"
                 />
             </section>

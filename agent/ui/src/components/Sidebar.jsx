@@ -7,6 +7,7 @@ import {
     Info,
     Server,
 } from 'lucide-react';
+import { useStatus } from '../ipc/hooks.js';
 
 const NAV = [
     { to: '/overview', label: 'Overview', icon: LayoutDashboard },
@@ -17,6 +18,11 @@ const NAV = [
 ];
 
 export default function Sidebar() {
+    // Pulled lazily — sidebar renders on every page so this hook is a
+    // single shared subscription to /status. Errors are intentionally
+    // ignored; the sidebar shows '—' when the version isn't known yet
+    // rather than an error spinner.
+    const { status } = useStatus(5000);
     return (
         <aside className="sidebar">
             <div className="sidebar__brand">
@@ -42,6 +48,14 @@ export default function Sidebar() {
                     </NavLink>
                 ))}
             </nav>
+            <div className="sidebar__footer">
+                <div className="sidebar__version">v{status?.version || '—'}</div>
+                {status?.transport === 'poll' && (
+                    <div className="sidebar__transport" title="Connected via REST polling fallback">
+                        polling
+                    </div>
+                )}
+            </div>
         </aside>
     );
 }

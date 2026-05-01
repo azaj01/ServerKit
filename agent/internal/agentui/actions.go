@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os/exec"
 	"time"
+
+	"github.com/serverkit/agent/internal/config"
 )
 
 // localActions exposes a small set of console-process-level operations to
@@ -15,12 +17,13 @@ import (
 // All endpoints live under /local/ so they're trivially distinguishable
 // from agent-service IPC calls (which target a different port entirely).
 type localActions struct {
-	exePath string
+	exePath    string
+	configPath string
 }
 
-func newLocalActions() *localActions {
+func newLocalActions(configPath string) *localActions {
 	exe, _ := exeForSpawn()
-	return &localActions{exePath: exe}
+	return &localActions{exePath: exe, configPath: configPath}
 }
 
 // register hooks the action handlers into the asset server's mux.
@@ -31,6 +34,33 @@ func (a *localActions) register(mux *http.ServeMux) {
 	mux.HandleFunc("/local/open", a.handleOpen)
 	mux.HandleFunc("/local/wizard", a.handleWizard)
 	mux.HandleFunc("/local/diag", a.handleDiag)
+	mux.HandleFunc("/local/status", a.handleStatus)
+}
+
+// handleStatus reports whether the agent has been paired by reading
+// config.yaml directly. The React PairGate uses this as a fallback when
+// the agent service IPC is unreachable — which is exactly the case on a
+// fresh install: no config means no service, so the service can't tell
+// the UI it isn't registered. Without this endpoint the wizard is a
+// dead end on first run.
+func (a *localActions) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp := map[string]interface{}{
+		"registered": false,
+		"agent_id":   "",
+		"server_url": "",
+	}
+	if cfg, err := config.Load(a.configPath); err == nil && cfg != nil {
+		if cfg.Agent.ID != "" {
+			resp["registered"] = true
+			resp["agent_id"] = cfg.Agent.ID
+			resp["server_url"] = cfg.Server.URL
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

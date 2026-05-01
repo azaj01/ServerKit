@@ -34,6 +34,11 @@ type AgentStatus struct {
 	ServerURL   string  `json:"server_url"`
 	Uptime      int64   `json:"uptime_seconds"`
 	Version     string  `json:"version"`
+	// Transport reports which link the agent is on right now: "ws" for
+	// the primary Socket.IO link, "poll" when WS-incompatible tunnels
+	// forced a fallback to the REST polling transport. UI uses this to
+	// surface a "limited mode" badge — streams are unavailable in poll.
+	Transport   string  `json:"transport,omitempty"`
 	CPUPercent  float64 `json:"cpu_percent"`
 	MemPercent  float64 `json:"mem_percent"`
 	DiskPercent float64 `json:"disk_percent"`

@@ -91,6 +91,10 @@ export const local = {
     open: (target) => localCall('/local/open', target),
     repair: () => localCall('/local/wizard'),
     diag: () => localCall('/local/diag'),
+    // status reads config.yaml in the console process so we can route the
+    // wizard correctly even when the agent service isn't running (which is
+    // the default state on a fresh install — no config, no service).
+    status: () => localGet('/local/status'),
     pairStart: (panelUrl, serverName) =>
         localCall('/local/pair/start', { panel_url: panelUrl, server_name: serverName }),
     pairState: () => localGet('/local/pair/state'),

@@ -82,6 +82,11 @@ def create_app(config_name=None):
     from app.api.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
 
+    # Agent polling fallback transport (REST equivalent of the WS gateway,
+    # used when tunnels mangle WebSocket frames).
+    from app.api.agent_poll import agent_poll_bp
+    app.register_blueprint(agent_poll_bp, url_prefix='/api/v1/agent')
+
     # Register blueprints - Core
     from app.api.apps import apps_bp
     from app.api.domains import domains_bp

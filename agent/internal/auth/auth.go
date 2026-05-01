@@ -79,13 +79,18 @@ func (a *Authenticator) VerifyTimestamp(timestamp int64, maxAgeSeconds int64) bo
 	return diff <= maxAgeSeconds*1000
 }
 
-// GetAPIKeyPrefix returns the first 8 characters of the API key
-// Used for identification without exposing full key
+// GetAPIKeyPrefix returns the first 12 characters of the API key for
+// server-side identification. Must match the panel's storage width
+// (backend/app/models/server.py: api_key_prefix = api_key[:12]) — the
+// panel does direct string equality, so any drift between the two
+// sides 401s every auth attempt. Was 8 here historically, which is a
+// dormant bug only exposed once the polling fallback transport made
+// auth failures visible (WS would just retry silently forever).
 func (a *Authenticator) GetAPIKeyPrefix() string {
-	if len(a.apiKey) < 8 {
+	if len(a.apiKey) < 12 {
 		return a.apiKey
 	}
-	return a.apiKey[:8]
+	return a.apiKey[:12]
 }
 
 // AgentID returns the agent ID

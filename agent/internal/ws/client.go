@@ -16,11 +16,14 @@ import (
 	"github.com/serverkit/agent/internal/auth"
 	"github.com/serverkit/agent/internal/config"
 	"github.com/serverkit/agent/internal/logger"
+	"github.com/serverkit/agent/internal/transport"
 	"github.com/serverkit/agent/pkg/protocol"
 )
 
-// MessageHandler is called when a message is received
-type MessageHandler func(msgType protocol.MessageType, data []byte)
+// MessageHandler is the callback fired on inbound packets. Aliased to the
+// transport package so ws.Client implements transport.Transport without
+// adapter glue.
+type MessageHandler = transport.MessageHandler
 
 // Client is a Socket.IO client with auto-reconnect
 type Client struct {
@@ -34,6 +37,8 @@ type Client struct {
 	mu            sync.RWMutex
 	connected     bool
 	reconnecting  bool
+	lastErr       error
+	everConnected bool
 
 	sendCh        chan []byte
 	doneCh        chan struct{}
@@ -105,13 +110,18 @@ func (c *Client) Connect(ctx context.Context) error {
 		return err
 	}
 
+	// Compression default: off. Some tunnel intermediaries (free-tier ngrok,
+	// trycloudflare.com quick tunnels) corrupt compressed WebSocket frames —
+	// gorilla then rejects them with "RSV1 set, FIN not set on control". The
+	// env var override exists for users behind a *permanent* cf tunnel or a
+	// reverse proxy that handles WS compression cleanly: setting
+	// SERVERKIT_WS_COMPRESSION=true makes the agent negotiate permessage-
+	// deflate, which is necessary if the panel/proxy unconditionally sends
+	// compressed frames regardless of negotiation.
+	enableCompression := os.Getenv("SERVERKIT_WS_COMPRESSION") == "true"
 	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
-		// Defensive: don't negotiate permessage-deflate. Some intermediaries
-		// (notably free-tier ngrok) have been seen to corrupt compressed
-		// frames so a control frame arrives with RSV1 set, which gorilla
-		// rejects as "RSV1 set, FIN not set on control".
-		EnableCompression: false,
+		HandshakeTimeout:  10 * time.Second,
+		EnableCompression: enableCompression,
 	}
 
 	// Only allow insecure TLS when explicitly set via environment variable
@@ -148,6 +158,17 @@ func (c *Client) Connect(ctx context.Context) error {
 	// Step 1: Read Engine.IO OPEN packet
 	if err := c.handleEngineIOOpen(); err != nil {
 		conn.Close()
+		// "RSV1 set, FIN not set on control" is the classic signature of a
+		// tunnel intermediary (cf quick tunnels, free-tier ngrok) injecting
+		// or corrupting WebSocket compression. The user can't fix the panel
+		// from the agent side — the only useful action is "try a different
+		// transport." Surface that explicitly so the error stops being
+		// cryptic.
+		if strings.Contains(err.Error(), "RSV1 set") {
+			c.log.Error("WebSocket frame compression conflict — likely caused by the tunnel between agent and panel",
+				"hint", "try SERVERKIT_WS_COMPRESSION=true, or switch from a Cloudflare quick tunnel (*.trycloudflare.com) to a permanent named tunnel, or front the panel with a direct HTTPS reverse proxy",
+			)
+		}
 		return fmt.Errorf("engine.io handshake failed: %w", err)
 	}
 
@@ -401,9 +422,16 @@ func (c *Client) Run(ctx context.Context) error {
 		if !connected {
 			if err := c.Connect(ctx); err != nil {
 				c.log.Warn("Connection failed", "error", err)
+				c.mu.Lock()
+				c.lastErr = err
+				c.mu.Unlock()
 				c.handleReconnect(ctx)
 				continue
 			}
+			c.mu.Lock()
+			c.everConnected = true
+			c.lastErr = nil
+			c.mu.Unlock()
 		}
 
 		// Start read/write/ping loops
@@ -699,6 +727,30 @@ func (c *Client) Close() error {
 }
 
 // Session returns the current session token
+// Mode reports this transport as WS so consumers (UI, log lines) can
+// distinguish from the polling fallback.
+func (c *Client) Mode() transport.Mode { return transport.ModeWS }
+
+// LastError returns the most recent connect or runloop error, or nil
+// when healthy. Used by the transport manager to decide whether to fall
+// back to polling — specifically, RSV1/handshake errors indicate a
+// tunnel intermediary that won't ever let WS through and we shouldn't
+// keep retrying the same dial.
+func (c *Client) LastError() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastErr
+}
+
+// EverConnected reports whether the client has successfully completed a
+// handshake at least once during this Run. False after several seconds
+// is the strongest signal that WS won't ever work for this network.
+func (c *Client) EverConnected() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.everConnected
+}
+
 func (c *Client) Session() *auth.SessionToken {
 	return c.session
 }

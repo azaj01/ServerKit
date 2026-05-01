@@ -97,6 +97,16 @@ export default function Overview() {
                 </div>
             )}
 
+            {status?.transport === 'poll' && (
+                <div className="banner banner--info" style={{ background: '#1e1b4b', borderColor: '#4338ca', color: '#c7d2fe' }}>
+                    <strong>Limited mode (polling fallback).</strong> The WebSocket link to your panel
+                    couldn't be established cleanly, so the agent fell back to a REST polling transport.
+                    Heartbeats and commands continue to work; live logs, real-time metrics streaming, and
+                    terminal sessions are unavailable in this mode. This usually points at the network
+                    path between agent and panel mangling WebSocket frames.
+                </div>
+            )}
+
             <section className="card">
                 <h2 className="card__title">Connection</h2>
                 <div className="info-row">
@@ -112,6 +122,16 @@ export default function Overview() {
                         {status?.agent_id || '—'}
                         <CopyButton value={status?.agent_id} />
                     </span>
+                </div>
+                <div className="info-row">
+                    <span className="info-row__label">Transport</span>
+                    <span className="info-row__value">
+                        {status?.transport === 'poll' ? 'Polling (REST fallback)' : 'WebSocket'}
+                    </span>
+                </div>
+                <div className="info-row">
+                    <span className="info-row__label">Agent version</span>
+                    <span className="info-row__value">{status?.version ? `v${status.version}` : '—'}</span>
                 </div>
                 <div className="info-row">
                     <span className="info-row__label">Uptime</span>

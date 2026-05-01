@@ -31,9 +31,24 @@ func startAssetServer(ctx context.Context, log *logger.Logger, configPath string
 	}
 
 	mux := http.NewServeMux()
-	newLocalActions().register(mux)
+	newLocalActions(configPath).register(mux)
 	newPairer(log, configPath).register(mux)
-	mux.Handle("/", http.FileServer(http.FS(dist)))
+
+	// Wrap the static file server with no-store headers. WebView2 caches
+	// per-user-data-folder aggressively; on an MSI upgrade the new bundle
+	// would otherwise be shadowed by the previous index.html for several
+	// runs. Asset payload is ~600KB total, so loading it fresh each launch
+	// has no perceptible cost and removes a whole class of stale-asset
+	// bug reports.
+	noCache := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+			h.ServeHTTP(w, r)
+		})
+	}
+	mux.Handle("/", noCache(http.FileServer(http.FS(dist))))
 
 	srv := &http.Server{
 		Handler:           mux,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	stdlog "log"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -25,6 +26,17 @@ var (
 	BuildTime = "unknown"
 	GitCommit = "unknown"
 )
+
+// Mirror Version into the agent package at startup so /status reports the
+// real version. ldflags set main.Version but the IPC reads agent.Version
+// — they're two distinct package-level vars and were silently drifting,
+// which is why the UI showed "vdev" while `serverkit-agent version`
+// correctly printed "1.6.10".
+func init() {
+	if Version != "dev" {
+		agent.Version = Version
+	}
+}
 
 var (
 	cfgFile   string
@@ -263,6 +275,41 @@ func runAgent() error {
 		"version", Version,
 		"config", config.DefaultConfigPath(),
 	)
+
+	// Single-instance enforcement for the service. Multiple "start"
+	// invocations would fight for IPC port 19780 and the SCM-launched
+	// service would lose to a manually-started one (or vice versa) with
+	// a 30s timeout in either direction. Mutex is in the Global\
+	// namespace because the service runs as SYSTEM and a per-user lock
+	// wouldn't catch a user-context "serverkit-agent start" race.
+	if alreadyRunning, release := acquireServiceInstance(); alreadyRunning {
+		log.Error("Another ServerKit agent service is already running. " +
+			"If this is unexpected, end leftover serverkit-agent.exe processes via " +
+			"Task Manager (or run `taskkill /F /IM serverkit-agent.exe /T`) and try again.")
+		return fmt.Errorf("another agent service is already running (mutex held)")
+	} else {
+		defer release()
+	}
+
+	// Probe the IPC port up-front. If it's held by something else (a
+	// stale agent, another tool, anything), fail fast with a clear
+	// message instead of letting the IPC server later time out and
+	// trip SCM's 1053 "service did not respond" error.
+	if cfg.IPC.Enabled {
+		probe, perr := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", cfg.IPC.Port))
+		if perr != nil {
+			log.Error("IPC port is already in use — likely a leftover serverkit-agent.exe process",
+				"port", cfg.IPC.Port, "error", perr)
+			return fmt.Errorf("IPC port %d is in use; "+
+				"end leftover agent processes (Task Manager → 'serverkit-agent.exe') and try again",
+				cfg.IPC.Port)
+		}
+		// Release the probe — the real IPC server will rebind in a moment.
+		// There's a tiny race window where another process could grab the
+		// port between probe-close and real-bind, but that's acceptable
+		// for what's effectively a "is anyone else here?" check.
+		probe.Close()
+	}
 
 	// Check if registered
 	if cfg.Agent.ID == "" {

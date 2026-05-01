@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/serverkit/agent/internal/logger"
 	"github.com/serverkit/agent/internal/pairdriver"
@@ -116,9 +117,37 @@ func (p *pairer) handleStart(w http.ResponseWriter, r *http.Request) {
 			p.mu.Unlock()
 			// After credentials land on disk the running service still has
 			// the old config in memory — restart it so the new URL/agent_id
-			// take effect immediately.
-			_ = runServiceCmd("stop")
-			_ = runServiceCmd("start")
+			// take effect immediately, and verify it actually came up.
+			// Earlier versions ignored sc start errors silently which is
+			// why users saw "successfully paired" on a dead service and
+			// had to start it manually from the CLI.
+			if err := runServiceCmd("stop"); err != nil {
+				p.log.Info("Service stop reported error (likely already stopped)", "error", err)
+			}
+			if err := runServiceCmd("start"); err != nil {
+				p.log.Error("Failed to start service after pairing", "error", err)
+				p.mu.Lock()
+				p.state = "error"
+				p.errMsg = "Pairing succeeded but the agent service failed to start: " + err.Error() +
+					"\n\nTry: restart the machine, or open Actions → Restart agent."
+				p.mu.Unlock()
+				return
+			}
+			// sc start returns as soon as the SCM accepts the request, not
+			// when the service is actually running. Poll for state=RUNNING
+			// so the wizard's "claimed" stage reflects reality.
+			if err := waitForServiceRunning(20 * time.Second); err != nil {
+				p.log.Error("Service did not reach RUNNING after pairing", "error", err)
+				p.mu.Lock()
+				p.state = "error"
+				p.errMsg = "Pairing succeeded but the agent service didn't come up within 20s. " +
+					"This usually means another agent process is holding port 19780 — " +
+					"try ending all serverkit-agent.exe processes from Task Manager and reopen the wizard.\n\n" +
+					"Detail: " + err.Error()
+				p.mu.Unlock()
+				return
+			}
+			p.log.Info("Agent service running after pair", "server", serverName)
 		},
 		OnError: func(err error) {
 			p.mu.Lock()

@@ -117,6 +117,32 @@ a {
     }
 }
 
+.sidebar__footer {
+    margin-top: auto;
+    padding: $space-sm 4px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-sm;
+}
+
+.sidebar__version {
+    font-size: 11px;
+    color: $text-tertiary;
+    letter-spacing: 0.04em;
+}
+
+.sidebar__transport {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #c7d2fe;
+    background: #312e81;
+    border: 1px solid #4338ca;
+    padding: 2px 6px;
+    border-radius: $radius-sm;
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────
 
 .page {

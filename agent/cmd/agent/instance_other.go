@@ -7,3 +7,9 @@ package main
 func acquireSingleInstance() (alreadyRunning bool, release func()) {
 	return false, func() {}
 }
+
+// acquireServiceInstance is a no-op on non-Windows; SCM doesn't exist
+// and POSIX deployments rely on systemd to enforce single-instance.
+func acquireServiceInstance() (alreadyRunning bool, release func()) {
+	return false, func() {}
+}

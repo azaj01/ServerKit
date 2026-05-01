@@ -2,12 +2,19 @@
 
 package agentui
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // runServiceCmd is a stub on non-Windows: the console window is Windows-only
 // for now, and the platform-specific service controls land alongside the
 // cross-platform webview wrapper later.
 func runServiceCmd(verb string) error {
+	return fmt.Errorf("service control not implemented on this platform")
+}
+
+func waitForServiceRunning(timeout time.Duration) error {
 	return fmt.Errorf("service control not implemented on this platform")
 }
 
