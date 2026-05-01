@@ -511,9 +511,28 @@ func abs(x int64) int64 {
 // Also doubles as the "send capabilities on connect" hook: each time the
 // transport flips from down→up, we re-ship the capability map so the
 // panel's record stays current after a panel restart.
+//
+// On top of the transition trigger, we also re-send capabilities on a
+// 60-second cadence whenever the transport is up. The transition path
+// is fragile when the WS-then-poll fallback dance briefly raises
+// IsConnected() against a backend that's about to be replaced — the
+// message can land on a transport whose Send() silently drops it
+// (or buffers it forever). Periodic re-sends mean a single missed
+// transition doesn't leave the panel with an empty capability map for
+// the lifetime of the agent process; the worst case is a 60-second
+// gap before the next refresh.
 func (a *Agent) connectionWatcher(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	transitionTicker := time.NewTicker(1 * time.Second)
+	defer transitionTicker.Stop()
+	// Aggressive cadence for the first minute so a cold-boot agent
+	// populates the panel within ~5s of the first successful transport
+	// connect. Aaron's law: the WS-then-poll fallback dance can land
+	// the transition's send on a backend that's about to be replaced,
+	// and the panel ends up with an empty capability map until the
+	// next steady-state tick fires.
+	resendTicker := time.NewTicker(5 * time.Second)
+	defer resendTicker.Stop()
+	resendTicks := 0
 
 	prev := false
 	first := true
@@ -521,7 +540,22 @@ func (a *Agent) connectionWatcher(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-resendTicker.C:
+			// Idempotent re-send. The panel's update_capabilities is a
+			// pure overwrite, so re-shipping the same payload costs us
+			// nothing; the panel just rewrites the same row.
+			if a.ws.IsConnected() {
+				a.sendCapabilities()
+			}
+			resendTicks++
+			// After ~60 seconds (12 ticks at 5s), back the cadence off
+			// to once a minute. The first minute is the only window
+			// where transport churn is likely; long-lived connections
+			// don't need the heavier pulse.
+			if resendTicks == 12 {
+				resendTicker.Reset(60 * time.Second)
+			}
+		case <-transitionTicker.C:
 			now := a.ws.IsConnected()
 			if now == prev && !first {
 				continue
