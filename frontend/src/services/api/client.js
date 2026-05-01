@@ -25,16 +25,25 @@ class ApiClient {
         const url = `${this.baseUrl}${endpoint}`;
         const token = this.getToken();
 
+        // FormData uploads need browser-built Content-Type (with boundary)
+        // and must NOT be JSON-stringified. Detect and bypass both.
+        const isFormData = options.body instanceof FormData;
+
         const config = {
             headers: {
-                'Content-Type': 'application/json',
+                ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
                 ...(token && { Authorization: `Bearer ${token}` }),
                 ...options.headers,
             },
             ...options,
         };
 
-        if (options.body && typeof options.body === 'object') {
+        if (
+            !isFormData &&
+            options.body &&
+            typeof options.body === 'object' &&
+            !(options.body instanceof Blob)
+        ) {
             config.body = JSON.stringify(options.body);
         }
 

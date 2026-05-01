@@ -1784,7 +1784,7 @@ $drawer-width: 520px;
     border-radius: $radius-md;
     background: rgba(99, 102, 241, 0.1);
     color: var(--text-primary);
-    font-size: $text-sm;
+    font-size: $font-size-sm;
     border: 1px solid rgba(99, 102, 241, 0.25);
 }
 
@@ -1800,7 +1800,7 @@ $drawer-width: 520px;
         background: transparent;
         border: none;
         color: var(--text-primary);
-        font-size: $text-sm;
+        font-size: $font-size-sm;
         outline: none;
         cursor: pointer;
     }

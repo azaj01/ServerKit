@@ -20,6 +20,9 @@ const Marketplace = () => {
     const [category, setCategory] = useState('');
     const [showSubmit, setShowSubmit] = useState(false);
     const [pluginUrl, setPluginUrl] = useState('');
+    const [pluginPath, setPluginPath] = useState('');
+    const [pluginFile, setPluginFile] = useState(null);
+    const [installSource, setInstallSource] = useState('url');
     const [installing, setInstalling] = useState(false);
     const [form, setForm] = useState({ name: '', display_name: '', description: '', category: 'utility', version: '1.0.0', author: '' });
 
@@ -61,12 +64,27 @@ const Marketplace = () => {
     };
 
     const handlePluginInstall = async () => {
-        if (!pluginUrl.trim()) return;
+        let action;
+        if (installSource === 'url') {
+            if (!pluginUrl.trim()) return;
+            action = () => api.installPlugin(pluginUrl.trim());
+        } else if (installSource === 'path') {
+            if (!pluginPath.trim()) return;
+            action = () => api.installPluginFromPath(pluginPath.trim());
+        } else if (installSource === 'upload') {
+            if (!pluginFile) return;
+            action = () => api.installPluginFromZip(pluginFile);
+        } else {
+            return;
+        }
+
         setInstalling(true);
         try {
-            const result = await api.installPlugin(pluginUrl.trim());
+            const result = await action();
             toast.success(`Plugin "${result.display_name}" installed. Restart backend to activate routes.`);
             setPluginUrl('');
+            setPluginPath('');
+            setPluginFile(null);
             loadExtensions();
         } catch (err) {
             toast.error(err.message || 'Plugin installation failed');
@@ -196,23 +214,105 @@ const Marketplace = () => {
                 <TabsContent value="plugins">
                     <div className="plugins-section">
                         <div className="plugin-install-form card">
-                            <h3>Install Plugin from URL</h3>
-                            <p className="text-muted">Paste a GitHub repo URL, release URL, or direct zip link.</p>
-                            <div className="plugin-install-row">
-                                <Input
-                                    placeholder="https://github.com/user/serverkit-plugin"
-                                    value={pluginUrl}
-                                    onChange={e => setPluginUrl(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handlePluginInstall()}
-                                    disabled={installing}
-                                />
-                                <Button
-                                    onClick={handlePluginInstall}
-                                    disabled={installing || !pluginUrl.trim()}
-                                >
-                                    {installing ? 'Installing...' : 'Install'}
-                                </Button>
+                            <h3>Install Plugin</h3>
+
+                            <div className="plugin-install-tabs" role="tablist">
+                                {[
+                                    { id: 'url', label: 'From URL' },
+                                    { id: 'path', label: 'From Folder' },
+                                    { id: 'upload', label: 'Upload Zip' },
+                                ].map(t => (
+                                    <button
+                                        key={t.id}
+                                        role="tab"
+                                        type="button"
+                                        aria-selected={installSource === t.id}
+                                        className={`plugin-install-tab ${installSource === t.id ? 'plugin-install-tab--active' : ''}`}
+                                        onClick={() => setInstallSource(t.id)}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
                             </div>
+
+                            {installSource === 'url' && (
+                                <>
+                                    <p className="text-muted">Paste a GitHub repo URL, release URL, or direct zip link.</p>
+                                    <div className="plugin-install-row">
+                                        <Input
+                                            placeholder="https://github.com/user/serverkit-plugin"
+                                            value={pluginUrl}
+                                            onChange={e => setPluginUrl(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && handlePluginInstall()}
+                                            disabled={installing}
+                                        />
+                                        <Button
+                                            onClick={handlePluginInstall}
+                                            disabled={installing || !pluginUrl.trim()}
+                                        >
+                                            {installing ? 'Installing...' : 'Install'}
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+
+                            {installSource === 'path' && (
+                                <>
+                                    <p className="text-muted">
+                                        Absolute path to a plugin folder on the panel host (must contain
+                                        <code> plugin.json</code>). Useful for plugin development —
+                                        edit, install, repeat.
+                                    </p>
+                                    <div className="plugin-install-row">
+                                        <Input
+                                            placeholder={
+                                                navigator.userAgent.toLowerCase().includes('win')
+                                                    ? 'C:\\Users\\you\\Documents\\GitHub\\my-plugin'
+                                                    : '/home/you/projects/my-plugin'
+                                            }
+                                            value={pluginPath}
+                                            onChange={e => setPluginPath(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && handlePluginInstall()}
+                                            disabled={installing}
+                                        />
+                                        <Button
+                                            onClick={handlePluginInstall}
+                                            disabled={installing || !pluginPath.trim()}
+                                        >
+                                            {installing ? 'Installing...' : 'Install'}
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+
+                            {installSource === 'upload' && (
+                                <>
+                                    <p className="text-muted">
+                                        Upload a plugin zip (max 50 MB). The archive must contain
+                                        <code> plugin.json</code> at the top level (or one folder deep,
+                                        as GitHub source zips do).
+                                    </p>
+                                    <div className="plugin-install-row">
+                                        <input
+                                            type="file"
+                                            accept=".zip,application/zip,application/x-zip-compressed"
+                                            disabled={installing}
+                                            onChange={e => setPluginFile(e.target.files?.[0] || null)}
+                                        />
+                                        <Button
+                                            onClick={handlePluginInstall}
+                                            disabled={installing || !pluginFile}
+                                        >
+                                            {installing ? 'Installing...' : 'Install'}
+                                        </Button>
+                                    </div>
+                                    {pluginFile && (
+                                        <div className="text-muted" style={{ marginTop: 6, fontSize: 12 }}>
+                                            {pluginFile.name} · {(pluginFile.size / 1024).toFixed(1)} KB
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
 
                         <div className="installed-list">

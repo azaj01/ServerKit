@@ -115,9 +115,46 @@
     .plugin-install-row {
         display: flex;
         gap: $spacing-sm;
+        align-items: center;
 
-        .form-input {
+        .form-input,
+        input[type="text"] {
             flex: 1;
+        }
+
+        input[type="file"] {
+            flex: 1;
+            color: var(--text-muted);
+            font-size: $font-size-sm;
+        }
+    }
+
+    .plugin-install-tabs {
+        display: inline-flex;
+        gap: 0;
+        margin-bottom: $spacing-md;
+        background: var(--border-color, #2a2e36);
+        border-radius: 6px;
+        padding: 2px;
+    }
+
+    .plugin-install-tab {
+        padding: 6px 14px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: $font-size-sm;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: 4px;
+
+        &:hover {
+            color: var(--text-color);
+        }
+
+        &--active {
+            background: var(--primary-color, #6366f1);
+            color: #fff;
         }
     }
 }

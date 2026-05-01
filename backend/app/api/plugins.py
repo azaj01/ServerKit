@@ -82,6 +82,91 @@ def install_plugin():
         return jsonify({'error': f'Installation failed: {e}'}), 500
 
 
+@plugins_bp.route('/install-local', methods=['POST'])
+@jwt_required()
+def install_plugin_local():
+    """Install a plugin from a local directory on the panel host.
+
+    Body: { "path": "/abs/path/to/plugin-folder" }
+
+    Intended for plugin development: point at the working tree, install,
+    iterate. The path must exist on the panel host's filesystem and
+    contain a plugin.json. The folder is zipped in memory and run
+    through the same install pipeline as URL/upload installs, so
+    behavior matches.
+    """
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+
+    data = request.get_json() or {}
+    path = (data.get('path') or '').strip()
+    if not path:
+        return jsonify({'error': 'path required'}), 400
+
+    from app.services.plugin_service import install_from_path
+    try:
+        plugin = install_from_path(path, user_id=user.id)
+        AuditService.log(
+            action=AuditLog.ACTION_RESOURCE_CREATE,
+            user_id=user.id,
+            target_type='plugin',
+            target_id=plugin.id,
+            details={'name': plugin.name, 'version': plugin.version, 'path': path, 'source': 'local'}
+        )
+        return jsonify(plugin.to_dict()), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Installation failed: {e}'}), 500
+
+
+@plugins_bp.route('/install-upload', methods=['POST'])
+@jwt_required()
+def install_plugin_upload():
+    """Install a plugin from an uploaded zip file.
+
+    Multipart: file=<plugin.zip>
+
+    Cap at 50 MB. Anything that needs to be bigger probably belongs in
+    a release artifact installed via /install instead.
+    """
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded (use multipart field "file")'}), 400
+
+    f = request.files['file']
+    if not f or not f.filename:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    raw = f.read()
+    max_bytes = 50 * 1024 * 1024
+    if len(raw) > max_bytes:
+        return jsonify({'error': f'Upload exceeds {max_bytes // (1024 * 1024)} MB cap'}), 413
+
+    from app.services.plugin_service import install_from_zip
+    try:
+        plugin = install_from_zip(raw, user_id=user.id, source_name=f.filename)
+        AuditService.log(
+            action=AuditLog.ACTION_RESOURCE_CREATE,
+            user_id=user.id,
+            target_type='plugin',
+            target_id=plugin.id,
+            details={
+                'name': plugin.name, 'version': plugin.version,
+                'filename': f.filename, 'source': 'upload',
+            }
+        )
+        return jsonify(plugin.to_dict()), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Installation failed: {e}'}), 500
+
+
 @plugins_bp.route('/<int:plugin_id>', methods=['DELETE'])
 @jwt_required()
 def uninstall_plugin(plugin_id):

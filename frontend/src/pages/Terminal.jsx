@@ -1,16 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { LogViewer } from '../components/LogViewer';
 import { ProcessTable, ProcessDetailsPanel } from '../components/ProcessTable';
 import { ServiceCard, ServicesGrid } from '../components/ServiceCard';
 import { JournalControls } from '../components/JournalControls';
+import TargetPicker from '../components/TargetPicker';
+import LogFileList from '../components/log-viewer/LogFileList';
+import LogToolbar from '../components/log-viewer/LogToolbar';
+import LogContent from '../components/log-viewer/LogContent';
+import { formatBytes, logKindFromPath } from '../components/log-viewer/logHelpers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { FileText, Clock, AlertCircle } from 'lucide-react';
 
 const VALID_TABS = ['logs', 'journal', 'processes', 'services'];
 
@@ -82,23 +87,61 @@ const Terminal = () => {
     );
 };
 
+const LOG_PREFS = {
+    showLineNumbers: 'serverkit-logs-line-numbers',
+    wrapLines: 'serverkit-logs-wrap',
+    lineCount: 'serverkit-logs-line-count',
+};
+
+// Operations supported by the agent for remote targets. Only `read` is
+// likely available today; everything else is panel-host-only until the
+// matching agent verbs land. Mirrors the FileManager pattern.
+const REMOTE_LOG_SUPPORTED = new Set(['list', 'read']);
+
 const LogFilesTab = () => {
+    const toast = useToast();
     const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+
+    const [target, setTarget] = useState({ kind: 'local' });
+    const isRemote = target.kind === 'agent';
+
     const [logFiles, setLogFiles] = useState([]);
     const [selectedLog, setSelectedLog] = useState(null);
     const [logContent, setLogContent] = useState('');
     const [loading, setLoading] = useState(true);
     const [loadingContent, setLoadingContent] = useState(false);
     const [error, setError] = useState(null);
-    const [lineCount, setLineCount] = useState(100);
-    const [searchPattern, setSearchPattern] = useState('');
-    const [autoRefresh, setAutoRefresh] = useState(false);
-    const logViewerRef = useRef(null);
-    const intervalRef = useRef(null);
+    const [lastUpdated, setLastUpdated] = useState(null);
 
+    const [lineCount, setLineCount] = useState(() => {
+        const v = parseInt(localStorage.getItem(LOG_PREFS.lineCount), 10);
+        return Number.isFinite(v) ? v : 200;
+    });
+    const [searchPattern, setSearchPattern] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
+    const [autoRefresh, setAutoRefresh] = useState(false);
+    const [showLineNumbers, setShowLineNumbers] = useState(() => localStorage.getItem(LOG_PREFS.showLineNumbers) !== 'false');
+    const [wrapLines, setWrapLines] = useState(() => localStorage.getItem(LOG_PREFS.wrapLines) !== 'false');
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const contentRef = useRef(null);
+    const intervalRef = useRef(null);
+    const selectedLogObj = useMemo(
+        () => logFiles.find((l) => l.path === selectedLog) || null,
+        [logFiles, selectedLog]
+    );
+
+    useEffect(() => { localStorage.setItem(LOG_PREFS.showLineNumbers, showLineNumbers); }, [showLineNumbers]);
+    useEffect(() => { localStorage.setItem(LOG_PREFS.wrapLines, wrapLines); }, [wrapLines]);
+    useEffect(() => { localStorage.setItem(LOG_PREFS.lineCount, lineCount); }, [lineCount]);
+
+    // Reset when the target changes (clears previous server's selection)
     useEffect(() => {
+        setSelectedLog(null);
+        setLogContent('');
+        setAutoRefresh(false);
         loadLogFiles();
-    }, []);
+    }, [target.kind, target.server_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (autoRefresh && selectedLog) {
@@ -106,14 +149,28 @@ const LogFilesTab = () => {
                 loadLogContent(selectedLog, false);
             }, 3000);
         }
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-        };
-    }, [autoRefresh, selectedLog]);
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [autoRefresh, selectedLog, lineCount, appliedSearch]); // eslint-disable-line
+
+    function ensureSupported(op) {
+        if (isRemote && !REMOTE_LOG_SUPPORTED.has(op)) {
+            toast.error(`This action isn't available on remote targets yet.`);
+            return false;
+        }
+        return true;
+    }
 
     async function loadLogFiles() {
+        if (isRemote) {
+            // No remote log-file listing yet — gracefully empty out so the
+            // panel doesn't get confused with stale local entries.
+            setLogFiles([]);
+            setLoading(false);
+            setError(`Remote log listing isn't available yet for ${target.name}.`);
+            return;
+        }
+        setLoading(true);
+        setError(null);
         try {
             const data = await api.getLogFiles();
             setLogFiles(data.logs || []);
@@ -128,17 +185,17 @@ const LogFilesTab = () => {
         if (showLoading) setLoadingContent(true);
         try {
             let data;
-            if (searchPattern.trim()) {
-                data = await api.searchLog(logPath, searchPattern, lineCount);
+            if (appliedSearch.trim()) {
+                data = await api.searchLog(logPath, appliedSearch, lineCount);
             } else {
                 data = await api.readLog(logPath, lineCount);
             }
-            setLogContent(data.content || data.lines?.join('\n') || 'No content');
+            setLogContent(data.content || data.lines?.join('\n') || '');
             setSelectedLog(logPath);
+            setLastUpdated(new Date());
 
-            // Scroll to bottom
-            if (logViewerRef.current) {
-                logViewerRef.current.scrollTop = logViewerRef.current.scrollHeight;
+            if (autoRefresh && contentRef.current) {
+                contentRef.current.scrollTop = contentRef.current.scrollHeight;
             }
         } catch (err) {
             setLogContent(`Error loading log: ${err.message}`);
@@ -147,16 +204,60 @@ const LogFilesTab = () => {
         }
     }
 
-    async function handleClearLog() {
-        if (!selectedLog) return;
-        const confirmed = await confirm({ title: 'Clear Log', message: `Clear ${selectedLog}? This cannot be undone.` });
-        if (!confirmed) return;
+    function handleSelectFile(log) {
+        loadLogContent(log.path);
+    }
 
+    function handleSearchSubmit() {
+        setAppliedSearch(searchPattern);
+        if (selectedLog) {
+            // Re-fetch with new search.
+            (async () => {
+                setLoadingContent(true);
+                try {
+                    const data = searchPattern.trim()
+                        ? await api.searchLog(selectedLog, searchPattern, lineCount)
+                        : await api.readLog(selectedLog, lineCount);
+                    setLogContent(data.content || data.lines?.join('\n') || '');
+                    setLastUpdated(new Date());
+                } catch (err) {
+                    setLogContent(`Error: ${err.message}`);
+                } finally {
+                    setLoadingContent(false);
+                }
+            })();
+        }
+    }
+
+    function handleSearchClear() {
+        setSearchPattern('');
+        setAppliedSearch('');
+        if (selectedLog) loadLogContent(selectedLog);
+    }
+
+    function scrollToBottom() {
+        if (contentRef.current) {
+            contentRef.current.scrollTop = contentRef.current.scrollHeight;
+        }
+    }
+
+    async function handleClearLog() {
+        if (!ensureSupported('clear')) return;
+        if (!selectedLog) return;
+        const confirmed = await confirm({
+            title: 'Truncate log file',
+            message: `This will permanently empty ${selectedLog}. Continue?`,
+            variant: 'danger',
+            confirmText: 'Truncate',
+        });
+        if (!confirmed) return;
         try {
             await api.clearLog(selectedLog);
-            setLogContent('Log cleared.');
+            setLogContent('');
+            toast.success('Log file truncated');
+            loadLogFiles();
         } catch (err) {
-            setError(err.message);
+            toast.error(`Failed: ${err.message}`);
         }
     }
 
@@ -171,59 +272,120 @@ const LogFilesTab = () => {
         URL.revokeObjectURL(url);
     }
 
-    function getLogIcon(path) {
-        if (path.includes('error')) return 'error';
-        if (path.includes('access')) return 'access';
-        if (path.includes('nginx')) return 'nginx';
-        if (path.includes('mysql') || path.includes('postgres')) return 'database';
-        return 'default';
-    }
-
-    function formatFileSize(bytes) {
-        if (!bytes) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB'];
-        let i = 0;
-        while (bytes >= 1024 && i < units.length - 1) {
-            bytes /= 1024;
-            i++;
-        }
-        return `${bytes.toFixed(1)} ${units[i]}`;
-    }
-
-    if (loading) {
-        return <div className="loading">Loading log files...</div>;
-    }
+    const visibleLineCount = useMemo(() => {
+        if (!logContent) return 0;
+        return logContent.split('\n').filter(Boolean).length;
+    }, [logContent]);
 
     return (
-        <div className="logs-container">
+        <div className={`lv-page ${isFullscreen ? 'fullscreen' : ''}`}>
+            <div className="lv-header">
+                <div className="lv-header-target">
+                    <span className="lv-header-label">Source</span>
+                    <TargetPicker
+                        feature="logs"
+                        value={target}
+                        onChange={setTarget}
+                    />
+                    {isRemote && (
+                        <span className="lv-header-hint">
+                            <AlertCircle size={12} />
+                            Read-only. Most actions require panel-host access.
+                        </span>
+                    )}
+                </div>
+                <div className="lv-header-stats">
+                    {selectedLogObj && (
+                        <>
+                            <span className="lv-stat">
+                                <FileText size={12} />
+                                {selectedLogObj.name}
+                            </span>
+                            <span className="lv-stat-divider" />
+                            <span className="lv-stat">
+                                <span className="lv-stat-label">Size</span>
+                                <span className="lv-stat-value">{formatBytes(selectedLogObj.size)}</span>
+                            </span>
+                            <span className="lv-stat">
+                                <span className="lv-stat-label">Showing</span>
+                                <span className="lv-stat-value">{visibleLineCount.toLocaleString()} lines</span>
+                            </span>
+                            {lastUpdated && (
+                                <span className="lv-stat">
+                                    <Clock size={12} />
+                                    {lastUpdated.toLocaleTimeString()}
+                                </span>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+
             {error && (
-                <div className="alert alert-danger">
-                    {error}
-                    <button onClick={() => setError(null)} className="alert-close">&times;</button>
+                <div className="lv-error">
+                    <AlertCircle size={14} />
+                    <span>{error}</span>
+                    <button onClick={() => setError(null)}>&times;</button>
                 </div>
             )}
 
-            <LogViewer
-                files={logFiles}
-                selectedPath={selectedLog}
-                onSelectFile={(log) => loadLogContent(log.path)}
-                onRefreshFiles={loadLogFiles}
-                content={selectedLog ? logContent : ''}
-                contentLoading={loadingContent}
-                contentEmpty="Select a log file to view its contents."
-                searchPattern={searchPattern}
-                onSearchChange={setSearchPattern}
-                onSearchSubmit={() => selectedLog && loadLogContent(selectedLog)}
-                lineCount={lineCount}
-                onLineCountChange={setLineCount}
-                autoRefresh={autoRefresh}
-                onAutoRefreshChange={setAutoRefresh}
-                onRefreshContent={() => selectedLog && loadLogContent(selectedLog)}
-                onDownload={handleDownload}
-                onClear={handleClearLog}
-                formatFileSize={formatFileSize}
-                getLogIconType={(log) => getLogIcon(log.path)}
-            />
+            <div className="lv-layout">
+                <LogFileList
+                    files={logFiles}
+                    selectedPath={selectedLog}
+                    onSelect={handleSelectFile}
+                    onRefresh={loadLogFiles}
+                    loading={loading}
+                />
+
+                <div className="lv-viewer">
+                    {selectedLog && (
+                        <div className="lv-viewer-path">
+                            <span className={`lv-viewer-path-dot kind-${logKindFromPath(selectedLog)}`} />
+                            <code>{selectedLog}</code>
+                        </div>
+                    )}
+
+                    <LogToolbar
+                        searchPattern={searchPattern}
+                        onSearchChange={setSearchPattern}
+                        onSearchSubmit={handleSearchSubmit}
+                        onSearchClear={handleSearchClear}
+                        lineCount={lineCount}
+                        onLineCountChange={(n) => { setLineCount(n); if (selectedLog) setTimeout(() => loadLogContent(selectedLog), 0); }}
+                        autoRefresh={autoRefresh}
+                        onAutoRefreshToggle={() => setAutoRefresh(!autoRefresh)}
+                        showLineNumbers={showLineNumbers}
+                        onToggleLineNumbers={() => setShowLineNumbers(!showLineNumbers)}
+                        wrapLines={wrapLines}
+                        onToggleWrap={() => setWrapLines(!wrapLines)}
+                        isFullscreen={isFullscreen}
+                        onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+                        onRefresh={() => selectedLog && loadLogContent(selectedLog)}
+                        onDownload={handleDownload}
+                        onClear={handleClearLog}
+                        onScrollToBottom={scrollToBottom}
+                        canAct={!!selectedLog && !loadingContent}
+                    />
+
+                    <LogContent
+                        ref={contentRef}
+                        content={selectedLog ? logContent : ''}
+                        loading={loadingContent}
+                        emptyMessage={
+                            isRemote && logFiles.length === 0
+                                ? `Remote log browsing isn't supported yet for ${target.name}.`
+                                : logFiles.length === 0
+                                    ? 'No log files were found on this server.'
+                                    : 'Select a log file from the list to view its contents.'
+                        }
+                        showLineNumbers={showLineNumbers}
+                        wrapLines={wrapLines}
+                        searchPattern={appliedSearch}
+                    />
+                </div>
+            </div>
+
             <ConfirmDialog
                 isOpen={confirmState.isOpen}
                 title={confirmState.title}
