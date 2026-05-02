@@ -46,13 +46,15 @@ export default function SystemStatusCard({ server, onRefresh }) {
     return (
         <div className="info-card system-status-card">
             <div className="system-status-card__header">
-                <h3>System Status</h3>
-                <div className="system-status-card__header-meta">
+                <div className="system-status-card__title">
+                    <h3>System Status</h3>
                     {stale && (
                         <Badge variant="outline" title="Agent offline — showing last cached snapshot">
                             Stale
                         </Badge>
                     )}
+                </div>
+                <div className="system-status-card__header-meta">
                     {probedAt && (
                         <span className="system-status-card__probed-at">
                             probed {formatRelative(probedAt)}
