@@ -490,6 +490,38 @@ class DockerService:
             return None
 
     @staticmethod
+    def get_containers_stats(container_ids):
+        """Get resource usage stats for multiple containers in one Docker call."""
+        if not container_ids:
+            return {}
+
+        try:
+            cleaned_ids = [str(container_id) for container_id in container_ids if container_id]
+            if not cleaned_ids:
+                return {}
+
+            result = subprocess.run(
+                ['docker', 'stats', '--no-stream', '--format', '{{json .}}', *cleaned_ids],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                logger.error(f"Failed to get container stats: {result.stderr.strip()}")
+                return {}
+
+            stats_map = {}
+            for line in result.stdout.splitlines():
+                if not line.strip():
+                    continue
+                stats = json.loads(line)
+                for key in (stats.get('ID'), stats.get('Container'), stats.get('Name')):
+                    if key:
+                        stats_map[key] = stats
+            return stats_map
+        except Exception as e:
+            logger.error(f"Failed to get bulk container stats: {e}")
+            return {}
+
+    @staticmethod
     def exec_command(container_id, command, interactive=False, tty=False):
         """Execute a command in a running container."""
         try:

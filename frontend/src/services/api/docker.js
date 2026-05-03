@@ -71,6 +71,13 @@ export async function getContainerStats(containerId) {
     return this.request(`/docker/containers/${containerId}/stats`);
 }
 
+export async function getContainersStats(containerIds) {
+    return this.request('/docker/containers/stats', {
+        method: 'POST',
+        body: { ids: containerIds }
+    });
+}
+
 export async function execContainer(containerId, command) {
     return this.request(`/docker/containers/${containerId}/exec`, {
         method: 'POST',

@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import TargetPicker from '../components/TargetPicker';
 import LogToolbar from '../components/log-viewer/LogToolbar';
 import LogContent from '../components/log-viewer/LogContent';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
     Box, Layers, HardDrive, Network as NetworkIcon, Search, X, RefreshCw,
     Trash2, Play, Square, RotateCw, Terminal as TerminalLucide, FileText,
-    Activity, Clock3, Copy, Database, Gauge, Info, Package, Server as ServerIcon,
+    Activity, Clock3, Copy, Database, Gauge, Package, Server as ServerIcon, ArrowUpDown,
 } from 'lucide-react';
 
 // Server context for Docker operations
@@ -21,6 +20,7 @@ const ServerContext = createContext({ serverId: 'local', serverName: 'Local' });
 const useServer = () => useContext(ServerContext);
 
 const VALID_TABS = ['containers', 'compose', 'images', 'volumes', 'networks'];
+const LOCAL_DOCKER_TARGET = { id: 'local', name: 'Local (this server)', status: 'online', is_local: true };
 
 const unwrapRemoteData = (response) => {
     if (response?.success && response.data !== undefined) {
@@ -108,7 +108,8 @@ const Docker = () => {
     const [activeTab, setActiveTab] = useTabParam('/docker', VALID_TABS);
     const [dockerStatus, setDockerStatus] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [selectedServer, setSelectedServer] = useState({ id: 'local', name: 'Local (this server)' });
+    const [selectedServer, setSelectedServer] = useState(LOCAL_DOCKER_TARGET);
+    const [availableServers, setAvailableServers] = useState([LOCAL_DOCKER_TARGET]);
     const [stats, setStats] = useState({
         containers: { total: 0, running: 0, stopped: 0 },
         images: { total: 0, size: '0 B' },
@@ -119,6 +120,31 @@ const Docker = () => {
     useEffect(() => {
         checkDockerStatus();
     }, [selectedServer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadAvailableServers() {
+            try {
+                const data = await api.getAvailableServers();
+                const servers = Array.isArray(data) && data.length > 0 ? data : [LOCAL_DOCKER_TARGET];
+                if (cancelled) return;
+                setAvailableServers(servers);
+                setSelectedServer(prev => (
+                    servers.some(server => server.id === prev.id)
+                        ? prev
+                        : (servers[0] || LOCAL_DOCKER_TARGET)
+                ));
+            } catch {
+                if (cancelled) return;
+                setAvailableServers([LOCAL_DOCKER_TARGET]);
+                setSelectedServer(LOCAL_DOCKER_TARGET);
+            }
+        }
+
+        loadAvailableServers();
+        return () => { cancelled = true; };
+    }, []);
 
     async function checkDockerStatus() {
         setLoading(true);
@@ -272,12 +298,15 @@ const Docker = () => {
     }
 
     const tabs = [
-        { id: 'containers', label: 'Containers' },
-        { id: 'compose', label: 'Compose' },
-        { id: 'images', label: 'Images' },
-        { id: 'volumes', label: 'Volumes' },
-        { id: 'networks', label: 'Networks' }
+        { id: 'containers', label: 'Containers', icon: Box, count: stats.containers.total },
+        { id: 'compose', label: 'Compose', icon: Package, count: null },
+        { id: 'images', label: 'Images', icon: Layers, count: stats.images.total },
+        { id: 'volumes', label: 'Volumes', icon: HardDrive, count: stats.volumes.total },
+        { id: 'networks', label: 'Networks', icon: NetworkIcon, count: stats.networks.total }
     ];
+
+    const activeTabMeta = tabs.find(tab => tab.id === activeTab) || tabs[0];
+    const hasMultipleTargets = availableServers.length > 1;
 
     const serverContextValue = {
         serverId: selectedServer.id,
@@ -288,100 +317,112 @@ const Docker = () => {
     return (
         <ServerContext.Provider value={serverContextValue}>
         <div className="page-container page-container--full-bleed docker-page-new dx-page">
-            <div className="page-header">
-                <div className="page-header-content">
-                    <h1>Docker</h1>
-                    <p className="page-description">Manage containers, images, networks, and volumes</p>
-                </div>
-                <div className="page-header-actions">
-                    {activeTab === 'containers' && <RunContainerButton />}
-                    {activeTab === 'images' && <PullImageButton />}
-                    {activeTab === 'networks' && <CreateNetworkButton />}
-                    {activeTab === 'volumes' && <CreateVolumeButton />}
-                </div>
-            </div>
+            <div className="dx-workspace">
+                <aside className="dx-docker-sidebar">
+                    {hasMultipleTargets && (
+                        <section className="dx-sidebar-section">
+                            <div className="dx-sidebar-section-header">
+                                <ServerIcon size={14} />
+                                <span>Targets</span>
+                            </div>
+                            <div className="dx-resource-nav">
+                                {availableServers.map(server => (
+                                    <button
+                                        key={server.id}
+                                        className={`dx-resource-nav-item ${selectedServer.id === server.id ? 'active' : ''}`}
+                                        onClick={() => setSelectedServer(server)}
+                                    >
+                                        <ServerIcon size={15} />
+                                        <span>{server.name || server.hostname || server.id}</span>
+                                        <strong>{server.status || 'online'}</strong>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    )}
 
-            <div className="lv-header">
-                <div className="lv-header-target">
-                    <span className="lv-header-label">Server</span>
-                    <TargetPicker
-                        feature="docker"
-                        value={selectedServer.id === 'local'
-                            ? { kind: 'local' }
-                            : { kind: 'agent', server_id: selectedServer.id, name: selectedServer.name }}
-                        onChange={(v) => {
-                            if (v.kind === 'local') setSelectedServer({ id: 'local', name: 'Local (this server)' });
-                            else setSelectedServer({ id: v.server_id, name: v.name });
-                        }}
-                    />
-                </div>
-                <div className="lv-header-stats">
-                    <PruneButton onPruned={loadStats} />
-                </div>
-            </div>
+                    <section className="dx-sidebar-section">
+                        <div className="dx-sidebar-section-header">
+                            <Box size={14} />
+                            <span>Resources</span>
+                        </div>
+                        <div className="dx-resource-nav">
+                            {tabs.map(tab => {
+                                const Icon = tab.icon;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        className={`dx-resource-nav-item ${activeTab === tab.id ? 'active' : ''}`}
+                                        onClick={() => setActiveTab(tab.id)}
+                                    >
+                                        <Icon size={15} />
+                                        <span>{tab.label}</span>
+                                        {tab.count !== null && <strong>{tab.count}</strong>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
 
-            <div className="dx-stats-row">
-                <div className="dx-stat" data-kind="containers">
-                    <div className="dx-stat-icon"><Box size={18} /></div>
-                    <div className="dx-stat-body">
-                        <div className="dx-stat-label">Containers</div>
-                        <div className="dx-stat-value">{stats.containers.total}</div>
-                        <div className="dx-stat-meta">
-                            <span className="dx-pill running"><span className="dot" />{stats.containers.running} running</span>
-                            <span className="dx-pill stopped"><span className="dot" />{stats.containers.stopped} stopped</span>
+                    <section className="dx-sidebar-section">
+                        <div className="dx-sidebar-section-header">
+                            <Activity size={14} />
+                            <span>Inventory</span>
+                        </div>
+                        <div className="dx-inventory-list">
+                            <div className="dx-inventory-item">
+                                <span>Running</span>
+                                <strong>{stats.containers.running}</strong>
+                            </div>
+                            <div className="dx-inventory-item">
+                                <span>Stopped</span>
+                                <strong>{stats.containers.stopped}</strong>
+                            </div>
+                            <div className="dx-inventory-item">
+                                <span>Images</span>
+                                <strong>{stats.images.size}</strong>
+                            </div>
+                            <div className="dx-inventory-item">
+                                <span>Volumes</span>
+                                <strong>{stats.volumes.total}</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="dx-sidebar-section">
+                        <div className="dx-sidebar-section-header">
+                            <Trash2 size={14} />
+                            <span>Maintenance</span>
+                        </div>
+                        <div className="dx-sidebar-section-content">
+                            <PruneButton onPruned={loadStats} />
+                        </div>
+                    </section>
+                </aside>
+
+                <main className="dx-main">
+                    <div className="dx-workbar">
+                        <div className="dx-workbar-title">
+                            <span>Docker</span>
+                            <strong>{activeTabMeta.label}</strong>
+                            {hasMultipleTargets && <em>{selectedServer.name || selectedServer.id}</em>}
+                        </div>
+                        <div className="dx-workbar-actions">
+                            {activeTab === 'containers' && <RunContainerButton />}
+                            {activeTab === 'images' && <PullImageButton />}
+                            {activeTab === 'networks' && <CreateNetworkButton />}
+                            {activeTab === 'volumes' && <CreateVolumeButton />}
                         </div>
                     </div>
-                </div>
-                <div className="dx-stat" data-kind="images">
-                    <div className="dx-stat-icon"><Layers size={18} /></div>
-                    <div className="dx-stat-body">
-                        <div className="dx-stat-label">Images</div>
-                        <div className="dx-stat-value">{stats.images.total}</div>
-                        <div className="dx-stat-meta">
-                            <span className="dx-stat-sub">{stats.images.size} on disk</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="dx-stat" data-kind="volumes">
-                    <div className="dx-stat-icon"><HardDrive size={18} /></div>
-                    <div className="dx-stat-body">
-                        <div className="dx-stat-label">Volumes</div>
-                        <div className="dx-stat-value">{stats.volumes.total}</div>
-                        <div className="dx-stat-meta">
-                            <span className="dx-stat-sub">Persistent data</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="dx-stat" data-kind="networks">
-                    <div className="dx-stat-icon"><NetworkIcon size={18} /></div>
-                    <div className="dx-stat-body">
-                        <div className="dx-stat-label">Networks</div>
-                        <div className="dx-stat-value">{stats.networks.total}</div>
-                        <div className="dx-stat-meta">
-                            <span className="dx-stat-sub">Bridge · Host · None</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div className="dx-tabs">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        className={`dx-tab ${activeTab === tab.id ? 'active' : ''}`}
-                        onClick={() => setActiveTab(tab.id)}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
-
-            <div className="dx-panel">
-                {activeTab === 'containers' && <ContainersTab onStatsChange={loadStats} />}
-                {activeTab === 'compose' && <ComposeTab onStatsChange={loadStats} />}
-                {activeTab === 'images' && <ImagesTab onStatsChange={loadStats} />}
-                {activeTab === 'networks' && <NetworksTab onStatsChange={loadStats} />}
-                {activeTab === 'volumes' && <VolumesTab onStatsChange={loadStats} />}
+                    <div className="dx-panel">
+                        {activeTab === 'containers' && <ContainersTab onStatsChange={loadStats} />}
+                        {activeTab === 'compose' && <ComposeTab onStatsChange={loadStats} />}
+                        {activeTab === 'images' && <ImagesTab onStatsChange={loadStats} />}
+                        {activeTab === 'networks' && <NetworksTab onStatsChange={loadStats} />}
+                        {activeTab === 'volumes' && <VolumesTab onStatsChange={loadStats} />}
+                    </div>
+                </main>
             </div>
         </div>
         </ServerContext.Provider>
@@ -533,10 +574,91 @@ const ContainersTab = ({ onStatsChange }) => {
     const [execContainer, setExecContainer] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [sortKey, setSortKey] = useState('status');
+    const [sortDirection, setSortDirection] = useState('asc');
+    const statsRequestSeq = useRef(0);
 
     useEffect(() => {
         loadContainers();
     }, [showAll, serverId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const fetchContainerStats = useCallback(async (container) => {
+        const containerId = getContainerId(container);
+        if (!containerId) return null;
+
+        if (isRemote) {
+            const result = await api.getRemoteContainerStats(serverId, containerId);
+            const payload = unwrapRemoteData(result);
+            return payload?.stats || payload;
+        }
+
+        const statsData = await api.getContainerStats(containerId);
+        return statsData.stats;
+    }, [isRemote, serverId]);
+
+    const refreshContainerStats = useCallback(async (containerList, requestSeq = statsRequestSeq.current) => {
+        const runningContainers = containerList.filter(isContainerRunning);
+        if (runningContainers.length === 0) return;
+
+        if (!isRemote) {
+            const containerIds = runningContainers.map(getContainerId).filter(Boolean);
+            if (containerIds.length === 0) return;
+
+            const resolveStats = (statsMap, container) => {
+                const containerId = getContainerId(container);
+                const containerName = getContainerName(container);
+                return statsMap[containerId] ||
+                    statsMap[containerName] ||
+                    statsMap[`/${containerName}`] ||
+                    null;
+            };
+
+            try {
+                const statsData = await api.getContainersStats(containerIds);
+                if (requestSeq !== statsRequestSeq.current) return;
+                const statsMap = statsData?.stats || {};
+                setContainerStats(prev => {
+                    const next = { ...prev };
+                    runningContainers.forEach(container => {
+                        next[getContainerId(container)] = resolveStats(statsMap, container);
+                    });
+                    return next;
+                });
+            } catch {
+                if (requestSeq !== statsRequestSeq.current) return;
+                setContainerStats(prev => {
+                    const next = { ...prev };
+                    runningContainers.forEach(container => {
+                        next[getContainerId(container)] = null;
+                    });
+                    return next;
+                });
+            }
+            return;
+        }
+
+        await Promise.all(runningContainers.map(async (container) => {
+            const containerId = getContainerId(container);
+            try {
+                const stats = await fetchContainerStats(container);
+                if (requestSeq !== statsRequestSeq.current || !stats) return;
+                setContainerStats(prev => ({ ...prev, [containerId]: stats }));
+            } catch {
+                if (requestSeq !== statsRequestSeq.current) return;
+                setContainerStats(prev => ({ ...prev, [containerId]: null }));
+            }
+        }));
+    }, [fetchContainerStats, isRemote]);
+
+    useEffect(() => {
+        if (loading || containers.length === 0) return undefined;
+
+        const timer = window.setInterval(() => {
+            refreshContainerStats(containers, statsRequestSeq.current);
+        }, 10000);
+
+        return () => window.clearInterval(timer);
+    }, [containers, loading, refreshContainerStats]);
 
     async function loadContainers() {
         setLoading(true);
@@ -549,38 +671,15 @@ const ContainersTab = ({ onStatsChange }) => {
                 data = await api.getContainers(showAll);
             }
             const containerList = data.containers || [];
+            const requestSeq = ++statsRequestSeq.current;
             setContainers(containerList);
             setContainerStats({});
             setSelectedContainer(prev => {
-                if (!containerList.length) return null;
-                if (!prev) return containerList[0];
-                return containerList.find(c => getContainerId(c) === getContainerId(prev)) || containerList[0];
+                if (!containerList.length || !prev) return null;
+                return containerList.find(c => getContainerId(c) === getContainerId(prev)) || null;
             });
             setLoading(false);
-
-            // Load stats for running containers
-            const runningContainers = containerList.filter(isContainerRunning);
-            const statsPromises = runningContainers.map(async (c) => {
-                try {
-                    let statsData;
-                    if (isRemote) {
-                        const result = await api.getRemoteContainerStats(serverId, getContainerId(c));
-                        statsData = { stats: unwrapRemoteData(result) };
-                    } else {
-                        statsData = await api.getContainerStats(getContainerId(c));
-                    }
-                    return { id: getContainerId(c), stats: statsData.stats };
-                } catch {
-                    return { id: getContainerId(c), stats: null };
-                }
-            });
-
-            const statsResults = await Promise.all(statsPromises);
-            const statsMap = {};
-            statsResults.forEach(({ id, stats }) => {
-                if (stats) statsMap[id] = stats;
-            });
-            setContainerStats(statsMap);
+            refreshContainerStats(containerList, requestSeq);
         } catch (err) {
             console.error('Failed to load containers:', err);
             setLoading(false);
@@ -629,17 +728,18 @@ const ContainersTab = ({ onStatsChange }) => {
     }
 
     function parseStats(stats) {
-        if (!stats) return { cpu: 0, memory: 0 };
+        if (!stats) return { cpu: 0, memory: 0, available: false };
+        const source = stats.stats || stats;
+        const parsePercent = (value) => {
+            if (typeof value === 'number') return value;
+            if (value === null || value === undefined) return 0;
+            return parseFloat(String(value).replace('%', '')) || 0;
+        };
 
-        // CPU comes as "0.12%" format
-        const cpuStr = stats.CPUPerc || stats.cpu_percent || '0%';
-        const cpu = parseFloat(cpuStr.replace('%', '')) || 0;
+        const cpu = parsePercent(source.CPUPerc ?? source.cpu_percent ?? source.cpu?.percent);
+        const memory = parsePercent(source.MemPerc ?? source.memory_percent ?? source.memory?.percent);
 
-        // Memory comes as "0.12%" format
-        const memStr = stats.MemPerc || stats.memory_percent || '0%';
-        const memory = parseFloat(memStr.replace('%', '')) || 0;
-
-        return { cpu, memory };
+        return { cpu, memory, available: true };
     }
 
     const counts = useMemo(() => {
@@ -648,19 +748,52 @@ const ContainersTab = ({ onStatsChange }) => {
         return c;
     }, [containers]);
 
-    const filteredContainers = containers.filter(c => {
-        if (statusFilter === 'running' && !isContainerRunning(c)) return false;
-        if (statusFilter === 'stopped' && isContainerRunning(c)) return false;
-        if (!searchTerm) return true;
+    const filteredContainers = useMemo(() => {
         const search = searchTerm.toLowerCase();
-        return getContainerName(c).toLowerCase().includes(search) ||
-               getContainerId(c).toLowerCase().includes(search) ||
-               getContainerImage(c).toLowerCase().includes(search);
-    });
+        const filtered = containers.filter(c => {
+            if (statusFilter === 'running' && !isContainerRunning(c)) return false;
+            if (statusFilter === 'stopped' && isContainerRunning(c)) return false;
+            if (!search) return true;
+            return getContainerName(c).toLowerCase().includes(search) ||
+                   getContainerId(c).toLowerCase().includes(search) ||
+                   getContainerImage(c).toLowerCase().includes(search);
+        });
+
+        const direction = sortDirection === 'asc' ? 1 : -1;
+        const statusRank = (container) => isContainerRunning(container) ? 0 : 1;
+        const createdTime = (container) => {
+            const raw = container.created || container.CreatedAt || '';
+            const parsed = Date.parse(raw);
+            return Number.isNaN(parsed) ? 0 : parsed;
+        };
+
+        return [...filtered].sort((a, b) => {
+            const statsA = parseStats(containerStats[getContainerId(a)]);
+            const statsB = parseStats(containerStats[getContainerId(b)]);
+            let result = 0;
+
+            if (sortKey === 'status') {
+                result = statusRank(a) - statusRank(b) ||
+                    getContainerStatus(a).localeCompare(getContainerStatus(b));
+            } else if (sortKey === 'name') {
+                result = getContainerName(a).localeCompare(getContainerName(b));
+            } else if (sortKey === 'image') {
+                result = getContainerImage(a).localeCompare(getContainerImage(b));
+            } else if (sortKey === 'cpu') {
+                result = statsA.cpu - statsB.cpu;
+            } else if (sortKey === 'memory') {
+                result = statsA.memory - statsB.memory;
+            } else if (sortKey === 'created') {
+                result = createdTime(a) - createdTime(b);
+            }
+
+            return result * direction;
+        });
+    }, [containers, statusFilter, searchTerm, sortKey, sortDirection, containerStats]);
 
     const selectedStats = selectedContainer
         ? parseStats(containerStats[getContainerId(selectedContainer)])
-        : { cpu: 0, memory: 0 };
+        : { cpu: 0, memory: 0, available: false };
 
     if (loading) {
         return (
@@ -691,6 +824,24 @@ const ContainersTab = ({ onStatsChange }) => {
                     ))}
                 </div>
                 <div className="dx-tab-toolbar-right">
+                    <div className="dx-sort-control">
+                        <span>Sort</span>
+                        <select value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+                            <option value="status">Status</option>
+                            <option value="name">Name</option>
+                            <option value="image">Image</option>
+                            <option value="cpu">CPU</option>
+                            <option value="memory">RAM</option>
+                            <option value="created">Created</option>
+                        </select>
+                        <button
+                            className="lv-icon-btn"
+                            onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                            title={`Sort ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+                        >
+                            <ArrowUpDown size={13} />
+                        </button>
+                    </div>
                     <label className="dx-toggle">
                         <input
                             type="checkbox"
@@ -827,15 +978,18 @@ const ContainersTab = ({ onStatsChange }) => {
                             </table>
                         </div>
                     </section>
-
-                    <ContainerInspector
-                        container={selectedContainer}
-                        stats={selectedStats}
-                        onAction={handleAction}
-                        onOpenLogs={setLogsContainer}
-                        onOpenExec={setExecContainer}
-                    />
                 </div>
+            )}
+
+            {selectedContainer && (
+                <ContainerInspector
+                    container={selectedContainer}
+                    stats={selectedStats}
+                    onAction={handleAction}
+                    onOpenLogs={setLogsContainer}
+                    onOpenExec={setExecContainer}
+                    onClose={() => setSelectedContainer(null)}
+                />
             )}
 
             {logsContainer && (
@@ -866,20 +1020,20 @@ const ContainersTab = ({ onStatsChange }) => {
 };
 
 const ContainerResourceBars = ({ stats, muted = false }) => (
-    <div className={`dx-mini-resources ${muted ? 'is-muted' : ''}`}>
+    <div className={`dx-mini-resources ${muted || !stats.available ? 'is-muted' : ''}`}>
         <div className="dx-mini-resource">
             <span>CPU</span>
             <div className="dx-res-track">
-                <div className="dx-res-fill cpu" style={{ width: `${Math.min(stats.cpu, 100)}%` }} />
+                <div className="dx-res-fill cpu" style={{ width: `${stats.available ? Math.min(stats.cpu, 100) : 0}%` }} />
             </div>
-            <strong>{stats.cpu.toFixed(1)}%</strong>
+            <strong>{stats.available ? `${stats.cpu.toFixed(1)}%` : '--'}</strong>
         </div>
         <div className="dx-mini-resource">
             <span>RAM</span>
             <div className="dx-res-track">
-                <div className="dx-res-fill mem" style={{ width: `${Math.min(stats.memory, 100)}%` }} />
+                <div className="dx-res-fill mem" style={{ width: `${stats.available ? Math.min(stats.memory, 100) : 0}%` }} />
             </div>
-            <strong>{stats.memory.toFixed(1)}%</strong>
+            <strong>{stats.available ? `${stats.memory.toFixed(1)}%` : '--'}</strong>
         </div>
     </div>
 );
@@ -893,7 +1047,7 @@ const maskEnvValue = (entry) => {
     return entry;
 };
 
-const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec }) => {
+const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec, onClose }) => {
     const toast = useToast();
     const { serverId, isRemote } = useServer();
     const [details, setDetails] = useState(null);
@@ -903,6 +1057,7 @@ const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec
 
     useEffect(() => {
         let mounted = true;
+        let loadingTimer;
 
         async function loadDetails() {
             if (!container) {
@@ -911,6 +1066,9 @@ const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec
             }
 
             setLoading(true);
+            loadingTimer = window.setTimeout(() => {
+                if (mounted) setLoading(false);
+            }, 2500);
             setActiveSection('overview');
             try {
                 let data;
@@ -925,22 +1083,20 @@ const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec
                 console.error('Failed to inspect container:', err);
                 if (mounted) setDetails(null);
             } finally {
+                window.clearTimeout(loadingTimer);
                 if (mounted) setLoading(false);
             }
         }
 
         loadDetails();
-        return () => { mounted = false; };
+        return () => {
+            mounted = false;
+            window.clearTimeout(loadingTimer);
+        };
     }, [container, containerId, serverId, isRemote]);
 
     if (!container) {
-        return (
-            <aside className="dx-inspector dx-inspector-empty">
-                <Info size={24} />
-                <h3>Select a container</h3>
-                <p>Use the list to inspect ports, mounts, networks, labels, and live resource usage.</p>
-            </aside>
-        );
+        return null;
     }
 
     const isRunning = isContainerRunning(container);
@@ -963,7 +1119,9 @@ const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec
     }
 
     return (
-        <aside className="dx-inspector">
+        <>
+        <div className="dx-drawer-backdrop" onClick={onClose} />
+        <aside className="dx-inspector dx-inspector-drawer">
             <div className="dx-inspector-header">
                 <div className="dx-inspector-icon">
                     <Box size={18} />
@@ -974,6 +1132,9 @@ const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec
                 </div>
                 <button className="dx-row-action" onClick={copyContainerId} title="Copy container ID">
                     <Copy size={13} />
+                </button>
+                <button className="dx-row-action" onClick={onClose} title="Close details">
+                    <X size={13} />
                 </button>
             </div>
 
@@ -1115,6 +1276,7 @@ const ContainerInspector = ({ container, stats, onAction, onOpenLogs, onOpenExec
                 )}
             </div>
         </aside>
+        </>
     );
 };
 

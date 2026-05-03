@@ -1731,3 +1731,404 @@
         grid-template-columns: 1fr;
     }
 }
+
+// Docker workspace polish: File Manager-style rail + click-open details drawer
+.docker-page-new.dx-page {
+    padding: $space-3;
+    gap: $space-3;
+    background: transparent;
+
+    .page-header,
+    .lv-header,
+    .dx-stats-row,
+    .dx-tabs {
+        display: none;
+    }
+}
+
+.dx-workspace {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 252px minmax(0, 1fr);
+    gap: $space-3;
+    overflow: hidden;
+}
+
+.dx-docker-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+
+    &::-webkit-scrollbar { width: 4px; }
+    &::-webkit-scrollbar-thumb { background: $border-default; border-radius: $radius-sm; }
+}
+
+.dx-sidebar-section {
+    background: $bg-card;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.dx-sidebar-section-header {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-3;
+    background: $bg-elevated;
+    border-bottom: 1px solid $border-subtle;
+    color: $text-primary;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+
+    svg {
+        color: $accent-primary;
+        flex-shrink: 0;
+    }
+}
+
+.dx-sidebar-section-content {
+    padding: $space-2;
+
+    .btn,
+    button {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+.dx-resource-nav {
+    display: grid;
+    gap: 2px;
+    padding: $space-2;
+}
+
+.dx-resource-nav-item {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: $space-2;
+    width: 100%;
+    min-height: 34px;
+    padding: 0 $space-2;
+    border: none;
+    border-radius: $radius-md;
+    background: transparent;
+    color: $text-secondary;
+    font-size: $font-size-sm;
+    text-align: left;
+    cursor: pointer;
+    @include transition(all);
+
+    svg {
+        color: $text-tertiary;
+    }
+
+    span {
+        @include truncate();
+    }
+
+    strong {
+        min-width: 24px;
+        padding: 1px 7px;
+        border-radius: $radius-full;
+        background: $bg-tertiary;
+        color: $text-tertiary;
+        font-family: $font-mono;
+        font-size: 10px;
+        font-weight: $font-weight-medium;
+        text-align: center;
+    }
+
+    &:hover {
+        background: $bg-hover;
+        color: $text-primary;
+    }
+
+    &.active {
+        background: $accent-glow;
+        color: $accent-primary;
+
+        svg { color: $accent-primary; }
+        strong {
+            background: fade($accent-primary-raw, 18%);
+            color: $accent-primary;
+        }
+    }
+}
+
+.dx-inventory-list {
+    display: grid;
+    gap: 1px;
+    padding: $space-2;
+}
+
+.dx-inventory-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
+    min-height: 30px;
+    padding: 0 $space-2;
+    border-radius: $radius-md;
+
+    span {
+        color: $text-secondary;
+        font-size: $font-size-xs;
+    }
+
+    strong {
+        color: $text-primary;
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-medium;
+        @include truncate();
+    }
+}
+
+.dx-main {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+}
+
+.dx-workbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-3;
+    min-height: 46px;
+    padding: $space-2;
+    background: $bg-card;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    flex-shrink: 0;
+}
+
+.dx-workbar-title {
+    display: flex;
+    align-items: baseline;
+    gap: $space-2;
+    min-width: 0;
+
+    span {
+        color: $text-tertiary;
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    strong {
+        color: $text-primary;
+        font-size: $font-size-base;
+        font-weight: $font-weight-semibold;
+    }
+
+    em {
+        color: $text-tertiary;
+        font-size: $font-size-xs;
+        font-style: normal;
+        @include truncate();
+    }
+}
+
+.dx-workbar-actions {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex-wrap: wrap;
+
+    .btn,
+    button {
+        min-height: 32px;
+    }
+}
+
+.dx-panel {
+    flex: 1;
+    min-height: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.dx-tab-pane {
+    padding: 0;
+}
+
+.dx-containers-pane {
+    gap: $space-2;
+}
+
+.dx-tab-toolbar {
+    margin: 0;
+    padding: $space-2;
+    background: $bg-card;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+}
+
+.dx-tab-toolbar-right {
+    margin-left: auto;
+}
+
+.dx-sort-control {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+
+    span {
+        color: $text-tertiary;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-semibold;
+    }
+
+    select {
+        height: 32px;
+        min-width: 108px;
+        padding: 0 $space-6 0 $space-2;
+        border: 1px solid $border-default;
+        border-radius: $radius-md;
+        background: $bg-elevated;
+        color: $text-primary;
+        font-size: $font-size-xs;
+        outline: none;
+
+        &:focus {
+            border-color: $accent-primary;
+            box-shadow: 0 0 0 2px $accent-glow;
+        }
+    }
+}
+
+.dx-manager-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+}
+
+.dx-resource-list {
+    background: $bg-card;
+    border-color: $border-default;
+}
+
+.dx-table-wrap {
+    background: $bg-card;
+}
+
+.dx-manager-table {
+    th {
+        background: $bg-elevated;
+    }
+
+    th,
+    td {
+        padding: $space-3;
+    }
+
+    tbody tr {
+        background: $bg-card;
+
+        &:hover {
+            background: $bg-hover;
+        }
+
+        &.is-selected {
+            background: $accent-glow;
+        }
+    }
+}
+
+.dx-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.08);
+    backdrop-filter: none;
+    z-index: $z-modal-backdrop;
+    animation: drawer-fade 0.18s ease;
+}
+
+.dx-inspector-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(540px, 100vw);
+    max-width: 100%;
+    box-sizing: border-box;
+    background: $bg-card;
+    border: none;
+    border-left: 1px solid $border-default;
+    border-radius: 0;
+    box-shadow: -10px 0 36px rgba(0, 0, 0, 0.42);
+    z-index: $z-modal;
+    animation: drawer-slide 0.24s cubic-bezier(0.32, 0.72, 0.24, 1);
+}
+
+@keyframes drawer-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes drawer-slide {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+@media (max-width: $breakpoint-xl) {
+    .dx-workspace {
+        grid-template-columns: 220px minmax(0, 1fr);
+    }
+}
+
+@media (max-width: $breakpoint-lg) {
+    .dx-workspace {
+        grid-template-columns: 1fr;
+        overflow: auto;
+    }
+
+    .dx-docker-sidebar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: visible;
+    }
+
+    .dx-main {
+        min-height: 620px;
+    }
+}
+
+@media (max-width: $breakpoint-md) {
+    .dx-docker-sidebar {
+        grid-template-columns: 1fr;
+    }
+
+    .dx-workbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .dx-workbar-actions {
+        width: 100%;
+
+        > * {
+            flex: 1;
+        }
+    }
+
+    .dx-tab-toolbar-right {
+        margin-left: 0;
+    }
+
+    .dx-inspector-drawer {
+        width: 100%;
+    }
+}

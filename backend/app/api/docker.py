@@ -169,6 +169,20 @@ def get_container_logs(container_id):
     return jsonify(result), 200
 
 
+@docker_bp.route('/containers/stats', methods=['POST'])
+@jwt_required()
+def get_containers_stats():
+    """Get resource stats for multiple containers."""
+    data = request.get_json() or {}
+    container_ids = data.get('ids') or data.get('container_ids') or []
+
+    if not isinstance(container_ids, list):
+        return jsonify({'error': 'ids must be a list'}), 400
+
+    stats = DockerService.get_containers_stats(container_ids)
+    return jsonify({'stats': stats}), 200
+
+
 @docker_bp.route('/containers/<container_id>/stats', methods=['GET'])
 @jwt_required()
 def get_container_stats(container_id):
