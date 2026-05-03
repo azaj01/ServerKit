@@ -20,6 +20,12 @@ export function AuthProvider({ children }) {
         checkSetupStatus();
     }, []);
 
+    useEffect(() => {
+        const handleAuthExpired = () => setUser(null);
+        window.addEventListener('serverkit:auth-expired', handleAuthExpired);
+        return () => window.removeEventListener('serverkit:auth-expired', handleAuthExpired);
+    }, []);
+
     async function checkSetupStatus(retries = 3) {
         try {
             const status = await api.getSetupStatus();
@@ -60,7 +66,9 @@ export function AuthProvider({ children }) {
                 const data = await api.getCurrentUser();
                 setUser(data.user);
             } catch (error) {
-                console.error('Auth check failed:', error);
+                if (error.status !== 401) {
+                    console.error('Auth check failed:', error);
+                }
                 api.clearTokens();
             }
         }

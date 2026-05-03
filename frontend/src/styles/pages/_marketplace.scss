@@ -714,44 +714,6 @@
         }
     }
 
-    .marketplace-submit-modal {
-        max-width: 680px;
-
-        .modal-header {
-            align-items: flex-start;
-
-            h2 {
-                margin-bottom: $space-1;
-            }
-
-            p {
-                margin: 0;
-                font-size: $font-size-sm;
-            }
-        }
-
-        .modal-close {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-
-            svg {
-                width: 18px;
-                height: 18px;
-            }
-        }
-    }
-
-    .marketplace-submit-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: $space-4;
-
-        .form-group--full {
-            grid-column: 1 / -1;
-        }
-    }
-
     @media (max-width: 1180px) {
         .marketplace-browse-grid {
             grid-template-columns: 1fr;
@@ -821,8 +783,7 @@
         }
 
         .marketplace-stats,
-        .marketplace-side-panel,
-        .marketplace-submit-grid {
+        .marketplace-side-panel {
             grid-template-columns: 1fr;
         }
 

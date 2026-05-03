@@ -19,27 +19,16 @@ import {
     Sparkles,
     Star,
     UploadCloud,
-    X,
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const CATEGORIES = ['monitoring', 'security', 'deployment', 'integration', 'ui', 'utility'];
-
-const INITIAL_EXTENSION_FORM = {
-    name: '',
-    display_name: '',
-    description: '',
-    category: 'utility',
-    version: '1.0.0',
-    author: '',
-};
 
 const CATEGORY_ICONS = {
     monitoring: Activity,
@@ -142,13 +131,12 @@ const Marketplace = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [category, setCategory] = useState('');
-    const [showSubmit, setShowSubmit] = useState(false);
+    const [activeTab, setActiveTab] = useState('browse');
     const [pluginUrl, setPluginUrl] = useState('');
     const [pluginPath, setPluginPath] = useState('');
     const [pluginFile, setPluginFile] = useState(null);
     const [installSource, setInstallSource] = useState('url');
     const [installing, setInstalling] = useState(false);
-    const [form, setForm] = useState(INITIAL_EXTENSION_FORM);
 
     const loadExtensions = useCallback(async () => {
         try {
@@ -251,19 +239,14 @@ const Marketplace = () => {
         } catch (err) { toast.error(err.message); }
     };
 
-    const handleSubmit = async () => {
-        try {
-            await api.createMarketplaceExtension(form);
-            toast.success('Extension submitted');
-            setShowSubmit(false);
-            setForm(INITIAL_EXTENSION_FORM);
-            loadExtensions();
-        } catch (err) { toast.error(err.message); }
-    };
-
     const resetFilters = () => {
         setSearch('');
         setCategory('');
+    };
+
+    const openZipInstaller = () => {
+        setInstallSource('upload');
+        setActiveTab('plugins');
     };
 
     const pluginStatusVariant = (status) => {
@@ -309,9 +292,9 @@ const Marketplace = () => {
                     </div>
                 </div>
                 <div className="marketplace-hero__actions">
-                    <Button variant="outline" onClick={() => setShowSubmit(true)}>
+                    <Button variant="outline" onClick={openZipInstaller}>
                         <UploadCloud aria-hidden="true" />
-                        Submit Extension
+                        Import ZIP
                     </Button>
                 </div>
             </section>
@@ -323,7 +306,7 @@ const Marketplace = () => {
                 <StatTile icon={PlugZap} label="Active Plugins" value={`${activePluginCount}/${plugins.length}`} tone={pluginIssueCount > 0 ? 'red' : 'violet'} />
             </div>
 
-            <Tabs defaultValue="browse" className="marketplace-tabs">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="marketplace-tabs">
                 <TabsList className="marketplace-tabs__list">
                     <TabsTrigger value="browse">
                         <LayoutGrid aria-hidden="true" />
@@ -604,54 +587,6 @@ const Marketplace = () => {
                 </TabsContent>
             </Tabs>
 
-            {showSubmit && (
-                <div className="modal-overlay" onClick={() => setShowSubmit(false)}>
-                    <div className="modal marketplace-submit-modal" onClick={(event) => event.stopPropagation()}>
-                        <div className="modal-header">
-                            <div>
-                                <h2>Submit Extension</h2>
-                                <p className="text-muted">Publish a package listing to the local marketplace index.</p>
-                            </div>
-                            <button
-                                className="modal-close"
-                                type="button"
-                                aria-label="Close submit extension dialog"
-                                onClick={() => setShowSubmit(false)}
-                            >
-                                <X aria-hidden="true" />
-                            </button>
-                        </div>
-                        <div className="modal-body marketplace-submit-grid">
-                            <div className="form-group">
-                                <label>Name</label>
-                                <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label>Display Name</label>
-                                <Input value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} />
-                            </div>
-                            <div className="form-group form-group--full">
-                                <label>Description</label>
-                                <Textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={3} />
-                            </div>
-                            <div className="form-group">
-                                <label>Category</label>
-                                <select className="form-select" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
-                                    {CATEGORIES.map((item) => <option key={item} value={item}>{titleCase(item)}</option>)}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>Author</label>
-                                <Input value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} />
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <Button variant="outline" onClick={() => setShowSubmit(false)}>Cancel</Button>
-                            <Button onClick={handleSubmit} disabled={!form.name}>Submit</Button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

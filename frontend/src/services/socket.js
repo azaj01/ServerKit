@@ -1,6 +1,11 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || window.location.origin;
+const getSocketUrl = () => {
+    if (import.meta.env.DEV) return window.location.origin;
+    return import.meta.env.VITE_API_URL?.replace(/\/api\/v1\/?$/, '') || window.location.origin;
+};
+
+const SOCKET_URL = getSocketUrl();
 
 class SocketService {
     constructor() {

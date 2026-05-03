@@ -22,7 +22,7 @@ import { useContributions, resolveComponent, getPluginModule } from './contribut
 
 const pluginModules = import.meta.glob('./*/index.{js,jsx}', { eager: true });
 
-export function getInstalledPlugins() {
+function getInstalledPlugins() {
     const plugins = [];
     for (const [path, mod] of Object.entries(pluginModules)) {
         const match = path.match(/^\.\/([^/]+)\/index\.(?:js|jsx)$/);

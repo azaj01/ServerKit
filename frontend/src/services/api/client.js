@@ -1,6 +1,18 @@
-// Base HTTP client — constructor, token management, core request methods
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
-    (import.meta.env.PROD ? '/api/v1' : '/api/v1');
+// Base HTTP client - constructor, token management, core request methods
+const AUTH_EXPIRED_EVENT = 'serverkit:auth-expired';
+
+const normalizeApiBaseUrl = (url) => {
+    if (!url) return '/api/v1';
+    const trimmed = url.replace(/\/+$/, '');
+    return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
+};
+
+// In dev, keep browser requests same-origin so Vite can proxy /api to the
+// configured backend target. Calling VITE_API_URL directly bypasses that
+// proxy and exposes CORS/preflight redirects in the browser.
+const API_BASE_URL = import.meta.env.DEV
+    ? '/api/v1'
+    : normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
 class ApiClient {
     constructor() {
@@ -47,41 +59,36 @@ class ApiClient {
             config.body = JSON.stringify(options.body);
         }
 
-        try {
-            const response = await fetch(url, config);
+        const response = await fetch(url, config);
 
-            if (response.status === 401) {
-                // flask-jwt-extended returns 401 with `{"msg": "..."}` when
-                // the token is the problem; domain endpoints (e.g. wrong
-                // pair-code passphrase) return `{"error": "..."}`. Only the
-                // former should trigger a token refresh — refreshing on a
-                // domain 401 wastes a backend round-trip and burns through
-                // rate limits twice as fast.
-                const probe = await response.clone().json().catch(() => ({}));
-                const isJwtIssue = probe && probe.msg && !probe.error;
+        if (response.status === 401) {
+            // flask-jwt-extended returns 401 with `{"msg": "..."}` when
+            // the token is the problem; domain endpoints (e.g. wrong
+            // pair-code passphrase) return `{"error": "..."}`. Only the
+            // former should trigger a token refresh — refreshing on a
+            // domain 401 wastes a backend round-trip and burns through
+            // rate limits twice as fast.
+            const probe = await response.clone().json().catch(() => ({}));
+            const isJwtIssue = probe && probe.msg && !probe.error;
 
-                if (isJwtIssue) {
-                    const refreshed = await this.refreshToken();
-                    if (refreshed) {
-                        config.headers.Authorization = `Bearer ${this.getToken()}`;
-                        const retryResponse = await fetch(url, config);
-                        return this.handleResponse(retryResponse);
-                    }
-                    this.clearTokens();
-                    window.location.href = '/login';
-                    const err = new Error('Session expired');
-                    err.status = 401;
-                    throw err;
+            if (isJwtIssue) {
+                const refreshed = await this.refreshToken();
+                if (refreshed) {
+                    config.headers.Authorization = `Bearer ${this.getToken()}`;
+                    const retryResponse = await fetch(url, config);
+                    return this.handleResponse(retryResponse);
                 }
-                // Domain 401 — fall through so handleResponse throws the
-                // server's error message verbatim, with status attached.
+                this.clearTokens();
+                window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+                const err = new Error('Session expired');
+                err.status = 401;
+                throw err;
             }
-
-            return this.handleResponse(response);
-        } catch (error) {
-            console.error('API Error:', error);
-            throw error;
+            // Domain 401 — fall through so handleResponse throws the
+            // server's error message verbatim, with status attached.
         }
+
+        return this.handleResponse(response);
     }
 
     async handleResponse(response) {

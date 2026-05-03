@@ -9,4 +9,6 @@
 // so the relative import resolves against the host's pages directory.
 import GitPage from '../../pages/Git';
 
-export const GitExtPage = GitPage;
+export function GitExtPage() {
+    return <GitPage basePath="/git-ext" />;
+}

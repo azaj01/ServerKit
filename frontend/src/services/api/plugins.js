@@ -1,8 +1,8 @@
 // Plugin management API methods
 
 export async function getInstalledPlugins(status) {
-    const params = status ? `?status=${status}` : '';
-    return this.request(`/plugins${params}`);
+    const params = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request(`/plugins/${params}`);
 }
 
 export async function getPlugin(pluginId) {

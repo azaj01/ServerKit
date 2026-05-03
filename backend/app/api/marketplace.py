@@ -13,6 +13,7 @@ def get_current_user():
     return User.query.get(get_jwt_identity())
 
 
+@marketplace_bp.route('', methods=['GET'])
 @marketplace_bp.route('/', methods=['GET'])
 @jwt_required()
 def list_extensions():
@@ -37,6 +38,7 @@ def get_extension(ext_id):
     return jsonify(ext.to_dict())
 
 
+@marketplace_bp.route('', methods=['POST'])
 @marketplace_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_extension():

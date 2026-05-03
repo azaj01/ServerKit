@@ -20,17 +20,34 @@
  */
 import { useEffect, useState } from 'react';
 import api from '../services/api';
+import pluginsManifest from './plugins-manifest.json';
 
 // Discover every plugin module at build time. Each plugin is expected to
 // expose its components from src/plugins/<slug>/index.{js,jsx}.
 const pluginModules = import.meta.glob('../plugins/*/index.{js,jsx}', { eager: true });
+const pluginManifestModules = import.meta.glob('../plugins/*/plugin.json', { eager: true });
+
+function slugFromPluginPath(path, filenamePattern) {
+    const m = path.match(new RegExp(`(?:^\\./|/plugins/)([^/]+)/${filenamePattern}$`));
+    return m ? m[1] : null;
+}
 
 const moduleBySlug = (() => {
     const out = {};
     for (const [path, mod] of Object.entries(pluginModules)) {
-        const m = path.match(/\/plugins\/([^/]+)\/index\.(?:js|jsx)$/);
-        if (!m) continue;
-        out[m[1]] = mod;
+        const slug = slugFromPluginPath(path, 'index\\.(?:js|jsx)');
+        if (!slug || slug === 'sdk') continue;
+        out[slug] = mod;
+    }
+    return out;
+})();
+
+const localManifestBySlug = (() => {
+    const out = {};
+    for (const [path, mod] of Object.entries(pluginManifestModules)) {
+        const slug = slugFromPluginPath(path, 'plugin\\.json');
+        if (!slug) continue;
+        out[slug] = mod.default || mod;
     }
     return out;
 })();
@@ -59,6 +76,53 @@ const EMPTY = {
     widgets: [],
     layouts: [],
 };
+
+function tagItems(items, slug) {
+    return (items || [])
+        .filter((item) => item && typeof item === 'object')
+        .map((item) => ({ ...item, plugin: slug }));
+}
+
+function getBuildTimeContributions() {
+    const installed = Array.isArray(pluginsManifest?.plugins)
+        ? pluginsManifest.plugins
+        : [];
+
+    const nav = [];
+    const routes = [];
+    const page_titles = {};
+    const command_palette = [];
+    const widgets = [];
+    const layouts = [];
+
+    for (const entry of installed) {
+        const slug = entry?.slug || entry?.name;
+        if (!slug) continue;
+
+        const manifest = localManifestBySlug[slug];
+        const contrib = manifest?.contributions;
+        if (!contrib || typeof contrib !== 'object') continue;
+
+        nav.push(...tagItems(contrib.nav, slug));
+        routes.push(...tagItems(contrib.routes, slug));
+        command_palette.push(...tagItems(contrib.command_palette, slug));
+        widgets.push(...tagItems(contrib.widgets, slug));
+        layouts.push(...tagItems(contrib.layouts, slug));
+
+        if (contrib.page_titles && typeof contrib.page_titles === 'object') {
+            Object.assign(page_titles, contrib.page_titles);
+        }
+    }
+
+    return {
+        nav,
+        routes,
+        page_titles,
+        command_palette,
+        widgets,
+        layouts,
+    };
+}
 
 // Built-in layout ids. These are reserved — a plugin can't redefine them.
 //   padded  → routes go inside DashboardLayout, normal padding (default)
@@ -103,10 +167,13 @@ export function refreshContributions() {
             return merged;
         })
         .catch(() => {
-            // No active plugins / endpoint missing / unauthenticated —
-            // fall back to an empty envelope so the host renders normally.
-            notify(EMPTY);
-            return EMPTY;
+            // If the backend contribution endpoint is unavailable (common
+            // while running only the Vite dev server), use the active plugin
+            // manifest baked into this frontend build instead of leaving
+            // contributed routes blank.
+            const fallback = getBuildTimeContributions();
+            notify(fallback);
+            return fallback;
         });
     return cachedPromise;
 }

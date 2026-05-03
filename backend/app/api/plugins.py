@@ -20,6 +20,7 @@ def get_current_user():
     return User.query.get(get_jwt_identity())
 
 
+@plugins_bp.route('', methods=['GET'])
 @plugins_bp.route('/', methods=['GET'])
 @jwt_required()
 def list_plugins():

@@ -12,10 +12,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const VALID_TABS = ['overview', 'repositories', 'access', 'webhooks', 'deployments', 'settings'];
 
-function Git() {
+function Git({ basePath = '/git' }) {
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useTabParam('/git', VALID_TABS);
+    const [activeTab, setActiveTab] = useTabParam(basePath, VALID_TABS);
     const [showInstallModal, setShowInstallModal] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
     const [confirmDialog, setConfirmDialog] = useState(null);
