@@ -27,6 +27,7 @@
 /backend/*.pyd
 /backend/.env
 /backend/.venv
+/backend/.venv-wsl/
 /backend/pip-log.txt
 /backend/pip-delete-this-directory.txt
 /backend/dev-data/
@@ -54,6 +55,7 @@
 *.csr
 /backend/.env
 /frontend/.env.local
+/frontend/.env.development.local
 
 # Docker
 .docker-compose.untracked.yml
@@ -110,3 +112,4 @@ UI_REPORT.md
 !agent/internal/setupui/serverkit_header.png
 docs/PLAN_AGENT_FLEET.md
 /docs/plans
+/.agents

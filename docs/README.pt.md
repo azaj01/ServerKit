@@ -247,7 +247,7 @@ Detalhes completos: [ROADMAP.md](../ROADMAP.md)
 | Camada | Tecnologia |
 |-------|------------|
 | Backend | Python 3.11, Flask, SQLAlchemy, Flask-SocketIO |
-| Frontend | React 18, Vite, LESS |
+| Frontend | React 18, Vite, SCSS |
 | Banco de Dados | SQLite / PostgreSQL |
 | Servidor Web | Nginx, Gunicorn |
 | Containers | Docker, Docker Compose |

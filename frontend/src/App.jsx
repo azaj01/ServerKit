@@ -50,6 +50,8 @@ import StatusPages from './pages/StatusPages';
 import CloudProvision from './pages/CloudProvision';
 import Marketplace from './pages/Marketplace';
 import StyleGuide from './pages/StyleGuide';
+import AppMap from './pages/AppMap';
+import Documentation from './pages/Documentation';
 import Deployments from './pages/Deployments';
 
 // Page title mapping
@@ -92,6 +94,8 @@ const PAGE_TITLES = {
     '/cloud': 'Cloud Provisioning',
     '/marketplace': 'Marketplace',
     '/style-guide': 'Style Guide',
+    '/app-map': 'App Map',
+    '/documentation': 'Documentation',
 };
 
 function PageTitleUpdater() {
@@ -239,6 +243,9 @@ function AppRoutes() {
                 <Route path="marketplace" element={<Marketplace />} />
                 <Route path="style-guide" element={<StyleGuide />} />
                 <Route path="style-guide/:tab" element={<StyleGuide />} />
+                <Route path="app-map" element={<AppMap />} />
+                <Route path="app-map/:tab" element={<AppMap />} />
+                <Route path="documentation" element={<Documentation />} />
                 <Route path="downloads" element={<Downloads />} />
                 <Route path="firewall" element={<Navigate to="/security/firewall" replace />} />
                 <Route path="git" element={<Git />} />

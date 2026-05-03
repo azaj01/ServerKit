@@ -247,7 +247,7 @@ docker compose up -d       # 访问 http://localhost
 | 层级 | 技术 |
 |-------|------------|
 | 后端 | Python 3.11, Flask, SQLAlchemy, Flask-SocketIO |
-| 前端 | React 18, Vite, LESS |
+| 前端 | React 18, Vite, SCSS |
 | 数据库 | SQLite / PostgreSQL |
 | Web 服务器 | Nginx, Gunicorn |
 | 容器 | Docker, Docker Compose |

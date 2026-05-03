@@ -1,18 +1,16 @@
 import {
-    Folder, Eye, Download, Edit3, Lock, Copy, Star, StarOff, Trash2,
+    Folder, Eye, Download, Edit3, Lock, Copy, Trash2,
 } from 'lucide-react';
 
 export default function ContextMenu({
     menu,                  // { x, y, entry }
     selectionCount,        // total items selected
-    isPinned,
     onClose,
     onOpen,
     onDownload,
     onRename,
     onPermissions,
     onCopyPath,
-    onTogglePin,
     onDelete,
 }) {
     if (!menu) return null;
@@ -43,13 +41,6 @@ export default function ContextMenu({
             <button onClick={() => { onCopyPath(entry.path); onClose(); }}>
                 <Copy size={14} /> Copy path
             </button>
-            {entry.is_dir && (
-                <button onClick={() => { onTogglePin(entry); onClose(); }}>
-                    {isPinned(entry.path)
-                        ? <><StarOff size={14} /> Unpin</>
-                        : <><Star size={14} /> Pin to Quick Access</>}
-                </button>
-            )}
             <div className="context-menu-divider" />
             <button className="danger" onClick={() => { onDelete(entry); onClose(); }}>
                 <Trash2 size={14} /> Delete{multi ? ` ${selectionCount} items` : ''}

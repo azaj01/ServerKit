@@ -6,14 +6,12 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import {
     Folder, File, Upload, FolderPlus, FilePlus,
     ArrowLeft, ArrowRight, ArrowUp, Search, X, RefreshCw, Eye, EyeOff,
-    Download, Edit3, Trash2, BarChart3, ChevronDown, ChevronRight,
-    HardDrive, PieChart, Clock, PanelLeftClose, PanelLeftOpen,
-    LayoutGrid, List, Home, CloudUpload, Star, StarOff,
-    Check, Copy, ArrowUpDown, ZoomIn, ZoomOut, Code2, FileJson,
-    Image as ImageIcon, Film, Music, Archive, FileType, FileText,
+    Download, Edit3, Trash2, ChevronDown, ChevronRight,
+    HardDrive, Clock, PanelLeftClose, PanelLeftOpen,
+    LayoutGrid, List, Home, CloudUpload,
+    Check, Copy, ArrowUpDown,
     FolderTree as FolderTreeIcon, MousePointer2,
 } from 'lucide-react';
-import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,7 +22,7 @@ import FileRow from '../components/file-manager/FileRow';
 import PreviewDrawer from '../components/file-manager/PreviewDrawer';
 import ContextMenu from '../components/file-manager/ContextMenu';
 import TargetPicker from '../components/TargetPicker';
-import { TREE_ROOTS, DEFAULT_PINNED, getFileType, formatBytes } from '../components/file-manager/fileTypes';
+import { TREE_ROOTS, getFileType, formatBytes } from '../components/file-manager/fileTypes';
 
 // File manager operations that the agent can serve over file:* commands.
 // Anything else (mkdir, delete, rename, copy, chmod, search, disk usage,
@@ -52,26 +50,23 @@ function unwrapAgentData(res) {
 const STORAGE = {
     sidebar: 'serverkit-fm-sidebar',
     treeCollapsed: 'serverkit-fm-tree-collapsed',
-    quickCollapsed: 'serverkit-fm-quick-collapsed',
     diskCollapsed: 'serverkit-fm-disk-collapsed',
     expanded: 'serverkit-fm-tree-expanded',
     viewMode: 'serverkit-fm-view-mode',
-    gridSize: 'serverkit-fm-grid-size',
     sortBy: 'serverkit-fm-sort-by',
     sortDir: 'serverkit-fm-sort-dir',
-    pinned: 'serverkit-fm-pinned',
 };
 
-const FILTER_CHIPS = [
-    { id: 'all', label: 'All', icon: FileType },
-    { id: 'folder', label: 'Folders', icon: Folder },
-    { id: 'image', label: 'Images', icon: ImageIcon },
-    { id: 'code', label: 'Code', icon: Code2 },
-    { id: 'text', label: 'Documents', icon: FileText },
-    { id: 'data', label: 'Data', icon: FileJson },
-    { id: 'video', label: 'Videos', icon: Film },
-    { id: 'audio', label: 'Audio', icon: Music },
-    { id: 'archive', label: 'Archives', icon: Archive },
+const FILTER_OPTIONS = [
+    { id: 'all', label: 'All' },
+    { id: 'folder', label: 'Folders' },
+    { id: 'image', label: 'Images' },
+    { id: 'code', label: 'Code' },
+    { id: 'text', label: 'Documents' },
+    { id: 'data', label: 'Data' },
+    { id: 'video', label: 'Videos' },
+    { id: 'audio', label: 'Audio' },
+    { id: 'archive', label: 'Archives' },
 ];
 
 function FileManager() {
@@ -124,11 +119,10 @@ function FileManager() {
 
     // ─── view prefs ──────────────────────────────────────
     const [viewMode, setViewMode] = useState(() => localStorage.getItem(STORAGE.viewMode) || 'grid');
-    const [gridSize, setGridSize] = useState(() => localStorage.getItem(STORAGE.gridSize) || 'lg');
+    const gridSize = 'md';
     const [sortBy, setSortBy] = useState(() => localStorage.getItem(STORAGE.sortBy) || 'name');
     const [sortDir, setSortDir] = useState(() => localStorage.getItem(STORAGE.sortDir) || 'asc');
     const [activeFilter, setActiveFilter] = useState('all');
-    const [sortOpen, setSortOpen] = useState(false);
 
     // ─── left sidebar ────────────────────────────────────
     const [sidebarVisible, setSidebarVisible] = useState(() => {
@@ -136,8 +130,10 @@ function FileManager() {
         return v !== null ? v === 'true' : true;
     });
     const [treeCollapsed, setTreeCollapsed] = useState(() => localStorage.getItem(STORAGE.treeCollapsed) === 'true');
-    const [quickCollapsed, setQuickCollapsed] = useState(() => localStorage.getItem(STORAGE.quickCollapsed) === 'true');
-    const [diskCollapsed, setDiskCollapsed] = useState(() => localStorage.getItem(STORAGE.diskCollapsed) === 'true');
+    const [diskCollapsed, setDiskCollapsed] = useState(() => {
+        const v = localStorage.getItem(STORAGE.diskCollapsed);
+        return v !== null ? v === 'true' : true;
+    });
 
     // ─── folder tree state ───────────────────────────────
     const [treeExpanded, setTreeExpanded] = useState(() => {
@@ -154,20 +150,6 @@ function FileManager() {
     const [diskLastUpdated, setDiskLastUpdated] = useState(null);
     const [diskLoading, setDiskLoading] = useState(false);
 
-    // ─── pinned ──────────────────────────────────────────
-    const [pinned, setPinned] = useState(() => {
-        try {
-            const stored = localStorage.getItem(STORAGE.pinned);
-            return stored ? JSON.parse(stored) : DEFAULT_PINNED;
-        } catch { return DEFAULT_PINNED; }
-    });
-
-    // ─── analysis ────────────────────────────────────────
-    const [analysisLoading, setAnalysisLoading] = useState(false);
-    const [directoryAnalysis, setDirectoryAnalysis] = useState(null);
-    const [typeBreakdown, setTypeBreakdown] = useState(null);
-    const [analysisView, setAnalysisView] = useState('directories');
-
     // ─── history ─────────────────────────────────────────
     const [history, setHistory] = useState(['/home']);
     const [historyIdx, setHistoryIdx] = useState(0);
@@ -181,13 +163,10 @@ function FileManager() {
     // ─── persistence ─────────────────────────────────────
     useEffect(() => { localStorage.setItem(STORAGE.sidebar, sidebarVisible); }, [sidebarVisible]);
     useEffect(() => { localStorage.setItem(STORAGE.treeCollapsed, treeCollapsed); }, [treeCollapsed]);
-    useEffect(() => { localStorage.setItem(STORAGE.quickCollapsed, quickCollapsed); }, [quickCollapsed]);
     useEffect(() => { localStorage.setItem(STORAGE.diskCollapsed, diskCollapsed); }, [diskCollapsed]);
     useEffect(() => { localStorage.setItem(STORAGE.viewMode, viewMode); }, [viewMode]);
-    useEffect(() => { localStorage.setItem(STORAGE.gridSize, gridSize); }, [gridSize]);
     useEffect(() => { localStorage.setItem(STORAGE.sortBy, sortBy); }, [sortBy]);
     useEffect(() => { localStorage.setItem(STORAGE.sortDir, sortDir); }, [sortDir]);
-    useEffect(() => { localStorage.setItem(STORAGE.pinned, JSON.stringify(pinned)); }, [pinned]);
     useEffect(() => {
         localStorage.setItem(STORAGE.expanded, JSON.stringify([...treeExpanded]));
     }, [treeExpanded]);
@@ -244,8 +223,6 @@ function FileManager() {
     const loadDirectory = useCallback(async (path) => {
         setLoading(true);
         setSearchResults(null);
-        setDirectoryAnalysis(null);
-        setTypeBreakdown(null);
         setSelectedPaths(new Set());
         try {
             const data = await fileApi.browse(path, showHidden);
@@ -297,24 +274,6 @@ function FileManager() {
             console.error('Failed to load disk mounts:', e);
         } finally {
             setDiskLoading(false);
-        }
-    };
-
-    // ─── analysis ────────────────────────────────────────
-    const analyzeDirectory = async () => {
-        setAnalysisLoading(true);
-        try {
-            const [analysisData, breakdownData] = await Promise.all([
-                api.analyzeDirectory(currentPath, 2, 15),
-                api.getFileTypeBreakdown(currentPath, 3),
-            ]);
-            setDirectoryAnalysis(analysisData);
-            setTypeBreakdown(breakdownData);
-            if (!sidebarVisible) setSidebarVisible(true);
-        } catch (error) {
-            toast.error(`Analysis failed: ${error.message}`);
-        } finally {
-            setAnalysisLoading(false);
         }
     };
 
@@ -621,18 +580,6 @@ function FileManager() {
         if (e.dataTransfer.files?.length > 0) uploadFiles(e.dataTransfer.files);
     };
 
-    // ─── pinned ──────────────────────────────────────────
-    const isPinned = useCallback((path) => pinned.some((p) => p.path === path), [pinned]);
-    const togglePin = useCallback((target) => {
-        const path = typeof target === 'string' ? target : target.path;
-        const name = typeof target === 'string' ? path.split('/').pop() || path : (target.name || target.path.split('/').pop());
-        if (isPinned(path)) {
-            setPinned((p) => p.filter((x) => x.path !== path));
-        } else {
-            setPinned((p) => [...p, { path, name }]);
-        }
-    }, [isPinned]);
-
     // ─── derived ─────────────────────────────────────────
     const breadcrumbs = useMemo(() => {
         const parts = currentPath.split('/').filter(Boolean);
@@ -661,7 +608,7 @@ function FileManager() {
 
     const filterCounts = useMemo(() => {
         const counts = { all: entries.length };
-        FILTER_CHIPS.forEach((c) => { if (c.id !== 'all') counts[c.id] = 0; });
+        FILTER_OPTIONS.forEach((c) => { if (c.id !== 'all') counts[c.id] = 0; });
         entries.forEach((e) => { const t = getFileType(e); if (counts[t] !== undefined) counts[t]++; });
         return counts;
     }, [entries]);
@@ -681,6 +628,13 @@ function FileManager() {
         ? activeUploads.reduce((s, u) => s + u.progress, 0) / activeUploads.length
         : 0;
 
+    const sortValue = `${sortBy}-${sortDir}`;
+    const handleSortChange = (value) => {
+        const [nextSortBy, nextSortDir] = value.split('-');
+        setSortBy(nextSortBy);
+        setSortDir(nextSortDir);
+    };
+
     const selectedEntries = useMemo(
         () => sortedFiltered.filter((e) => selectedPaths.has(e.path)),
         [sortedFiltered, selectedPaths],
@@ -693,7 +647,6 @@ function FileManager() {
             if (inInput) return;
             if (e.key === 'Escape') {
                 if (contextMenu) setContextMenu(null);
-                else if (sortOpen) setSortOpen(false);
                 else if (previewFile) setPreviewFile(null);
                 else if (selectedPaths.size > 0) clearSelection();
             }
@@ -710,15 +663,15 @@ function FileManager() {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [selectedEntries, sortedFiltered, contextMenu, sortOpen, previewFile, parentPath, selectedPaths]); // eslint-disable-line
+    }, [selectedEntries, sortedFiltered, contextMenu, previewFile, parentPath, selectedPaths]); // eslint-disable-line
 
     // ─── close popovers ──────────────────────────────────
     useEffect(() => {
-        if (!contextMenu && !sortOpen) return;
-        const close = () => { setContextMenu(null); setSortOpen(false); };
+        if (!contextMenu) return;
+        const close = () => { setContextMenu(null); };
         document.addEventListener('click', close);
         return () => document.removeEventListener('click', close);
-    }, [contextMenu, sortOpen]);
+    }, [contextMenu]);
 
     const openContextMenu = (e, entry) => {
         e.preventDefault();
@@ -757,16 +710,9 @@ function FileManager() {
             <div className="page-header">
                 <div className="page-header-content">
                     <h1>File Manager</h1>
-                    <p className="page-description">Browse, edit, and manage your server files</p>
                 </div>
                 <div className="page-header-actions">
                     <TargetPicker feature="files" value={target} onChange={setTarget} />
-                    <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isRemote}>
-                        <Upload size={16} /> Upload
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowNewFolderModal(true)} disabled={isRemote}>
-                        <FolderPlus size={16} /> New Folder
-                    </Button>
                     <Button onClick={() => setShowNewFileModal(true)} disabled={isRemote}>
                         <FilePlus size={16} /> New File
                     </Button>
@@ -854,13 +800,6 @@ function FileManager() {
                                 </button>
                             </span>
                         ))}
-                        <button
-                            className={`crumb-pin ${isPinned(currentPath) ? 'pinned' : ''}`}
-                            onClick={() => togglePin(currentPath)}
-                            title={isPinned(currentPath) ? 'Unpin' : 'Pin to Quick Access'}
-                        >
-                            {isPinned(currentPath) ? <Star size={12} fill="currentColor" /> : <StarOff size={12} />}
-                        </button>
                     </div>
                 </div>
                 <div className="toolbar-right">
@@ -883,47 +822,33 @@ function FileManager() {
                             </button>
                         )}
                     </div>
-                    <div className="sort-control" onClick={(e) => e.stopPropagation()}>
-                        <button className="toolbar-chip" onClick={() => setSortOpen(!sortOpen)} title="Sort">
-                            <ArrowUpDown size={14} />
-                            <span>Sort</span>
-                        </button>
-                        {sortOpen && (
-                            <div className="sort-popover">
-                                <div className="sort-popover-label">Sort by</div>
-                                {[
-                                    { id: 'name', label: 'Name' },
-                                    { id: 'size', label: 'Size' },
-                                    { id: 'modified', label: 'Modified' },
-                                    { id: 'type', label: 'Type' },
-                                ].map((opt) => (
-                                    <button
-                                        key={opt.id}
-                                        className={`sort-popover-item ${sortBy === opt.id ? 'active' : ''}`}
-                                        onClick={() => { setSortBy(opt.id); setSortOpen(false); }}
-                                    >
-                                        {sortBy === opt.id && <Check size={12} />}
-                                        <span>{opt.label}</span>
-                                    </button>
-                                ))}
-                                <div className="sort-popover-divider" />
-                                <button
-                                    className={`sort-popover-item ${sortDir === 'asc' ? 'active' : ''}`}
-                                    onClick={() => { setSortDir('asc'); setSortOpen(false); }}
-                                >
-                                    {sortDir === 'asc' && <Check size={12} />}
-                                    <span>Ascending</span>
-                                </button>
-                                <button
-                                    className={`sort-popover-item ${sortDir === 'desc' ? 'active' : ''}`}
-                                    onClick={() => { setSortDir('desc'); setSortOpen(false); }}
-                                >
-                                    {sortDir === 'desc' && <Check size={12} />}
-                                    <span>Descending</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                    <button className="toolbar-chip" onClick={() => fileInputRef.current?.click()} disabled={isRemote}>
+                        <Upload size={14} />
+                        <span>Upload</span>
+                    </button>
+                    <label className="toolbar-select">
+                        <span>Type</span>
+                        <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)}>
+                            {FILTER_OPTIONS.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                    {opt.label} ({filterCounts[opt.id] ?? 0})
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="toolbar-select">
+                        <ArrowUpDown size={14} />
+                        <select value={sortValue} onChange={(e) => handleSortChange(e.target.value)}>
+                            <option value="name-asc">Name A-Z</option>
+                            <option value="name-desc">Name Z-A</option>
+                            <option value="modified-desc">Newest</option>
+                            <option value="modified-asc">Oldest</option>
+                            <option value="size-desc">Largest</option>
+                            <option value="size-asc">Smallest</option>
+                            <option value="type-asc">Type</option>
+                            <option value="type-desc">Type Z-A</option>
+                        </select>
+                    </label>
                     <button
                         className={`toolbar-chip ${selectMode ? 'active' : ''}`}
                         onClick={() => { setSelectMode(!selectMode); if (selectMode) clearSelection(); }}
@@ -932,31 +857,6 @@ function FileManager() {
                         <MousePointer2 size={14} />
                         <span>Select</span>
                     </button>
-                    {viewMode === 'grid' && (
-                        <div className="view-toggle">
-                            <button
-                                className={`view-toggle-btn ${gridSize === 'sm' ? 'active' : ''}`}
-                                onClick={() => setGridSize('sm')}
-                                title="Small thumbnails"
-                            >
-                                <ZoomOut size={14} />
-                            </button>
-                            <button
-                                className={`view-toggle-btn ${gridSize === 'md' ? 'active' : ''}`}
-                                onClick={() => setGridSize('md')}
-                                title="Medium thumbnails"
-                            >
-                                <LayoutGrid size={14} />
-                            </button>
-                            <button
-                                className={`view-toggle-btn ${gridSize === 'lg' ? 'active' : ''}`}
-                                onClick={() => setGridSize('lg')}
-                                title="Large thumbnails"
-                            >
-                                <ZoomIn size={14} />
-                            </button>
-                        </div>
-                    )}
                     <div className="view-toggle">
                         <button
                             className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
@@ -982,15 +882,6 @@ function FileManager() {
                         <span>Hidden</span>
                     </button>
                     <button
-                        className="toolbar-chip"
-                        onClick={analyzeDirectory}
-                        disabled={analysisLoading}
-                        title="Analyze directory sizes"
-                    >
-                        <BarChart3 size={14} />
-                        <span>{analysisLoading ? 'Analyzing…' : 'Analyze'}</span>
-                    </button>
-                    <button
                         className="toolbar-icon-btn"
                         onClick={() => loadDirectory(currentPath)}
                         title="Refresh"
@@ -998,25 +889,6 @@ function FileManager() {
                         <RefreshCw size={14} className={loading ? 'spinning' : ''} />
                     </button>
                 </div>
-            </div>
-
-            <div className="filter-chips-row">
-                {FILTER_CHIPS.map((chip) => {
-                    const Icon = chip.icon;
-                    const count = filterCounts[chip.id] ?? 0;
-                    return (
-                        <button
-                            key={chip.id}
-                            className={`filter-chip ${activeFilter === chip.id ? 'active' : ''}`}
-                            onClick={() => setActiveFilter(chip.id)}
-                            disabled={chip.id !== 'all' && count === 0}
-                        >
-                            <Icon size={13} />
-                            <span>{chip.label}</span>
-                            <span className="filter-chip-count">{count}</span>
-                        </button>
-                    );
-                })}
             </div>
 
             {selectedPaths.size > 0 && (
@@ -1054,11 +926,21 @@ function FileManager() {
                     <aside className="file-manager-sidebar left">
                         {/* Folder Tree */}
                         <div className="sidebar-section">
-                            <button className="sidebar-section-header" onClick={() => setTreeCollapsed(!treeCollapsed)}>
-                                <FolderTreeIcon size={16} />
-                                <span>Folders</span>
-                                {treeCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                            </button>
+                            <div className="sidebar-section-header sidebar-section-header--split">
+                                <button className="sidebar-section-toggle" onClick={() => setTreeCollapsed(!treeCollapsed)}>
+                                    <FolderTreeIcon size={16} />
+                                    <span>Folders</span>
+                                    {treeCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                                </button>
+                                <button
+                                    className="sidebar-action-btn"
+                                    onClick={() => setShowNewFolderModal(true)}
+                                    disabled={isRemote}
+                                    title="New folder"
+                                >
+                                    <FolderPlus size={14} />
+                                </button>
+                            </div>
                             {!treeCollapsed && (
                                 <div className="sidebar-section-content tree-content">
                                     <FolderTree
@@ -1070,44 +952,6 @@ function FileManager() {
                                         onNavigate={navigateTo}
                                         onToggle={toggleTreeExpand}
                                     />
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Quick Access */}
-                        <div className="sidebar-section">
-                            <button className="sidebar-section-header" onClick={() => setQuickCollapsed(!quickCollapsed)}>
-                                <Star size={16} />
-                                <span>Quick Access</span>
-                                {quickCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                            </button>
-                            {!quickCollapsed && (
-                                <div className="sidebar-section-content quick-access-list">
-                                    {pinned.length === 0 && (
-                                        <div className="quick-access-empty">
-                                            Star folders from the breadcrumb to pin them here.
-                                        </div>
-                                    )}
-                                    {pinned.map((p) => (
-                                        <div
-                                            key={p.path}
-                                            className={`quick-access-item ${currentPath === p.path ? 'active' : ''}`}
-                                            onClick={() => navigateTo(p.path)}
-                                        >
-                                            <Folder size={14} fill="currentColor" fillOpacity={0.15} />
-                                            <div className="quick-access-text">
-                                                <div className="quick-access-name">{p.name}</div>
-                                                <div className="quick-access-path">{p.path}</div>
-                                            </div>
-                                            <button
-                                                className="quick-access-remove"
-                                                onClick={(e) => { e.stopPropagation(); togglePin(p.path); }}
-                                                title="Unpin"
-                                            >
-                                                <X size={12} />
-                                            </button>
-                                        </div>
-                                    ))}
                                 </div>
                             )}
                         </div>
@@ -1153,127 +997,6 @@ function FileManager() {
                             )}
                         </div>
 
-                        {/* Analysis */}
-                        {(directoryAnalysis || analysisLoading) && (
-                            <div className="sidebar-section analysis-section">
-                                <div className="sidebar-section-header static">
-                                    <BarChart3 size={16} />
-                                    <span>Directory Analysis</span>
-                                    <button className="toolbar-icon-btn small" onClick={() => { setDirectoryAnalysis(null); setTypeBreakdown(null); }}>
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                                <div className="sidebar-section-content">
-                                    {analysisLoading ? (
-                                        <div className="analysis-loading">
-                                            <Spinner /><span>Analyzing…</span>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div className="analysis-total">
-                                                Total: {directoryAnalysis.total_size_human}
-                                            </div>
-                                            <div className="analysis-tabs">
-                                                <button
-                                                    className={`analysis-tab ${analysisView === 'directories' ? 'active' : ''}`}
-                                                    onClick={() => setAnalysisView('directories')}
-                                                >
-                                                    <Folder size={14} /> Directories
-                                                </button>
-                                                <button
-                                                    className={`analysis-tab ${analysisView === 'files' ? 'active' : ''}`}
-                                                    onClick={() => setAnalysisView('files')}
-                                                >
-                                                    <File size={14} /> Files
-                                                </button>
-                                            </div>
-                                            {analysisView === 'directories' && (
-                                                <div className="analysis-bars">
-                                                    {directoryAnalysis.directories.slice(0, 10).map((dir, idx) => (
-                                                        <div
-                                                            key={idx}
-                                                            className="analysis-bar-item"
-                                                            onClick={() => navigateTo(dir.path)}
-                                                        >
-                                                            <div className="analysis-bar-header">
-                                                                <span className="analysis-bar-name">
-                                                                    <Folder size={12} />
-                                                                    {dir.name}
-                                                                </span>
-                                                                <span className="analysis-bar-size">{dir.size_human}</span>
-                                                            </div>
-                                                            <div className="analysis-bar-track">
-                                                                <div className="analysis-bar-fill" style={{ width: `${dir.percent}%` }} />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {directoryAnalysis.directories.length === 0 && <div className="analysis-empty">No subdirectories</div>}
-                                                </div>
-                                            )}
-                                            {analysisView === 'files' && (
-                                                <div className="analysis-files">
-                                                    {directoryAnalysis.largest_files.slice(0, 10).map((file, idx) => (
-                                                        <div key={idx} className="analysis-file-item" onClick={() => handleOpen(file)}>
-                                                            <File size={12} />
-                                                            <span className="analysis-file-name">{file.name}</span>
-                                                            <span className="analysis-file-size">{file.size_human}</span>
-                                                        </div>
-                                                    ))}
-                                                    {directoryAnalysis.largest_files.length === 0 && <div className="analysis-empty">No files</div>}
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Type breakdown chart */}
-                        {typeBreakdown && typeBreakdown.breakdown && typeBreakdown.breakdown.length > 0 && (
-                            <div className="sidebar-section">
-                                <div className="sidebar-section-header static">
-                                    <PieChart size={16} />
-                                    <span>File Types</span>
-                                </div>
-                                <div className="sidebar-section-content">
-                                    <div className="type-breakdown-chart">
-                                        <ResponsiveContainer width="100%" height={180}>
-                                            <RechartsPie>
-                                                <Pie
-                                                    data={typeBreakdown.breakdown}
-                                                    dataKey="size"
-                                                    nameKey="name"
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    outerRadius={60}
-                                                    innerRadius={35}
-                                                    paddingAngle={2}
-                                                >
-                                                    {typeBreakdown.breakdown.map((entry, idx) => (
-                                                        <Cell key={idx} fill={entry.color} />
-                                                    ))}
-                                                </Pie>
-                                                <Tooltip
-                                                    formatter={(value, name) => [
-                                                        typeBreakdown.breakdown.find(b => b.name === name)?.size_human || value,
-                                                        name,
-                                                    ]}
-                                                />
-                                            </RechartsPie>
-                                        </ResponsiveContainer>
-                                    </div>
-                                    <div className="type-breakdown-legend">
-                                        {typeBreakdown.breakdown.map((cat, idx) => (
-                                            <div key={idx} className="type-legend-item">
-                                                <span className="type-legend-color" style={{ background: cat.color }} />
-                                                <span className="type-legend-name">{cat.name}</span>
-                                                <span className="type-legend-size">{cat.size_human}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </aside>
                 )}
 
@@ -1407,14 +1130,12 @@ function FileManager() {
             <ContextMenu
                 menu={contextMenu}
                 selectionCount={selectedEntries.length}
-                isPinned={isPinned}
                 onClose={() => setContextMenu(null)}
                 onOpen={handleOpen}
                 onDownload={(e) => api.downloadFile(e.path)}
                 onRename={openRenameModal}
                 onPermissions={openPermissionsModal}
                 onCopyPath={copyPathToClipboard}
-                onTogglePin={togglePin}
                 onDelete={(e) => handleDelete(selectedEntries.length > 1 ? selectedEntries : e)}
             />
 

@@ -242,11 +242,32 @@ const Sidebar = () => {
 
             {import.meta.env.DEV && (
                 <>
-                    <div className="nav-category">Dev Tools</div>
+                    <div className="nav-category nav-category--dev">Dev Tools</div>
                     <nav className="nav">
                         <NavLink
+                            to="/app-map"
+                            className={({ isActive }) => `nav-item nav-item--dev ${isActive ? 'active' : ''}`}
+                        >
+                            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+                                <line x1="8" y1="2" x2="8" y2="18"/>
+                                <line x1="16" y1="6" x2="16" y2="22"/>
+                            </svg>
+                            App Map
+                        </NavLink>
+                        <NavLink
+                            to="/documentation"
+                            className={({ isActive }) => `nav-item nav-item--dev ${isActive ? 'active' : ''}`}
+                        >
+                            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                            Documentation
+                        </NavLink>
+                        <NavLink
                             to="/style-guide"
-                            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                            className={({ isActive }) => `nav-item nav-item--dev ${isActive ? 'active' : ''}`}
                         >
                             <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <circle cx="13.5" cy="6.5" r="2.5"/><path d="M17 2H7a5 5 0 0 0-5 5v10a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5V7a5 5 0 0 0-5-5z"/><path d="M9.5 14.5l-3 3"/><path d="M14.5 9.5l3-3"/>

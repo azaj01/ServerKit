@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
     Activity,
     CheckCircle2,
@@ -11,7 +11,6 @@ import {
     PlayCircle,
 } from 'lucide-react';
 import api from '../services/api';
-import { useToast } from '../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 
 const STATUS_COLORS = {
@@ -43,28 +42,14 @@ const StatusBadge = ({ status }) => {
     const Icon = cfg.icon;
     const spin = status === 'running';
     return (
-        <span
-            style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '4px 10px',
-                borderRadius: 999,
-                background: cfg.bg,
-                color: cfg.fg,
-                fontSize: 12,
-                fontWeight: 600,
-                textTransform: 'capitalize',
-            }}
-        >
-            <Icon size={14} className={spin ? 'spin' : ''} />
+        <span className="deployments-page__status-badge" style={{ background: cfg.bg, color: cfg.fg }}>
+            <Icon size={14} className={spin ? 'deployments-page__spin' : ''} />
             {status}
         </span>
     );
 };
 
 const Deployments = () => {
-    const toast = useToast();
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState('all');
@@ -147,18 +132,18 @@ const Deployments = () => {
     }, [jobs]);
 
     return (
-        <div className="page-container">
-            <div className="page-header">
-                <div>
+        <div className="page-container deployments-page">
+            <div className="page-header deployments-page__header">
+                <div className="deployments-page__heading">
                     <h1 className="page-title">
-                        <Activity size={24} style={{ marginRight: 8, verticalAlign: 'middle' }} />
+                        <Activity size={22} />
                         Deployments
                     </h1>
-                    <p className="page-description">
+                    <p className="deployments-page__description">
                         Track deployment jobs across all servers — see real-time status, step-by-step progress, and logs.
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="deployments-page__actions">
                     <Button
                         variant={autoRefresh ? 'default' : 'outline'}
                         onClick={() => setAutoRefresh((v) => !v)}
@@ -173,14 +158,7 @@ const Deployments = () => {
                 </div>
             </div>
 
-            <div
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                    gap: 12,
-                    marginBottom: 16,
-                }}
-            >
+            <div className="deployments-page__summary">
                 {[
                     { label: 'Running', value: summary.running, icon: Loader2, color: '#6366f1' },
                     { label: 'Succeeded', value: summary.succeeded, icon: CheckCircle2, color: '#22c55e' },
@@ -189,22 +167,20 @@ const Deployments = () => {
                 ].map((s) => {
                     const Icon = s.icon;
                     return (
-                        <div key={s.label} className="card" style={{ padding: 16 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <Icon size={20} style={{ color: s.color }} />
-                                <div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{s.label}</div>
-                                    <div style={{ fontSize: 22, fontWeight: 700 }}>{s.value}</div>
-                                </div>
+                        <div key={s.label} className="deployments-page__stat-card">
+                            <Icon size={18} style={{ color: s.color }} />
+                            <div>
+                                <div className="deployments-page__stat-label">{s.label}</div>
+                                <div className="deployments-page__stat-value">{s.value}</div>
                             </div>
                         </div>
                     );
                 })}
             </div>
 
-            <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <div>
-                    <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block' }}>Status</label>
+            <div className="deployments-page__toolbar">
+                <div className="deployments-page__filter">
+                    <label>Status</label>
                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                         <option value="all">All</option>
                         <option value="pending">Pending</option>
@@ -213,8 +189,8 @@ const Deployments = () => {
                         <option value="failed">Failed</option>
                     </select>
                 </div>
-                <div>
-                    <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block' }}>Target server</label>
+                <div className="deployments-page__filter">
+                    <label>Target server</label>
                     <select value={serverFilter} onChange={(e) => setServerFilter(e.target.value)}>
                         <option value="all">All servers</option>
                         {servers.map((s) => (
@@ -226,20 +202,26 @@ const Deployments = () => {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.2fr)', gap: 16 }}>
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="deployments-page__workspace">
+                <div className="deployments-page__panel deployments-page__jobs-panel">
+                    <div className="deployments-page__panel-header">
+                        <div>
+                            <h2>Jobs</h2>
+                            <span>{jobs.length} visible</span>
+                        </div>
+                    </div>
                     {loading ? (
-                        <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading…</div>
+                        <div className="deployments-page__empty">Loading...</div>
                     ) : jobs.length === 0 ? (
-                        <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
-                            <PlayCircle size={32} style={{ marginBottom: 8, opacity: 0.5 }} />
-                            <div>No deployment jobs yet.</div>
-                            <div style={{ fontSize: 13, marginTop: 4 }}>
+                        <div className="deployments-page__empty">
+                            <PlayCircle size={34} />
+                            <strong>No deployment jobs yet</strong>
+                            <span>
                                 Install a template or trigger a deploy to see it here.
-                            </div>
+                            </span>
                         </div>
                     ) : (
-                        <table className="data-table" style={{ width: '100%' }}>
+                        <table className="deployments-page__jobs-table">
                             <thead>
                                 <tr>
                                     <th>Status</th>
@@ -255,43 +237,32 @@ const Deployments = () => {
                                     <tr
                                         key={job.id}
                                         onClick={() => setSelectedJob(job.id)}
-                                        style={{
-                                            cursor: 'pointer',
-                                            background: selectedJob === job.id ? 'var(--accent-glow)' : 'transparent',
-                                        }}
+                                        className={selectedJob === job.id ? 'is-selected' : ''}
                                     >
                                         <td><StatusBadge status={job.status} /></td>
                                         <td>{job.kind}</td>
                                         <td>
-                                            <Server size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                                            {job.target_server_name || 'Local server'}
+                                            <span className="deployments-page__server-cell">
+                                                <Server size={12} />
+                                                {job.target_server_name || 'Local server'}
+                                            </span>
                                         </td>
                                         <td>{job.app_name || '—'}</td>
                                         <td>
-                                            <div
-                                                style={{
-                                                    height: 6,
-                                                    background: 'var(--bg-elevated)',
-                                                    borderRadius: 3,
-                                                    overflow: 'hidden',
-                                                    minWidth: 80,
-                                                }}
-                                            >
+                                            <div className="deployments-page__progress">
                                                 <div
                                                     style={{
                                                         width: `${job.progress_percent || 0}%`,
-                                                        height: '100%',
                                                         background:
                                                             job.status === 'failed' ? '#ef4444' : 'var(--accent-primary)',
-                                                        transition: 'width 200ms ease',
                                                     }}
                                                 />
                                             </div>
-                                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                            <div className="deployments-page__progress-meta">
                                                 {job.current_step || 0}/{job.total_steps || 0}
                                             </div>
                                         </td>
-                                        <td style={{ fontSize: 12 }}>{formatTime(job.started_at || job.created_at)}</td>
+                                        <td className="deployments-page__time-cell">{formatTime(job.started_at || job.created_at)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -299,98 +270,70 @@ const Deployments = () => {
                     )}
                 </div>
 
-                <div className="card" style={{ padding: 16, minHeight: 400 }}>
+                <div className="deployments-page__panel deployments-page__detail-panel">
+                    <div className="deployments-page__panel-header">
+                        <div>
+                            <h2>Details</h2>
+                            <span>Plan and logs</span>
+                        </div>
+                    </div>
                     {!selectedJob ? (
-                        <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: 48 }}>
+                        <div className="deployments-page__empty">
+                            <Activity size={34} />
+                            <strong>No job selected</strong>
                             Select a job to view its plan and logs.
                         </div>
                     ) : !jobDetail ? (
-                        <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: 48 }}>Loading…</div>
+                        <div className="deployments-page__empty">Loading...</div>
                     ) : (
-                        <>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                        <div className="deployments-page__detail-content">
+                            <div className="deployments-page__detail-title">
                                 <div>
-                                    <h3 style={{ margin: 0 }}>{jobDetail.app_name || jobDetail.kind}</h3>
-                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                                    <h3>{jobDetail.app_name || jobDetail.kind}</h3>
+                                    <div>
                                         {jobDetail.id}
                                     </div>
                                 </div>
                                 <StatusBadge status={jobDetail.status} />
                             </div>
 
-                            <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                                    gap: 12,
-                                    marginTop: 16,
-                                    fontSize: 13,
-                                }}
-                            >
-                                <div>
-                                    <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Target</div>
+                            <div className="deployments-page__detail-grid">
+                                <div className="deployments-page__detail-metric">
+                                    <span>Target</span>
                                     <div>{jobDetail.target_server_name}</div>
                                 </div>
-                                <div>
-                                    <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Step</div>
+                                <div className="deployments-page__detail-metric">
+                                    <span>Step</span>
                                     <div>{jobDetail.current_step || 0} / {jobDetail.total_steps || 0}</div>
                                 </div>
-                                <div>
-                                    <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Duration</div>
+                                <div className="deployments-page__detail-metric">
+                                    <span>Duration</span>
                                     <div>{formatDuration(jobDetail.duration)}</div>
                                 </div>
-                                <div>
-                                    <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Started</div>
+                                <div className="deployments-page__detail-metric">
+                                    <span>Started</span>
                                     <div>{formatTime(jobDetail.started_at)}</div>
                                 </div>
                             </div>
 
                             {jobDetail.current_step_name && jobDetail.status === 'running' && (
-                                <div
-                                    style={{
-                                        marginTop: 12,
-                                        padding: 10,
-                                        background: 'rgba(99,102,241,0.1)',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                    }}
-                                >
-                                    <Loader2 size={14} className="spin" style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                                <div className="deployments-page__notice deployments-page__notice--running">
+                                    <Loader2 size={14} className="deployments-page__spin" />
                                     {jobDetail.current_step_name}
                                 </div>
                             )}
 
                             {jobDetail.error_message && (
-                                <div
-                                    style={{
-                                        marginTop: 12,
-                                        padding: 10,
-                                        background: 'rgba(239,68,68,0.1)',
-                                        border: '1px solid rgba(239,68,68,0.3)',
-                                        borderRadius: 6,
-                                        color: '#ef4444',
-                                        fontSize: 13,
-                                    }}
-                                >
-                                    <AlertTriangle size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                                <div className="deployments-page__notice deployments-page__notice--error">
+                                    <AlertTriangle size={14} />
                                     {jobDetail.error_message}
                                 </div>
                             )}
 
-                            <h4 style={{ marginTop: 20, marginBottom: 8 }}>Logs</h4>
+                            <h4 className="deployments-page__logs-title">Logs</h4>
                             <div
                                 ref={detailRef}
-                                style={{
-                                    background: '#0b0f1a',
-                                    color: '#cbd5e1',
-                                    padding: 12,
-                                    borderRadius: 6,
-                                    fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                                    fontSize: 12,
-                                    height: 360,
-                                    overflowY: 'auto',
-                                    whiteSpace: 'pre-wrap',
-                                }}
+                                className="deployments-page__logs"
                             >
                                 {(jobDetail.logs || []).length === 0
                                     ? 'Waiting for logs…'
@@ -405,22 +348,17 @@ const Deployments = () => {
                                                 : '#cbd5e1';
                                         return (
                                             <div key={log.id} style={{ color }}>
-                                                <span style={{ color: '#64748b' }}>{ts}</span>{' '}
-                                                <span style={{ color: '#94a3b8' }}>{log.level.toUpperCase()}</span>{' '}
+                                                <span className="deployments-page__log-time">{ts}</span>{' '}
+                                                <span className="deployments-page__log-level">{log.level.toUpperCase()}</span>{' '}
                                                 {stepPrefix}{log.message}
                                             </div>
                                         );
                                     })}
                             </div>
-                        </>
+                        </div>
                     )}
                 </div>
             </div>
-
-            <style>{`
-                .spin { animation: spin 1s linear infinite; }
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
         </div>
     );
 };

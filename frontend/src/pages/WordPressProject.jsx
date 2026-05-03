@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || window.location.origin;
 
 const VALID_TABS = ['pipeline', 'activity', 'health'];
 

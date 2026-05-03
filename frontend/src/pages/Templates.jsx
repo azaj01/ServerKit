@@ -4,7 +4,7 @@ import {
     Search, X, Star, ExternalLink, BookOpen, Container, Globe, BarChart3,
     Database, Shield, Cloud, MessageSquare, Video, Music, Image, Home,
     Code, Server, GitBranch, Workflow, HardDrive, Lock, Users, FileText,
-    Settings, Layers, ChevronDown, Copy, Check, Tag, Cpu, HardDriveIcon,
+    Settings, Layers, ChevronDown, Copy, Check, Tag, Cpu,
     Newspaper, TrendingUp
 } from 'lucide-react';
 import api from '../services/api';
@@ -108,11 +108,12 @@ const Templates = () => {
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [showInstallModal, setShowInstallModal] = useState(false);
     const [copiedCompose, setCopiedCompose] = useState(false);
+    const [showAllCategories, setShowAllCategories] = useState(false);
 
     // Initialize from URL params
     const selectedCategory = searchParams.get('category') || null;
     const searchQuery = searchParams.get('search') || '';
-    const sortBy = searchParams.get('sort') || 'name-asc';
+    const sortBy = searchParams.get('sort') || 'featured';
     const installTemplateId = searchParams.get('install');
 
     useEffect(() => {
@@ -291,6 +292,8 @@ const Templates = () => {
 
     const sortedTemplates = sortTemplates(templates);
     const hasActiveFilters = selectedCategory || searchQuery;
+    const visibleCategories = showAllCategories ? categories : categories.slice(0, 10);
+    const hiddenCategoryCount = Math.max(categories.length - visibleCategories.length, 0);
 
     if (loading) {
         return (
@@ -302,13 +305,8 @@ const Templates = () => {
 
     return (
         <div className="page-container templates-page">
-            <div className="page-header">
+            <div className="page-header templates-page-header">
                 <h1>App Templates</h1>
-                <p className="page-description">One-click deployment for popular self-hosted applications</p>
-            </div>
-
-            {/* Search and Filters */}
-            <div className="templates-filters">
                 <div className="search-box">
                     <Search size={18} className="search-icon" />
                     <Input
@@ -323,14 +321,21 @@ const Templates = () => {
                         </Button>
                     )}
                 </div>
-                <div className="category-filters">
+            </div>
+
+            {/* Results and Filters */}
+            <div className="templates-results-header">
+                <span className="results-count">
+                    {sortedTemplates.length} template{sortedTemplates.length !== 1 ? 's' : ''}
+                </span>
+                <div className="category-filters" aria-label="Template categories">
                     <button
                         className={`category-btn ${!selectedCategory ? 'active' : ''}`}
                         onClick={() => setSelectedCategoryFilter(null)}
                     >
                         All
                     </button>
-                    {categories.slice(0, 12).map(category => (
+                    {visibleCategories.map(category => (
                         <button
                             key={category}
                             className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
@@ -339,6 +344,23 @@ const Templates = () => {
                             {getCategoryIcon(category)} {category}
                         </button>
                     ))}
+                    {categories.length > 10 && (
+                        <button
+                            className="category-btn category-btn--more"
+                            onClick={() => setShowAllCategories(prev => !prev)}
+                        >
+                            {showAllCategories ? 'Less' : `More +${hiddenCategoryCount}`}
+                        </button>
+                    )}
+                </div>
+                <div className="sort-dropdown">
+                    <label>Sort by:</label>
+                    <select value={sortBy} onChange={(e) => setSortByFilter(e.target.value)}>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="featured">Featured First</option>
+                    </select>
+                    <ChevronDown size={16} className="dropdown-icon" />
                 </div>
             </div>
 
@@ -357,7 +379,7 @@ const Templates = () => {
                     {searchQuery && (
                         <span className="filter-chip">
                             <Search size={14} />
-                            "{searchQuery}"
+                            &ldquo;{searchQuery}&rdquo;
                             <button onClick={() => setSearchQueryFilter('')}>
                                 <X size={14} />
                             </button>
@@ -368,22 +390,6 @@ const Templates = () => {
                     </Button>
                 </div>
             )}
-
-            {/* Results Header */}
-            <div className="templates-results-header">
-                <span className="results-count">
-                    {sortedTemplates.length} template{sortedTemplates.length !== 1 ? 's' : ''}
-                </span>
-                <div className="sort-dropdown">
-                    <label>Sort by:</label>
-                    <select value={sortBy} onChange={(e) => setSortByFilter(e.target.value)}>
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
-                        <option value="featured">Featured First</option>
-                    </select>
-                    <ChevronDown size={16} className="dropdown-icon" />
-                </div>
-            </div>
 
             {/* Templates Grid */}
             <div className="templates-grid">

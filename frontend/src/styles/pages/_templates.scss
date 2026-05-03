@@ -3,6 +3,19 @@
 // ============================================
 
 .templates-page {
+    .templates-page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-4;
+        margin-bottom: $space-4;
+
+        h1 {
+            margin: 0;
+            white-space: nowrap;
+        }
+    }
+
     .page-description {
         color: $text-secondary;
         margin-top: $space-2;
@@ -40,6 +53,7 @@
 .search-box {
     position: relative;
     max-width: 400px;
+    width: min(400px, 42vw);
 
     .search-icon {
         position: absolute;
@@ -52,7 +66,8 @@
 
     input {
         width: 100%;
-        padding: $space-3 $space-4;
+        min-height: 40px;
+        padding: $space-2 $space-4;
         padding-left: $space-10;
         padding-right: $space-10;
         background: $bg-card;
@@ -98,6 +113,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: $space-2;
+    min-width: 0;
 }
 
 .category-btn {
@@ -125,6 +141,11 @@
         border-color: $accent-primary;
         color: $accent-primary;
     }
+
+    &--more {
+        color: $accent-primary;
+        border-color: $border-active;
+    }
 }
 
 // Active Filters
@@ -133,7 +154,7 @@
     align-items: center;
     flex-wrap: wrap;
     gap: $space-2;
-    margin-bottom: $space-4;
+    margin: -$space-2 0 $space-4;
 }
 
 .filter-chip {
@@ -191,9 +212,10 @@
 
 // Results Header
 .templates-results-header {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
+    gap: $space-3;
     margin-bottom: $space-4;
     padding-bottom: $space-3;
     border-bottom: 1px solid $border-subtle;
@@ -202,6 +224,7 @@
 .results-count {
     font-size: $font-size-sm;
     color: $text-secondary;
+    white-space: nowrap;
 }
 
 .sort-dropdown {
@@ -707,14 +730,35 @@
 
 // Responsive
 @media (max-width: $breakpoint-md) {
+    .templates-page {
+        .templates-page-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: $space-3;
+
+            h1 {
+                white-space: normal;
+            }
+        }
+    }
+
+    .search-box {
+        width: 100%;
+        max-width: none;
+    }
+
     .templates-grid {
         grid-template-columns: 1fr;
     }
 
     .templates-results-header {
-        flex-direction: column;
+        grid-template-columns: 1fr;
         align-items: flex-start;
         gap: $space-3;
+    }
+
+    .category-filters {
+        width: 100%;
     }
 
     .sort-dropdown {

@@ -97,7 +97,7 @@ function Downloads() {
         if (import.meta.env.PROD) {
             return window.location.origin;
         }
-        return import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000';
+        return import.meta.env.VITE_API_URL?.replace('/api/v1', '') || window.location.origin;
     };
 
     const platforms = [

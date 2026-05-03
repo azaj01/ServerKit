@@ -115,7 +115,7 @@ ServerKit/
 │   │   ├── components/    # Reusable components
 │   │   ├── pages/         # Page components
 │   │   ├── services/      # API client
-│   │   └── styles/        # LESS stylesheets
+│   │   └── styles/        # SCSS stylesheets
 │   ├── package.json
 │   └── vite.config.js
 │
@@ -137,7 +137,7 @@ ServerKit/
 - `frontend/src/pages/` - Page components
 - `frontend/src/components/` - Shared components
 - `frontend/src/services/api.js` - API client
-- `frontend/src/styles/` - LESS stylesheets
+- `frontend/src/styles/` - SCSS stylesheets
 
 ---
 
@@ -201,7 +201,7 @@ def get_system_stats() -> dict:
 - Use functional components with hooks
 - Use meaningful component and variable names
 - Keep components focused and small
-- Use LESS for styling (not inline styles)
+- Use SCSS for styling (not inline styles)
 
 ```jsx
 const ServerStats = ({ serverId }) => {
@@ -217,24 +217,24 @@ const ServerStats = ({ serverId }) => {
 };
 ```
 
-### LESS/CSS (Styles)
+### SCSS/CSS (Styles)
 
 - Use the existing design system variables
 - Follow BEM-like naming conventions
 - Keep specificity low
 - Use the component/page file structure
 
-```less
+```scss
 .notification-card {
-  background: @card-bg;
-  border-radius: @border-radius-md;
+  background: $bg-card;
+  border-radius: $radius-md;
 
   &__header {
-    padding: @spacing-md;
+    padding: $spacing-md;
   }
 
   &--expanded {
-    border-color: @primary-color;
+    border-color: $primary-color;
   }
 }
 ```

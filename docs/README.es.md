@@ -247,7 +247,7 @@ Detalles completos: [ROADMAP.md](../ROADMAP.md)
 | Capa | Tecnología |
 |-------|------------|
 | Backend | Python 3.11, Flask, SQLAlchemy, Flask-SocketIO |
-| Frontend | React 18, Vite, LESS |
+| Frontend | React 18, Vite, SCSS |
 | Base de Datos | SQLite / PostgreSQL |
 | Servidor Web | Nginx, Gunicorn |
 | Contenedores | Docker, Docker Compose |

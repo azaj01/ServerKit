@@ -29,6 +29,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+    Sheet, SheetContent, SheetHeader, SheetFooter, SheetTitle, SheetDescription, SheetClose,
+} from '@/components/ui/sheet';
 
 const SECTIONS = [
     { id: 'colors', label: 'Colors', icon: Palette },
@@ -70,6 +73,8 @@ export default function StyleGuide() {
     const [activeSection, setActiveSection] = useTabParam('/style-guide', SECTION_IDS, 'colors');
     const { openDrawer } = useLogsDrawer();
     const [modalOpen, setModalOpen] = useState(false);
+    const [sheetSide, setSheetSide] = useState('right');
+    const [sheetOpen, setSheetOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmVariant, setConfirmVariant] = useState('danger');
     const [controlledDemoTab, setControlledDemoTab] = useState('general');
@@ -729,6 +734,45 @@ export default function StyleGuide() {
                                     <Input type="text" placeholder="Type something..." />
                                 </div>
                             </Modal>
+                        </div>
+
+                        <SectionTitle title="Side Drawer (Sheet)" />
+                        <p className="text-sm text-secondary mb-2">Right/left-anchored panel built on Radix Dialog. Used for forms like &ldquo;Add Server&rdquo; or &ldquo;Add Service&rdquo; where a slide-in panel is preferred over a centered modal.</p>
+                        <div className="card" style={{ padding: 24 }}>
+                            <div className="flex flex-wrap gap-3">
+                                <Button onClick={() => { setSheetSide('right'); setSheetOpen(true); }}>
+                                    <Plus size={16} /> Open Right Drawer
+                                </Button>
+                                <Button variant="outline" onClick={() => { setSheetSide('left'); setSheetOpen(true); }}>
+                                    <Plus size={16} /> Open Left Drawer
+                                </Button>
+                            </div>
+                            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+                                <SheetContent side={sheetSide}>
+                                    <SheetHeader>
+                                        <SheetTitle>Add Service</SheetTitle>
+                                        <SheetDescription>
+                                            Configure a new service. This drawer pattern is the panel-style alternative to a centered modal.
+                                        </SheetDescription>
+                                    </SheetHeader>
+                                    <div className="space-y-4" style={{ padding: '16px 0' }}>
+                                        <div className="form-group">
+                                            <label>Service name</label>
+                                            <Input type="text" placeholder="my-service" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Description</label>
+                                            <Textarea placeholder="What does this service do?" rows={3} />
+                                        </div>
+                                    </div>
+                                    <SheetFooter>
+                                        <SheetClose asChild>
+                                            <Button variant="outline">Cancel</Button>
+                                        </SheetClose>
+                                        <Button onClick={() => setSheetOpen(false)}>Create Service</Button>
+                                    </SheetFooter>
+                                </SheetContent>
+                            </Sheet>
                         </div>
 
                         <SectionTitle title="Logs Drawer (LogsDrawer)" />
