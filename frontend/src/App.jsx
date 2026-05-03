@@ -26,6 +26,7 @@ import Git from './pages/Git';
 import CronJobs from './pages/CronJobs';
 import Security from './pages/Security';
 import Services from './pages/Services';
+import NewService from './pages/NewService';
 import ServiceDetail from './pages/ServiceDetail';
 import Templates from './pages/Templates';
 import WorkflowBuilder from './pages/WorkflowBuilder';
@@ -61,11 +62,12 @@ const PAGE_TITLES = {
     '/register': 'Register',
     '/setup': 'Setup',
     '/services': 'Services',
+    '/services/new': 'New Service',
     '/apps': 'Applications',
     '/wordpress': 'WordPress Sites',
     '/wordpress/projects': 'WordPress Projects',
     '/templates': 'Templates',
-    '/deployments': 'Deployments',
+    '/deployments': 'Deployment Activity',
     '/workflow': 'Workflow Builder',
     '/domains': 'Domains',
     '/databases': 'Databases',
@@ -209,6 +211,7 @@ function AppRoutes() {
             }>
                 <Route index element={<Dashboard />} />
                 <Route path="services" element={<Services />} />
+                <Route path="services/new" element={<NewService />} />
                 <Route path="services/:id" element={<ServiceDetail />} />
                 <Route path="apps" element={<Navigate to="/services" replace />} />
                 <Route path="apps/:id" element={<ApplicationDetail />} />

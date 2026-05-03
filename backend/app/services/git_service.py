@@ -109,7 +109,10 @@ class GitService:
             if os.path.exists(app_path):
                 return {'success': False, 'error': 'Directory already exists'}
 
-            cmd = ['git', 'clone', '--branch', branch, '--single-branch', repo_url, app_path]
+            cmd = ['git', 'clone']
+            if branch:
+                cmd.extend(['--branch', branch, '--single-branch'])
+            cmd.extend([repo_url, app_path])
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
             if result.returncode == 0:

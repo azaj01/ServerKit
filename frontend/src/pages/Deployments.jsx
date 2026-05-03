@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Activity,
     CheckCircle2,
@@ -8,6 +9,7 @@ import {
     Server,
     Loader2,
     AlertTriangle,
+    GitBranch,
     PlayCircle,
 } from 'lucide-react';
 import api from '../services/api';
@@ -137,13 +139,19 @@ const Deployments = () => {
                 <div className="deployments-page__heading">
                     <h1 className="page-title">
                         <Activity size={22} />
-                        Deployments
+                        Deployment Activity
                     </h1>
                     <p className="deployments-page__description">
-                        Track deployment jobs across all servers — see real-time status, step-by-step progress, and logs.
+                        Track install and deploy jobs across services and servers with status, progress, and logs.
                     </p>
                 </div>
                 <div className="deployments-page__actions">
+                    <Button variant="outline" asChild>
+                        <Link to="/services/new">
+                            <GitBranch size={16} />
+                            New Service
+                        </Link>
+                    </Button>
                     <Button
                         variant={autoRefresh ? 'default' : 'outline'}
                         onClick={() => setAutoRefresh((v) => !v)}
@@ -217,7 +225,7 @@ const Deployments = () => {
                             <PlayCircle size={34} />
                             <strong>No deployment jobs yet</strong>
                             <span>
-                                Install a template or trigger a deploy to see it here.
+                                Create a service from a repository or install a template to see activity here.
                             </span>
                         </div>
                     ) : (

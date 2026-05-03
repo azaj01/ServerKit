@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -77,6 +78,32 @@ const ServiceDetail = () => {
             setActionLoading(null);
             setShowDeployMenu(false);
             setShowMoreMenu(false);
+        }
+    }
+
+    async function handleDeployLatest() {
+        setActionLoading('deploy-latest');
+        try {
+            let hasBuildConfig = false;
+            try {
+                const buildConfig = await api.getBuildConfig(service.id);
+                hasBuildConfig = Boolean(buildConfig.configured);
+            } catch {
+                hasBuildConfig = false;
+            }
+
+            if (hasBuildConfig) {
+                await api.deployApp(service.id);
+            } else {
+                await api.triggerAppDeploy(service.id, true);
+            }
+            toast.success('Deployment started');
+            await reload();
+        } catch (err) {
+            toast.error(err.message || 'Failed to deploy latest commit');
+        } finally {
+            setActionLoading(null);
+            setShowDeployMenu(false);
         }
     }
 
@@ -173,16 +200,13 @@ const ServiceDetail = () => {
                                     Manual Deploy (Restart)
                                 </button>
                                 {deployConfig && (
-                                    <button onClick={() => {
-                                        setShowDeployMenu(false);
-                                        setActiveTab('events');
-                                    }}>
+                                    <button onClick={handleDeployLatest} disabled={actionLoading === 'deploy-latest'}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <circle cx="18" cy="18" r="3"/>
                                             <circle cx="6" cy="6" r="3"/>
                                             <path d="M6 21V9a9 9 0 0 0 9 9"/>
                                         </svg>
-                                        Deploy Latest Commit
+                                        {actionLoading === 'deploy-latest' ? 'Deploying...' : 'Deploy Latest Commit'}
                                     </button>
                                 )}
                             </div>
@@ -333,9 +357,9 @@ const ServiceDetail = () => {
             {showGitModal && (
                 <GitConnectModal
                     appId={service.id}
-                    currentConfig={deployConfig}
+                    deployConfig={deployConfig}
                     onClose={() => setShowGitModal(false)}
-                    onSave={() => {
+                    onSaved={() => {
                         setShowGitModal(false);
                         reload();
                     }}
@@ -380,8 +404,8 @@ function ServiceIcon({ type }) {
 function extractRepoDisplay(url) {
     if (!url) return '';
     try {
-        const cleaned = url.replace(/\.git$/, '');
-        const parts = cleaned.split('/');
+        const cleaned = url.replace(/\.git$/, '').replace(/^https?:\/\/[^@]+@/, 'https://');
+        const parts = cleaned.split(/[/:]/).filter(Boolean);
         return parts.slice(-2).join('/');
     } catch {
         return url;

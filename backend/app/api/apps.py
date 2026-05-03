@@ -1,10 +1,14 @@
 import os
 import json
+import re
+import shutil
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models import Application, User
+from app.services.build_service import BuildService
 from app.services.docker_service import DockerService
+from app.services.git_service import GitService
 from app.services.remote_docker_service import RemoteDockerService
 from app.services.log_service import LogService
 from app import paths
@@ -28,6 +32,50 @@ def _agent_result_error(result, fallback):
     if isinstance(data, dict):
         return data.get('error') or result.get('error') or fallback
     return result.get('error') or fallback
+
+
+def _service_slug(value):
+    return re.sub(r'[^a-z0-9-]+', '-', (value or '').strip().lower()).strip('-')
+
+
+def _derive_repo_app_type(detection):
+    if detection.get('has_dockerfile') or detection.get('has_docker_compose'):
+        return 'docker'
+    framework = detection.get('framework')
+    language = detection.get('language')
+    if framework == 'django':
+        return 'django'
+    if framework in ['flask', 'fastapi'] or language == 'python':
+        return 'flask'
+    if framework == 'laravel' or language == 'php':
+        return 'php'
+    return 'static'
+
+
+def _assert_managed_app_path(app_name):
+    base_dir = os.path.abspath(paths.APPS_DIR)
+    app_path = os.path.abspath(os.path.join(base_dir, app_name))
+    if app_path != base_dir and app_path.startswith(base_dir + os.sep):
+        return app_path
+    raise ValueError('Invalid application path')
+
+
+def _safe_repo_url(repo_url):
+    return re.sub(r'^(https?://)[^@]+@', r'\1', repo_url or '')
+
+
+def _attach_deploy_config(payload, deploy_configs=None):
+    deploy_configs = deploy_configs or GitService.get_config().get('apps', {})
+    deploy_config = deploy_configs.get(str(payload.get('id')))
+
+    payload['last_deploy_at'] = payload.get('last_deployed_at')
+    payload['deploy_configured'] = deploy_config is not None
+    if deploy_config:
+        payload['deploy_repo_url'] = _safe_repo_url(deploy_config.get('repo_url'))
+        payload['deploy_branch'] = deploy_config.get('branch')
+        payload['auto_deploy'] = deploy_config.get('auto_deploy', False)
+        payload['last_deploy_at'] = deploy_config.get('last_deploy')
+    return payload
 
 
 # ==================== ENVIRONMENT LINKING ====================
@@ -270,9 +318,13 @@ def get_apps():
         query = query.filter_by(environment_type=environment_filter)
 
     apps = query.all()
+    deploy_configs = GitService.get_config().get('apps', {})
 
     return jsonify({
-        'apps': [app.to_dict(include_linked=include_linked) for app in apps]
+        'apps': [
+            _attach_deploy_config(app.to_dict(include_linked=include_linked), deploy_configs)
+            for app in apps
+        ]
     }), 200
 
 
@@ -290,7 +342,119 @@ def get_app(app_id):
         return jsonify({'error': 'Access denied'}), 403
 
     # Single app requests include linked app info by default
-    return jsonify({'app': app.to_dict(include_linked=True)}), 200
+    return jsonify({'app': _attach_deploy_config(app.to_dict(include_linked=True))}), 200
+
+
+@apps_bp.route('/from-repository', methods=['POST'])
+@jwt_required()
+def create_app_from_repository():
+    """Create a new application by cloning a Git repository."""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    if not user or user.role != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    data = request.get_json() or {}
+    name = _service_slug(data.get('name'))
+    repo_url = (data.get('repo_url') or '').strip()
+    branch = (data.get('branch') or 'main').strip()
+    app_type = (data.get('app_type') or 'auto').strip().lower()
+    build_method = (data.get('build_method') or 'auto').strip().lower()
+    auto_deploy = bool(data.get('auto_deploy', True))
+    port = data.get('port')
+
+    if not name or len(name) < 2:
+        return jsonify({'error': 'Service name must be at least 2 characters'}), 400
+    if not repo_url:
+        return jsonify({'error': 'repo_url is required'}), 400
+
+    valid_app_types = ['auto', 'docker', 'flask', 'django', 'php', 'static']
+    if app_type not in valid_app_types:
+        return jsonify({'error': f'Invalid app_type. Must be one of: {", ".join(valid_app_types)}'}), 400
+
+    valid_build_methods = ['auto', 'dockerfile', 'nixpacks', 'custom']
+    if build_method not in valid_build_methods:
+        return jsonify({'error': f'Invalid build_method. Must be one of: {", ".join(valid_build_methods)}'}), 400
+
+    if port in ['', None]:
+        port = None
+    elif isinstance(port, int) or (isinstance(port, str) and port.isdigit()):
+        port = int(port)
+    else:
+        return jsonify({'error': 'port must be a number'}), 400
+
+    if Application.query.filter_by(name=name, server_id=None).first():
+        return jsonify({'error': f'An application named "{name}" already exists'}), 400
+
+    try:
+        app_path = _assert_managed_app_path(name)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    if os.path.exists(app_path):
+        return jsonify({'error': f'App directory already exists: {app_path}'}), 400
+
+    clone_result = GitService.clone_repository(app_path, repo_url, branch or None)
+    if not clone_result.get('success'):
+        return jsonify(clone_result), 400
+
+    detection = BuildService.detect_build_method(app_path)
+    resolved_app_type = _derive_repo_app_type(detection) if app_type == 'auto' else app_type
+
+    app = Application(
+        name=name,
+        app_type=resolved_app_type,
+        status='stopped',
+        root_path=app_path,
+        user_id=current_user_id,
+        port=port,
+    )
+
+    try:
+        db.session.add(app)
+        db.session.commit()
+
+        deploy_result = GitService.configure_deployment(
+            app_id=app.id,
+            app_path=app.root_path,
+            repo_url=repo_url,
+            branch=branch or 'main',
+            auto_deploy=auto_deploy,
+        )
+        if not deploy_result.get('success'):
+            raise RuntimeError(deploy_result.get('error', 'Failed to configure deployment'))
+
+        build_result = BuildService.configure_build(
+            app_id=app.id,
+            app_path=app.root_path,
+            build_method=build_method,
+        )
+        if not build_result.get('success'):
+            raise RuntimeError(build_result.get('error', 'Failed to configure build'))
+
+        return jsonify({
+            'message': 'Repository service created',
+            'app': _attach_deploy_config(app.to_dict(include_linked=True)),
+            'deploy_config': {
+                'repo_url': _safe_repo_url(repo_url),
+                'branch': branch or 'main',
+                'auto_deploy': auto_deploy,
+                'webhook_url': deploy_result.get('webhook_url'),
+            },
+            'build_config': build_result.get('config'),
+            'detection': detection,
+        }), 201
+    except Exception as exc:
+        db.session.rollback()
+        if app.id:
+            GitService.remove_deployment(app.id)
+            existing_app = Application.query.get(app.id)
+            if existing_app:
+                db.session.delete(existing_app)
+                db.session.commit()
+        if os.path.abspath(app_path).startswith(os.path.abspath(paths.APPS_DIR) + os.sep):
+            shutil.rmtree(app_path, ignore_errors=True)
+        return jsonify({'error': str(exc)}), 400
 
 
 @apps_bp.route('', methods=['POST'])

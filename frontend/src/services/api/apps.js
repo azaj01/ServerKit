@@ -17,6 +17,13 @@ export async function createApp(appData) {
     });
 }
 
+export async function createAppFromRepository(appData) {
+    return this.request('/apps/from-repository', {
+        method: 'POST',
+        body: appData,
+    });
+}
+
 export async function updateApp(id, appData) {
     return this.request(`/apps/${id}`, {
         method: 'PUT',

@@ -1,14 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Server as ServerLucideIcon } from 'lucide-react';
+import {
+    Activity,
+    CheckCircle2,
+    Clock3,
+    Folder,
+    Plus,
+    RefreshCw,
+    Search,
+    Server as ServerLucideIcon,
+    XCircle,
+} from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import EmptyState from '../components/EmptyState';
-import { StatCard, StatsGrid } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 
 const Servers = () => {
     const [servers, setServers] = useState([]);
@@ -149,36 +156,65 @@ const Servers = () => {
     };
     const availability = fleetStats.total > 0 ? Math.round((fleetStats.online / fleetStats.total) * 100) : 0;
     const hasActiveFilters = selectedGroup !== 'all' || selectedStatus !== 'all' || Boolean(searchTerm);
-    const statCards = [
+    const groupCounts = servers.reduce((acc, server) => {
+        const key = server.group_id ? String(server.group_id) : 'ungrouped';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+    const statusFilters = [
         {
             key: 'all',
-            label: 'Total',
+            label: 'All servers',
             value: fleetStats.total,
             detail: `${groups.length} group${groups.length === 1 ? '' : 's'}`,
-            icon: <ServerIcon />,
+            icon: ServerLucideIcon,
         },
         {
             key: 'online',
             label: 'Online',
             value: fleetStats.online,
             detail: `${availability}% available`,
-            icon: <CheckCircleIcon />,
+            icon: CheckCircle2,
         },
         {
             key: 'offline',
             label: 'Offline',
             value: fleetStats.offline,
             detail: 'Needs attention',
-            icon: <XCircleIcon />,
+            icon: XCircle,
         },
         {
             key: 'connecting',
             label: 'Connecting',
             value: fleetStats.connecting,
-            detail: `${fleetStats.pending} pending`,
-            icon: <RefreshIcon />,
-        }
+            detail: 'Agent handshake',
+            icon: RefreshCw,
+        },
+        {
+            key: 'pending',
+            label: 'Pending',
+            value: fleetStats.pending,
+            detail: 'Awaiting install',
+            icon: Clock3,
+        },
     ];
+    const groupFilters = [
+        { key: 'all', label: 'All groups', value: fleetStats.total },
+        ...groups.map(group => ({
+            key: String(group.id),
+            label: group.name,
+            value: groupCounts[String(group.id)] || 0,
+        })),
+        { key: 'ungrouped', label: 'Ungrouped', value: groupCounts.ungrouped || 0 },
+    ];
+    const activeStatusLabel = statusFilters.find(filter => filter.key === selectedStatus)?.label || 'All servers';
+    const fleetStateLabel = fleetStats.total === 0
+        ? 'No agents paired'
+        : fleetStats.offline > 0
+            ? 'Needs attention'
+            : (fleetStats.connecting + fleetStats.pending) > 0
+                ? 'Pairing in progress'
+                : 'Healthy';
 
     if (loading) {
         return (
@@ -196,161 +232,216 @@ const Servers = () => {
     const someVisibleSelected = visibleIds.some(id => selectedIds.has(id));
 
     return (
-        <div className="page-container servers-page">
-            <header className="servers-header">
-                <div className="servers-header__title">
-                    <h1>Servers</h1>
-                    <p>{servers.length} {servers.length === 1 ? 'machine' : 'machines'} · {fleetStats.online} online · {availability}% availability</p>
-                </div>
-                <div className="servers-header__actions">
-                    <Button variant="outline" onClick={() => setShowGroupModal(true)}>
-                        <FolderIcon /> Groups
-                    </Button>
-                    <Button onClick={() => setShowAddModal(true)}>
-                        <PlusIcon /> Add Server
-                    </Button>
-                </div>
-            </header>
+        <div className="page-container page-container--full-bleed servers-page servers-page--ops">
+            <div className="servers-ops-workspace">
+                <aside className="servers-fleet-rail">
+                    <section className="servers-rail-section servers-rail-section--health">
+                        <div className="servers-rail-section-header">
+                            <Activity size={14} />
+                            <span>Fleet health</span>
+                        </div>
+                        <div className="servers-health-dial" style={{ '--availability': `${availability * 3.6}deg` }}>
+                            <strong>{availability}%</strong>
+                            <span>available</span>
+                        </div>
+                        <div className="servers-health-summary">
+                            <strong>{fleetStateLabel}</strong>
+                            <span>{fleetStats.online} of {fleetStats.total} online</span>
+                        </div>
+                    </section>
 
-            <StatsGrid>
-                {statCards.map(stat => (
-                    <StatCard
-                        key={stat.key}
-                        iconNode={stat.icon}
-                        iconVariant={stat.key}
-                        label={stat.label}
-                        value={stat.value}
-                        detail={stat.detail}
-                        active={selectedStatus === stat.key}
-                        onClick={() => setSelectedStatus(stat.key)}
-                    />
-                ))}
-            </StatsGrid>
+                    <section className="servers-rail-section">
+                        <div className="servers-rail-section-header">
+                            <ServerLucideIcon size={14} />
+                            <span>Status</span>
+                        </div>
+                        <div className="servers-status-nav">
+                            {statusFilters.map(filter => {
+                                const Icon = filter.icon;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={filter.key}
+                                        className={`servers-status-nav-item servers-status-nav-item--${filter.key} ${selectedStatus === filter.key ? 'active' : ''}`}
+                                        onClick={() => setSelectedStatus(filter.key)}
+                                    >
+                                        <Icon size={15} />
+                                        <span>
+                                            <strong>{filter.label}</strong>
+                                            <small>{filter.detail}</small>
+                                        </span>
+                                        <b>{filter.value}</b>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
 
-            <div className="servers-command-bar">
-                <div className="servers-toolbar">
-                    <label className="search-box">
-                        <SearchIcon />
-                        <Input
-                            type="text"
-                            placeholder="Search by name, host, or IP..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </label>
-                    <div className="group-filter">
-                        <span>Group</span>
-                        <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
-                            <option value="all">All Groups</option>
-                            {groups.map(group => (
-                                <option key={group.id} value={group.id}>{group.name}</option>
+                    <section className="servers-rail-section">
+                        <div className="servers-rail-section-header servers-rail-section-header--split">
+                            <span>
+                                <Folder size={14} />
+                                Groups
+                            </span>
+                            <button type="button" onClick={() => setShowGroupModal(true)}>
+                                Manage
+                            </button>
+                        </div>
+                        <div className="servers-group-nav">
+                            {groupFilters.map(filter => (
+                                <button
+                                    type="button"
+                                    key={filter.key}
+                                    className={`servers-group-nav-item ${selectedGroup === filter.key ? 'active' : ''}`}
+                                    onClick={() => setSelectedGroup(filter.key)}
+                                >
+                                    <Folder size={14} />
+                                    <span>{filter.label}</span>
+                                    <b>{filter.value}</b>
+                                </button>
                             ))}
-                            <option value="ungrouped">Ungrouped</option>
-                        </select>
-                    </div>
-                </div>
+                        </div>
+                    </section>
+                </aside>
 
-                <div className="servers-results-summary">
-                    <strong>{filteredServers.length}</strong>
-                    <span>{filteredServers.length === 1 ? 'server' : 'servers'}</span>
-                    {hasActiveFilters && (
-                        <button
-                            type="button"
-                            className="servers-clear-filters"
-                            onClick={() => {
-                                setSelectedGroup('all');
-                                setSelectedStatus('all');
-                                setSearchTerm('');
-                            }}
-                        >
-                            Clear filters
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {selectedIds.size > 0 && (
-                <div className="servers-bulk-bar" role="region" aria-label="Bulk actions">
-                    <div className="servers-bulk-bar__info">
-                        <span className="servers-bulk-bar__count">{selectedIds.size}</span>
-                        <span>selected</span>
+                <main className="servers-main">
+                    <div className="servers-workbar">
+                        <div className="servers-workbar-title">
+                            <span>Servers</span>
+                            <h1>{activeStatusLabel}</h1>
+                            <em>{filteredServers.length} visible of {servers.length}</em>
+                        </div>
+                        <div className="servers-workbar-actions">
+                            <Button variant="outline" onClick={() => setShowGroupModal(true)}>
+                                <Folder size={16} /> Groups
+                            </Button>
+                            <Button onClick={() => setShowAddModal(true)}>
+                                <Plus size={16} /> Add Server
+                            </Button>
+                        </div>
                     </div>
-                    <div className="servers-bulk-bar__actions">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-                            Clear selection
-                        </Button>
-                        <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
-                            <TrashIcon /> Delete {selectedIds.size}
-                        </Button>
-                    </div>
-                </div>
-            )}
 
-            {filteredServers.length === 0 ? (
-                <EmptyState
-                    size="lg"
-                    icon={ServerLucideIcon}
-                    title={servers.length === 0 ? 'No servers yet' : 'No servers match these filters'}
-                    description={servers.length === 0
-                        ? 'Install a ServerKit agent on a machine to start monitoring health and managing Docker remotely.'
-                        : 'Try a different status, group, or search term to bring machines back into view.'}
-                    action={servers.length === 0 ? (
-                        <Button onClick={() => setShowAddModal(true)}>
-                            <PlusIcon /> Add your first server
-                        </Button>
-                    ) : (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                                setSelectedGroup('all');
-                                setSelectedStatus('all');
-                                setSearchTerm('');
-                            }}
-                        >
-                            Clear filters
-                        </Button>
-                    )}
-                />
-            ) : (
-                <div className="servers-table-wrap">
-                    <table className="servers-table">
-                        <thead>
-                            <tr>
-                                <th className="col-check">
-                                    <input
-                                        type="checkbox"
-                                        aria-label="Select all visible servers"
-                                        checked={allVisibleSelected}
-                                        ref={el => { if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected; }}
-                                        onChange={() => toggleSelectAll(visibleIds)}
-                                    />
-                                </th>
-                                <th>Server</th>
-                                <th>Status</th>
-                                <th>Group</th>
-                                <th>OS · Agent</th>
-                                <th>Telemetry</th>
-                                <th>Last seen</th>
-                                <th className="col-actions" aria-label="Actions" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredServers.map(server => (
-                                <ServerRow
-                                    key={server.id}
-                                    server={server}
-                                    selected={selectedIds.has(server.id)}
-                                    onToggle={() => toggleSelect(server.id)}
-                                    onPing={() => handlePingServer(server.id)}
-                                    onDelete={() => setDeleteTarget(server)}
-                                    onCopyInstall={() => handleCopyInstall(server)}
+                    <div className="servers-command-bar">
+                        <div className="servers-toolbar">
+                            <label className="search-box">
+                                <Search size={16} />
+                                <Input
+                                    type="text"
+                                    placeholder="Search by name, host, or IP..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
                                 />
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                            </label>
+                        </div>
+
+                        <div className="servers-results-summary">
+                            <strong>{filteredServers.length}</strong>
+                            <span>{filteredServers.length === 1 ? 'server' : 'servers'}</span>
+                            {hasActiveFilters && (
+                                <button
+                                    type="button"
+                                    className="servers-clear-filters"
+                                    onClick={() => {
+                                        setSelectedGroup('all');
+                                        setSelectedStatus('all');
+                                        setSearchTerm('');
+                                    }}
+                                >
+                                    Clear filters
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {selectedIds.size > 0 && (
+                        <div className="servers-bulk-bar" role="region" aria-label="Bulk actions">
+                            <div className="servers-bulk-bar__info">
+                                <span className="servers-bulk-bar__count">{selectedIds.size}</span>
+                                <span>selected</span>
+                            </div>
+                            <div className="servers-bulk-bar__actions">
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                                    Clear selection
+                                </Button>
+                                <Button type="button" variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+                                    <TrashIcon /> Delete {selectedIds.size}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {filteredServers.length === 0 ? (
+                        <div className="servers-empty-workspace">
+                            <div className="servers-empty-workspace__icon">
+                                <ServerLucideIcon size={28} />
+                            </div>
+                            <h2>{servers.length === 0 ? 'No servers yet' : 'No servers match these filters'}</h2>
+                            <p>
+                                {servers.length === 0
+                                    ? 'Pair an agent to bring a machine into this fleet.'
+                                    : 'Adjust the rail filters or search query to bring machines back into view.'}
+                            </p>
+                            <div className="servers-empty-workspace__actions">
+                                {servers.length === 0 ? (
+                                    <Button onClick={() => setShowAddModal(true)}>
+                                        <Plus size={16} /> Add your first server
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => {
+                                            setSelectedGroup('all');
+                                            setSelectedStatus('all');
+                                            setSearchTerm('');
+                                        }}
+                                    >
+                                        Clear filters
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="servers-table-wrap">
+                            <table className="servers-table">
+                                <thead>
+                                    <tr>
+                                        <th className="col-check">
+                                            <input
+                                                type="checkbox"
+                                                aria-label="Select all visible servers"
+                                                checked={allVisibleSelected}
+                                                ref={el => { if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected; }}
+                                                onChange={() => toggleSelectAll(visibleIds)}
+                                            />
+                                        </th>
+                                        <th>Server</th>
+                                        <th>Status</th>
+                                        <th>Group</th>
+                                        <th>OS · Agent</th>
+                                        <th>Telemetry</th>
+                                        <th>Last seen</th>
+                                        <th className="col-actions" aria-label="Actions" />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredServers.map(server => (
+                                        <ServerRow
+                                            key={server.id}
+                                            server={server}
+                                            selected={selectedIds.has(server.id)}
+                                            onToggle={() => toggleSelect(server.id)}
+                                            onPing={() => handlePingServer(server.id)}
+                                            onDelete={() => setDeleteTarget(server)}
+                                            onCopyInstall={() => handleCopyInstall(server)}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </main>
+            </div>
 
             {showAddModal && (
                 <AddServerModal
@@ -736,7 +827,7 @@ const PairAgentForm = ({ groups, onClose, onClaimed }) => {
                             onChange={(e) => setName(e.target.value)}
                             placeholder={lookupResult?.system_info?.hostname || 'Auto-detected from agent (optional)'}
                         />
-                        <span className="form-hint">Leave blank to use the agent's hostname.</span>
+                        <span className="form-hint">Leave blank to use the agent&apos;s hostname.</span>
                     </div>
                     <div className="form-group">
                         <label>Group</label>
@@ -1158,25 +1249,10 @@ const FolderIcon = ({ size = 16 }) => (
     </svg>
 );
 
-const SearchIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="11" cy="11" r="8"/>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-);
-
 const CheckCircleIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
         <polyline points="22 4 12 14.01 9 11.01"/>
-    </svg>
-);
-
-const XCircleIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="15" y1="9" x2="9" y2="15"/>
-        <line x1="9" y1="9" x2="15" y2="15"/>
     </svg>
 );
 

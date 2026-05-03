@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Layers } from 'lucide-react';
+import { Layers, Plus } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { getServiceType, getStatusConfig, formatRelativeTime } from '../utils/serviceTypes';
@@ -145,11 +145,8 @@ const Services = () => {
                     </p>
                 </div>
                 <Button asChild>
-                    <Link to="/templates">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="12" y1="5" x2="12" y2="19"/>
-                            <line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
+                    <Link to="/services/new">
+                        <Plus size={16} />
                         New Service
                     </Link>
                 </Button>
@@ -289,10 +286,10 @@ const Services = () => {
                     title="No services found"
                     description={searchTerm || typeFilter !== 'all' || statusFilter !== 'all'
                         ? 'Try adjusting your filters'
-                        : 'Deploy your first service to get started'}
+                        : 'Connect a repository or install a template to get started'}
                     action={!searchTerm && typeFilter === 'all' && statusFilter === 'all' && (
                         <Button asChild>
-                            <Link to="/templates">Create Service</Link>
+                            <Link to="/services/new">Create Service</Link>
                         </Button>
                     )}
                 />
@@ -484,8 +481,8 @@ function ServiceTypeIcon({ type }) {
 function extractRepoName(url) {
     if (!url) return '';
     try {
-        const cleaned = url.replace(/\.git$/, '');
-        const parts = cleaned.split('/');
+        const cleaned = url.replace(/\.git$/, '').replace(/^https?:\/\/[^@]+@/, 'https://');
+        const parts = cleaned.split(/[/:]/).filter(Boolean);
         return parts.slice(-2).join('/');
     } catch {
         return url;
