@@ -89,13 +89,6 @@ export const SIDEBAR_ITEMS = [
         icon: '<rect x="2" y="7" width="6" height="6" rx="1"/><rect x="9" y="7" width="6" height="6" rx="1"/><rect x="16" y="7" width="6" height="6" rx="1"/><rect x="2" y="14" width="6" height="6" rx="1"/><rect x="9" y="14" width="6" height="6" rx="1"/>'
     },
     {
-        id: 'git',
-        label: 'Git',
-        route: '/git',
-        category: 'infrastructure',
-        icon: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>'
-    },
-    {
         id: 'files',
         label: 'Files',
         route: '/files',
@@ -198,15 +191,21 @@ export const SIDEBAR_PRESETS = {
     }
 };
 
-// Get visible items based on config
-export function getVisibleItems(sidebarConfig) {
+export function getHiddenItemIds(sidebarConfig) {
     const { preset = 'full', hiddenItems = [] } = sidebarConfig || {};
 
     const hidden = preset === 'custom'
         ? hiddenItems
         : (SIDEBAR_PRESETS[preset]?.hiddenItems || []);
 
+    return new Set(hidden);
+}
+
+// Get visible items based on config
+export function getVisibleItems(sidebarConfig) {
+    const hidden = getHiddenItemIds(sidebarConfig);
+
     return SIDEBAR_ITEMS.filter(item =>
-        item.alwaysVisible || !hidden.includes(item.id)
+        item.alwaysVisible || !hidden.has(item.id)
     );
 }

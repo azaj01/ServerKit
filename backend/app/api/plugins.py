@@ -244,8 +244,8 @@ def list_builtin():
     """Enumerate bundled extensions in BUILTIN_EXTENSIONS_DIR.
 
     Used by the Marketplace UI to show one-click installs for plugins
-    that ship with the repo (e.g. the opt-in Git wrapper) without
-    making the user paste an absolute path.
+    that ship with the repo (e.g. the Git extension) without making the
+    user paste an absolute path.
     """
     from app.services.plugin_service import list_builtin_extensions
     return jsonify({'builtin': list_builtin_extensions()})

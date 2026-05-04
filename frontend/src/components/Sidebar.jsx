@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Star, Settings, LogOut, Sun, Moon, Monitor, ChevronRight, ChevronDown, ChevronUp, Layers, Palette, PanelLeft, Check } from 'lucide-react';
 import { api } from '../services/api';
 import ServerKitLogo from './ServerKitLogo';
-import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getVisibleItems, SIDEBAR_ITEMS } from './sidebarItems';
+import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems } from './sidebarItems';
 import { useContributions } from '../plugins/contributions';
 
 const Sidebar = () => {
@@ -94,12 +94,17 @@ const Sidebar = () => {
 
     const visibleItems = useMemo(() => {
         const core = getVisibleItems(user?.sidebar_config);
+        const hiddenIds = getHiddenItemIds(user?.sidebar_config);
         // Merge contributed nav items, dedup by id (core wins). Plugins
         // can claim a category; default to 'system' so they always land
         // somewhere visible.
         const existingIds = new Set(core.map((i) => i.id));
         const fromPlugins = (pluginNav || [])
-            .filter((item) => item && item.id && item.route && !existingIds.has(item.id))
+            .filter((item) => (
+                item && item.id && item.route
+                && !existingIds.has(item.id)
+                && !hiddenIds.has(item.id)
+            ))
             .map((item) => ({
                 ...item,
                 category: item.category || 'system',

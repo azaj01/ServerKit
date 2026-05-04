@@ -1,14 +1,16 @@
-// Re-exports the existing host Git page as GitExtPage so the
-// contribution system can mount it at /git-ext while the hardcoded
-// /git route stays in place. Both routes hit the same /api/v1/git
-// backend and share state — this is intentional, the extension is
-// the same feature surfaced through the opt-in plugin pipeline so
-// you can A/B the two install paths.
+// Re-exports the existing host Git page through the extension system.
+// The extension owns the canonical /git route; the host keeps the page
+// component as implementation detail until the Git UI is fully split.
 //
 // After install, this file lives at frontend/src/plugins/serverkit-git/
 // so the relative import resolves against the host's pages directory.
 import GitPage from '../../pages/Git';
 
-export function GitExtPage() {
-    return <GitPage basePath="/git-ext" />;
+export function GitExtensionPage() {
+    return <GitPage basePath="/git" />;
 }
+
+// Backward compatibility for older installed manifests that still point
+// at GitExtPage. Contribution normalization rewrites those manifests, but
+// keeping the export avoids a blank route if stale metadata slips through.
+export const GitExtPage = GitExtensionPage;

@@ -22,7 +22,6 @@ const STATIC_PAGES = [
     { label: 'Workflow Builder', path: '/workflow', category: 'Pages', keywords: 'automation pipeline' },
     { label: 'WordPress', path: '/wordpress', category: 'Pages', keywords: 'wp sites' },
     { label: 'WordPress Projects', path: '/wordpress/projects', category: 'Pages', keywords: 'wp environments' },
-    { label: 'Git', path: '/git', category: 'Pages', keywords: 'repos deploy' },
     { label: 'Files', path: '/files', category: 'Pages', keywords: 'file manager explorer' },
     { label: 'FTP Server', path: '/ftp', category: 'Pages', keywords: 'sftp upload' },
     { label: 'Monitoring', path: '/monitoring', category: 'Pages', keywords: 'metrics uptime' },

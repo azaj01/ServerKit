@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -21,7 +21,6 @@ import Settings from './pages/Settings';
 import FileManager from './pages/FileManager';
 import FTPServer from './pages/FTPServer';
 // Firewall is now part of Security page
-import Git from './pages/Git';
 import CronJobs from './pages/CronJobs';
 import Security from './pages/Security';
 import Services from './pages/Services';
@@ -77,7 +76,6 @@ const PAGE_TITLES = {
     '/docker': 'Docker',
     '/servers': 'Servers',
     '/downloads': 'Downloads',
-    '/git': 'Git Repositories',
     '/files': 'File Manager',
     '/ftp': 'FTP Server',
     '/monitoring': 'Monitoring',
@@ -186,6 +184,11 @@ function SetupRoute({ children }) {
     return children;
 }
 
+function LegacyGitExtRedirect() {
+    const { tab } = useParams();
+    return <Navigate to={tab ? `/git/${tab}` : '/git'} replace />;
+}
+
 function AppRoutes() {
     const { dashboardRoutes, standaloneGroups } = useExtensionRoutes();
     return (
@@ -278,8 +281,8 @@ function AppRoutes() {
                 <Route path="documentation" element={<Documentation />} />
                 <Route path="downloads" element={<Downloads />} />
                 <Route path="firewall" element={<Navigate to="/security/firewall" replace />} />
-                <Route path="git" element={<Git />} />
-                <Route path="git/:tab" element={<Git />} />
+                <Route path="git-ext" element={<LegacyGitExtRedirect />} />
+                <Route path="git-ext/:tab" element={<LegacyGitExtRedirect />} />
                 <Route path="files" element={<FileManager />} />
                 <Route path="ftp" element={<FTPServer />} />
                 <Route path="ftp/:tab" element={<FTPServer />} />

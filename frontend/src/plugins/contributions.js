@@ -77,6 +77,63 @@ const EMPTY = {
     layouts: [],
 };
 
+const GIT_PLUGIN_SLUG = 'serverkit-git';
+const GIT_ICON = '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>';
+
+function normalizeContributions(value) {
+    const out = { ...EMPTY, ...(value || {}) };
+    const hasGitPlugin = [
+        ...(out.nav || []),
+        ...(out.routes || []),
+        ...(out.command_palette || []),
+    ].some((item) => item?.plugin === GIT_PLUGIN_SLUG);
+
+    if (!hasGitPlugin) return out;
+
+    const oldGitNav = (out.nav || []).find((item) => item?.plugin === GIT_PLUGIN_SLUG);
+
+    // Compatibility for the initial Git extension experiment, which
+    // contributed /git-ext while the host still owned /git. The extension
+    // is now the canonical Git surface.
+    return {
+        ...out,
+        nav: [
+            ...(out.nav || []).filter((item) => item?.plugin !== GIT_PLUGIN_SLUG),
+            {
+                ...oldGitNav,
+                plugin: GIT_PLUGIN_SLUG,
+                id: 'git',
+                label: 'Git',
+                route: '/git',
+                category: oldGitNav?.category || 'infrastructure',
+                icon: oldGitNav?.icon || GIT_ICON,
+            },
+        ],
+        routes: [
+            ...(out.routes || []).filter((item) => item?.plugin !== GIT_PLUGIN_SLUG),
+            { plugin: GIT_PLUGIN_SLUG, path: 'git', component: 'GitExtensionPage' },
+            { plugin: GIT_PLUGIN_SLUG, path: 'git/:tab', component: 'GitExtensionPage' },
+        ],
+        page_titles: {
+            ...(Object.fromEntries(
+                Object.entries(out.page_titles || {})
+                    .filter(([path]) => path !== '/git-ext')
+            )),
+            '/git': 'Git Repositories',
+        },
+        command_palette: [
+            ...(out.command_palette || []).filter((item) => item?.plugin !== GIT_PLUGIN_SLUG),
+            {
+                plugin: GIT_PLUGIN_SLUG,
+                label: 'Git',
+                path: '/git',
+                category: 'Pages',
+                keywords: 'git repos deploy extension plugin',
+            },
+        ],
+    };
+}
+
 function tagItems(items, slug) {
     return (items || [])
         .filter((item) => item && typeof item === 'object')
@@ -162,7 +219,7 @@ function notify(value) {
 export function refreshContributions() {
     cachedPromise = api.getPluginContributions()
         .then((data) => {
-            const merged = { ...EMPTY, ...(data || {}) };
+            const merged = normalizeContributions({ ...EMPTY, ...(data || {}) });
             notify(merged);
             return merged;
         })
@@ -171,7 +228,7 @@ export function refreshContributions() {
             // while running only the Vite dev server), use the active plugin
             // manifest baked into this frontend build instead of leaving
             // contributed routes blank.
-            const fallback = getBuildTimeContributions();
+            const fallback = normalizeContributions(getBuildTimeContributions());
             notify(fallback);
             return fallback;
         });
