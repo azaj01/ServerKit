@@ -33,6 +33,14 @@ Vagrant.configure("2") do |config|
     hv.linked_clone = true
   end
 
+  # Pin the Hyper-V switch so vagrant up doesn't prompt the operator
+  # to pick one interactively (which blocks unattended runs). "Default
+  # Switch" is Hyper-V's built-in NAT switch and ships on every install.
+  # Override via VAGRANT_HYPERV_SWITCH_NAME env if you want a different
+  # network.
+  config.vm.network "public_network",
+                    bridge: ENV.fetch('VAGRANT_HYPERV_SWITCH_NAME', 'Default Switch')
+
   # Bootstrap: ensure rsync + curl are present (mirrors the multipass
   # cloud-init). Best effort — different distros use different package
   # managers, so try them in order.
