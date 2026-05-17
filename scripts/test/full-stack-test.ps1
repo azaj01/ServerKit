@@ -103,6 +103,24 @@ if (-not $Distros -or $Distros.Count -eq 0) {
     exit 2
 }
 
+# Vagrant + Hyper-V requires the process itself to run elevated. Being in
+# the Hyper-V Administrators group is necessary but not sufficient.
+$needsAdmin = $Distros | Where-Object { $DistroMap[$_].backend -eq 'vagrant' }
+if ($needsAdmin) {
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Write-Host "" -ForegroundColor Red
+        Write-Host "Vagrant + Hyper-V requires an elevated PowerShell." -ForegroundColor Red
+        Write-Host "Requested distros that need it: $($needsAdmin -join ', ')" -ForegroundColor Red
+        Write-Host "" -ForegroundColor Red
+        Write-Host "Either:" -ForegroundColor Yellow
+        Write-Host "  1. Right-click PowerShell -> Run as Administrator, then re-run this script." -ForegroundColor Yellow
+        Write-Host "  2. Or run with -Only ubuntu22,ubuntu24 to skip Vagrant distros." -ForegroundColor Yellow
+        exit 2
+    }
+}
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " ServerKit E2E Test - run $RunId" -ForegroundColor Cyan
 if ($MpExe) { Write-Host " Multipass: $MpExe" -ForegroundColor Cyan }

@@ -18,6 +18,10 @@ installer actually works on multiple distros" use case.
    ```powershell
    winget install Hashicorp.Vagrant
    ```
+   **Note:** Vagrant + Hyper-V requires running the script from an
+   **elevated** PowerShell (right-click → Run as Administrator). If you
+   run as a normal user, the script will tell you and exit cleanly.
+   Multipass-only runs (Ubuntu) don't need admin.
 3. **Python 3** on PATH (for the HTML report generator; tests run inside the VMs).
 4. **Hyper-V** enabled (both Multipass and Vagrant use it on Windows).
 
