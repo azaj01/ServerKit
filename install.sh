@@ -192,7 +192,22 @@ elif [ "$OS_FAMILY" = "fedora" ] || [ "$OS_FAMILY" = "rhel" ]; then
         dnf install -y epel-release || true
     fi
 
-    dnf update -y
+    dnf makecache --refresh
+
+    # On Rocky/RHEL 9.7+, the updates stream ships openssl-libs 3.5.x
+    # which has a different ABI than the older openssl-3.0.x most boxes
+    # ship with. If subsequent dnf installs pull in the new openssl-libs
+    # as a transitive dep (e.g. via libcurl from `dnf install curl`),
+    # every new sshd fork dies with "OpenSSL version mismatch" — TCP
+    # accepts, then RST, and remote installs over SSH fail silently.
+    # Pull openssh + openssl in the same transaction up front so the
+    # post-transaction scriptlet restarts sshd against a matched
+    # openssh-server/openssl-libs pair. sshd.service uses
+    # KillMode=process so existing SSH sessions survive the restart.
+    if [ "$OS_FAMILY" = "rhel" ]; then
+        dnf upgrade -y openssh openssh-server openssh-clients \
+            openssl openssl-libs openssl-devel 2>/dev/null || true
+    fi
 
     dnf install -y \
         python3 \
