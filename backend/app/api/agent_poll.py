@@ -90,6 +90,11 @@ def connect():
         transport='poll',
     )
 
+    # None means the DB write failed and register_agent rolled back the
+    # in-memory state — surface a 5xx rather than a session the panel can't back.
+    if not session_token:
+        return jsonify({'success': False, 'error': 'Registration failed'}), 500
+
     return jsonify({
         'success': True,
         'session_token': session_token,

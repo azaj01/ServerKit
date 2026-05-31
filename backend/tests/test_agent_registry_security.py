@@ -287,3 +287,32 @@ def test_failed_signature_does_not_consume_nonce(app, monkeypatch):
     )
     assert ok is not None
     assert consumed == [(s.id, nonce)], "valid request should consume the nonce exactly once"
+
+
+# --------------------------------------------------------------------------
+# register_agent must fail closed on a DB error: return None and roll back the
+# in-memory registration so the gateway can't report a connected agent with no
+# backing session row.
+# --------------------------------------------------------------------------
+
+def test_register_agent_returns_none_and_rolls_back_on_db_failure(app, clean_registry, monkeypatch):
+    import app.services.agent_registry as reg
+
+    s = Server(name="t", agent_id="agent-dbfail")
+    _db.session.add(s)
+    _db.session.commit()
+    sid = s.id
+
+    # Blow up AgentSession construction to simulate a DB-layer failure that
+    # happens AFTER the in-memory registration has been installed.
+    class _Boom:
+        def __init__(self, *a, **k):
+            raise RuntimeError("simulated db failure")
+
+    monkeypatch.setattr(reg, "AgentSession", _Boom)
+
+    token = agent_registry.register_agent(sid, "socket-dbfail", "1.2.3.4", "1.0.0")
+
+    assert token is None
+    assert agent_registry.is_agent_connected(sid) is False
+    assert agent_registry.get_agent(sid) is None

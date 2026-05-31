@@ -158,6 +158,16 @@ class AgentNamespace(Namespace):
             agent_version=agent_version
         )
 
+        # register_agent returns None when the DB write failed and it rolled
+        # back the in-memory state — don't tell the agent it's authenticated.
+        if not session_token:
+            emit('auth_fail', {
+                'type': 'auth_fail',
+                'error': 'Registration failed'
+            })
+            disconnect()
+            return
+
         # Calculate token expiry (1 hour)
         expires = int((time.time() + 3600) * 1000)
 

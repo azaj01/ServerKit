@@ -255,7 +255,7 @@ class AgentRegistry:
         ip_address: str,
         agent_version: str = None,
         transport: str = 'ws'
-    ) -> str:
+    ) -> Optional[str]:
         """
         Register a newly connected agent.
 
@@ -264,7 +264,9 @@ class AgentRegistry:
         ngrok, cf quick tunnels) corrupt frames. The two share storage
         and the command-routing path differs only in send_command.
 
-        Returns: session_token
+        Returns: session_token on success, or None if the DB write failed
+        (in which case the in-memory registration is rolled back and the
+        caller must NOT treat the agent as connected).
         """
         session_token = secrets.token_urlsafe(32)
 
@@ -361,9 +363,22 @@ class AgentRegistry:
             except Exception as e:
                 logger.error("Error delivering queued commands: %s", e)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error registering agent")
             db.session.rollback()
+            # The DB row/session didn't persist, so don't leave this agent in
+            # the in-memory registry advertising itself as connected. That
+            # desync would make the gateway emit auth_ok and have command
+            # routing target an agent with no backing session row. Remove our
+            # entry (guarded on identity, in case a concurrent reconnect has
+            # already replaced it) and signal failure so the caller emits
+            # auth_fail instead of auth_ok. A stale 'online' server row with no
+            # in-memory agent is self-corrected by the heartbeat reaper.
+            with self._lock:
+                if self._agents.get(server_id) is agent:
+                    self._agents.pop(server_id, None)
+                    self._socket_to_server.pop(socket_id, None)
+            return None
 
         return session_token
 
@@ -612,8 +627,14 @@ class AgentRegistry:
             command_record.result = result.get('data')
             command_record.error = result.get('error')
             db.session.commit()
-        except Exception as e:
+        except Exception:
             db.session.rollback()
+            # Don't swallow silently: if this final write fails the command
+            # row is left stuck in 'running', which is invisible without a log.
+            logger.exception(
+                "Failed to finalize command record %s (left in 'running')",
+                command_id,
+            )
 
         return result
 
