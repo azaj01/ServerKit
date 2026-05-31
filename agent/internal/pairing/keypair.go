@@ -27,6 +27,13 @@ func (k *KeyPair) PublicKeyHex() string {
 	return hex.EncodeToString(k.Public)
 }
 
+// Sign produces an Ed25519 signature over message using the private key.
+// Used for pairing proof-of-possession: the panel verifies the signature
+// against the enrolled public key before releasing credentials.
+func (k *KeyPair) Sign(message []byte) []byte {
+	return ed25519.Sign(k.Private, message)
+}
+
 // DefaultKeyPath returns the OS-specific default path for the pairing keyfile.
 func DefaultKeyPath() string {
 	if runtime.GOOS == "windows" {

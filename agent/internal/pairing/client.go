@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,7 +67,15 @@ type Client struct {
 	UserAgent        string
 	EnrollmentID     string
 	EnrollmentSecret string
+	keypair          *KeyPair
 	log              *logger.Logger
+}
+
+// SetKeyPair attaches the agent's Ed25519 keypair so Poll can prove
+// possession of the private key matching the enrolled pubkey. Optional: when
+// unset, Poll falls back to bearer-secret-only auth (older behavior).
+func (c *Client) SetKeyPair(kp *KeyPair) {
+	c.keypair = kp
 }
 
 // NewClient constructs a pairing client. baseURL must be the panel HTTPS root.
@@ -122,8 +131,16 @@ func (c *Client) SetFreeze(ctx context.Context, frozen bool) (*RefreshResponse, 
 // Returns (claimed, credentials, err). If err is nil and claimed is false the
 // caller should reconnect immediately for another long-poll.
 func (c *Client) Poll(ctx context.Context) (bool, *Credentials, error) {
+	headers := c.enrollHeaders()
+	// Prove possession of the enrolled private key by signing the
+	// enrollment_id. The panel verifies this against the pubkey we submitted at
+	// enroll() time, so a stolen enrollment_secret alone can't claim our creds.
+	if c.keypair != nil && c.EnrollmentID != "" {
+		sig := base64.StdEncoding.EncodeToString(c.keypair.Sign([]byte(c.EnrollmentID)))
+		headers.Set("X-Enrollment-Signature", sig)
+	}
 	var resp PollResponse
-	if err := c.do(ctx, "GET", "/api/v1/pairing/poll", nil, c.enrollHeaders(), &resp); err != nil {
+	if err := c.do(ctx, "GET", "/api/v1/pairing/poll", nil, headers, &resp); err != nil {
 		return false, nil, err
 	}
 	if resp.Status == "claimed" && resp.Credentials != nil {

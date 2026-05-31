@@ -114,12 +114,20 @@ def poll():
     if not enrollment_id or not enrollment_secret:
         return jsonify({'error': 'Missing enrollment credentials'}), 401
 
+    # Optional Ed25519 proof-of-possession over the enrollment_id. Sent as a
+    # header (works for GET long-polls) or in the JSON body. It's constant for a
+    # given enrollment, so read it once before the long-poll loop.
+    signature = request.headers.get('X-Enrollment-Signature')
+    if not signature and request.is_json:
+        signature = (request.get_json(silent=True) or {}).get('signature')
+
     deadline = time.time() + 25.0  # leave headroom under typical proxy timeouts
     poll_interval = 1.0
 
     while True:
         try:
-            result = pairing_service.poll(enrollment_id, enrollment_secret)
+            result = pairing_service.poll(enrollment_id, enrollment_secret,
+                                          signature=signature)
         except PairingError as exc:
             return _error_response(exc)
 

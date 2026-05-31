@@ -15,6 +15,7 @@ Flow:
   5. The agent's next /poll returns the credentials. Done.
 """
 
+import base64
 import json
 import logging
 import secrets
@@ -214,15 +215,57 @@ def set_freeze(enrollment_id: str, enrollment_secret: str, frozen: bool) -> dict
     return {'pair_code_frozen': pending.pair_code_frozen}
 
 
-def poll(enrollment_id: str, enrollment_secret: str) -> dict:
+def _verify_pop(pubkey_hex: str, enrollment_id: str, signature_b64: str) -> bool:
+    """Verify an Ed25519 proof-of-possession signature over the enrollment_id.
+
+    The agent signs the enrollment_id with the private key whose public half it
+    submitted at enroll() time. pubkey is stored as lowercase hex of the raw
+    32-byte Ed25519 key; the signature is base64 of the raw 64-byte signature.
+    Any decode/verify failure returns False (never raises) so a malformed or
+    wrong-key signature is treated as a failed proof, not a 500.
+    """
+    if not pubkey_hex or not signature_b64:
+        return False
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        pub = Ed25519PublicKey.from_public_bytes(bytes.fromhex(pubkey_hex))
+        pub.verify(base64.b64decode(signature_b64), enrollment_id.encode())
+        return True
+    except Exception:
+        return False
+
+
+def poll(enrollment_id: str, enrollment_secret: str,
+         signature: Optional[str] = None) -> dict:
     """
     Called by the agent to check whether an operator has claimed it yet.
+
+    signature (optional): base64 Ed25519 signature over the enrollment_id,
+    proving possession of the private key matching the enrolled pubkey. When
+    supplied it MUST verify before anything is returned — so a stolen
+    enrollment_secret alone can't claim the credentials of a device whose
+    private key the attacker lacks. Verification is best-effort for backward
+    compatibility: agents that predate signing omit it and fall back to
+    bearer-secret-only auth (this becomes mandatory once signing agents have
+    rolled out — see SECURITY.md).
 
     Returns:
       {'status': 'pending', ...} if still waiting.
       {'status': 'claimed', 'credentials': {...}} once claimed (delivered ONCE).
     """
     pending = _load_pending_for_agent(enrollment_id, enrollment_secret)
+
+    # Proof-of-possession: a present signature must verify against the enrolled
+    # pubkey. A present-but-invalid signature is an attack (or key mismatch) and
+    # is rejected outright, before last_seen_at or any state is touched.
+    if signature is not None:
+        if not _verify_pop(pending.pubkey, enrollment_id, signature):
+            logger.warning(
+                "Pairing poll signature verification FAILED for enrollment %s",
+                enrollment_id,
+            )
+            raise InvalidEnrollmentError("Invalid proof-of-possession signature")
+
     pending.last_seen_at = datetime.utcnow()
 
     if pending.is_claimed() and pending.claim_payload_encrypted:

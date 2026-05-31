@@ -78,6 +78,7 @@ func Run(
 	sysMap := buildSystemInfo(sysInfo, displayName)
 
 	client := pairing.NewClient(panelURL, log)
+	client.SetKeyPair(kp) // enables Ed25519 proof-of-possession on poll
 	enrollCtx, enrollCancel := context.WithTimeout(ctx, 30*time.Second)
 	enrollResp, err := client.Enroll(enrollCtx, pairing.EnrollRequest{
 		Pubkey:     kp.PublicKeyHex(),
