@@ -42,6 +42,13 @@
 /agent/*.out
 /agent/bin/
 /dist/
+# Release artifacts built by .github/workflows/agent-release.yml — these are
+# published to GitHub Releases, not committed. (NOTE: the *.syso resource
+# objects under agent/cmd/agent/ are build INPUTS, embedded by the Go
+# toolchain at build time, and are intentionally tracked.)
+/packages/
+*.msi
+*.wixpdb
 
 # Environment / Secrets
 .env
