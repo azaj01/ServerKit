@@ -274,11 +274,12 @@ Highest-effort, broadest surface — but by now the `WordPressSite` is a first-c
 - **Reuse:** `security_service` (Fail2ban jails), `wp_cli`, `cron_service`, `nginx_service` WP template.
 - **Done when:** A site can be scanned, checksum-verified, brute-force-protected, and debug-toggled.
 
-### #31 — Selective push UI `[S]` 🟡
+### #31 — Selective push UI `[S]` 🟡 — ✅ Done (specific-tables selectors added; files-only/db-only/specific-folders already existed)
 - **Today:** The dump layer already supports table filters / files-only / db-only; `PromoteModal` exposes only coarse code/db/full.
 - **Do:** Expose files-only / db-only / specific-folders / specific-tables selectors in `PromoteModal`.
 - **Reuse:** `db_sync_service` `_transform_dump` filters, `environment_pipeline` promote.
 - **Done when:** A promote can move just selected files/tables.
+- **Landed:** `PromoteModal` already had **files-only** (`code` type), **db-only** (`database` type), and **specific-folders** (the `include_plugins`/`themes`/`mu_plugins`/`uploads` checkboxes); the only missing piece was **specific-tables**, now added as two comma-separated inputs in the database section — **Exclude tables** (omitted entirely) and **Truncate tables** (structure promoted, rows dropped) — split into arrays on submit. The full backend chain already honored them (`POST …/promote` documents+forwards `config.exclude_tables`/`truncate_tables` → `promote_database`/`promote_full` → `clone_options` → `_transform_dump`), so this is pure UI wiring with no backend change. Verified: frontend lint-clean + production build.
 
 ### #32 — Per-site SFTP `[M]` ❌
 - **Today:** FTP is host-global (`ftp_service`); no per-site SFTP.

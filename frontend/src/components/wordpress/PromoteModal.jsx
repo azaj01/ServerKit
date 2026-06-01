@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 const PromoteModal = ({ sourceEnv, targetEnv, onClose, onPromote }) => {
     const [promotionType, setPromotionType] = useState('code');
@@ -17,7 +18,9 @@ const PromoteModal = ({ sourceEnv, targetEnv, onClose, onPromote }) => {
         include_uploads: false,
         backup_target_first: true,
         sanitize: false,
-        sanitization_profile_id: ''
+        sanitization_profile_id: '',
+        exclude_tables: '',
+        truncate_tables: ''
     });
     const [loading, setLoading] = useState(false);
     const [profiles, setProfiles] = useState([]);
@@ -49,6 +52,9 @@ const PromoteModal = ({ sourceEnv, targetEnv, onClose, onPromote }) => {
             } else {
                 delete submitConfig.sanitization_profile_id;
             }
+            const toList = (s) => (s || '').split(',').map(t => t.trim()).filter(Boolean);
+            submitConfig.exclude_tables = toList(config.exclude_tables);
+            submitConfig.truncate_tables = toList(config.truncate_tables);
             await onPromote({
                 source_env_id: sourceEnv.id,
                 target_env_id: targetEnv.id,
@@ -204,6 +210,25 @@ const PromoteModal = ({ sourceEnv, targetEnv, onClose, onPromote }) => {
                                 )}
                             </div>
                         )}
+
+                        <div className="form-group">
+                            <Label>Exclude tables (optional)</Label>
+                            <Input
+                                value={config.exclude_tables}
+                                onChange={e => handleConfigChange('exclude_tables', e.target.value)}
+                                placeholder="e.g. wp_statistics, wp_actionscheduler_logs"
+                            />
+                            <span className="form-hint">Comma-separated table names to omit from the promotion entirely.</span>
+                        </div>
+                        <div className="form-group">
+                            <Label>Truncate tables (optional)</Label>
+                            <Input
+                                value={config.truncate_tables}
+                                onChange={e => handleConfigChange('truncate_tables', e.target.value)}
+                                placeholder="e.g. wp_sessions, wp_woocommerce_log"
+                            />
+                            <span className="form-hint">Comma-separated tables to keep but empty (structure promoted, rows dropped).</span>
+                        </div>
                     </>
                 )}
 
