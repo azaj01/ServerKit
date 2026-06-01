@@ -189,6 +189,15 @@ const wordpressApi = {
     getVulnerabilities: (siteId) => api.request(`${BASE_PATH}/${siteId}/vulnerabilities`),
     scanVulnerabilities: (siteId) => api.request(`${BASE_PATH}/${siteId}/vulnerabilities/scan`, { method: 'POST' }),
 
+    // Security depth (#30): file integrity / debug toggle / WP-Cron
+    getIntegrity: (siteId) => api.request(`${BASE_PATH}/${siteId}/integrity`),
+    scanIntegrity: (siteId) => api.request(`${BASE_PATH}/${siteId}/integrity/scan`, { method: 'POST' }),
+    getDebug: (siteId) => api.request(`${BASE_PATH}/${siteId}/debug`),
+    setDebug: (siteId, enabled) => api.request(`${BASE_PATH}/${siteId}/debug`, { method: 'POST', body: { enabled } }),
+    getCron: (siteId) => api.request(`${BASE_PATH}/${siteId}/cron`),
+    runCron: (siteId) => api.request(`${BASE_PATH}/${siteId}/cron/run`, { method: 'POST' }),
+    setCronDisabled: (siteId, disabled) => api.request(`${BASE_PATH}/${siteId}/cron`, { method: 'POST', body: { disabled } }),
+
     // Mint a one-time passwordless wp-admin login URL for the current operator.
     autoLogin: (siteId) => api.request(`${BASE_PATH}/${siteId}/login`, {
         method: 'POST'

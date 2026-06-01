@@ -73,7 +73,7 @@ const DetailPageSkeleton = () => (
     </div>
 );
 
-const VALID_TABS = ['overview', 'environments', 'database', 'plugins', 'themes', 'php', 'git', 'backups', 'uptime', 'analytics', 'vulnerabilities'];
+const VALID_TABS = ['overview', 'environments', 'database', 'plugins', 'themes', 'php', 'git', 'backups', 'uptime', 'analytics', 'vulnerabilities', 'security'];
 
 const WordPressDetail = () => {
     const { id } = useParams();
@@ -362,6 +362,12 @@ const WordPressDetail = () => {
                 >
                     <ShieldCheck size={14} /> Vulnerabilities
                 </div>
+                <div
+                    className={`app-detail-tab ${activeTab === 'security' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('security')}
+                >
+                    <Lock size={14} /> Security
+                </div>
             </div>
 
             {/* Clone Site Modal */}
@@ -408,6 +414,7 @@ const WordPressDetail = () => {
                     {activeTab === 'uptime' && <UptimeTab siteId={site.id} />}
                     {activeTab === 'analytics' && <AnalyticsTab siteId={site.id} />}
                     {activeTab === 'vulnerabilities' && <VulnerabilitiesTab siteId={site.id} />}
+                    {activeTab === 'security' && <SecurityTab siteId={site.id} />}
                 </ErrorBoundary>
             </div>
         </div>
@@ -635,6 +642,131 @@ const UptimeTab = ({ siteId }) => {
                         </div>
                     </div>
                 )}
+            </div>
+        </div>
+    );
+};
+
+// Security Tab — per-site security depth (#30): file-integrity verification,
+// WP_DEBUG toggle, and WP-Cron management, all via the Docker-aware WP-CLI bridge.
+const SecurityTab = ({ siteId }) => {
+    const toast = useToast();
+    const [integrity, setIntegrity] = useState(null);
+    const [debug, setDebug] = useState(null);
+    const [cron, setCron] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    const loadAll = React.useCallback(async () => {
+        try {
+            const [i, d, c] = await Promise.all([
+                wordpressApi.getIntegrity(siteId).catch(() => null),
+                wordpressApi.getDebug(siteId).catch(() => null),
+                wordpressApi.getCron(siteId).catch(() => null),
+            ]);
+            setIntegrity(i); setDebug(d); setCron(c);
+        } finally {
+            setLoading(false);
+        }
+    }, [siteId]);
+
+    useEffect(() => { loadAll(); }, [loadAll]);
+    useEffect(() => {
+        if (integrity?.status !== 'running') return undefined;
+        const t = setTimeout(() => {
+            wordpressApi.getIntegrity(siteId).then(setIntegrity).catch(() => {});
+        }, 2500);
+        return () => clearTimeout(t);
+    }, [integrity, siteId]);
+
+    async function runIntegrity() {
+        try {
+            await wordpressApi.scanIntegrity(siteId);
+            setIntegrity(await wordpressApi.getIntegrity(siteId));
+        } catch (err) { toast.error(err.message || 'Failed to start check'); }
+    }
+    async function toggleDebug() {
+        setBusy(true);
+        try {
+            const res = await wordpressApi.setDebug(siteId, !debug?.enabled);
+            if (res.success === false) { toast.error(res.error || 'Failed to update debug setting'); return; }
+            setDebug(res);
+            toast.success('Debug setting updated');
+        } catch (err) { toast.error(err.message || 'Failed to update debug setting'); }
+        finally { setBusy(false); }
+    }
+    async function runCron() {
+        setBusy(true);
+        try {
+            const r = await wordpressApi.runCron(siteId);
+            toast[r.success ? 'success' : 'error'](r.success ? 'Ran due events' : (r.error || 'Failed to run cron'));
+            setCron(await wordpressApi.getCron(siteId));
+        } catch (err) { toast.error(err.message || 'Failed to run cron'); }
+        finally { setBusy(false); }
+    }
+    async function toggleCron() {
+        setBusy(true);
+        try { setCron(await wordpressApi.setCronDisabled(siteId, !cron?.disabled)); }
+        catch (err) { toast.error(err.message || 'Failed to update WP-Cron'); }
+        finally { setBusy(false); }
+    }
+
+    if (loading) return <div className="tab-loading"><p className="hint">Loading security tools...</p></div>;
+
+    const intRunning = integrity?.status === 'running';
+    const issues = integrity?.issues || [];
+
+    return (
+        <div className="app-overview-grid">
+            <div className="app-overview-left">
+                <div className="app-panel">
+                    <div className="app-panel-header">File integrity</div>
+                    <div className="app-panel-body">
+                        <div className="app-detail-actions">
+                            <Button size="sm" onClick={runIntegrity} disabled={intRunning}>{intRunning ? 'Checking…' : 'Verify checksums'}</Button>
+                        </div>
+                        {(!integrity || integrity.status === 'idle') && <p className="hint">Verifies WordPress core and wordpress.org plugins against official checksums to detect tampered or unexpected files.</p>}
+                        {integrity?.status === 'error' && <p className="hint">Check failed: {integrity.error}</p>}
+                        {integrity?.status === 'completed' && (
+                            issues.length === 0
+                                ? <p className="hint">All core and plugin files verify against official checksums.</p>
+                                : <>
+                                    <div className="app-detail-actions"><Badge variant="destructive">{issues.length} issue{issues.length === 1 ? '' : 's'}</Badge></div>
+                                    {issues.slice(0, 50).map((line, i) => <div className="form-hint" key={i}>{line}</div>)}
+                                </>
+                        )}
+                    </div>
+                </div>
+
+                <div className="app-panel">
+                    <div className="app-panel-header">Debug mode</div>
+                    <div className="app-panel-body">
+                        <div className="app-info-grid">
+                            <div className="app-info-item"><span className="app-info-label">WP_DEBUG</span><span className="app-info-value"><Badge variant={debug?.debug?.WP_DEBUG ? 'warning' : 'secondary'}>{debug?.debug?.WP_DEBUG ? 'on' : 'off'}</Badge></span></div>
+                            <div className="app-info-item"><span className="app-info-label">Debug log</span><span className="app-info-value">{debug?.debug?.WP_DEBUG_LOG ? 'on' : 'off'}</span></div>
+                            <div className="app-info-item"><span className="app-info-label">Script debug</span><span className="app-info-value">{debug?.debug?.SCRIPT_DEBUG ? 'on' : 'off'}</span></div>
+                        </div>
+                        <div className="app-detail-actions">
+                            <Button variant="outline" size="sm" onClick={toggleDebug} disabled={busy}>{debug?.enabled ? 'Disable debugging' : 'Enable debugging'}</Button>
+                        </div>
+                        <p className="hint">Logs errors to a private file outside the web root (never to the page or a public URL). Enable to capture PHP fatals; disable in production.</p>
+                    </div>
+                </div>
+
+                <div className="app-panel">
+                    <div className="app-panel-header">WP-Cron</div>
+                    <div className="app-panel-body">
+                        <div className="app-info-grid">
+                            <div className="app-info-item"><span className="app-info-label">Pseudo-cron</span><span className="app-info-value">{cron?.disabled ? 'disabled' : 'enabled'}</span></div>
+                            <div className="app-info-item"><span className="app-info-label">Scheduled events</span><span className="app-info-value">{(cron?.events || []).length}</span></div>
+                        </div>
+                        <div className="app-detail-actions">
+                            <Button variant="outline" size="sm" onClick={runCron} disabled={busy}>Run due events</Button>
+                            <Button variant="outline" size="sm" onClick={toggleCron} disabled={busy}>{cron?.disabled ? 'Enable WP-Cron' : 'Disable WP-Cron'}</Button>
+                        </div>
+                        <p className="hint">Disable WP-Cron only if a real system cron hits wp-cron.php — otherwise scheduled tasks (publishing, updates) will not run.</p>
+                    </div>
+                </div>
             </div>
         </div>
     );

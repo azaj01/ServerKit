@@ -548,6 +548,110 @@ def scan_site_vulnerabilities(app_id):
     return jsonify(WpVulnerabilityService.start_scan(wp_site)), 200
 
 
+# ---- Per-site security depth (#30): file integrity, WP_DEBUG, WP-Cron ----
+
+def _owner_or_admin_app(app_id):
+    """Resolve an app and enforce the owner-or-admin read guard. Returns
+    (app, None) or (None, (response, status))."""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    app = _resolve_app(app_id)
+    if not app:
+        return None, (jsonify({'error': 'Application not found'}), 404)
+    if user.role != 'admin' and app.user_id != current_user_id:
+        return None, (jsonify({'error': 'Access denied'}), 403)
+    return app, None
+
+
+@wordpress_bp.route('/sites/<int:app_id>/integrity', methods=['GET'])
+@jwt_required()
+def get_site_integrity(app_id):
+    """Return the latest file-integrity result + scan status for a site."""
+    from app.services.wp_security_service import WpSecurityService
+    app, err = _owner_or_admin_app(app_id)
+    if err:
+        return err
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    return jsonify(WpSecurityService.get_integrity(wp_site.id)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/integrity/scan', methods=['POST'])
+@jwt_required()
+@admin_required
+def scan_site_integrity(app_id):
+    """Start a background file-integrity check (wp core/plugin verify-checksums)."""
+    from app.services.wp_security_service import WpSecurityService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    return jsonify(WpSecurityService.start_integrity_scan(wp_site)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/debug', methods=['GET'])
+@jwt_required()
+def get_site_debug(app_id):
+    """Return the site's WP_DEBUG / WP_DEBUG_LOG / SCRIPT_DEBUG state."""
+    from app.services.wp_security_service import WpSecurityService
+    app, err = _owner_or_admin_app(app_id)
+    if err:
+        return err
+    return jsonify(WpSecurityService.get_debug(app.root_path)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/debug', methods=['POST'])
+@jwt_required()
+@admin_required
+def set_site_debug(app_id):
+    """Toggle debug logging (WP_DEBUG/WP_DEBUG_LOG/SCRIPT_DEBUG on; display always off)."""
+    from app.services.wp_security_service import WpSecurityService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    enabled = bool((request.get_json() or {}).get('enabled'))
+    return jsonify(WpSecurityService.set_debug(app.root_path, enabled)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/cron', methods=['GET'])
+@jwt_required()
+def get_site_cron(app_id):
+    """Return WP-Cron status (DISABLE_WP_CRON + due events)."""
+    from app.services.wp_security_service import WpSecurityService
+    app, err = _owner_or_admin_app(app_id)
+    if err:
+        return err
+    return jsonify(WpSecurityService.get_cron(app.root_path)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/cron/run', methods=['POST'])
+@jwt_required()
+@admin_required
+def run_site_cron(app_id):
+    """Run all due WP-Cron events now."""
+    from app.services.wp_security_service import WpSecurityService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    return jsonify(WpSecurityService.run_cron(app.root_path)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/cron', methods=['POST'])
+@jwt_required()
+@admin_required
+def set_site_cron(app_id):
+    """Enable/disable WP's pseudo-cron (DISABLE_WP_CRON)."""
+    from app.services.wp_security_service import WpSecurityService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    disabled = bool((request.get_json() or {}).get('disabled'))
+    return jsonify(WpSecurityService.set_cron_disabled(app.root_path, disabled)), 200
+
+
 @wordpress_bp.route('/sites/<int:app_id>/info', methods=['GET'])
 @jwt_required()
 def get_wordpress_info(app_id):
