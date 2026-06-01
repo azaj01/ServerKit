@@ -337,6 +337,9 @@ def create_app(config_name=None):
         # Start workflow scheduler
         _start_workflow_scheduler(app)
 
+        # Start per-site WordPress health poller (uptime % + auto-incidents + alerts)
+        _start_health_check_scheduler(app)
+
         # Start API analytics flush thread
         from app.middleware.api_analytics import start_analytics_flush_thread
         start_analytics_flush_thread(app)
@@ -677,3 +680,115 @@ def _check_workflow_schedules(logger):
                 )
         except Exception as e:
             logger.error(f'Workflow schedule check failed for workflow {workflow.id}: {e}')
+
+
+_health_check_thread = None
+
+# How often the per-site WordPress health poller runs (seconds).
+HEALTH_CHECK_INTERVAL = 300
+
+# Retention for recorded health-check samples (days) — bounds unbounded growth
+# from the continuous poller; matches the longest uptime window (uptime_90d).
+# Pruned at most once per day.
+HEALTH_CHECK_RETENTION_DAYS = 90
+_last_health_prune = None
+
+
+def _start_health_check_scheduler(app):
+    """Start a background thread that polls every managed WordPress site's
+    health on an interval. This keeps health_status fresh (so #27 transition
+    alerts fire autonomously, not only while the health card is open) and drives
+    any bound status-page components (#26): a real uptime % and auto-incidents.
+
+    Single-worker only — like the other in-process schedulers, this must not be
+    multiplied across Gunicorn workers (see CLAUDE.md). The module-global guard
+    ensures one thread per process.
+    """
+    global _health_check_thread
+    if _health_check_thread is not None:
+        return
+
+    import threading
+    import time
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    def health_loop():
+        # Small initial delay so startup isn't slowed by blocking probes.
+        time.sleep(30)
+        while True:
+            try:
+                with app.app_context():
+                    _run_health_checks(logger)
+            except Exception as e:
+                logger.error(f'Health-check scheduler error: {e}')
+            time.sleep(HEALTH_CHECK_INTERVAL)
+
+    _health_check_thread = threading.Thread(
+        target=health_loop,
+        daemon=True,
+        name='health-check-scheduler'
+    )
+    _health_check_thread.start()
+
+
+def _run_health_checks(logger):
+    """Run a health check for every managed (production) WordPress site and sync
+    any status-page components bound to it. Per-site try/except so one hung site
+    never stalls the whole sweep."""
+    from app import db
+    from app.models.wordpress_site import WordPressSite
+    from app.models.status_page import StatusComponent
+    from app.services.environment_health_service import EnvironmentHealthService
+    from app.services.status_page_service import StatusPageService
+
+    _prune_old_health_checks(logger)
+
+    sites = WordPressSite.query.filter_by(is_production=True).all()
+    for site in sites:
+        try:
+            # Only poll sites the operator expects to be up — skip archived/stopped
+            # stacks so an intentional stop never looks like an outage.
+            if not site.application or site.application.status != 'running':
+                continue
+            result = EnvironmentHealthService.check_health(site.id)
+            overall = result.get('overall_status')
+            if not overall:
+                continue
+            # Drive any status-page components bound to this site.
+            components = StatusComponent.query.filter_by(wordpress_site_id=site.id).all()
+            for comp in components:
+                StatusPageService.sync_component_from_health(comp, overall)
+        except Exception as e:
+            logger.error(f'Health check failed for site {site.id}: {e}')
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+
+def _prune_old_health_checks(logger):
+    """Delete health-check samples older than the retention window, at most once
+    per day, so the continuous poller doesn't grow the health_checks table without
+    bound. Best-effort — failure never stalls the health sweep."""
+    global _last_health_prune
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    if _last_health_prune is not None and (now - _last_health_prune).total_seconds() < 86400:
+        return
+    from app import db
+    from app.models.status_page import HealthCheck
+    cutoff = now - timedelta(days=HEALTH_CHECK_RETENTION_DAYS)
+    try:
+        deleted = HealthCheck.query.filter(HealthCheck.checked_at < cutoff).delete(synchronize_session=False)
+        db.session.commit()
+        _last_health_prune = now
+        if deleted:
+            logger.info(f'Pruned {deleted} health-check row(s) older than {HEALTH_CHECK_RETENTION_DAYS}d')
+    except Exception as e:
+        logger.error(f'Health-check prune failed: {e}')
+        try:
+            db.session.rollback()
+        except Exception:
+            pass

@@ -177,6 +177,11 @@ const wordpressApi = {
     enableObjectCache: (siteId) => api.request(`${BASE_PATH}/${siteId}/object-cache`, { method: 'POST' }),
     disableObjectCache: (siteId) => api.request(`${BASE_PATH}/${siteId}/object-cache`, { method: 'DELETE' }),
 
+    // Status-page binding + uptime (#26): live health, bound component + uptime %, attach/detach
+    getSiteStatusPage: (siteId) => api.request(`${BASE_PATH}/${siteId}/status-page`),
+    attachStatusPage: (siteId, pageId) => api.request(`${BASE_PATH}/${siteId}/status-page`, { method: 'POST', body: { page_id: pageId } }),
+    detachStatusPage: (siteId) => api.request(`${BASE_PATH}/${siteId}/status-page`, { method: 'DELETE' }),
+
     // Mint a one-time passwordless wp-admin login URL for the current operator.
     autoLogin: (siteId) => api.request(`${BASE_PATH}/${siteId}/login`, {
         method: 'POST'

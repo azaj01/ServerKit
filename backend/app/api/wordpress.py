@@ -391,6 +391,113 @@ def set_php(app_id):
     return jsonify(result), 200 if result.get('success') else 400
 
 
+def _site_status_target(wp_site):
+    """Best-effort public URL for a managed site's status-page component.
+    Prefers a primary domain (https when SSL), falls back to the local port.
+    The component is health-driven, so this is mainly cosmetic / manual-probe."""
+    app = wp_site.application
+    if not app:
+        return ''
+    try:
+        domains = list(app.domains)
+    except Exception:
+        domains = []
+    primary = next((d for d in domains if getattr(d, 'is_primary', False)),
+                   domains[0] if domains else None)
+    if primary and getattr(primary, 'name', None):
+        scheme = 'https' if getattr(primary, 'ssl_enabled', False) else 'http'
+        return f'{scheme}://{primary.name}'
+    # No public domain yet — leave the probe target empty rather than storing an
+    # internal localhost:port (the component is health-driven, not network-probed).
+    return ''
+
+
+@wordpress_bp.route('/sites/<int:app_id>/status-page', methods=['GET'])
+@jwt_required()
+def get_site_status_page(app_id):
+    """Return the site's live health + bound status-page component (if any) and
+    the status pages it can be attached to."""
+    from app.models.status_page import StatusPage, StatusComponent
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if user.role != 'admin' and app.user_id != current_user_id:
+        return jsonify({'error': 'Access denied'}), 403
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    component = None
+    if wp_site:
+        comp = StatusComponent.query.filter_by(wordpress_site_id=wp_site.id).first()
+        component = comp.to_dict() if comp else None
+    pages = [{'id': p.id, 'name': p.name, 'slug': p.slug}
+             for p in StatusPage.query.order_by(StatusPage.name).all()]
+    return jsonify({
+        'health_status': wp_site.health_status if wp_site else None,
+        'last_health_check': (wp_site.last_health_check.isoformat()
+                              if wp_site and wp_site.last_health_check else None),
+        'component': component,
+        'pages': pages,
+    }), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/status-page', methods=['POST'])
+@jwt_required()
+@admin_required
+def attach_site_status_page(app_id):
+    """Attach a managed site to a status page as a health-driven component."""
+    from app.models.status_page import StatusPage, StatusComponent
+    from app.services.status_page_service import StatusPageService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    if not wp_site.is_production:
+        # The health poller only sweeps production sites, so a component bound to
+        # a staging/dev environment would never accrue uptime — reject it.
+        return jsonify({'error': 'Only production sites can be added to a status page'}), 400
+    data = request.get_json() or {}
+    page_id = data.get('page_id')
+    if not page_id:
+        return jsonify({'error': 'page_id is required'}), 400
+    if not StatusPage.query.get(page_id):
+        return jsonify({'error': 'Status page not found'}), 404
+    existing = StatusComponent.query.filter_by(wordpress_site_id=wp_site.id).first()
+    if existing:
+        return jsonify({'error': 'Site is already on a status page',
+                        'component': existing.to_dict()}), 409
+    comp = StatusPageService.create_component(page_id, {
+        'name': app.name,
+        'group': 'WordPress',
+        'check_type': 'http',
+        'check_target': _site_status_target(wp_site),
+        'wordpress_site_id': wp_site.id,
+    })
+    return jsonify({'success': True, 'component': comp.to_dict()}), 201
+
+
+@wordpress_bp.route('/sites/<int:app_id>/status-page', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def detach_site_status_page(app_id):
+    """Detach a managed site from its status page (removes the bound component)."""
+    from app.models.status_page import StatusComponent
+    from app.services.status_page_service import StatusPageService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    removed = 0
+    for comp in StatusComponent.query.filter_by(wordpress_site_id=wp_site.id).all():
+        StatusPageService.delete_component(comp.id)
+        removed += 1
+    return jsonify({'success': True, 'removed': removed}), 200
+
+
 @wordpress_bp.route('/sites/<int:app_id>/info', methods=['GET'])
 @jwt_required()
 def get_wordpress_info(app_id):

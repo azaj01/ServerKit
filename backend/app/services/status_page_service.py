@@ -91,11 +91,17 @@ class StatusPageService:
         if not page:
             return None
 
+        # Internal probe config must not appear on the unauthenticated public page
+        # (a health-driven WP component may carry an internal localhost:port target).
+        public_hidden = ('check_type', 'check_target', 'check_interval', 'check_timeout')
         components = page.components.all()
         grouped = {}
         for comp in components:
             group = comp.group or 'Services'
-            grouped.setdefault(group, []).append(comp.to_dict())
+            cd = comp.to_dict()
+            for k in public_hidden:
+                cd.pop(k, None)
+            grouped.setdefault(group, []).append(cd)
 
         # Active incidents
         active_incidents = page.incidents.filter(
@@ -142,6 +148,7 @@ class StatusPageService:
             check_target=data.get('check_target', ''),
             check_interval=data.get('check_interval', 60),
             check_timeout=data.get('check_timeout', 10),
+            wordpress_site_id=data.get('wordpress_site_id'),
         )
         db.session.add(comp)
         db.session.commit()
@@ -164,6 +171,14 @@ class StatusPageService:
         comp = StatusComponent.query.get(comp_id)
         if not comp:
             return False
+        # Resolve + unlink any incidents referencing this component first, so we
+        # never dangle the component_id FK (enforced on PostgreSQL) or leave a
+        # stale active incident on the public page after the component is gone.
+        for inc in StatusIncident.query.filter_by(component_id=comp_id).all():
+            if inc.status != 'resolved':
+                inc.status = 'resolved'
+                inc.resolved_at = datetime.utcnow()
+            inc.component_id = None
         db.session.delete(comp)
         db.session.commit()
         return True
@@ -251,6 +266,104 @@ class StatusPageService:
             HealthCheck.component_id == component_id,
             HealthCheck.checked_at >= since
         ).order_by(HealthCheck.checked_at.desc()).all()
+
+    @staticmethod
+    def recompute_uptime(comp):
+        """Recompute uptime_24h/7d/30d/90d for a component from its HealthCheck
+        rows (fraction of recorded checks with status 'up'). Only fully-healthy
+        checks count as up — 'degraded' periods reduce the percentage, matching
+        the status-page convention where degraded is not "operational". Leaves a
+        window's existing value untouched when it has no samples yet."""
+        windows = {'uptime_24h': 24, 'uptime_7d': 24 * 7,
+                   'uptime_30d': 24 * 30, 'uptime_90d': 24 * 90}
+        now = datetime.utcnow()
+        for field, hours in windows.items():
+            since = now - timedelta(hours=hours)
+            base = HealthCheck.query.filter(
+                HealthCheck.component_id == comp.id,
+                HealthCheck.checked_at >= since,
+            )
+            total = base.count()
+            if total:
+                up = base.filter(HealthCheck.status == 'up').count()
+                setattr(comp, field, round(up / total * 100, 2))
+        db.session.commit()
+
+    # Map an EnvironmentHealthService overall_status to (HealthCheck status,
+    # StatusComponent status). 'unknown' is intentionally absent — indeterminate
+    # checks are not recorded so they don't pollute the uptime %.
+    _HEALTH_MAP = {
+        'healthy': ('up', StatusComponent.STATUS_OPERATIONAL),
+        'degraded': ('degraded', StatusComponent.STATUS_DEGRADED),
+        'unhealthy': ('down', StatusComponent.STATUS_MAJOR),
+    }
+
+    @staticmethod
+    def sync_component_from_health(comp, overall_status, error=None):
+        """Drive a managed-site-bound component from an EnvironmentHealthService
+        verdict instead of a network probe (#26): record a HealthCheck sample,
+        update the component's live status, recompute uptime, and auto-open /
+        auto-resolve an incident on the operational<->major_outage edge.
+
+        Returns the recorded HealthCheck, or None for an indeterminate
+        ('unknown') verdict (not recorded).
+        """
+        mapped = StatusPageService._HEALTH_MAP.get(overall_status)
+        if not mapped:
+            return None
+        check_status, comp_status = mapped
+        prev_status = comp.status
+
+        hc = HealthCheck(component_id=comp.id, status=check_status, error=error)
+        db.session.add(hc)
+        comp.last_check_at = datetime.utcnow()
+        comp.status = comp_status
+        db.session.commit()
+
+        StatusPageService.recompute_uptime(comp)
+
+        # Open an incident when ENTERING a major outage; resolve it when LEAVING
+        # major (to operational OR degraded). Resolving on the leaving-edge — not
+        # only on a clean major->operational hop — ensures a recovery that passes
+        # through an intermediate degraded poll (a common path) never leaves the
+        # incident stuck open. Degraded itself never opens a full incident.
+        if comp_status == StatusComponent.STATUS_MAJOR and prev_status != StatusComponent.STATUS_MAJOR:
+            StatusPageService._open_incident_for_component(comp, error)
+        elif comp_status != StatusComponent.STATUS_MAJOR and prev_status == StatusComponent.STATUS_MAJOR:
+            StatusPageService._resolve_incident_for_component(comp)
+        return hc
+
+    @staticmethod
+    def _open_incident_for_component(comp, error=None):
+        """Open a major-impact incident for a component if one is not already open."""
+        existing = StatusIncident.query.filter(
+            StatusIncident.component_id == comp.id,
+            StatusIncident.status != 'resolved',
+        ).first()
+        if existing:
+            return existing
+        incident = StatusPageService.create_incident(comp.page_id, {
+            'title': f'{comp.name} is experiencing an outage',
+            'status': 'investigating',
+            'impact': 'major',
+            'body': error or 'Automated health check detected an outage.',
+        })
+        incident.component_id = comp.id
+        db.session.commit()
+        return incident
+
+    @staticmethod
+    def _resolve_incident_for_component(comp):
+        """Resolve the open auto-incident for a component, if any."""
+        existing = StatusIncident.query.filter(
+            StatusIncident.component_id == comp.id,
+            StatusIncident.status != 'resolved',
+        ).first()
+        if existing:
+            StatusPageService.update_incident(existing.id, {
+                'status': 'resolved',
+                'update_body': 'Automated health check detected recovery.',
+            })
 
     # --- Incidents ---
 

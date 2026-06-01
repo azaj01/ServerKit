@@ -64,6 +64,11 @@ class StatusComponent(db.Model):
     check_interval = db.Column(db.Integer, default=60)  # seconds
     check_timeout = db.Column(db.Integer, default=10)
 
+    # Optional binding to a managed WordPress site. When set, the component's
+    # status is driven from the site's health checks (#26) rather than a network
+    # probe, and a real uptime % accrues from the recorded HealthCheck rows.
+    wordpress_site_id = db.Column(db.Integer, db.ForeignKey('wordpress_sites.id'), nullable=True)
+
     # Status
     STATUS_OPERATIONAL = 'operational'
     STATUS_DEGRADED = 'degraded'
@@ -98,6 +103,7 @@ class StatusComponent(db.Model):
             'check_target': self.check_target,
             'check_interval': self.check_interval,
             'check_timeout': self.check_timeout,
+            'wordpress_site_id': self.wordpress_site_id,
             'status': self.status,
             'last_check_at': self.last_check_at.isoformat() if self.last_check_at else None,
             'last_response_time': self.last_response_time,
@@ -138,6 +144,9 @@ class StatusIncident(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     page_id = db.Column(db.Integer, db.ForeignKey('status_pages.id'), nullable=False)
+    # Optional link to the component this incident is about. Set when an incident
+    # is auto-opened from a health check, so it can be auto-resolved on recovery (#26).
+    component_id = db.Column(db.Integer, db.ForeignKey('status_components.id'), nullable=True)
     title = db.Column(db.String(256), nullable=False)
     status = db.Column(db.String(32), default='investigating')  # investigating, identified, monitoring, resolved
     impact = db.Column(db.String(32), default='minor')  # none, minor, major, critical
@@ -159,6 +168,7 @@ class StatusIncident(db.Model):
         return {
             'id': self.id,
             'page_id': self.page_id,
+            'component_id': self.component_id,
             'title': self.title,
             'status': self.status,
             'impact': self.impact,

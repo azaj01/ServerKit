@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ExternalLink, Settings, RefreshCw, Plus, Database, GitBranch, Package, Palette, Archive, Trash2, Replace, ShieldCheck, FolderOpen, FileText, Lock, Copy, Zap } from 'lucide-react';
+import { ExternalLink, Settings, RefreshCw, Plus, Database, GitBranch, Package, Palette, Archive, Trash2, Replace, ShieldCheck, FolderOpen, FileText, Lock, Copy, Zap, Activity, Globe, Layers } from 'lucide-react';
 import useTabParam from '../hooks/useTabParam';
 import wordpressApi from '../services/wordpress';
 import api from '../services/api';
@@ -12,6 +12,7 @@ import { ErrorBoundary, ErrorState } from '../components/ErrorBoundary';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DangerZone } from '../components/DangerZone';
+import EmptyState from '../components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -70,7 +71,7 @@ const DetailPageSkeleton = () => (
     </div>
 );
 
-const VALID_TABS = ['overview', 'environments', 'database', 'plugins', 'themes', 'php', 'git', 'backups'];
+const VALID_TABS = ['overview', 'environments', 'database', 'plugins', 'themes', 'php', 'git', 'backups', 'uptime'];
 
 const WordPressDetail = () => {
     const { id } = useParams();
@@ -151,12 +152,12 @@ const WordPressDetail = () => {
 
     if (!site) {
         return (
-            <div className="empty-state">
-                <h3>Site not found</h3>
-                <Button onClick={() => navigate('/wordpress')}>
-                    Back to WordPress Sites
-                </Button>
-            </div>
+            <EmptyState
+                icon={Globe}
+                title="Site not found"
+                description="This WordPress site does not exist or has been removed."
+                action={<Button onClick={() => navigate('/wordpress')}>Back to WordPress Sites</Button>}
+            />
         );
     }
 
@@ -341,6 +342,12 @@ const WordPressDetail = () => {
                 >
                     <Archive size={14} /> Backups
                 </div>
+                <div
+                    className={`app-detail-tab ${activeTab === 'uptime' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('uptime')}
+                >
+                    <Activity size={14} /> Uptime
+                </div>
             </div>
 
             {/* Clone Site Modal */}
@@ -384,6 +391,7 @@ const WordPressDetail = () => {
                     {activeTab === 'php' && <PhpTab siteId={site.id} />}
                     {activeTab === 'git' && <GitTab siteId={site.id} site={site} onUpdate={loadSite} />}
                     {activeTab === 'backups' && <BackupsTab siteId={site.id} />}
+                    {activeTab === 'uptime' && <UptimeTab siteId={site.id} />}
                 </ErrorBoundary>
             </div>
         </div>
@@ -481,6 +489,133 @@ const PhpTab = ({ siteId }) => {
                                     </Button>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// Uptime Tab — per-site health + uptime % via a bound status-page component (#26).
+// Health is polled server-side every 5 min; outages auto-open incidents and alert
+// the configured notification channels.
+const UptimeTab = ({ siteId }) => {
+    const toast = useToast();
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [pageId, setPageId] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const load = React.useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await wordpressApi.getSiteStatusPage(siteId);
+            setData(res);
+        } catch (err) {
+            toast.error(err.message || 'Failed to load uptime info');
+        } finally {
+            setLoading(false);
+        }
+    }, [siteId, toast]);
+
+    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        if (data?.pages?.length) setPageId(prev => prev || String(data.pages[0].id));
+    }, [data]);
+
+    async function handleAttach() {
+        if (!pageId) { toast.error('Choose a status page'); return; }
+        setBusy(true);
+        try {
+            await wordpressApi.attachStatusPage(siteId, Number(pageId));
+            toast.success('Added to status page');
+            await load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to add to status page');
+        } finally { setBusy(false); }
+    }
+
+    async function handleDetach() {
+        if (!window.confirm('Remove this site from its status page? Its uptime history and component will be deleted.')) return;
+        setBusy(true);
+        try {
+            await wordpressApi.detachStatusPage(siteId);
+            toast.success('Removed from status page');
+            await load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to remove from status page');
+        } finally { setBusy(false); }
+    }
+
+    if (loading) return <div className="tab-loading"><p className="hint">Loading uptime info...</p></div>;
+
+    const comp = data?.component;
+    const pages = data?.pages || [];
+    const pct = (v) => (v != null ? `${v.toFixed(2)}%` : '—');
+
+    return (
+        <div className="app-overview-grid">
+            <div className="app-overview-left">
+                <div className="app-panel">
+                    <div className="app-panel-header">Health</div>
+                    <div className="app-panel-body">
+                        <div className="app-info-grid">
+                            <div className="app-info-item">
+                                <span className="app-info-label">Current Status</span>
+                                <span className="app-info-value">
+                                    <HealthDot status={data?.health_status} /> {data?.health_status || 'unknown'}
+                                </span>
+                            </div>
+                            <div className="app-info-item">
+                                <span className="app-info-label">Last Checked</span>
+                                <span className="app-info-value">{data?.last_health_check ? new Date(data.last_health_check).toLocaleString() : 'Never'}</span>
+                            </div>
+                        </div>
+                        <p className="hint">Health is polled automatically every 5 minutes. Outages and recoveries alert your configured notification channels.</p>
+                    </div>
+                </div>
+
+                {comp ? (
+                    <div className="app-panel">
+                        <div className="app-panel-header">Uptime</div>
+                        <div className="app-panel-body">
+                            {comp.last_check_at ? (
+                                <div className="app-info-grid">
+                                    <div className="app-info-item"><span className="app-info-label">24 hours</span><span className="app-info-value">{pct(comp.uptime_24h)}</span></div>
+                                    <div className="app-info-item"><span className="app-info-label">7 days</span><span className="app-info-value">{pct(comp.uptime_7d)}</span></div>
+                                    <div className="app-info-item"><span className="app-info-label">30 days</span><span className="app-info-value">{pct(comp.uptime_30d)}</span></div>
+                                    <div className="app-info-item"><span className="app-info-label">90 days</span><span className="app-info-value">{pct(comp.uptime_90d)}</span></div>
+                                </div>
+                            ) : (
+                                <p className="hint">Awaiting the first health check (runs within 5 minutes).</p>
+                            )}
+                            <p className="hint">Uptime accrues from the 5-minute health checks; only fully-healthy checks count, so degraded periods reduce it. This site appears on its status page and auto-opens an incident on an outage (auto-resolved on recovery).</p>
+                            <div className="app-detail-actions">
+                                <Button variant="outline" size="sm" disabled={busy} onClick={handleDetach}>Remove from status page</Button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="app-panel">
+                        <div className="app-panel-header">Add to status page</div>
+                        <div className="app-panel-body">
+                            {pages.length === 0 ? (
+                                <p className="hint">No status pages exist yet. Create one under Status Pages first, then add this site to track its uptime and auto-open incidents on outages.</p>
+                            ) : (
+                                <>
+                                    <p className="hint">Track uptime for this site on a status page. It accrues a real uptime % and auto-opens/resolves incidents on outages.</p>
+                                    <div className="form-group">
+                                        <Label>Status Page</Label>
+                                        <select value={pageId} onChange={e => setPageId(e.target.value)} disabled={busy}>
+                                            {pages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="app-detail-actions">
+                                        <Button size="sm" disabled={busy} onClick={handleAttach}>Add to status page</Button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1519,10 +1654,11 @@ const EnvironmentsTab = ({ siteId, site, onUpdate }) => {
             </div>
 
             {childEnvs.length === 0 && site.is_production && (
-                <div className="hint-box">
-                    <p>No development or staging environments yet.</p>
-                    <p>Create an environment to safely test changes before deploying to production.</p>
-                </div>
+                <EmptyState
+                    icon={Layers}
+                    title="No development or staging environments yet"
+                    description="Create an environment to test changes safely before deploying to production."
+                />
             )}
 
             {showCreateModal && (
@@ -2015,7 +2151,7 @@ const PluginsTab = ({ siteId }) => {
 
             <div className="plugins-list">
                 {plugins.length === 0 ? (
-                    <p className="hint">No plugins installed.</p>
+                    <EmptyState icon={Package} title="No plugins installed" description="Install a plugin by entering its slug above." />
                 ) : (
                     plugins.map(plugin => (
                         <div key={plugin.name} className={`plugin-item ${plugin.status === 'active' ? 'active' : ''}`}>
@@ -2174,7 +2310,7 @@ const ThemesTab = ({ siteId }) => {
 
             <div className="themes-list">
                 {themes.length === 0 ? (
-                    <p className="hint">No themes found.</p>
+                    <EmptyState icon={Palette} title="No themes installed" description="Install a theme by entering its slug above." />
                 ) : (
                     themes.map(theme => (
                         <div key={theme.name} className={`theme-item ${theme.status === 'active' ? 'active' : ''}`}>
@@ -2399,9 +2535,11 @@ const BackupsTab = ({ siteId }) => {
             />
 
             {snapshots.length === 0 && !loading && (
-                <div className="hint-box">
-                    <p>No backups yet. Create a backup to protect your site data.</p>
-                </div>
+                <EmptyState
+                    icon={Archive}
+                    title="No backups yet"
+                    description="Create a backup to protect your site files and database."
+                />
             )}
         </div>
     );
