@@ -24,14 +24,16 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
+import { StatStrip, Stat } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
-const CATEGORIES = ['monitoring', 'security', 'deployment', 'integration', 'ui', 'utility'];
+const CATEGORIES = ['ai', 'monitoring', 'security', 'deployment', 'integration', 'ui', 'utility'];
 
 const CATEGORY_ICONS = {
+    ai: Sparkles,
     monitoring: Activity,
     security: ShieldCheck,
     deployment: ServerCog,
@@ -300,12 +302,16 @@ const Marketplace = () => {
                 </div>
             </section>
 
-            <div className="marketplace-stats" aria-label="Marketplace summary">
-                <StatTile icon={Package} label="Catalog" value={availableCount} tone="blue" />
-                <StatTile icon={Archive} label="Local Entries" value={builtins.length} tone="amber" />
-                <StatTile icon={PackageCheck} label="Installed" value={installedCatalogCount} tone="green" />
-                <StatTile icon={PlugZap} label="Active Plugins" value={`${activePluginCount}/${plugins.length}`} tone={pluginIssueCount > 0 ? 'red' : 'violet'} />
-            </div>
+            <StatStrip ariaLabel="Marketplace summary">
+                <Stat label="Catalog" value={availableCount} />
+                <Stat label="Local Entries" value={builtins.length} />
+                <Stat label="Installed" value={installedCatalogCount} />
+                <Stat
+                    label="Active Plugins"
+                    value={`${activePluginCount}/${plugins.length}`}
+                    state={pluginIssueCount > 0 ? 'danger' : undefined}
+                />
+            </StatStrip>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="marketplace-tabs">
                 <TabsList className="marketplace-tabs__list">
@@ -591,18 +597,6 @@ const Marketplace = () => {
         </div>
     );
 };
-
-const StatTile = ({ icon: Icon, label, value, tone }) => (
-    <div className={`marketplace-stat marketplace-stat--${tone}`}>
-        <div className="marketplace-stat__icon">
-            <Icon aria-hidden="true" />
-        </div>
-        <div>
-            <div className="marketplace-stat__value">{value}</div>
-            <div className="marketplace-stat__label">{label}</div>
-        </div>
-    </div>
-);
 
 const SectionHeader = ({ kicker, title, meta }) => (
     <div className="marketplace-section__header">

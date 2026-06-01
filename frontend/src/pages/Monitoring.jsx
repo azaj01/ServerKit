@@ -4,6 +4,7 @@ import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import EmptyState from '../components/EmptyState';
+import { StatStrip, Stat } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -337,20 +338,11 @@ const Monitoring = () => {
                             </div>
                         </section>
 
-                        <div className="monitoring-summary-grid">
-                            <div>
-                                <span>Alert rules</span>
-                                <strong>{alertRuleCount}</strong>
-                            </div>
-                            <div>
-                                <span>Delivery channels</span>
-                                <strong>{enabledChannelCount}</strong>
-                            </div>
-                            <div>
-                                <span>History</span>
-                                <strong>{alertHistory.length}</strong>
-                            </div>
-                        </div>
+                        <StatStrip ariaLabel="Monitoring summary">
+                            <Stat label="Alert rules" value={alertRuleCount} />
+                            <Stat label="Delivery channels" value={enabledChannelCount} />
+                            <Stat label="History" value={alertHistory.length} />
+                        </StatStrip>
 
                         <section className="monitoring-panel">
                             <div className="monitoring-panel__header">

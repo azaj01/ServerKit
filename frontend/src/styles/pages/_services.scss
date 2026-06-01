@@ -260,68 +260,6 @@
         opacity: 0.5;
     }
 
-    // Summary Cards
-    &__summary {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: $space-4;
-        margin-bottom: $space-6;
-
-        @media (max-width: $breakpoint-lg) {
-            grid-template-columns: repeat(2, 1fr);
-        }
-
-        @media (max-width: $breakpoint-sm) {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    &__summary-card {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-        padding: $space-4 $space-5;
-        background: $bg-card;
-        border: 1px solid $border-default;
-        border-radius: $radius-lg;
-    }
-
-    &__summary-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: $radius-lg;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-
-        &--live { background: $success-bg; color: $success; }
-        &--stopped { background: $danger-bg; color: $danger; }
-        &--type { background: $info-bg; color: $info; }
-        &--deploy { background: $warning-bg; color: $warning; }
-    }
-
-    &__summary-info {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    &__summary-value {
-        font-size: $font-size-lg;
-        font-weight: $font-weight-bold;
-        color: $text-primary;
-        line-height: 1.2;
-    }
-
-    &__summary-label {
-        font-size: $font-size-xs;
-        color: $text-tertiary;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
     // List Header
     &__list-header {
         display: flex;

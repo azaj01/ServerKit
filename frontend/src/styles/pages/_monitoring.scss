@@ -43,37 +43,6 @@
         }
     }
 
-    .monitoring-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: $space-3;
-
-        > div {
-            padding: $space-4;
-            border: 1px solid $border-subtle;
-            border-radius: $radius-md;
-            background: $bg-card;
-        }
-
-        span {
-            display: block;
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-            font-weight: $font-weight-semibold;
-            text-transform: uppercase;
-        }
-
-        strong {
-            display: block;
-            margin-top: $space-2;
-            font-size: $font-size-xl;
-        }
-
-        @media (max-width: 720px) {
-            grid-template-columns: 1fr;
-        }
-    }
-
     .monitoring-panel {
         min-width: 0;
         padding: $space-5;

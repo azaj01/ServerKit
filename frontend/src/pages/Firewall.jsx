@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { StatStrip, Stat } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -296,44 +297,20 @@ function Firewall() {
                 />
             ) : (
                 <>
-                    <div className="status-cards">
-                        <div className={`status-card ${isActive ? 'success' : 'danger'}`}>
-                            <div className="status-icon">
-                                <span className="icon">{isActive ? 'shield' : 'shield_outlined'}</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Firewall Status</span>
-                                <span className="status-value">{isActive ? 'Active' : 'Inactive'}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <span className="icon">dns</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Firewall Type</span>
-                                <span className="status-value">{activeFirewall?.toUpperCase() || 'None'}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <span className="icon">rule</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Active Rules</span>
-                                <span className="status-value">{rules.length}</span>
-                            </div>
-                        </div>
-                        <div className="status-card warning">
-                            <div className="status-icon">
-                                <span className="icon">block</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Blocked IPs</span>
-                                <span className="status-value">{blockedIPs.length}</span>
-                            </div>
-                        </div>
-                    </div>
+                    <StatStrip ariaLabel="Firewall status">
+                        <Stat
+                            label="Firewall Status"
+                            value={isActive ? 'Active' : 'Inactive'}
+                            state={isActive ? 'success' : 'danger'}
+                        />
+                        <Stat label="Firewall Type" value={activeFirewall?.toUpperCase() || 'None'} />
+                        <Stat label="Active Rules" value={rules.length} />
+                        <Stat
+                            label="Blocked IPs"
+                            value={blockedIPs.length}
+                            state={blockedIPs.length > 0 ? 'warning' : undefined}
+                        />
+                    </StatStrip>
 
                     <Tabs defaultValue="overview">
                         <TabsList>

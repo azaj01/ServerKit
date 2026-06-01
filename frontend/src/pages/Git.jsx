@@ -6,6 +6,7 @@ import Spinner from '../components/Spinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { DangerZone } from '../components/DangerZone';
 import EmptyState from '../components/EmptyState';
+import { StatStrip, Stat } from '../components/StatCard';
 import { AlertCircle, FolderGit2, Webhook, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -643,58 +644,16 @@ function Git({ basePath = '/git' }) {
                 </div>
             ) : (
                 <>
-                    <div className="status-cards">
-                        <div className={`status-card ${status?.running ? 'success' : 'danger'}`}>
-                            <div className="status-icon">
-                                <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" fill="none" strokeWidth="2">
-                                    <circle cx="18" cy="18" r="3"/>
-                                    <circle cx="6" cy="6" r="3"/>
-                                    <path d="M6 21V9a9 9 0 0 0 9 9"/>
-                                </svg>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Server Status</span>
-                                <span className="status-value">{status?.running ? 'Running' : 'Stopped'}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" fill="none" strokeWidth="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <line x1="2" y1="12" x2="22" y2="12"/>
-                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                                </svg>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">URL Path</span>
-                                <span className="status-value">{status?.url_path || `/gitea`}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" fill="none" strokeWidth="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                </svg>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">SSH Port</span>
-                                <span className="status-value">{status?.ssh_port || 'N/A'}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" fill="none" strokeWidth="2">
-                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                    <circle cx="12" cy="7" r="4"/>
-                                </svg>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Version</span>
-                                <span className="status-value">{status?.version || 'Unknown'}</span>
-                            </div>
-                        </div>
-                    </div>
+                    <StatStrip ariaLabel="Git server status">
+                        <Stat
+                            label="Server Status"
+                            value={status?.running ? 'Running' : 'Stopped'}
+                            state={status?.running ? 'success' : 'danger'}
+                        />
+                        <Stat label="URL Path" value={status?.url_path || '/gitea'} />
+                        <Stat label="SSH Port" value={status?.ssh_port || 'N/A'} />
+                        <Stat label="Version" value={status?.version || 'Unknown'} />
+                    </StatStrip>
 
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList>

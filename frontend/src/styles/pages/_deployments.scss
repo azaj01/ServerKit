@@ -40,39 +40,6 @@
         flex-shrink: 0;
     }
 
-    &__summary {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: $space-3;
-        margin-bottom: $space-3;
-    }
-
-    &__stat-card {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-        min-height: 68px;
-        padding: $space-3 $space-4;
-        background: $bg-card;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-    }
-
-    &__stat-label {
-        color: $text-tertiary;
-        font-size: $font-size-xs;
-        font-weight: $font-weight-semibold;
-        line-height: 1;
-    }
-
-    &__stat-value {
-        margin-top: $space-1;
-        color: $text-primary;
-        font-size: $font-size-xl;
-        font-weight: $font-weight-bold;
-        line-height: 1;
-    }
-
     &__toolbar {
         display: flex;
         align-items: center;
@@ -405,10 +372,6 @@
 
 @media (max-width: $breakpoint-lg) {
     .deployments-page {
-        &__summary {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
         &__workspace {
             grid-template-columns: 1fr;
         }
@@ -447,7 +410,6 @@
 
 @media (max-width: $breakpoint-sm) {
     .deployments-page {
-        &__summary,
         &__detail-grid {
             grid-template-columns: 1fr;
         }

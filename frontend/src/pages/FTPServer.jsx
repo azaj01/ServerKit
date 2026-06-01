@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { StatStrip, Stat } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -299,44 +300,16 @@ function FTPServer() {
                 />
             ) : (
                 <>
-                    <div className="status-cards">
-                        <div className={`status-card ${isRunning ? 'success' : 'warning'}`}>
-                            <div className="status-icon">
-                                <span className="icon">{isRunning ? 'check_circle' : 'pause_circle'}</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Server Status</span>
-                                <span className="status-value">{isRunning ? 'Running' : 'Stopped'}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <span className="icon">dns</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Active Server</span>
-                                <span className="status-value">{activeServer || 'None'}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <span className="icon">people</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">FTP Users</span>
-                                <span className="status-value">{users.length}</span>
-                            </div>
-                        </div>
-                        <div className="status-card">
-                            <div className="status-icon">
-                                <span className="icon">lan</span>
-                            </div>
-                            <div className="status-info">
-                                <span className="status-label">Active Connections</span>
-                                <span className="status-value">{connections.length}</span>
-                            </div>
-                        </div>
-                    </div>
+                    <StatStrip ariaLabel="FTP server status">
+                        <Stat
+                            label="Server Status"
+                            value={isRunning ? 'Running' : 'Stopped'}
+                            state={isRunning ? 'success' : 'warning'}
+                        />
+                        <Stat label="Active Server" value={activeServer || 'None'} />
+                        <Stat label="FTP Users" value={users.length} />
+                        <Stat label="Active Connections" value={connections.length} />
+                    </StatStrip>
 
                     <Tabs value={activeTab} onValueChange={(val) => {
                         setActiveTab(val);

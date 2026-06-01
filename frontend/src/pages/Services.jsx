@@ -5,6 +5,7 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { getServiceType, getStatusConfig, formatRelativeTime } from '../utils/serviceTypes';
 import EmptyState from '../components/EmptyState';
+import { StatStrip, Stat } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -152,63 +153,30 @@ const Services = () => {
                 </Button>
             </div>
 
-            {/* Summary Cards */}
+            {/* Summary */}
             {apps.length > 0 && (
-                <div className="services-page__summary">
-                    <div className="services-page__summary-card">
-                        <div className="services-page__summary-icon services-page__summary-icon--live">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                            </svg>
-                        </div>
-                        <div className="services-page__summary-info">
-                            <span className="services-page__summary-value">{stats.running}</span>
-                            <span className="services-page__summary-label">Running</span>
-                        </div>
-                    </div>
-                    <div className="services-page__summary-card">
-                        <div className="services-page__summary-icon services-page__summary-icon--stopped">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <line x1="15" y1="9" x2="9" y2="15"/>
-                                <line x1="9" y1="9" x2="15" y2="15"/>
-                            </svg>
-                        </div>
-                        <div className="services-page__summary-info">
-                            <span className="services-page__summary-value">{stats.stopped}</span>
-                            <span className="services-page__summary-label">Stopped</span>
-                        </div>
-                    </div>
-                    <div className="services-page__summary-card">
-                        <div className="services-page__summary-icon services-page__summary-icon--type">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                            </svg>
-                        </div>
-                        <div className="services-page__summary-info">
-                            <span className="services-page__summary-value">{stats.total}</span>
-                            <span className="services-page__summary-label">
-                                Total{stats.topType ? ` (${stats.topType[1]} ${stats.topType[0]})` : ''}
-                            </span>
-                        </div>
-                    </div>
-                    <div className="services-page__summary-card">
-                        <div className="services-page__summary-icon services-page__summary-icon--deploy">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="23 4 23 10 17 10"/>
-                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                            </svg>
-                        </div>
-                        <div className="services-page__summary-info">
-                            <span className="services-page__summary-value">
-                                {stats.recentDeploy ? formatRelativeTime(stats.recentDeploy.last_deploy_at) : 'N/A'}
-                            </span>
-                            <span className="services-page__summary-label">
-                                Last Deploy{stats.recentDeploy ? ` (${stats.recentDeploy.name})` : ''}
-                            </span>
-                        </div>
-                    </div>
-                </div>
+                <StatStrip ariaLabel="Services summary">
+                    <Stat
+                        label="Running"
+                        value={stats.running}
+                        state={stats.running > 0 ? 'success' : undefined}
+                    />
+                    <Stat
+                        label="Stopped"
+                        value={stats.stopped}
+                        state={stats.stopped > 0 ? 'warning' : undefined}
+                    />
+                    <Stat
+                        label="Total"
+                        value={stats.total}
+                        detail={stats.topType ? `${stats.topType[1]} ${stats.topType[0]}` : undefined}
+                    />
+                    <Stat
+                        label="Last Deploy"
+                        value={stats.recentDeploy ? formatRelativeTime(stats.recentDeploy.last_deploy_at) : 'N/A'}
+                        detail={stats.recentDeploy?.name}
+                    />
+                </StatStrip>
             )}
 
             {/* Filters + Sort */}

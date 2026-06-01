@@ -60,78 +60,6 @@
         }
     }
 
-    .marketplace-stats {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: $space-3;
-        margin-bottom: $space-5;
-    }
-
-    .marketplace-stat {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-        min-height: 76px;
-        padding: $space-4;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-        background: fade($bg-card-raw, 92%);
-    }
-
-    .marketplace-stat__icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 38px;
-        height: 38px;
-        flex: 0 0 38px;
-        border-radius: $radius-lg;
-
-        svg {
-            width: 19px;
-            height: 19px;
-        }
-    }
-
-    .marketplace-stat__value {
-        color: $text-primary;
-        font-size: $font-size-xl;
-        font-weight: $font-weight-bold;
-        line-height: 1.1;
-    }
-
-    .marketplace-stat__label {
-        margin-top: $space-1;
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-    }
-
-    .marketplace-stat--blue .marketplace-stat__icon {
-        background: fade($info, 14%);
-        color: $info;
-    }
-
-    .marketplace-stat--amber .marketplace-stat__icon {
-        background: fade($warning, 14%);
-        color: $warning;
-    }
-
-    .marketplace-stat--green .marketplace-stat__icon {
-        background: fade($success, 14%);
-        color: $success;
-    }
-
-    .marketplace-stat--violet .marketplace-stat__icon {
-        background: fade($accent-primary-raw, 14%);
-        color: $accent-primary;
-    }
-
-    .marketplace-stat--red .marketplace-stat__icon {
-        background: fade($danger, 14%);
-        color: $danger;
-    }
-
     .marketplace-tabs__list {
         margin-bottom: $space-5;
 
@@ -729,7 +657,6 @@
             }
         }
 
-        .marketplace-stats,
         .marketplace-side-panel {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -771,7 +698,6 @@
             font-size: $font-size-2xl;
         }
 
-        .marketplace-stats,
         .marketplace-side-panel {
             grid-template-columns: 1fr;
         }

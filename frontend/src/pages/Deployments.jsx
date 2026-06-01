@@ -13,6 +13,7 @@ import {
     PlayCircle,
 } from 'lucide-react';
 import api from '../services/api';
+import { StatStrip, Stat } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 
 const STATUS_COLORS = {
@@ -166,25 +167,12 @@ const Deployments = () => {
                 </div>
             </div>
 
-            <div className="deployments-page__summary">
-                {[
-                    { label: 'Running', value: summary.running, icon: Loader2, color: '#6366f1' },
-                    { label: 'Succeeded', value: summary.succeeded, icon: CheckCircle2, color: '#22c55e' },
-                    { label: 'Failed', value: summary.failed, icon: XCircle, color: '#ef4444' },
-                    { label: 'Pending', value: summary.pending, icon: Clock, color: '#94a3b8' },
-                ].map((s) => {
-                    const Icon = s.icon;
-                    return (
-                        <div key={s.label} className="deployments-page__stat-card">
-                            <Icon size={18} style={{ color: s.color }} />
-                            <div>
-                                <div className="deployments-page__stat-label">{s.label}</div>
-                                <div className="deployments-page__stat-value">{s.value}</div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+            <StatStrip ariaLabel="Deployment summary">
+                <Stat label="Running" value={summary.running} state={summary.running > 0 ? 'info' : undefined} />
+                <Stat label="Succeeded" value={summary.succeeded} state={summary.succeeded > 0 ? 'success' : undefined} />
+                <Stat label="Failed" value={summary.failed} state={summary.failed > 0 ? 'danger' : undefined} />
+                <Stat label="Pending" value={summary.pending} />
+            </StatStrip>
 
             <div className="deployments-page__toolbar">
                 <div className="deployments-page__filter">
