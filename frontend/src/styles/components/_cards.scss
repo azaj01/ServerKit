@@ -63,7 +63,122 @@
     @include mono-text();
 }
 
-// Stats grid layout
+// ============================================
+// STAT STRIP — compact instrument-panel readout bar
+// ============================================
+// The page-level summary row that sits above a page's tabs. One bordered
+// container divided into segments; replaces the old hero-metric stat cards.
+// Dividers are drawn by a 1px grid gap revealing the border-coloured backdrop,
+// so they stay crisp on wrap (no per-cell side borders).
+
+.stat-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: $border-subtle;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-lg;
+    overflow: hidden;
+    margin-bottom: $space-6;
+}
+
+.stat-strip__item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: $space-4 $space-5;
+    background: $bg-card;
+}
+
+.stat-strip__label {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: $text-secondary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stat-strip__value {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-2;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $text-primary;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+
+    // long string values (URLs, versions) shouldn't blow out the segment
+    > :not(.stat-strip__dot):not(.stat-strip__suffix) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+.stat-strip__suffix {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $text-tertiary;
+}
+
+.stat-strip__detail {
+    font-size: $font-size-xs;
+    color: $text-tertiary;
+}
+
+// Status dot — reinforces the (already text-stated) value; never the sole signal.
+.stat-strip__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: $text-tertiary;
+}
+
+@each $state, $color in (success: $success, warning: $warning, danger: $danger, info: $info) {
+    .stat-strip__item.is-#{$state} {
+        .stat-strip__dot { background: $color; }
+        .stat-strip__value { color: $color; }
+    }
+}
+
+// Clickable segment (acts as a filter toggle)
+.stat-strip__item--clickable {
+    appearance: none;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: background $transition-base;
+
+    &:hover { background: $bg-hover; }
+
+    &.is-active {
+        background: $bg-hover;
+        box-shadow: inset 3px 0 0 $accent-primary;
+    }
+
+    &:focus-visible {
+        outline: 2px solid $accent-primary;
+        outline-offset: -2px;
+    }
+}
+
+@media (max-width: $breakpoint-sm) {
+    .stat-strip {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .stat-strip__value { font-size: $font-size-md; }
+}
+
+// Legacy stats grid layout (retained for widgets that still use raw .stat-* inner
+// classes; the StatsGrid component now renders .stat-strip instead).
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
