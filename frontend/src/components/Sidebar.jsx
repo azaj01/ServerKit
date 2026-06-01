@@ -7,18 +7,15 @@ import { api } from '../services/api';
 import ServerKitLogo from './ServerKitLogo';
 import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems } from './sidebarItems';
 import { useContributions } from '../plugins/contributions';
-import useMediaQuery from '../hooks/useMediaQuery';
 
 const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {} }) => {
     const { user, logout, updateUser } = useAuth();
     const { theme, resolvedTheme, setTheme, whiteLabel } = useTheme();
     const navigate = useNavigate();
-    const [starAnimating, setStarAnimating] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [wpInstalled, setWpInstalled] = useState(false);
     const menuRef = useRef(null);
     const sidebarRef = useRef(null);
-    const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
     // When collapsed to a drawer and closed, take the whole subtree out of the
     // tab order and the accessibility tree. `inert` is set imperatively so it
@@ -72,16 +69,27 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         };
     }, [isMobile, mobileOpen, onMobileClose]);
 
-    // Close menu when clicking outside
+    // Close the user menu on outside click or Escape; return focus to the
+    // trigger when Escape dismisses it.
     useEffect(() => {
-        if (!menuOpen) return;
+        if (!menuOpen) return undefined;
         const handleClickOutside = (e) => {
             if (menuRef.current && !menuRef.current.contains(e.target)) {
                 setMenuOpen(false);
             }
         };
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                setMenuOpen(false);
+                menuRef.current?.querySelector('.user-mini')?.focus();
+            }
+        };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
     }, [menuOpen]);
 
     // Check if WordPress is installed
@@ -90,43 +98,6 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
             .then(data => setWpInstalled(!!data?.installed))
             .catch(() => setWpInstalled(false));
     }, []);
-
-    useEffect(() => {
-        // The star's celebratory burst is pure decoration: never auto-play it
-        // for users who asked the OS to reduce motion.
-        if (whiteLabel.enabled || prefersReducedMotion) return;
-
-        let playCount = 0;
-        let timeoutId;
-
-        const triggerAnimation = () => {
-            setStarAnimating(true);
-            setTimeout(() => setStarAnimating(false), 1500);
-            playCount++;
-        };
-
-        const scheduleNext = () => {
-            const multiplier = playCount + 1;
-            const minMinutes = 8 * multiplier;
-            const maxMinutes = 11 * multiplier;
-            const delay = (Math.random() * (maxMinutes - minMinutes) + minMinutes) * 60 * 1000;
-
-            timeoutId = setTimeout(() => {
-                triggerAnimation();
-                scheduleNext();
-            }, delay);
-        };
-
-        const initialDelay = setTimeout(() => {
-            triggerAnimation();
-            scheduleNext();
-        }, 60000);
-
-        return () => {
-            clearTimeout(initialDelay);
-            clearTimeout(timeoutId);
-        };
-    }, [whiteLabel.enabled, prefersReducedMotion]);
 
     const conditions = { wpInstalled };
     const currentPreset = user?.sidebar_config?.preset || 'full';
@@ -215,16 +186,20 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                         end={item.end || hasChildren}
                     >
                         <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            aria-hidden="true" focusable="false"
                             dangerouslySetInnerHTML={{ __html: item.icon }}
                         />
                         {item.label}
                     </NavLink>
                     {visibleSubs.length > 0 && (
                         <button
+                            type="button"
                             className={`nav-expand-btn ${isExpanded ? 'expanded' : ''}`}
+                            aria-expanded={isExpanded}
+                            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${item.label}`}
                             onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }}
                         >
-                            <ChevronRight size={14} />
+                            <ChevronRight size={14} aria-hidden="true" />
                         </button>
                     )}
                 </div>
@@ -235,6 +210,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                         className={({ isActive }) => `nav-item nav-sub-item ${isActive ? 'active' : ''}`}
                     >
                         <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            aria-hidden="true" focusable="false"
                             dangerouslySetInnerHTML={{ __html: sub.icon }}
                         />
                         {sub.label}
@@ -300,17 +276,11 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                         href="https://github.com/jhd3197/ServerKit"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`brand-star ${starAnimating ? 'animating' : ''}`}
+                        className="brand-star"
+                        aria-label="Star ServerKit on GitHub"
                         title="Star on GitHub"
                     >
-                        <Star size={14} />
-                        <span className="star-particles">
-                            <span></span><span></span><span></span><span></span><span></span><span></span>
-                        </span>
-                        <span className="star-ring"></span>
-                        <span className="star-ring ring-2"></span>
-                        <span className="star-ring ring-3"></span>
-                        <span className="star-tooltip">Star us!</span>
+                        <Star size={14} aria-hidden="true" />
                     </a>
                 </div>
             )}
@@ -370,91 +340,112 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
 
             <div className="sidebar-footer" ref={menuRef}>
                 {menuOpen && (
-                    <div className="user-context-menu">
+                    <div className="user-context-menu" id="user-context-menu" aria-label="Account and preferences">
                         <div className="context-menu-section">
-                            <div className="context-menu-label">Theme</div>
-                            <div className="theme-switcher">
+                            <div className="context-menu-label" id="theme-switcher-label">Theme</div>
+                            <div className="theme-switcher" role="group" aria-labelledby="theme-switcher-label">
                                 <button
+                                    type="button"
                                     className={`theme-btn ${theme === 'dark' ? 'active' : ''}`}
                                     onClick={() => setTheme('dark')}
+                                    aria-label="Dark theme"
+                                    aria-pressed={theme === 'dark'}
                                     title="Dark"
                                 >
-                                    <Moon size={14} />
+                                    <Moon size={14} aria-hidden="true" />
                                 </button>
                                 <button
+                                    type="button"
                                     className={`theme-btn ${theme === 'light' ? 'active' : ''}`}
                                     onClick={() => setTheme('light')}
+                                    aria-label="Light theme"
+                                    aria-pressed={theme === 'light'}
                                     title="Light"
                                 >
-                                    <Sun size={14} />
+                                    <Sun size={14} aria-hidden="true" />
                                 </button>
                                 <button
+                                    type="button"
                                     className={`theme-btn ${theme === 'system' ? 'active' : ''}`}
                                     onClick={() => setTheme('system')}
+                                    aria-label="System theme"
+                                    aria-pressed={theme === 'system'}
                                     title="System"
                                 >
-                                    <Monitor size={14} />
+                                    <Monitor size={14} aria-hidden="true" />
                                 </button>
                             </div>
                         </div>
                         <div className="context-menu-section">
-                            <div className="context-menu-label">Sidebar View</div>
-                            <div className="view-switcher">
+                            <div className="context-menu-label" id="sidebar-view-label">Sidebar View</div>
+                            <div className="view-switcher" role="group" aria-labelledby="sidebar-view-label">
                                 {Object.entries(SIDEBAR_PRESETS).map(([key, preset]) => (
                                     <button
                                         key={key}
+                                        type="button"
                                         className={`view-btn ${currentPreset === key ? 'active' : ''}`}
                                         onClick={() => handlePresetSwitch(key)}
+                                        aria-pressed={currentPreset === key}
                                         title={preset.description}
                                     >
                                         {preset.label}
-                                        {currentPreset === key && <Check size={10} />}
+                                        {currentPreset === key && <Check size={10} aria-hidden="true" />}
                                     </button>
                                 ))}
                             </div>
                         </div>
                         <div className="context-menu-divider" />
                         <button
+                            type="button"
                             className="context-menu-item"
                             onClick={() => { navigate('/settings/appearance'); setMenuOpen(false); }}
                         >
-                            <Palette size={15} />
+                            <Palette size={15} aria-hidden="true" />
                             Appearance
-                            <ChevronRight size={14} className="context-menu-arrow" />
+                            <ChevronRight size={14} className="context-menu-arrow" aria-hidden="true" />
                         </button>
                         <button
+                            type="button"
                             className="context-menu-item"
                             onClick={() => { navigate('/settings/sidebar'); setMenuOpen(false); }}
                         >
-                            <PanelLeft size={15} />
+                            <PanelLeft size={15} aria-hidden="true" />
                             Customize Sidebar
-                            <ChevronRight size={14} className="context-menu-arrow" />
+                            <ChevronRight size={14} className="context-menu-arrow" aria-hidden="true" />
                         </button>
                         <button
+                            type="button"
                             className="context-menu-item"
                             onClick={() => { navigate('/settings'); setMenuOpen(false); }}
                         >
-                            <Settings size={15} />
+                            <Settings size={15} aria-hidden="true" />
                             All Settings
-                            <ChevronRight size={14} className="context-menu-arrow" />
+                            <ChevronRight size={14} className="context-menu-arrow" aria-hidden="true" />
                         </button>
                         <div className="context-menu-divider" />
-                        <button className="context-menu-item danger" onClick={logout}>
-                            <LogOut size={15} />
+                        <button type="button" className="context-menu-item danger" onClick={logout}>
+                            <LogOut size={15} aria-hidden="true" />
                             Log out
                         </button>
                     </div>
                 )}
-                <div className="user-mini" onClick={() => setMenuOpen(!menuOpen)}>
-                    <div className="user-avatar">
+                <button
+                    type="button"
+                    className="user-mini"
+                    onClick={() => setMenuOpen(!menuOpen)}
+                    aria-haspopup="true"
+                    aria-expanded={menuOpen}
+                    aria-controls="user-context-menu"
+                >
+                    <span className="user-avatar" aria-hidden="true">
                         {user?.username?.charAt(0).toUpperCase() || 'U'}
-                    </div>
-                    <div className="user-meta">
+                    </span>
+                    <span className="user-meta">
                         <span className="user-handle">{user?.username || 'User'}</span>
                         <span className="user-status">Online</span>
-                    </div>
-                    <ChevronUp size={14} className={`user-menu-arrow ${menuOpen ? 'open' : ''}`} />
-                </div>
+                    </span>
+                    <ChevronUp size={14} className={`user-menu-arrow ${menuOpen ? 'open' : ''}`} aria-hidden="true" />
+                </button>
             </div>
         </aside>
     );

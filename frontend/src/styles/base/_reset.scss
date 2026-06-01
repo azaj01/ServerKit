@@ -6,7 +6,19 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+// Focus visibility (app-wide baseline).
+// Suppress the ring for pointer/mouse focus, but guarantee a consistent,
+// visible accent ring for keyboard users on every focusable element.
+// Components may override with a tuned ring (offset/radius) as needed.
+:focus:not(:focus-visible) {
     outline: none;
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
 }
 
 html {

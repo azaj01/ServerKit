@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
     HardDrive, Activity,
     RefreshCw, Zap,
@@ -415,8 +415,14 @@ const Dashboard = () => {
                                                     <td>{app.id}</td>
                                                     <td>
                                                         <div className="app-name-cell">
-                                                            <span className="app-icon-mini">{getStackIcon(app.app_type)}</span>
-                                                            {app.name}
+                                                            <span className="app-icon-mini" aria-hidden="true">{getStackIcon(app.app_type)}</span>
+                                                            <Link
+                                                                to={`/apps/${app.id}`}
+                                                                className="app-name-link"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                {app.name}
+                                                            </Link>
                                                         </div>
                                                     </td>
                                                     <td>{app.app_type}</td>

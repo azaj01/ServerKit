@@ -298,6 +298,7 @@
     justify-content: space-between;
     align-items: center;
     transition: all $transition-fast;
+    @include focus-ring();
 
     &:hover {
         border-color: $accent-primary;
@@ -365,6 +366,18 @@
     align-items: center;
     gap: $space-2;
     color: $text-primary;
+}
+
+.app-name-link {
+    color: $text-primary;
+    text-decoration: none;
+    border-radius: $radius-sm;
+    @include focus-ring();
+
+    &:hover {
+        color: $accent-primary;
+        text-decoration: underline;
+    }
 }
 
 .app-icon-mini {
@@ -491,6 +504,7 @@
     padding: $space-2;
     cursor: pointer;
     transition: all $transition-fast;
+    @include focus-ring();
 
     &:hover {
         border-color: $accent-primary;
