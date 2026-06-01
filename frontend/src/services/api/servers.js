@@ -1,8 +1,19 @@
 // Server management, remote Docker, fleet management, terminals, cloud provisioning
 
 // Servers (Multi-Server Management) endpoints
-export async function getServers() {
-    return this.request('/servers');
+export async function getServers(options = {}) {
+    // allWorkspaces neutralizes the ambient X-Workspace-Id header so a
+    // cross-workspace view (resource management) sees every server.
+    const config = options.allWorkspaces ? { headers: { 'X-Workspace-Id': '' } } : {};
+    return this.request('/servers', config);
+}
+
+// Reassign a server to a workspace (#33). Pass null to move it to Default.
+export async function setServerWorkspace(serverId, workspaceId) {
+    return this.request(`/servers/${serverId}/workspace`, {
+        method: 'PUT',
+        body: { workspace_id: workspaceId },
+    });
 }
 
 export async function getServer(id) {

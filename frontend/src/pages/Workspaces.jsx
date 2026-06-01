@@ -23,6 +23,7 @@ const Workspaces = () => {
     const [allUsers, setAllUsers] = useState([]);
     const [showResourcesModal, setShowResourcesModal] = useState(null);
     const [apps, setApps] = useState([]);
+    const [servers, setServers] = useState([]);
     const [form, setForm] = useState({ name: '', description: '', max_servers: 0, max_users: 0, primary_color: '#6366f1' });
 
     const loadWorkspaces = useCallback(async () => {
@@ -105,14 +106,20 @@ const Workspaces = () => {
         }
     };
 
+    const asServerList = (data) => (Array.isArray(data) ? data : (data?.servers || []));
+
     const loadResources = async (wsId) => {
         try {
-            // allWorkspaces so we can see apps in OTHER workspaces to move them in.
-            const data = await api.getApps({ allWorkspaces: true });
-            setApps(data.apps || []);
+            // allWorkspaces so we can see resources in OTHER workspaces to move them in.
+            const [appData, srvData] = await Promise.all([
+                api.getApps({ allWorkspaces: true }),
+                api.getServers({ allWorkspaces: true }).catch(() => []),
+            ]);
+            setApps(appData.apps || []);
+            setServers(asServerList(srvData));
             setShowResourcesModal(wsId);
         } catch (err) {
-            toast.error('Failed to load applications');
+            toast.error('Failed to load resources');
         }
     };
 
@@ -122,6 +129,16 @@ const Workspaces = () => {
             toast.success('Application moved');
             const data = await api.getApps({ allWorkspaces: true });
             setApps(data.apps || []);
+        } catch (err) {
+            toast.error(err.message);
+        }
+    };
+
+    const handleMoveServer = async (serverId, workspaceId) => {
+        try {
+            await api.setServerWorkspace(serverId, workspaceId);
+            toast.success('Server moved');
+            setServers(asServerList(await api.getServers({ allWorkspaces: true })));
         } catch (err) {
             toast.error(err.message);
         }
@@ -170,7 +187,7 @@ const Workspaces = () => {
                         )}
                         <div className="workspace-card__actions">
                             <Button size="sm" variant="outline" onClick={() => loadMembers(ws.id)}>Members</Button>
-                            <Button size="sm" variant="outline" onClick={() => loadResources(ws.id)}>Apps</Button>
+                            <Button size="sm" variant="outline" onClick={() => loadResources(ws.id)}>Resources</Button>
                             {ws.status === 'active' && (
                                 <Button size="sm" variant="secondary" onClick={() => handleArchive(ws.id)}>Archive</Button>
                             )}
@@ -271,39 +288,58 @@ const Workspaces = () => {
             )}
 
             {showResourcesModal && (() => {
-                const inWs = apps.filter(a => a.workspace_id === showResourcesModal);
-                const elsewhere = apps.filter(a => a.workspace_id !== showResourcesModal);
+                const appsIn = apps.filter(a => a.workspace_id === showResourcesModal);
+                const appsOut = apps.filter(a => a.workspace_id !== showResourcesModal);
+                const srvIn = servers.filter(s => s.workspace_id === showResourcesModal);
+                const srvOut = servers.filter(s => s.workspace_id !== showResourcesModal);
                 return (
                     <div className="modal-overlay" onClick={() => setShowResourcesModal(null)}>
                         <div className="modal" onClick={e => e.stopPropagation()}>
                             <div className="modal-header">
-                                <h2>Workspace Applications</h2>
+                                <h2>Workspace Resources</h2>
                                 <button className="modal-close" onClick={() => setShowResourcesModal(null)}>&times;</button>
                             </div>
                             <div className="modal-body">
+                                <h4>Applications</h4>
                                 <div className="members-list">
-                                    {inWs.length === 0 && <p className="form-hint">No applications in this workspace yet.</p>}
-                                    {inWs.map(a => (
+                                    {appsIn.length === 0 && <p className="form-hint">No applications in this workspace yet.</p>}
+                                    {appsIn.map(a => (
                                         <div key={a.id} className="member-row">
-                                            <div>
-                                                <strong>{a.name}</strong>
-                                                <Badge variant="outline" className="ml-2">{a.app_type}</Badge>
-                                            </div>
+                                            <div><strong>{a.name}</strong> <Badge variant="outline" className="ml-2">{a.app_type}</Badge></div>
                                             <Button size="sm" variant="destructive" onClick={() => handleMoveApp(a.id, null)}>Remove</Button>
                                         </div>
                                     ))}
                                 </div>
+                                {appsOut.length > 0 && (
+                                    <div className="server-select-list">
+                                        {appsOut.map(a => (
+                                            <div key={a.id} className="server-select-item" onClick={() => handleMoveApp(a.id, showResourcesModal)}>
+                                                <span>{a.name}</span>
+                                                <Badge variant="outline" className="ml-2">{a.app_type}</Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 <hr />
-                                <h4>Add Application</h4>
-                                <div className="server-select-list">
-                                    {elsewhere.length === 0 && <p className="form-hint">No other applications to add.</p>}
-                                    {elsewhere.map(a => (
-                                        <div key={a.id} className="server-select-item" onClick={() => handleMoveApp(a.id, showResourcesModal)}>
-                                            <span>{a.name}</span>
-                                            <Badge variant="outline" className="ml-2">{a.app_type}</Badge>
+                                <h4>Servers</h4>
+                                <div className="members-list">
+                                    {srvIn.length === 0 && <p className="form-hint">No servers in this workspace yet.</p>}
+                                    {srvIn.map(s => (
+                                        <div key={s.id} className="member-row">
+                                            <div><strong>{s.name}</strong></div>
+                                            <Button size="sm" variant="destructive" onClick={() => handleMoveServer(s.id, null)}>Remove</Button>
                                         </div>
                                     ))}
                                 </div>
+                                {srvOut.length > 0 && (
+                                    <div className="server-select-list">
+                                        {srvOut.map(s => (
+                                            <div key={s.id} className="server-select-item" onClick={() => handleMoveServer(s.id, showResourcesModal)}>
+                                                <span>{s.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
