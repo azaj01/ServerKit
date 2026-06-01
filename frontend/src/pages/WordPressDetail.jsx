@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ExternalLink, Settings, RefreshCw, Plus, Database, GitBranch, Package, Palette, Archive } from 'lucide-react';
+import { ExternalLink, Settings, RefreshCw, Plus, Database, GitBranch, Package, Palette, Archive, Trash2, Replace, ShieldCheck, FolderOpen, FileText } from 'lucide-react';
 import useTabParam from '../hooks/useTabParam';
 import wordpressApi from '../services/wordpress';
 import { useToast } from '../contexts/ToastContext';
+import { useLogsDrawer } from '../contexts/LogsDrawerContext';
 import { EnvironmentCard, SnapshotTable, GitConnectForm, CommitList } from '../components/wordpress';
 import { ErrorBoundary, ErrorState } from '../components/ErrorBoundary';
 import { Button } from '@/components/ui/button';
@@ -70,6 +71,7 @@ const WordPressDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const toast = useToast();
+    const { openDrawer } = useLogsDrawer();
     const [site, setSite] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useTabParam(`/wordpress/${id}`, VALID_TABS);
@@ -117,6 +119,33 @@ const WordPressDetail = () => {
                     <span className="current">{site.name}</span>
                 </div>
                 <div className="app-detail-actions">
+                    <Button
+                        variant="ghost"
+                        onClick={() => navigate(`/files?path=${encodeURIComponent(site.application?.root_path || '/')}`)}
+                        disabled={!site.application?.root_path}
+                        title={site.application?.root_path ? `Open ${site.application.root_path} in the File Manager` : 'No root path configured for this site'}
+                    >
+                        <FolderOpen size={16} />
+                        Open Files
+                    </Button>
+                    {site.db_name && (
+                        <Button
+                            variant="ghost"
+                            onClick={() => navigate(`/databases/mysql?db=${encodeURIComponent(site.db_name)}`)}
+                            title={`Open ${site.db_name} in the Database manager`}
+                        >
+                            <Database size={16} />
+                            Open Database
+                        </Button>
+                    )}
+                    <Button
+                        variant="ghost"
+                        onClick={() => openDrawer({ name: site.name, containerId: site.application_id, appType: 'docker' })}
+                        title="View live container logs"
+                    >
+                        <FileText size={16} />
+                        View Logs
+                    </Button>
                     {site.url && (
                         <>
                             <Button variant="ghost" asChild>
@@ -245,6 +274,9 @@ const OverviewTab = ({ site, onUpdate }) => {
     const [creatingSnapshot, setCreatingSnapshot] = useState(false);
     const [showEnvModal, setShowEnvModal] = useState(false);
     const [syncingAll, setSyncingAll] = useState(false);
+    const [flushingCache, setFlushingCache] = useState(false);
+    const [hardening, setHardening] = useState(false);
+    const [showSearchReplace, setShowSearchReplace] = useState(false);
 
     async function handleQuickSnapshot() {
         setCreatingSnapshot(true);
@@ -291,6 +323,51 @@ const OverviewTab = ({ site, onUpdate }) => {
             onUpdate?.();
         } catch (err) {
             toast.error(err.message || 'Failed to create environment');
+        }
+    }
+
+    async function handleFlushCache() {
+        setFlushingCache(true);
+        toast.info('Flushing cache...', { duration: 2000 });
+        try {
+            const res = await wordpressApi.flushCache(site.id);
+            toast.success(res.message || 'Cache flushed');
+        } catch (err) {
+            toast.error(err.message || 'Failed to flush cache');
+        } finally {
+            setFlushingCache(false);
+        }
+    }
+
+    async function handleHarden() {
+        if (!window.confirm('Apply security hardening? This disables file editing, the XML-RPC endpoint, forces SSL on wp-admin, tightens file permissions, and regenerates security keys (logs users out).')) {
+            return;
+        }
+        setHardening(true);
+        toast.info('Applying security hardening...', { duration: 4000 });
+        try {
+            const res = await wordpressApi.harden(site.id);
+            toast.success(res.message || 'Security hardening applied');
+        } catch (err) {
+            toast.error(err.message || 'Failed to harden site');
+        } finally {
+            setHardening(false);
+        }
+    }
+
+    async function handleSearchReplace(data) {
+        // data = { search, replace, dry_run }
+        toast.info(data.dry_run ? 'Running search-replace preview...' : 'Running search-replace...', { duration: 3000 });
+        try {
+            const res = await wordpressApi.searchReplace(site.id, data);
+            if (res.success === false) {
+                toast.error(res.error || res.message || 'Search-replace failed');
+                return;
+            }
+            toast.success(data.dry_run ? 'Dry run complete - no changes written' : 'Search-replace complete');
+            if (!data.dry_run) setShowSearchReplace(false);
+        } catch (err) {
+            toast.error(err.message || 'Search-replace failed');
         }
     }
 
@@ -438,6 +515,29 @@ const OverviewTab = ({ site, onUpdate }) => {
                                     {syncingAll ? 'Syncing...' : 'Sync All Envs'}
                                 </button>
                             )}
+                            <button
+                                className="quick-action-btn"
+                                onClick={handleFlushCache}
+                                disabled={flushingCache}
+                            >
+                                <Trash2 size={16} />
+                                {flushingCache ? 'Flushing...' : 'Purge Cache'}
+                            </button>
+                            <button
+                                className="quick-action-btn"
+                                onClick={() => setShowSearchReplace(true)}
+                            >
+                                <Replace size={16} />
+                                Search &amp; Replace
+                            </button>
+                            <button
+                                className="quick-action-btn"
+                                onClick={handleHarden}
+                                disabled={hardening}
+                            >
+                                <ShieldCheck size={16} />
+                                {hardening ? 'Hardening...' : 'Harden'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -457,6 +557,79 @@ const OverviewTab = ({ site, onUpdate }) => {
                     />
                 );
             })()}
+
+            {showSearchReplace && (
+                <SearchReplaceModal
+                    onClose={() => setShowSearchReplace(false)}
+                    onSubmit={handleSearchReplace}
+                />
+            )}
+        </div>
+    );
+};
+
+// Search & Replace Modal (DB string replacement, guarded by dry-run)
+const SearchReplaceModal = ({ onClose, onSubmit }) => {
+    const [search, setSearch] = useState('');
+    const [replace, setReplace] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    async function run(dryRun) {
+        if (!search.trim() || !replace.trim()) return;
+        setLoading(true);
+        try {
+            await onSubmit({ search: search.trim(), replace: replace.trim(), dry_run: dryRun });
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>Search &amp; Replace</h2>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); run(false); }}>
+                    <p className="hint">Replaces a string across all database tables (e.g. an old domain). Always preview with a dry run first.</p>
+
+                    <div className="form-group">
+                        <Label>Search for *</Label>
+                        <Input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="https://old-domain.com"
+                            required
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <Label>Replace with *</Label>
+                        <Input
+                            type="text"
+                            value={replace}
+                            onChange={(e) => setReplace(e.target.value)}
+                            placeholder="https://new-domain.com"
+                            required
+                        />
+                    </div>
+
+                    <div className="modal-actions">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Cancel
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => run(true)} disabled={loading || !search.trim() || !replace.trim()}>
+                            {loading ? 'Running...' : 'Dry Run'}
+                        </Button>
+                        <Button type="submit" disabled={loading || !search.trim() || !replace.trim()}>
+                            {loading ? 'Running...' : 'Run Replace'}
+                        </Button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 };

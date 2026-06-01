@@ -91,7 +91,7 @@ These are bugs the rest of the roadmap stands on. **Estimated cluster: half a da
 
 Every task here reuses a service that already exists and is verified present. **This is the highest "managed feel" per hour.** Many run in parallel. **Estimated cluster: 1–2 days, parallelizable.**
 
-### #5 — Surface the orphaned WP-CLI actions in the UI `[S]` 🟡
+### #5 — Surface the orphaned WP-CLI actions in the UI `[S]` 🟡 — ✅ Done
 - **Today:** Routes exist and work — `harden` (`api/wordpress.py:499`), `search-replace` (`:513`, serialized-safe), `flush-cache` (`:550`) — but `services/wordpress.js` has **no** `harden`/`searchReplace`/`flushCache` methods, so there's no button.
 - **Do:** Add the three `ApiService` methods + controls on `WordPressDetail` (a "Purge Cache" button, a guarded search-replace dialog, a "Harden" action).
 - **Reuse:** `WordPressService.harden_wordpress/search_replace/flush_cache` (`:497,609,626`).
@@ -115,13 +115,13 @@ Every task here reuses a service that already exists and is verified present. **
 - **Reuse:** `ssl_service`, `advanced_ssl_service`, `security.js`.
 - **Done when:** Creating/attaching a domain provisions TLS and the health card shows SSL status.
 
-### #9 — Stop dropping the sanitization profile `[S]` 🟡
+### #9 — Stop dropping the sanitization profile `[S]` 🟡 — ✅ Done
 - **Today:** `PromoteModal`/`SyncModal` send `sanitization_profile_id`; `db_sync_service.apply_sanitization_profile` exists — but `api/environment_pipeline.py` / `EnvironmentPipelineService` never resolve the id; only the boolean `options['sanitize']` is honored. The profile (incl. WooCommerce payment-table stripping) is silently ignored.
 - **Do:** Resolve `SanitizationProfile` by id in `promote_database`/`sync_from_production` and pass it to `_transform_dump`.
 - **Reuse:** `apply_sanitization_profile`, `SanitizationProfile` model.
 - **Done when:** A selected profile demonstrably rewrites/strips data on sync.
 
-### #10 — Close the rollback loop on promotions `[M]` 🟡
+### #10 — Close the rollback loop on promotions `[M]` 🟡 — ✅ Done
 - **Today:** `PromotionJob.pre_promotion_snapshot_id` and status `rolled_back` exist; `db_sync_service.restore_snapshot` exists; pre-promotion snapshots are captured on **every** promote — but **nothing ever calls restore** and `rolled_back` is never set. The safety net is captured and never used.
 - **Do:** Add `POST /promotions/<id>/rollback` that restores the linked snapshot and flips status; optionally auto-trigger on failed promote.
 - **Reuse:** `restore_snapshot`, `PromotionJob`.
@@ -133,7 +133,7 @@ Every task here reuses a service that already exists and is verified present. **
 - **Reuse:** `storage_provider_service`, `backup_service`, the cron scheduler.
 - **Done when:** Snapshots replicate to configured object storage and age out per policy.
 
-### #12 — Deep-link DB, files, and logs from the site `[S]` 🟡
+### #12 — Deep-link DB, files, and logs from the site `[S]` 🟡 — ✅ Done
 - **Today:** `QueryRunner.jsx` + `api/databases.py` and the File Manager + host log viewer exist but are reached only by raw DB-name / manual path; none deep-link to a site's `db_name` / docroot / `debug.log`.
 - **Do:** Add "Open Database", "Open Files", and "View Logs" buttons that pass the site's `db_name`/`root_path`.
 - **Reuse:** `QueryRunner`, File Manager, log viewer.

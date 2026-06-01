@@ -739,6 +739,55 @@ def get_promotions(prod_id):
     })
 
 
+@environment_pipeline_bp.route('/<int:prod_id>/promotions/<int:promotion_id>/rollback', methods=['POST'])
+@jwt_required()
+@limiter.limit("5 per minute")
+def rollback_promotion(prod_id, promotion_id):
+    """Restore a promotion's pre-promotion snapshot into its target environment."""
+    user_id = get_jwt_identity()
+
+    site, error = _get_production_site(prod_id, user_id)
+    if error:
+        return error
+
+    job = PromotionJob.query.get(promotion_id)
+    if not job:
+        return jsonify({'error': 'Promotion not found'}), 404
+
+    # The promotion must belong to this project (its source or target env).
+    env_ids = [prod_id] + [e.id for e in site.environments]
+    if job.source_site_id not in env_ids and job.target_site_id not in env_ids:
+        return jsonify({'error': 'Promotion does not belong to this project'}), 400
+
+    # Verify ownership of the target environment being restored.
+    _, error = _get_environment_site(job.target_site_id, user_id)
+    if error:
+        return error
+
+    _emit_pipeline_event(prod_id, 'rollback_started', {
+        'promotion_id': promotion_id,
+        'target_env_id': job.target_site_id,
+        'message': f'Rolling back promotion #{promotion_id}...',
+    })
+
+    result = EnvironmentPipelineService.rollback_promotion(
+        promotion_id=promotion_id,
+        user_id=user_id,
+    )
+
+    _emit_pipeline_event(prod_id, 'rollback_completed' if result.get('success') else 'rollback_failed', {
+        'promotion_id': promotion_id,
+        'target_env_id': job.target_site_id,
+        'success': result.get('success', False),
+        'message': result.get('message') or result.get('error'),
+    })
+
+    if result.get('success'):
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
+
+
 # =============================================================================
 # Environment Status (single environment detail)
 # =============================================================================

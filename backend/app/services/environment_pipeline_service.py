@@ -483,6 +483,11 @@ class EnvironmentPipelineService:
                     'anonymize': options.get('sanitize', False),
                 }
 
+                # Apply sanitization profile rules if a profile was selected (sync)
+                cls._apply_sanitization_profile_options(
+                    clone_options, options.get('sanitization_profile_id'), user_id=user_id
+                )
+
                 # Auto-add domain search-replace
                 prod_domain = cls._get_primary_domain(prod_site)
                 env_domain = cls._get_primary_domain(env_site)
@@ -885,6 +890,11 @@ class EnvironmentPipelineService:
                 'anonymize': config.get('sanitize', False),
             }
 
+            # Apply sanitization profile rules if a profile was selected (promote)
+            cls._apply_sanitization_profile_options(
+                clone_options, config.get('sanitization_profile_id'), user_id=user_id
+            )
+
             # Auto-add domain search-replace
             source_domain = cls._get_primary_domain(source_site)
             target_domain = cls._get_primary_domain(target_site)
@@ -965,6 +975,102 @@ class EnvironmentPipelineService:
             job.duration_seconds = time.time() - start_time
             db.session.commit()
 
+            cls._unlock_environment(target_site)
+            cls._finish_activity(activity, 'failed', str(e), start_time)
+            return {'success': False, 'error': str(e)}
+
+    @classmethod
+    def rollback_promotion(cls, promotion_id: int, user_id: int = None) -> Dict:
+        """Restore a promotion's pre-promotion snapshot into its target environment DB.
+
+        Finds the PromotionJob's pre_promotion_snapshot (a DatabaseSnapshot of the
+        target taken just before the promotion) and restores that dump into the
+        target environment's database — container import when the target runs in
+        Docker, host restore otherwise — then sets job.status='rolled_back'.
+        """
+        job = PromotionJob.query.get(promotion_id)
+        if not job:
+            return {'success': False, 'error': 'Promotion not found'}
+
+        if not job.pre_promotion_snapshot_id:
+            return {'success': False, 'error': 'No pre-promotion snapshot available for this promotion'}
+
+        snapshot = DatabaseSnapshot.query.get(job.pre_promotion_snapshot_id)
+        if not snapshot or not snapshot.file_path:
+            return {'success': False, 'error': 'Pre-promotion snapshot record not found'}
+
+        if not os.path.exists(snapshot.file_path):
+            return {'success': False, 'error': f'Snapshot file not found: {snapshot.file_path}'}
+
+        target_site = WordPressSite.query.get(job.target_site_id)
+        if not target_site:
+            return {'success': False, 'error': 'Target environment not found'}
+
+        if target_site.is_locked:
+            return {'success': False, 'error': f'Target environment is locked: {target_site.locked_reason}'}
+
+        start_time = time.time()
+        activity = cls._create_activity(
+            site_id=job.target_site_id,
+            user_id=user_id,
+            action='rolled_back_promotion',
+            description=f'Rolling back promotion #{promotion_id} on {target_site.environment_type}',
+            status='running'
+        )
+
+        cls._lock_environment(target_site, 'Promotion rollback in progress', user_id)
+        try:
+            target_compose = cls._get_compose_path(target_site)
+            if target_compose:
+                target_vars = cls._read_env_vars(target_site)
+                restore_result = DatabaseSyncService.import_to_container(
+                    compose_path=target_compose,
+                    snapshot_path=snapshot.file_path,
+                    db_name=target_site.db_name,
+                    db_user=target_vars.get('DB_USER', target_site.db_user),
+                    db_password=target_vars.get('DB_PASSWORD') or cls._get_env_password(target_site),
+                )
+            else:
+                restore_result = DatabaseSyncService.restore_snapshot(
+                    file_path=snapshot.file_path,
+                    target_db=target_site.db_name,
+                    host=target_site.db_host or 'localhost',
+                    user=target_site.db_user,
+                    password=cls._get_db_password_from_config(target_site),
+                    create_db=True,
+                )
+
+            if not restore_result.get('success'):
+                cls._unlock_environment(target_site)
+                cls._finish_activity(activity, 'failed', restore_result.get('error'), start_time)
+                return {'success': False, 'error': f"Rollback restore failed: {restore_result.get('error')}"}
+
+            # Flush caches on the target if it is containerized
+            if target_compose:
+                EnvironmentDockerService.exec_in_container(
+                    target_compose, 'wordpress', 'wp cache flush --allow-root'
+                )
+
+            job.status = 'rolled_back'
+            db.session.commit()
+
+            cls._unlock_environment(target_site)
+            cls._finish_activity(activity, 'completed', None, start_time, {
+                'promotion_job_id': job.id,
+                'restored_snapshot_id': snapshot.id,
+            })
+
+            cls._send_notification('Promotion Rolled Back', {
+                'message': f'Promotion #{promotion_id} rolled back on {target_site.environment_type}',
+            }, user_id)
+
+            return {
+                'success': True,
+                'message': f'Promotion #{promotion_id} rolled back',
+                'promotion_job': job.to_dict(),
+            }
+
+        except Exception as e:
             cls._unlock_environment(target_site)
             cls._finish_activity(activity, 'failed', str(e), start_time)
             return {'success': False, 'error': str(e)}
@@ -1414,6 +1520,44 @@ class EnvironmentPipelineService:
         }
 
     # ==================== PRIVATE HELPERS ====================
+
+    @classmethod
+    def _apply_sanitization_profile_options(cls, clone_options: Dict, profile_id,
+                                            user_id: int = None) -> None:
+        """Resolve a SanitizationProfile id and merge its rules into clone_options in place.
+
+        Composes with the boolean ``sanitize`` flag: profile anonymize flags win,
+        table lists are unioned, and search-replace maps are merged. No-ops when
+        ``profile_id`` is falsy or the profile is not found / not owned by the user.
+        """
+        if not profile_id:
+            return
+        try:
+            from app.models.sanitization_profile import SanitizationProfile
+            query = SanitizationProfile.query.filter_by(id=int(profile_id))
+            if user_id is not None:
+                query = query.filter_by(user_id=user_id)
+            profile = query.first()
+            if not profile:
+                return
+            profile_opts = DatabaseSyncService.apply_sanitization_profile(profile.get_config())
+            for key in ('anonymize', 'anonymize_names', 'reset_passwords', 'remove_transients'):
+                if profile_opts.get(key):
+                    clone_options[key] = True
+            for key in ('truncate_tables', 'exclude_tables'):
+                if profile_opts.get(key):
+                    existing = list(clone_options.get(key, []) or [])
+                    for table in profile_opts[key]:
+                        if table not in existing:
+                            existing.append(table)
+                    clone_options[key] = existing
+            if profile_opts.get('search_replace'):
+                merged = dict(clone_options.get('search_replace', {}) or {})
+                merged.update(profile_opts['search_replace'])
+                clone_options['search_replace'] = merged
+        except Exception:
+            # Best-effort: never break a clone because profile resolution failed.
+            pass
 
     @classmethod
     def _get_compose_path(cls, site: WordPressSite) -> Optional[str]:

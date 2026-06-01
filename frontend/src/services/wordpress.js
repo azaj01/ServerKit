@@ -107,6 +107,20 @@ const wordpressApi = {
         method: 'POST'
     }),
 
+    // Maintenance & Security
+    flushCache: (siteId) => api.request(`${BASE_PATH}/${siteId}/flush-cache`, {
+        method: 'POST'
+    }),
+
+    searchReplace: (siteId, data) => api.request(`${BASE_PATH}/${siteId}/search-replace`, {
+        method: 'POST',
+        body: data
+    }),
+
+    harden: (siteId) => api.request(`${BASE_PATH}/${siteId}/harden`, {
+        method: 'POST'
+    }),
+
     // Clone Database (for advanced use)
     cloneDatabase: (siteId, data) => api.request(`${BASE_PATH}/${siteId}/clone-db`, {
         method: 'POST',
@@ -192,6 +206,12 @@ const wordpressApi = {
         const query = new URLSearchParams(params).toString();
         return api.request(`/wordpress/projects/${prodId}/promotions${query ? `?${query}` : ''}`);
     },
+
+    // Restore a promotion's pre-promotion snapshot into its target environment
+    rollbackPromotion: (prodId, promotionId) => api.request(
+        `/wordpress/projects/${prodId}/promotions/${promotionId}/rollback`,
+        { method: 'POST' }
+    ),
 
     // Git branches (for multidev)
     getBranches: (prodId) => api.request(`/wordpress/projects/${prodId}/git/branches`),

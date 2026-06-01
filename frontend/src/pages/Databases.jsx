@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
@@ -167,6 +167,7 @@ const MySQLTab = ({ status }) => {
     const [showCreateUserModal, setShowCreateUserModal] = useState(false);
     const [selectedDb, setSelectedDb] = useState(null);
     const [queryDb, setQueryDb] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
 
     useEffect(() => {
         if (status?.running) {
@@ -183,8 +184,21 @@ const MySQLTab = ({ status }) => {
                 api.getMySQLDatabases(),
                 api.getMySQLUsers()
             ]);
-            setDatabases(dbData.databases || []);
+            const dbList = dbData.databases || [];
+            setDatabases(dbList);
             setUsers(userData.users || []);
+            // Deep-link support: open the QueryRunner for a ?db= database (e.g. from a WordPress site)
+            const wanted = searchParams.get('db');
+            if (wanted) {
+                const match = dbList.find(d => d.name === wanted);
+                if (match) {
+                    setView('databases');
+                    setQueryDb(match);
+                }
+                const next = new URLSearchParams(searchParams);
+                next.delete('db');
+                setSearchParams(next, { replace: true });
+            }
         } catch (err) {
             console.error('Failed to load MySQL data:', err);
         } finally {
