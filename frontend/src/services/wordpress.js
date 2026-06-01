@@ -13,8 +13,20 @@ const wordpressApi = {
 
     getSite: (id) => api.request(`${BASE_PATH}/${id}`),
 
-    deleteSite: (id) => api.request(`${BASE_PATH}/${id}`, {
-        method: 'DELETE'
+    // Deletes the site and all environments. A final files+DB backup is taken
+    // by default (pass { createBackup: false } to skip).
+    deleteSite: (id, { createBackup = true } = {}) => api.request(
+        `${BASE_PATH}/${id}?create_backup=${createBackup}`,
+        { method: 'DELETE' }
+    ),
+
+    // Stop the stack but keep data + files (reversible via unarchiveSite).
+    archiveSite: (id) => api.request(`${BASE_PATH}/${id}/archive`, {
+        method: 'POST'
+    }),
+
+    unarchiveSite: (id) => api.request(`${BASE_PATH}/${id}/unarchive`, {
+        method: 'POST'
     }),
 
     // Environment Management

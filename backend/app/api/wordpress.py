@@ -57,8 +57,30 @@ def get_site(site_id):
 @wordpress_bp.route('/sites/<int:site_id>', methods=['DELETE'])
 @jwt_required()
 def delete_site(site_id):
-    """Delete site and all its environments."""
-    result = WordPressService.delete_site(site_id)
+    """Delete site and all its environments (takes a final backup by default)."""
+    # Back up before delete unless explicitly opted out via ?create_backup=false
+    create_backup = request.args.get('create_backup', 'true').lower() != 'false'
+    result = WordPressService.delete_site(site_id, create_backup=create_backup)
+    if result.get('success'):
+        return jsonify(result), 200
+    return jsonify(result), 400
+
+
+@wordpress_bp.route('/sites/<int:site_id>/archive', methods=['POST'])
+@jwt_required()
+def archive_site(site_id):
+    """Archive a site: stop the stack but keep all data. Reversible."""
+    result = WordPressService.archive_site(site_id)
+    if result.get('success'):
+        return jsonify(result), 200
+    return jsonify(result), 400
+
+
+@wordpress_bp.route('/sites/<int:site_id>/unarchive', methods=['POST'])
+@jwt_required()
+def unarchive_site(site_id):
+    """Restore a previously archived site."""
+    result = WordPressService.unarchive_site(site_id)
     if result.get('success'):
         return jsonify(result), 200
     return jsonify(result), 400

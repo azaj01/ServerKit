@@ -1029,11 +1029,16 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             return {'success': False, 'error': str(e)}
 
     @classmethod
-    def delete_site(cls, site_id: int) -> Dict:
-        """Delete a WordPress site and all its environments."""
+    def delete_site(cls, site_id: int, create_backup: bool = True) -> Dict:
+        """Delete a WordPress site and all its environments.
+
+        By default a final files + database backup of the production site is
+        captured to ``BACKUP_DIR`` before anything is torn down, so a deleted
+        site stays restorable. The backup lives outside the site root, so it
+        survives the filesystem teardown. Pass ``create_backup=False`` to skip.
+        """
         from app import db
-        from app.models import WordPressSite, Application
-        from app.services.docker_service import DockerService
+        from app.models import WordPressSite
 
         site = WordPressSite.query.get(site_id)
         if not site:
@@ -1041,6 +1046,18 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
 
         if not site.is_production:
             return {'success': False, 'error': 'Can only delete production sites from this endpoint. Use delete_environment for non-production.'}
+
+        # Capture a final backup BEFORE any destructive action, while the
+        # containers are still up (wp db export runs inside the running stack).
+        backup_info = None
+        if create_backup and site.application and site.application.root_path:
+            backup_result = cls.backup_wordpress(site.application.root_path, include_db=True)
+            if backup_result.get('success'):
+                backup_info = {
+                    'backup_name': backup_result.get('backup_name'),
+                    'backup_path': backup_result.get('backup_path'),
+                    'size': backup_result.get('size'),
+                }
 
         try:
             # Delete all child environments first
@@ -1052,7 +1069,85 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             cls._teardown_wp_site(site)
 
             db.session.commit()
-            return {'success': True, 'message': 'Site and all environments deleted'}
+            return {
+                'success': True,
+                'message': 'Site and all environments deleted',
+                'backup': backup_info,
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            return {'success': False, 'error': str(e)}
+
+    @classmethod
+    def archive_site(cls, site_id: int) -> Dict:
+        """Archive a site: stop its stack but keep all data (volumes + files).
+
+        Unlike delete, archiving is fully reversible via ``unarchive_site`` —
+        the Docker volumes (database) and files are preserved, and a final
+        backup is captured for safety. Applies to the production site and all
+        of its child environments.
+        """
+        from app import db
+        from app.models import WordPressSite
+        from app.services.docker_service import DockerService
+
+        site = WordPressSite.query.get(site_id)
+        if not site:
+            return {'success': False, 'error': 'Site not found'}
+
+        if not site.is_production:
+            return {'success': False, 'error': 'Only production sites can be archived'}
+
+        # Best-effort safety backup (archiving keeps the data either way).
+        backup_info = None
+        if site.application and site.application.root_path:
+            backup_result = cls.backup_wordpress(site.application.root_path, include_db=True)
+            if backup_result.get('success'):
+                backup_info = backup_result.get('backup_name')
+
+        try:
+            targets = [site] + WordPressSite.query.filter_by(production_site_id=site.id).all()
+            for wp in targets:
+                if (wp.application and wp.application.root_path
+                        and os.path.exists(wp.application.root_path)):
+                    # Keep volumes so the database/files survive.
+                    DockerService.compose_down(wp.application.root_path, volumes=False)
+                if wp.application:
+                    wp.application.status = 'archived'
+
+            db.session.commit()
+            return {'success': True, 'message': 'Site archived', 'backup': backup_info}
+
+        except Exception as e:
+            db.session.rollback()
+            return {'success': False, 'error': str(e)}
+
+    @classmethod
+    def unarchive_site(cls, site_id: int) -> Dict:
+        """Bring an archived site back online by starting its stack again."""
+        from app import db
+        from app.models import WordPressSite
+        from app.services.docker_service import DockerService
+
+        site = WordPressSite.query.get(site_id)
+        if not site:
+            return {'success': False, 'error': 'Site not found'}
+
+        if not site.is_production:
+            return {'success': False, 'error': 'Only production sites can be unarchived'}
+
+        try:
+            targets = [site] + WordPressSite.query.filter_by(production_site_id=site.id).all()
+            for wp in targets:
+                if (wp.application and wp.application.root_path
+                        and os.path.exists(wp.application.root_path)):
+                    DockerService.compose_up(wp.application.root_path)
+                if wp.application:
+                    wp.application.status = 'running'
+
+            db.session.commit()
+            return {'success': True, 'message': 'Site restored from archive'}
 
         except Exception as e:
             db.session.rollback()
@@ -1176,7 +1271,7 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             return {'success': False, 'error': str(e)}
 
     @classmethod
-    def _teardown_wp_site(cls, wp_site) -> None:
+    def _teardown_wp_site(cls, wp_site, remove_volumes: bool = True) -> None:
         """Tear down Docker stack and delete records for a WordPressSite."""
         from app import db
         from app.services.docker_service import DockerService
@@ -1184,7 +1279,7 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
         if wp_site.application and wp_site.application.root_path:
             root_path = wp_site.application.root_path
             if os.path.exists(root_path):
-                DockerService.compose_down(root_path, remove_volumes=True)
+                DockerService.compose_down(root_path, volumes=remove_volumes)
                 shutil.rmtree(root_path, ignore_errors=True)
 
         if wp_site.application:
