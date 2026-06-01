@@ -81,6 +81,10 @@ class WordPressSite(db.Model):
     # Vulnerability scan (#28)
     last_vuln_scan_at = db.Column(db.DateTime)
 
+    # Safe updates (#29)
+    auto_update_schedule = db.Column(db.String(100))   # cron expression (null = off)
+    auto_update_exclude = db.Column(db.Text)           # JSON list of plugin/theme slugs to skip
+
     # Auto-sync
     auto_sync_schedule = db.Column(db.String(100))  # cron expression
     auto_sync_enabled = db.Column(db.Boolean, default=False)
@@ -98,6 +102,7 @@ class WordPressSite(db.Model):
     )
     snapshots = db.relationship('DatabaseSnapshot', backref='site', lazy='dynamic', cascade='all, delete-orphan')
     vulnerabilities = db.relationship('WordPressVulnerability', backref='site', lazy='dynamic', cascade='all, delete-orphan')
+    update_runs = db.relationship('WordPressUpdateRun', backref='site', lazy='dynamic', cascade='all, delete-orphan')
     sync_jobs_as_source = db.relationship(
         'SyncJob',
         foreign_keys='SyncJob.source_site_id',
@@ -150,6 +155,8 @@ class WordPressSite(db.Model):
             'disk_usage_human': DatabaseSnapshot._format_size(self.disk_usage_bytes) if self.disk_usage_bytes else None,
             'disk_usage_updated_at': self.disk_usage_updated_at.isoformat() if self.disk_usage_updated_at else None,
             'last_vuln_scan_at': self.last_vuln_scan_at.isoformat() if self.last_vuln_scan_at else None,
+            'auto_update_schedule': self.auto_update_schedule,
+            'auto_update_exclude': json.loads(self.auto_update_exclude) if self.auto_update_exclude else [],
             'auto_sync_schedule': self.auto_sync_schedule,
             'auto_sync_enabled': self.auto_sync_enabled,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -349,3 +356,36 @@ class WordPressVulnerability(db.Model):
 
     def __repr__(self):
         return f'<WordPressVulnerability {self.id} {self.source}:{self.slug} {self.severity}>'
+
+
+class WordPressUpdateRun(db.Model):
+    """A record of a safe-update run: snapshot -> update -> health-check -> rollback."""
+
+    __tablename__ = 'wordpress_update_runs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    site_id = db.Column(db.Integer, db.ForeignKey('wordpress_sites.id'), nullable=False, index=True)
+
+    status = db.Column(db.String(20), default='running')   # running|completed|rolled_back|failed
+    trigger = db.Column(db.String(20), default='manual')   # manual|scheduled
+    # JSON: {targets, excluded, updated:[{type,slug,from,to}], health_before, health_after, rolled_back}
+    details = db.Column(db.Text)
+    error = db.Column(db.Text)
+
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    finished_at = db.Column(db.DateTime)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'site_id': self.site_id,
+            'status': self.status,
+            'trigger': self.trigger,
+            'details': json.loads(self.details) if self.details else {},
+            'error': self.error,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+        }
+
+    def __repr__(self):
+        return f'<WordPressUpdateRun {self.id} site={self.site_id} {self.status}>'

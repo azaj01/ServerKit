@@ -652,6 +652,66 @@ def set_site_cron(app_id):
     return jsonify(WpSecurityService.set_cron_disabled(app.root_path, disabled)), 200
 
 
+# ---- Safe update manager (#29): run history, on-demand safe update, schedule ----
+
+@wordpress_bp.route('/sites/<int:app_id>/updates', methods=['GET'])
+@jwt_required()
+def get_site_updates(app_id):
+    """Return safe-update run history + status + the site's update schedule."""
+    from app.services.wp_update_service import WpUpdateService
+    app, err = _owner_or_admin_app(app_id)
+    if err:
+        return err
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    result = WpUpdateService.get_runs(wp_site)
+    result['schedule'] = wp_site.auto_update_schedule
+    result['exclude'] = json.loads(wp_site.auto_update_exclude) if wp_site.auto_update_exclude else []
+    return jsonify(result), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/updates/run', methods=['POST'])
+@jwt_required()
+@admin_required
+def run_site_updates(app_id):
+    """Start a background safe update (snapshot -> update -> health-check -> auto-rollback)."""
+    from app.services.wp_update_service import WpUpdateService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    data = request.get_json() or {}
+    targets = data.get('targets') or {'core': True, 'plugins': True, 'themes': True}
+    exclude = data.get('exclude') or []
+    return jsonify(WpUpdateService.start_update(wp_site, targets=targets, exclude=exclude)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/updates/schedule', methods=['POST'])
+@jwt_required()
+@admin_required
+def set_site_update_schedule(app_id):
+    """Set/clear the per-site auto-update cron schedule + exclusion list."""
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    data = request.get_json() or {}
+    wp_site.auto_update_schedule = (data.get('schedule') or '').strip() or None
+    if data.get('exclude') is not None:
+        wp_site.auto_update_exclude = json.dumps(data.get('exclude'))
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'schedule': wp_site.auto_update_schedule,
+        'exclude': json.loads(wp_site.auto_update_exclude) if wp_site.auto_update_exclude else [],
+    }), 200
+
+
 @wordpress_bp.route('/sites/<int:app_id>/info', methods=['GET'])
 @jwt_required()
 def get_wordpress_info(app_id):

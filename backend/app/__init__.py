@@ -340,6 +340,9 @@ def create_app(config_name=None):
         # Start per-site WordPress health poller (uptime % + auto-incidents + alerts)
         _start_health_check_scheduler(app)
 
+        # Start per-site WordPress safe-update scheduler (#29)
+        _start_update_scheduler(app)
+
         # Start API analytics flush thread
         from app.middleware.api_analytics import start_analytics_flush_thread
         start_analytics_flush_thread(app)
@@ -792,3 +795,76 @@ def _prune_old_health_checks(logger):
             db.session.rollback()
         except Exception:
             pass
+
+
+_update_scheduler_thread = None
+
+
+def _start_update_scheduler(app):
+    """Background thread that runs due per-site WordPress auto-updates (safe-update
+    with snapshot + health-check + auto-rollback). Single-worker only (module-global
+    guard); each run itself runs in its own thread, so this loop only triggers them."""
+    global _update_scheduler_thread
+    if _update_scheduler_thread is not None:
+        return
+
+    import threading
+    import time
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    def loop():
+        time.sleep(45)  # let startup settle
+        while True:
+            try:
+                time.sleep(60)
+                with app.app_context():
+                    _check_update_schedules(logger)
+            except Exception as e:
+                logger.error(f'Update scheduler error: {e}')
+
+    _update_scheduler_thread = threading.Thread(target=loop, daemon=True, name='wp-update-scheduler')
+    _update_scheduler_thread.start()
+
+
+def _check_update_schedules(logger):
+    from app.models.wordpress_site import WordPressSite, WordPressUpdateRun
+    from app.services.wp_update_service import WpUpdateService
+    from datetime import datetime
+    import json as _json
+
+    try:
+        from croniter import croniter
+    except ImportError:
+        return
+
+    sites = WordPressSite.query.filter(WordPressSite.auto_update_schedule.isnot(None)).all()
+    if not sites:
+        return
+    now = datetime.utcnow()
+    for site in sites:
+        try:
+            expr = (site.auto_update_schedule or '').strip()
+            if not expr or not croniter.is_valid(expr):
+                continue
+            if not site.application or site.application.status != 'running':
+                continue
+            prev = croniter(expr, now).get_prev(datetime)
+            if not (0 < (now - prev).total_seconds() <= 90):
+                continue
+            # de-dup: skip if a run already started in the last ~10 minutes
+            last = (WordPressUpdateRun.query.filter_by(site_id=site.id)
+                    .order_by(WordPressUpdateRun.started_at.desc()).first())
+            if last and last.started_at and (now - last.started_at).total_seconds() < 600:
+                continue
+            exclude = []
+            if site.auto_update_exclude:
+                try:
+                    exclude = _json.loads(site.auto_update_exclude)
+                except Exception:
+                    exclude = []
+            logger.info(f'Scheduled WordPress safe-update: site {site.id}')
+            WpUpdateService.start_update(site, exclude=exclude, trigger='scheduled')
+        except Exception as e:
+            logger.error(f'Update schedule check failed for site {site.id}: {e}')

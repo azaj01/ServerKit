@@ -189,6 +189,11 @@ const wordpressApi = {
     getVulnerabilities: (siteId) => api.request(`${BASE_PATH}/${siteId}/vulnerabilities`),
     scanVulnerabilities: (siteId) => api.request(`${BASE_PATH}/${siteId}/vulnerabilities/scan`, { method: 'POST' }),
 
+    // Safe update manager (#29): run history, on-demand safe update, schedule
+    getUpdates: (siteId) => api.request(`${BASE_PATH}/${siteId}/updates`),
+    runUpdates: (siteId, body = {}) => api.request(`${BASE_PATH}/${siteId}/updates/run`, { method: 'POST', body }),
+    setUpdateSchedule: (siteId, body) => api.request(`${BASE_PATH}/${siteId}/updates/schedule`, { method: 'POST', body }),
+
     // Security depth (#30): file integrity / debug toggle / WP-Cron
     getIntegrity: (siteId) => api.request(`${BASE_PATH}/${siteId}/integrity`),
     scanIntegrity: (siteId) => api.request(`${BASE_PATH}/${siteId}/integrity/scan`, { method: 'POST' }),

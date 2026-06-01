@@ -58,12 +58,17 @@ define('WP_AUTO_UPDATE_CORE', 'minor');
             return {'success': False, 'error': str(e)}
 
     @classmethod
-    def wp_cli(cls, path: str, command: List[str], user: str = 'www-data') -> Dict:
-        """Execute a WP-CLI command. Auto-detects Docker-based sites."""
+    def wp_cli(cls, path: str, command: List[str], user: str = 'www-data', timeout: int = None) -> Dict:
+        """Execute a WP-CLI command. Auto-detects Docker-based sites.
+
+        ``timeout`` overrides the default per-call wall-clock limit; pass a
+        generous value for long operations like ``db export``/``db import`` so a
+        large database is never truncated mid-restore.
+        """
         # Check if this is a Docker-based site (has docker-compose.yml)
         compose_file = os.path.join(path, 'docker-compose.yml')
         if os.path.exists(compose_file):
-            return cls._wp_cli_docker(path, command)
+            return cls._wp_cli_docker(path, command, timeout=timeout)
 
         if not cls.is_wp_cli_installed():
             install_result = cls.install_wp_cli()
@@ -76,7 +81,7 @@ define('WP_AUTO_UPDATE_CORE', 'minor');
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=timeout or 300,
                 cwd=path
             )
 
@@ -91,7 +96,7 @@ define('WP_AUTO_UPDATE_CORE', 'minor');
             return {'success': False, 'error': str(e)}
 
     @classmethod
-    def _wp_cli_docker(cls, path: str, command: List[str]) -> Dict:
+    def _wp_cli_docker(cls, path: str, command: List[str], timeout: int = None) -> Dict:
         """Execute a WP-CLI command inside a Docker WordPress container."""
         # Resolve container name from the Application record
         container_name = None
@@ -129,7 +134,7 @@ define('WP_AUTO_UPDATE_CORE', 'minor');
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=timeout or 60
             )
 
             return {

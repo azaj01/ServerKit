@@ -33,6 +33,14 @@ class EnvironmentHealthService:
             return {'success': False, 'error': 'Site not found'}
 
         compose_path = EnvironmentPipelineService._get_compose_path(site)
+        if not compose_path and site.application and site.application.root_path:
+            # Production sites (created by WordPressService.create_site) have no
+            # container_prefix, so _get_compose_path returns None; their compose
+            # lives directly at the Application root_path. Without this fallback,
+            # health is 'unknown' for every production site (breaking #26/#27).
+            candidate = os.path.join(site.application.root_path, 'docker-compose.yml')
+            if os.path.exists(candidate):
+                compose_path = candidate
         checks = {
             'container': {'status': 'unknown', 'message': ''},
             'mysql': {'status': 'unknown', 'message': ''},
