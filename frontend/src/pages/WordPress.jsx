@@ -18,7 +18,9 @@ function WordPress() {
     const [activeTag, setActiveTag] = useState(null); // null = show all
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [createLoading, setCreateLoading] = useState(false);
-    const [createForm, setCreateForm] = useState({ name: '', adminEmail: '' });
+    const [createForm, setCreateForm] = useState({
+        name: '', adminEmail: '', phpVersion: '', enablePageCache: false, enableObjectCache: false,
+    });
     const [createdCreds, setCreatedCreds] = useState(null);
     const [showImportModal, setShowImportModal] = useState(false);
     const [importLoading, setImportLoading] = useState(false);
@@ -59,12 +61,13 @@ function WordPress() {
                 if (result.admin_password) {
                     // The generated admin password is returned once — surface it.
                     setCreatedCreds({ user: result.admin_user || 'admin', password: result.admin_password });
-                } else if (result.warning) {
+                }
+                if (result.warning) {
                     toast.info(result.warning, { duration: 8000 });
                 }
                 toast.success('WordPress site created successfully');
                 setShowCreateModal(false);
-                setCreateForm({ name: '', adminEmail: '' });
+                setCreateForm({ name: '', adminEmail: '', phpVersion: '', enablePageCache: false, enableObjectCache: false });
                 await loadSites();
             } else {
                 toast.error(result.error || 'Failed to create site');
@@ -422,6 +425,47 @@ function WordPress() {
                                     placeholder="admin@example.com"
                                     disabled={createLoading}
                                 />
+                            </div>
+
+                            <div className="form-group">
+                                <Label>PHP Version</Label>
+                                <select
+                                    value={createForm.phpVersion}
+                                    onChange={e => setCreateForm({ ...createForm, phpVersion: e.target.value })}
+                                    disabled={createLoading}
+                                >
+                                    <option value="">Default (latest for WordPress 6.4)</option>
+                                    <option value="8.1">PHP 8.1</option>
+                                    <option value="8.2">PHP 8.2</option>
+                                    <option value="8.3">PHP 8.3</option>
+                                </select>
+                                <span className="form-hint">Baked into the container image at creation. Changeable later from the PHP tab.</span>
+                            </div>
+
+                            <div className="form-group">
+                                <label className="checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={createForm.enablePageCache}
+                                        onChange={e => setCreateForm({ ...createForm, enablePageCache: e.target.checked })}
+                                        disabled={createLoading}
+                                    />
+                                    Enable full-page cache
+                                </label>
+                                <span className="form-hint">Disk page cache with WordPress-aware skip rules (admin, login, cart, checkout).</span>
+                            </div>
+
+                            <div className="form-group">
+                                <label className="checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={createForm.enableObjectCache}
+                                        onChange={e => setCreateForm({ ...createForm, enableObjectCache: e.target.checked })}
+                                        disabled={createLoading}
+                                    />
+                                    Enable Redis object cache
+                                </label>
+                                <span className="form-hint">Uses the bundled Redis container with the redis-cache drop-in.</span>
                             </div>
                         </div>
                         <div className="modal-footer">

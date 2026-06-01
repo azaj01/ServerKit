@@ -11,6 +11,11 @@ categories:
   - website
 
 variables:
+  - name: VERSION
+    description: WordPress image tag (WP core + PHP variant, e.g. 6.4-php8.2-apache)
+    type: string
+    default: "6.4-apache"
+    hidden: true
   - name: HTTP_PORT
     description: HTTP port
     type: port
@@ -43,7 +48,7 @@ volumes:
 compose:
   services:
     wordpress:
-      image: wordpress:${VERSION:-6.4-apache}
+      image: wordpress:${VERSION}
       container_name: ${APP_NAME}
       restart: unless-stopped
       environment:

@@ -33,12 +33,23 @@ def create_site():
     data = request.get_json() or {}
     name = data.get('name')
     admin_email = data.get('adminEmail', '')
+    php_version = data.get('phpVersion') or None
+    enable_page_cache = bool(data.get('enablePageCache'))
+    enable_object_cache = bool(data.get('enableObjectCache'))
 
     if not name:
         return jsonify({'error': 'Site name is required'}), 400
 
+    if php_version and php_version not in WordPressService.get_available_php_versions():
+        return jsonify({'error': f'Unsupported PHP version: {php_version}'}), 400
+
     current_user_id = get_jwt_identity()
-    result = WordPressService.create_site(name, admin_email, current_user_id)
+    result = WordPressService.create_site(
+        name, admin_email, current_user_id,
+        php_version=php_version,
+        enable_page_cache=enable_page_cache,
+        enable_object_cache=enable_object_cache,
+    )
 
     if result.get('success'):
         return jsonify(result), 201

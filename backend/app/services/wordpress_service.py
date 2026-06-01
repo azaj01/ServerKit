@@ -263,8 +263,11 @@ define('WP_AUTO_UPDATE_CORE', 'minor');
             if not m:
                 return {'success': False, 'error': 'wordpress image line not found in compose file'}
             current_tag = m.group(1)
-            wp_core = current_tag.split('-')[0] if current_tag and current_tag[0].isdigit() else ''
-            new_tag = (f'{wp_core}-php{version}-apache' if wp_core else f'php{version}-apache')
+            # Derive the WP core from the existing tag; fall back to the known core for
+            # legacy compose files that still carry an unresolved ${VERSION...} literal,
+            # so the switch never drops the core pin (e.g. -> php8.2-apache).
+            wp_core = current_tag.split('-')[0] if current_tag and current_tag[0].isdigit() else cls.WP_CORE
+            new_tag = f'{wp_core}-php{version}-apache'
             new_content = content.replace(f'image: wordpress:{current_tag}', f'image: wordpress:{new_tag}')
             with open(compose_file, 'w') as f:
                 f.write(new_content)
@@ -1405,9 +1408,21 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             return {'success': False, 'error': str(e),
                     'site': wp_site.to_dict(), 'http_port': http_port}
 
+    # WordPress core line baked into every managed stack's image tag. Kept in sync
+    # with the template default (backend/templates/wordpress.yaml) and wp_version below.
+    WP_CORE = '6.4'
+
     @classmethod
-    def create_site(cls, name: str, admin_email: str, user_id: int, admin_user: str = 'admin') -> Dict:
-        """Create a new WordPress site via Docker."""
+    def create_site(cls, name: str, admin_email: str, user_id: int, admin_user: str = 'admin',
+                    php_version: str = None, enable_page_cache: bool = False,
+                    enable_object_cache: bool = False) -> Dict:
+        """Create a new WordPress site via Docker.
+
+        One-click orchestration: provision the Docker stack on a chosen PHP version,
+        finalize + harden the install, then optionally enable the full-page and/or
+        Redis object cache — all in a single call. Cache enablement is best-effort
+        and never fails the create. The generated admin password is returned ONCE.
+        """
         from app import db
         from app.models import Application, WordPressSite
         from app.services.template_service import TemplateService
@@ -1421,11 +1436,18 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
         if existing:
             return {'success': False, 'error': f'A site with name "{safe_name}" already exists'}
 
+        # Bake the chosen PHP version into the initial image tag so the site is
+        # created on the right PHP from the start (no post-create container recreate).
+        # Invalid/empty values fall through to the template default (WP_CORE-apache).
+        user_variables = {}
+        if php_version and php_version in cls.get_available_php_versions():
+            user_variables['VERSION'] = f'{cls.WP_CORE}-php{php_version}-apache'
+
         try:
             result = TemplateService.install_template(
                 template_id='wordpress',
                 app_name=safe_name,
-                user_variables={},
+                user_variables=user_variables,
                 user_id=user_id
             )
 
@@ -1448,6 +1470,9 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             site_url = f'http://localhost:{http_port}' if http_port else 'http://localhost'
             wp_warning = None
             harden_actions = []
+            cache_actions = []
+            cache_warnings = []
+            page_cache_on = False
             if cls._wait_for_wp_ready(app.root_path):
                 install_res = cls.wp_cli(app.root_path, [
                     'core', 'install',
@@ -1460,6 +1485,24 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
                 ])
                 if install_res.get('success'):
                     harden_actions = cls._harden_docker_site(app.root_path)
+                    # Optional caches (best-effort; never fail the create). These are
+                    # wp_cli calls inside the now-running container, so they must run
+                    # AFTER the core install has finalized.
+                    if enable_object_cache:
+                        oc = cls.enable_object_cache(app.root_path)
+                        # Record whatever work succeeded — the helper returns its partial
+                        # 'actions' even on failure (e.g. redis added + plugin installed
+                        # but the drop-in enable failed) — then note any failure non-fatally.
+                        cache_actions.extend(oc.get('actions') or [])
+                        if not oc.get('success'):
+                            cache_warnings.append('object cache: ' + (oc.get('error') or 'unknown error'))
+                    if enable_page_cache:
+                        pc = cls.enable_page_cache(app.root_path)
+                        if pc.get('success'):
+                            cache_actions.append('Enabled full-page cache')
+                            page_cache_on = True
+                        else:
+                            cache_warnings.append('page cache: ' + (pc.get('error') or 'unknown error'))
                 else:
                     admin_password = None
                     wp_warning = (
@@ -1478,16 +1521,23 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             # only meaningful if the automated install finalized).
             multisite = cls.is_multisite(app.root_path) if admin_password else False
 
-            # Create WordPressSite record
+            # Surface any best-effort cache failures without failing the create.
+            if cache_warnings:
+                note = 'Site created, but some caches could not be enabled — ' + '; '.join(cache_warnings) + '.'
+                wp_warning = (wp_warning + ' ' + note) if wp_warning else note
+
+            # Create WordPressSite record. Persist the page-cache flag in sync_config
+            # to mirror the per-site page-cache route (object cache + PHP are read live).
             wp_site = WordPressSite(
                 application_id=app.id,
                 admin_user=admin_user if admin_password else None,
                 admin_email=admin_email,
                 is_production=True,
                 environment_type='production',
-                wp_version='6.4',
+                wp_version=cls.WP_CORE,
                 compose_project_name=safe_name,
-                multisite=multisite
+                multisite=multisite,
+                sync_config=json.dumps({'page_cache_enabled': True}) if page_cache_on else None,
             )
             db.session.add(wp_site)
             db.session.commit()
@@ -1500,6 +1550,7 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
                 'admin_user': admin_user if admin_password else None,
                 'admin_password': admin_password,
                 'hardening': harden_actions,
+                'cache': cache_actions,
             }
             if wp_warning:
                 result['warning'] = wp_warning
