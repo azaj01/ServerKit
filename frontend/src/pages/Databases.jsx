@@ -1,417 +1,572 @@
-import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import useTabParam from '../hooks/useTabParam';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+    PanelLeftClose, PanelLeftOpen, Search, X, RefreshCw, Plus, Terminal,
+    Archive, Database, Table2, Server, ChevronDown,
+    Trash2, DatabaseBackup, Copy, FileCode2, Lock,
+} from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import QueryRunner from '../components/QueryRunner';
 import EmptyState from '../components/EmptyState';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Archive, Box, Database, HardDrive, Server, Users } from 'lucide-react';
+import SourceTree from '../components/databases/SourceTree';
+import ConsoleTab from '../components/databases/ConsoleTab';
+import TableDataTab from '../components/databases/TableDataTab';
+import BackupsTab from '../components/databases/BackupsTab';
+import {
+    CreateMySQLDatabaseModal, CreateMySQLUserModal,
+    CreatePostgreSQLDatabaseModal, CreatePostgreSQLUserModal,
+} from '../components/databases/modals';
+import { listTables, connKey, connLabel, quoteIdent, ENGINE_META } from '../components/databases/dbAdapter';
 
-const VALID_TABS = ['mysql', 'postgresql', 'docker', 'backups', 'sqlite'];
+const SIDEBAR_KEY = 'serverkit-dbx-sidebar';
 
-const getEngineState = (engine) => {
-    if (!engine) return 'unknown';
-    if (!engine.installed) return 'missing';
-    return engine.running ? 'active' : 'inactive';
-};
+function formatBytes(bytes) {
+    if (!bytes) return null;
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
-const getEngineStatusLabel = (engine) => {
-    const state = getEngineState(engine);
-    if (state === 'active') return 'Running';
-    if (state === 'inactive') return 'Stopped';
-    if (state === 'missing') return 'Not installed';
-    return 'Unknown';
-};
+function engineState(engine, status) {
+    if (engine !== 'mysql' && engine !== 'postgresql') return 'available';
+    const s = status?.[engine];
+    if (!s) return 'available';
+    if (!s.installed) return 'missing';
+    return s.running ? 'active' : 'inactive';
+}
 
-const EngineStatusBadge = ({ label, engine, tone }) => {
-    const state = getEngineState(engine);
+// ─── node builders ───────────────────────────────────────────
+function dbNode(engine, conn, label, size, idOverride) {
+    return {
+        id: idOverride || `${engine}:db:${label}`,
+        kind: 'database', engine, label, expandable: true, conn,
+        sizeText: formatBytes(size),
+    };
+}
 
-    return (
-        <span className={`db-status-indicator ${state} ${tone}`}>
-            <span className="status-dot" />
-            <span className="db-status-label">{label}</span>
-            <span className="db-status-value">{getEngineStatusLabel(engine)}</span>
-        </span>
-    );
-};
+function TabIcon({ tab }) {
+    if (tab.kind === 'backups') return <Archive size={13} aria-hidden="true" />;
+    if (tab.kind === 'console') return <Terminal size={13} aria-hidden="true" />;
+    return <Table2 size={13} aria-hidden="true" />;
+}
 
-const Databases = () => {
-    const { tab } = useParams();
-    const [activeTab, setActiveTab] = useTabParam('/databases', VALID_TABS);
-    const [status, setStatus] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        checkStatus();
-    }, []);
-
-    async function checkStatus() {
-        try {
-            const data = await api.getDatabaseStatus();
-            setStatus(data);
-
-            // Default to available server
-            if (!tab && !data.mysql.running && data.postgresql.running) {
-                setActiveTab('postgresql');
-            }
-        } catch (err) {
-            console.error('Failed to get database status:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    if (loading) {
-        return <div className="loading">Checking database servers...</div>;
-    }
-
-    return (
-        <div className="page-container databases-page">
-            <header className="databases-hero">
-                <div className="databases-hero__main">
-                    <div className="databases-hero__icon">
-                        <Database size={22} />
-                    </div>
-                    <div className="databases-hero__copy">
-                        <div className="databases-hero__eyebrow">Storage engines</div>
-                        <h1>Databases</h1>
-                        <p>Manage SQL engines, app database connections, backups, and local SQLite files.</p>
-                    </div>
-                </div>
-                <div className="databases-hero__actions">
-                    <div className="db-status-indicators" aria-label="Database engine status">
-                        <EngineStatusBadge label="MySQL" engine={status?.mysql} tone="mysql" />
-                        <EngineStatusBadge label="PostgreSQL" engine={status?.postgresql} tone="postgresql" />
-                    </div>
-                </div>
-            </header>
-
-            <div className="database-summary-grid" aria-label="Database workspace summary">
-                <div className="database-summary-card mysql">
-                    <div className="database-summary-card__icon"><Database size={18} /></div>
-                    <div>
-                        <span>MySQL / MariaDB</span>
-                        <strong>{getEngineStatusLabel(status?.mysql)}</strong>
-                        <small>Native database service</small>
-                    </div>
-                </div>
-                <div className="database-summary-card postgresql">
-                    <div className="database-summary-card__icon"><Server size={18} /></div>
-                    <div>
-                        <span>PostgreSQL</span>
-                        <strong>{getEngineStatusLabel(status?.postgresql)}</strong>
-                        <small>Native database service</small>
-                    </div>
-                </div>
-                <div className="database-summary-card docker">
-                    <div className="database-summary-card__icon"><Box size={18} /></div>
-                    <div>
-                        <span>Docker Apps</span>
-                        <strong>App-linked</strong>
-                        <small>Container credentials</small>
-                    </div>
-                </div>
-                <div className="database-summary-card sqlite">
-                    <div className="database-summary-card__icon"><HardDrive size={18} /></div>
-                    <div>
-                        <span>SQLite</span>
-                        <strong>File scan</strong>
-                        <small>Local .db and .sqlite files</small>
-                    </div>
-                </div>
-            </div>
-
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="database-tabs">
-                <TabsList className="database-tabs__list">
-                    <TabsTrigger className="database-tabs__trigger" value="mysql"><Database size={14} /> MySQL / MariaDB</TabsTrigger>
-                    <TabsTrigger className="database-tabs__trigger" value="postgresql"><Server size={14} /> PostgreSQL</TabsTrigger>
-                    <TabsTrigger className="database-tabs__trigger" value="docker"><Box size={14} /> Docker Apps</TabsTrigger>
-                    <TabsTrigger className="database-tabs__trigger" value="backups"><Archive size={14} /> Backups</TabsTrigger>
-                    <TabsTrigger className="database-tabs__trigger" value="sqlite"><HardDrive size={14} /> SQLite</TabsTrigger>
-                </TabsList>
-
-                <div className="database-tabs__content">
-                    <TabsContent className="database-tabs__pane" value="mysql">
-                        <MySQLTab status={status?.mysql} />
-                    </TabsContent>
-                    <TabsContent className="database-tabs__pane" value="postgresql">
-                        <PostgreSQLTab status={status?.postgresql} />
-                    </TabsContent>
-                    <TabsContent className="database-tabs__pane" value="docker">
-                        <DockerDatabasesTab />
-                    </TabsContent>
-                    <TabsContent className="database-tabs__pane" value="backups">
-                        <BackupsTab />
-                    </TabsContent>
-                    <TabsContent className="database-tabs__pane" value="sqlite">
-                        <SQLiteTab />
-                    </TabsContent>
-                </div>
-            </Tabs>
-        </div>
-    );
-};
-
-const MySQLTab = ({ status }) => {
+export default function Databases() {
     const toast = useToast();
     const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
-    const [databases, setDatabases] = useState([]);
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [view, setView] = useState('databases');
-    const [showCreateDbModal, setShowCreateDbModal] = useState(false);
-    const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-    const [selectedDb, setSelectedDb] = useState(null);
-    const [queryDb, setQueryDb] = useState(null);
-    const [searchParams, setSearchParams] = useSearchParams();
+
+    const [status, setStatus] = useState(null);
+    const [statusLoading, setStatusLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    const [expanded, setExpanded] = useState(new Set());
+    const [childrenCache, setChildrenCache] = useState(new Map());
+    const [loadingNodes, setLoadingNodes] = useState(new Set());
+    const [selectedNode, setSelectedNode] = useState(null);
+
+    const [tabs, setTabs] = useState([]);
+    const [activeTabId, setActiveTabId] = useState(null);
+    const [tabStatuses, setTabStatuses] = useState({});
+
+    const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem(SIDEBAR_KEY) !== 'false');
+    const [filter, setFilter] = useState('');
+    const [ctxMenu, setCtxMenu] = useState(null);
+    const [showNewMenu, setShowNewMenu] = useState(false);
+    const [modal, setModal] = useState(null); // { type, databases }
+    const newMenuRef = useRef(null);
+    const didAutoExpand = useRef(false);
+
+    useEffect(() => { localStorage.setItem(SIDEBAR_KEY, String(sidebarVisible)); }, [sidebarVisible]);
 
     useEffect(() => {
-        if (status?.running) {
-            loadData();
-        } else {
-            setLoading(false);
-        }
-    }, [status]);
-
-    async function loadData() {
-        setLoading(true);
-        try {
-            const [dbData, userData] = await Promise.all([
-                api.getMySQLDatabases(),
-                api.getMySQLUsers()
-            ]);
-            const dbList = dbData.databases || [];
-            setDatabases(dbList);
-            setUsers(userData.users || []);
-            // Deep-link support: open the QueryRunner for a ?db= database (e.g. from a WordPress site)
-            const wanted = searchParams.get('db');
-            if (wanted) {
-                const match = dbList.find(d => d.name === wanted);
-                if (match) {
-                    setView('databases');
-                    setQueryDb(match);
-                }
-                const next = new URLSearchParams(searchParams);
-                next.delete('db');
-                setSearchParams(next, { replace: true });
+        (async () => {
+            try {
+                const data = await api.getDatabaseStatus();
+                setStatus(data);
+            } catch (err) {
+                console.error('Failed to get database status:', err);
+            } finally {
+                setStatusLoading(false);
             }
+            try {
+                const user = await api.getCurrentUser();
+                setIsAdmin(user.role === 'admin');
+            } catch { /* non-admin / not logged in handled by route guard */ }
+        })();
+    }, []);
+
+    const roots = useMemo(() => ([
+        { id: 'eng:mysql', kind: 'engine', engine: 'mysql', label: ENGINE_META.mysql.label, status: engineState('mysql', status), expandable: engineState('mysql', status) === 'active' },
+        { id: 'eng:postgresql', kind: 'engine', engine: 'postgresql', label: ENGINE_META.postgresql.label, status: engineState('postgresql', status), expandable: engineState('postgresql', status) === 'active' },
+        { id: 'eng:sqlite', kind: 'engine', engine: 'sqlite', label: ENGINE_META.sqlite.label, status: 'available', expandable: true },
+        { id: 'eng:docker', kind: 'engine', engine: 'docker', label: ENGINE_META.docker.label, status: 'available', expandable: true },
+    ]), [status]);
+
+    // ─── lazy child loading ───────────────────────────────────
+    const loadChildren = useCallback(async (node) => {
+        if (node.kind === 'engine') {
+            if (node.engine === 'mysql') {
+                const d = await api.getMySQLDatabases();
+                return (d.databases || []).map((db) => dbNode('mysql', { dbType: 'mysql', name: db.name }, db.name, db.size));
+            }
+            if (node.engine === 'postgresql') {
+                const d = await api.getPostgreSQLDatabases();
+                return (d.databases || []).map((db) => dbNode('postgresql', { dbType: 'postgresql', name: db.name }, db.name, db.size));
+            }
+            if (node.engine === 'sqlite') {
+                const d = await api.getSQLiteDatabases();
+                return (d.databases || []).map((db) => dbNode('sqlite', { dbType: 'sqlite', name: db.name, path: db.path }, db.name, db.size, `sqlite:db:${db.path}`));
+            }
+            if (node.engine === 'docker') {
+                const d = await api.getApps();
+                return (d.apps || []).filter((a) => a.app_type === 'docker').map((app) => ({
+                    id: `app:${app.id}`, kind: 'app', engine: 'docker', label: app.name, expandable: true, appId: app.id,
+                }));
+            }
+        }
+        if (node.kind === 'app') {
+            const d = await api.getAppDatabases(node.appId);
+            return (d.databases || []).map((db, i) => ({
+                id: `app:${node.appId}:db:${i}`, kind: 'database', engine: 'docker',
+                label: db.database || 'default', expandable: true,
+                conn: { dbType: 'docker', container: db.container, name: db.database, password: db.password || db.root_password, user: db.user, dockerType: db.type },
+            }));
+        }
+        if (node.kind === 'database') {
+            const d = await listTables(node.conn);
+            return (d.tables || []).map((t) => ({
+                id: `${node.id}:t:${t.name}`, kind: 'table', engine: node.engine, label: t.name,
+                expandable: false, conn: node.conn, table: t.name,
+                rows: typeof t.rows === 'number' ? t.rows : null,
+            }));
+        }
+        return [];
+    }, []);
+
+    const fetchChildren = useCallback(async (node) => {
+        setLoadingNodes((s) => new Set(s).add(node.id));
+        try {
+            const kids = await loadChildren(node);
+            setChildrenCache((c) => new Map(c).set(node.id, kids));
         } catch (err) {
-            console.error('Failed to load MySQL data:', err);
+            console.error('Failed to load tree node:', err);
+            setChildrenCache((c) => new Map(c).set(node.id, 'error'));
         } finally {
-            setLoading(false);
+            setLoadingNodes((s) => { const n = new Set(s); n.delete(node.id); return n; });
         }
+    }, [loadChildren]);
+
+    const toggle = useCallback((node) => {
+        const willOpen = !expanded.has(node.id);
+        setExpanded((prev) => { const n = new Set(prev); if (willOpen) n.add(node.id); else n.delete(node.id); return n; });
+        if (willOpen && !childrenCache.has(node.id)) fetchChildren(node);
+    }, [expanded, childrenCache, fetchChildren]);
+
+    const refresh = useCallback((node) => {
+        setChildrenCache((c) => { const n = new Map(c); n.delete(node.id); return n; });
+        if (expanded.has(node.id)) fetchChildren(node);
+    }, [expanded, fetchChildren]);
+
+    // Auto-expand the first running engine so the tree isn't empty on arrival.
+    useEffect(() => {
+        if (statusLoading || didAutoExpand.current) return;
+        const first = roots.find((r) => r.status === 'active');
+        if (first) {
+            didAutoExpand.current = true;
+            setExpanded((prev) => new Set(prev).add(first.id));
+            fetchChildren(first);
+        }
+    }, [statusLoading, roots, fetchChildren]);
+
+    // ─── tabs ─────────────────────────────────────────────────
+    const reportStatus = useCallback((tabId, s) => {
+        setTabStatuses((prev) => ({ ...prev, [tabId]: s }));
+    }, []);
+
+    function openTableTab(node) {
+        const id = `tbl:${connKey(node.conn)}:${node.table}`;
+        setTabs((prev) => prev.some((t) => t.id === id) ? prev
+            : [...prev, { id, kind: 'table', title: node.table, conn: node.conn, table: node.table, rows: node.rows, engine: node.engine }]);
+        setActiveTabId(id);
     }
 
-    async function handleDropDatabase(name) {
-        const confirmed = await confirm({ title: 'Drop Database', message: `Drop database "${name}"? This cannot be undone!` });
-        if (!confirmed) return;
-
-        try {
-            await api.dropMySQLDatabase(name);
-            toast.success(`Database "${name}" dropped successfully`);
-            loadData();
-        } catch (err) {
-            console.error('Failed to drop database:', err);
-            toast.error('Failed to drop database');
-        }
+    function openConsole(conn, engine, initialQuery = '') {
+        const id = `con:${connKey(conn)}`;
+        setTabs((prev) => prev.some((t) => t.id === id) ? prev
+            : [...prev, { id, kind: 'console', title: `${connLabel(conn)}`, conn, engine, initialQuery }]);
+        setActiveTabId(id);
     }
 
-    async function handleBackupDatabase(name) {
+    function openBackups() {
+        setTabs((prev) => prev.some((t) => t.id === 'backups') ? prev : [...prev, { id: 'backups', kind: 'backups', title: 'Backups' }]);
+        setActiveTabId('backups');
+    }
+
+    function closeTab(id, e) {
+        e?.stopPropagation();
+        setTabs((prev) => {
+            const idx = prev.findIndex((t) => t.id === id);
+            const next = prev.filter((t) => t.id !== id);
+            setActiveTabId((cur) => {
+                if (cur !== id) return cur;
+                const fallback = next[idx] || next[idx - 1];
+                return fallback ? fallback.id : null;
+            });
+            return next;
+        });
+        setTabStatuses((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    }
+
+    function activate(node) {
+        setSelectedNode(node);
+        if (node.kind === 'table') openTableTab(node);
+        else if (node.expandable) toggle(node);
+    }
+
+    // ─── tree context menu ────────────────────────────────────
+    function openContext(e, node) {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedNode(node);
+        const menuW = 220;
+        const x = Math.min(e.clientX, window.innerWidth - menuW - 8);
+        setCtxMenu({ x, y: e.clientY, node });
+    }
+
+    useEffect(() => {
+        if (!ctxMenu && !showNewMenu) return;
+        const close = (e) => {
+            if (showNewMenu && newMenuRef.current?.contains(e.target)) return;
+            setCtxMenu(null);
+            setShowNewMenu(false);
+        };
+        const onEsc = (e) => { if (e.key === 'Escape') { setCtxMenu(null); setShowNewMenu(false); } };
+        document.addEventListener('click', close);
+        document.addEventListener('keydown', onEsc);
+        return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', onEsc); };
+    }, [ctxMenu, showNewMenu]);
+
+    async function backupDatabase(node) {
         try {
-            const result = await api.backupMySQLDatabase(name);
-            if (result.success) {
-                toast.success(`Backup created: ${result.backup_path}`);
-            }
-        } catch (err) {
-            console.error('Failed to backup database:', err);
+            const res = node.engine === 'mysql' ? await api.backupMySQLDatabase(node.label) : await api.backupPostgreSQLDatabase(node.label);
+            if (res.success) toast.success(`Backup created: ${res.backup_path}`);
+        } catch {
             toast.error('Failed to create backup');
         }
     }
 
-    async function handleDropUser(username, host) {
-        const confirmed = await confirm({ title: 'Drop User', message: `Drop user "${username}"@"${host}"?` });
-        if (!confirmed) return;
-
+    async function dropDatabase(node) {
+        const ok = await confirm({
+            title: 'Drop database',
+            message: `Drop database "${node.label}"? This permanently deletes the database and all its data.`,
+            confirmText: `Drop ${node.label}`,
+            variant: 'danger',
+        });
+        if (!ok) return;
         try {
-            await api.dropMySQLUser(username, host);
-            toast.success(`User "${username}" dropped successfully`);
-            loadData();
-        } catch (err) {
-            console.error('Failed to drop user:', err);
-            toast.error('Failed to drop user');
+            if (node.engine === 'mysql') await api.dropMySQLDatabase(node.label);
+            else await api.dropPostgreSQLDatabase(node.label);
+            toast.success(`Dropped database "${node.label}"`);
+            const eng = roots.find((r) => r.engine === node.engine);
+            if (eng) refresh(eng);
+            setTabs((prev) => prev.filter((t) => !(t.conn && connKey(t.conn) === connKey(node.conn))));
+        } catch {
+            toast.error('Failed to drop database');
         }
     }
 
-    if (!status?.installed) {
-        return (
-            <EmptyState
-                icon={Database}
-                title="MySQL is not installed"
-                description="Install MySQL or MariaDB on your server to manage databases."
-            />
+    function copyName(node) {
+        navigator.clipboard?.writeText(node.label).then(
+            () => toast.success('Copied name'),
+            () => toast.error('Could not copy'),
         );
     }
 
-    if (!status?.running) {
-        return (
-            <EmptyState
-                icon={Database}
-                title="MySQL is not running"
-                description="Start the MySQL server to manage databases."
-            />
-        );
+    function ctxActions(node) {
+        switch (node.kind) {
+            case 'engine':
+                if (node.engine === 'mysql' && node.status === 'active') {
+                    return [
+                        { label: 'Create database', icon: Plus, onClick: () => setModal({ type: 'mysql-db' }) },
+                        { label: 'Create user', icon: Plus, onClick: () => openUserModal('mysql') },
+                        { label: 'Refresh', icon: RefreshCw, onClick: () => refresh(node) },
+                    ];
+                }
+                if (node.engine === 'postgresql' && node.status === 'active') {
+                    return [
+                        { label: 'Create database', icon: Plus, onClick: () => setModal({ type: 'pg-db' }) },
+                        { label: 'Create user', icon: Plus, onClick: () => openUserModal('postgresql') },
+                        { label: 'Refresh', icon: RefreshCw, onClick: () => refresh(node) },
+                    ];
+                }
+                return [{ label: 'Refresh', icon: RefreshCw, onClick: () => refresh(node) }];
+            case 'database': {
+                const actions = [
+                    { label: 'Open SQL console', icon: Terminal, onClick: () => openConsole(node.conn, node.engine) },
+                    { label: 'Refresh tables', icon: RefreshCw, onClick: () => refresh(node) },
+                ];
+                if (node.engine === 'mysql' || node.engine === 'postgresql') {
+                    actions.splice(1, 0, { label: 'Back up database', icon: DatabaseBackup, onClick: () => backupDatabase(node) });
+                    actions.push({ label: 'Drop database', icon: Trash2, danger: true, onClick: () => dropDatabase(node) });
+                }
+                return actions;
+            }
+            case 'app':
+                return [{ label: 'Refresh', icon: RefreshCw, onClick: () => refresh(node) }];
+            case 'table':
+                return [
+                    { label: 'Open data', icon: Table2, onClick: () => openTableTab(node) },
+                    { label: 'Query in console', icon: FileCode2, onClick: () => openConsole(node.conn, node.engine, `SELECT * FROM ${quoteIdent(node.conn, node.table)} LIMIT 100;`) },
+                    { label: 'Copy name', icon: Copy, onClick: () => copyName(node) },
+                ];
+            default:
+                return [];
+        }
     }
 
-    if (loading) {
-        return <div className="loading">Loading MySQL data...</div>;
+    async function openUserModal(engine) {
+        try {
+            const d = engine === 'mysql' ? await api.getMySQLDatabases() : await api.getPostgreSQLDatabases();
+            setModal({ type: engine === 'mysql' ? 'mysql-user' : 'pg-user', databases: d.databases || [] });
+        } catch {
+            setModal({ type: engine === 'mysql' ? 'mysql-user' : 'pg-user', databases: [] });
+        }
     }
+
+    function onModalCreated() {
+        // Refresh the affected engine's tree so new databases/users appear.
+        const engine = modal?.type?.startsWith('mysql') ? 'mysql' : 'postgresql';
+        const eng = roots.find((r) => r.engine === engine);
+        if (eng) refresh(eng);
+    }
+
+    const newConsoleConn = selectedNode?.conn || null;
+    const activeStatus = tabStatuses[activeTabId];
+
+    const treeHandlers = useMemo(() => ({
+        onToggle: toggle,
+        onActivate: activate,
+        onContext: openContext,
+    }), [toggle]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
-        <div>
-            <div className="section-header">
-                <div className="view-toggle">
-                    <Button
-                        size="sm"
-                        variant={view === 'databases' ? 'default' : 'outline'}
-                        onClick={() => setView('databases')}
+        <div className="page-container page-container--full-bleed db-explorer">
+            {/* ─── Toolbar ─────────────────────────────── */}
+            <header className="dbx-toolbar">
+                <div className="dbx-toolbar-left">
+                    <button
+                        type="button"
+                        className="dbx-icon-btn"
+                        onClick={() => setSidebarVisible((v) => !v)}
+                        aria-label={sidebarVisible ? 'Hide sources' : 'Show sources'}
+                        title={sidebarVisible ? 'Hide sources' : 'Show sources'}
                     >
-                        Databases ({databases.length})
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant={view === 'users' ? 'default' : 'outline'}
-                        onClick={() => setView('users')}
-                    >
-                        Users ({users.length})
-                    </Button>
+                        {sidebarVisible ? <PanelLeftClose size={16} aria-hidden="true" /> : <PanelLeftOpen size={16} aria-hidden="true" />}
+                    </button>
+                    <h1 className="dbx-title"><Database size={17} aria-hidden="true" /> Database Explorer</h1>
                 </div>
-                {view === 'databases' ? (
-                    <Button onClick={() => setShowCreateDbModal(true)}>
-                        Create Database
-                    </Button>
-                ) : (
-                    <Button onClick={() => setShowCreateUserModal(true)}>
-                        Create User
-                    </Button>
+
+                <div className="dbx-toolbar-right">
+                    <div className="dbx-new" ref={newMenuRef}>
+                        <button
+                            type="button"
+                            className="dbx-primary"
+                            onClick={() => setShowNewMenu((s) => !s)}
+                            aria-haspopup="menu"
+                            aria-expanded={showNewMenu}
+                        >
+                            <Plus size={15} aria-hidden="true" /> New <ChevronDown size={13} aria-hidden="true" />
+                        </button>
+                        {showNewMenu && (
+                            <div className="dbx-menu" role="menu">
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={!newConsoleConn}
+                                    onClick={() => { if (newConsoleConn) openConsole(newConsoleConn, selectedNode.engine); setShowNewMenu(false); }}
+                                >
+                                    <Terminal size={14} aria-hidden="true" /> SQL console
+                                    {!newConsoleConn && <span className="dbx-menu-hint">select a database</span>}
+                                </button>
+                                <div className="dbx-menu-sep" />
+                                <button type="button" role="menuitem" disabled={engineState('mysql', status) !== 'active'} onClick={() => { setModal({ type: 'mysql-db' }); setShowNewMenu(false); }}>
+                                    <Database size={14} aria-hidden="true" /> MySQL database
+                                </button>
+                                <button type="button" role="menuitem" disabled={engineState('postgresql', status) !== 'active'} onClick={() => { setModal({ type: 'pg-db' }); setShowNewMenu(false); }}>
+                                    <Database size={14} aria-hidden="true" /> PostgreSQL database
+                                </button>
+                                <div className="dbx-menu-sep" />
+                                <button type="button" role="menuitem" disabled={engineState('mysql', status) !== 'active'} onClick={() => { openUserModal('mysql'); setShowNewMenu(false); }}>
+                                    <Server size={14} aria-hidden="true" /> MySQL user
+                                </button>
+                                <button type="button" role="menuitem" disabled={engineState('postgresql', status) !== 'active'} onClick={() => { openUserModal('postgresql'); setShowNewMenu(false); }}>
+                                    <Server size={14} aria-hidden="true" /> PostgreSQL user
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <button type="button" className="dbx-chip" onClick={openBackups}>
+                        <Archive size={14} aria-hidden="true" /> Backups
+                    </button>
+                </div>
+            </header>
+
+            {/* ─── Body: tree + workspace ─────────────────── */}
+            <div className={`dbx-body ${sidebarVisible ? '' : 'is-collapsed'}`}>
+                {sidebarVisible && (
+                    <aside className="dbx-tree-panel" aria-label="Database sources">
+                        <div className="dbx-tree-search">
+                            <Search size={14} aria-hidden="true" />
+                            <input
+                                type="text"
+                                placeholder="Filter tables…"
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                aria-label="Filter sources"
+                            />
+                            {filter && (
+                                <button type="button" onClick={() => setFilter('')} aria-label="Clear filter"><X size={13} aria-hidden="true" /></button>
+                            )}
+                        </div>
+                        <div className="dbx-tree-scroll">
+                            {statusLoading ? (
+                                <div className="dbx-tree-loading"><RefreshCw size={14} className="dbx-spin" aria-hidden="true" /> Checking servers…</div>
+                            ) : (
+                                <SourceTree
+                                    roots={roots}
+                                    expanded={expanded}
+                                    childrenCache={childrenCache}
+                                    loading={loadingNodes}
+                                    activeKey={null}
+                                    selectedId={selectedNode?.id}
+                                    filter={filter}
+                                    handlers={treeHandlers}
+                                />
+                            )}
+                        </div>
+                    </aside>
                 )}
+
+                <main className="dbx-workspace">
+                    {tabs.length > 0 && (
+                        <div className="dbx-tabbar" role="tablist" aria-label="Open tabs">
+                            {tabs.map((tab) => (
+                                <div
+                                    key={tab.id}
+                                    role="tab"
+                                    aria-selected={tab.id === activeTabId}
+                                    tabIndex={0}
+                                    className={`dbx-tab is-${tab.engine || tab.kind} ${tab.id === activeTabId ? 'is-active' : ''}`}
+                                    onClick={() => setActiveTabId(tab.id)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTabId(tab.id); } }}
+                                >
+                                    <TabIcon tab={tab} />
+                                    <span className="dbx-tab-title">{tab.title}</span>
+                                    <button
+                                        type="button"
+                                        className="dbx-tab-close"
+                                        onClick={(e) => closeTab(tab.id, e)}
+                                        aria-label={`Close ${tab.title}`}
+                                    >
+                                        <X size={13} aria-hidden="true" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="dbx-panes">
+                        {tabs.length === 0 ? (
+                            <div className="dbx-welcome">
+                                <EmptyState
+                                    icon={Database}
+                                    title="Open a table or console"
+                                    description={statusLoading
+                                        ? 'Checking your database servers…'
+                                        : 'Pick a table from the left to browse its rows, or open a SQL console on any database. Right-click a node for more actions.'}
+                                />
+                            </div>
+                        ) : (
+                            tabs.map((tab) => (
+                                <div key={tab.id} className="dbx-tabpane" hidden={tab.id !== activeTabId}>
+                                    {tab.kind === 'console' && (
+                                        <ConsoleTab
+                                            conn={tab.conn}
+                                            tabId={tab.id}
+                                            active={tab.id === activeTabId}
+                                            isAdmin={isAdmin}
+                                            initialQuery={tab.initialQuery}
+                                            onStatus={reportStatus}
+                                        />
+                                    )}
+                                    {tab.kind === 'table' && (
+                                        <TableDataTab
+                                            conn={tab.conn}
+                                            tabId={tab.id}
+                                            table={tab.table}
+                                            rowsEstimate={tab.rows}
+                                            active={tab.id === activeTabId}
+                                            onStatus={reportStatus}
+                                            onOpenConsole={(q) => openConsole(tab.conn, tab.engine, q)}
+                                        />
+                                    )}
+                                    {tab.kind === 'backups' && <BackupsTab />}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </main>
             </div>
 
-            {view === 'databases' ? (
-                databases.length === 0 ? (
-                    <EmptyState
-                        icon={Database}
-                        title="No databases"
-                        description="Create your first MySQL database."
-                    />
-                ) : (
-                    <div className="db-list">
-                        {databases.map(db => (
-                            <div key={db.name} className="db-item">
-                                <div className="db-item-info">
-                                    <div className="db-item-icon mysql">
-                                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                                        </svg>
-                                    </div>
-                                    <div className="db-item-details">
-                                        <h3>{db.name}</h3>
-                                        <div className="db-item-meta">
-                                            <span>{formatBytes(db.size)}</span>
-                                            <span>MySQL</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="db-item-actions">
-                                    <Button size="sm" onClick={() => setQueryDb(db)}>
-                                        Query
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => setSelectedDb(db)}>
-                                        Tables
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => handleBackupDatabase(db.name)}>
-                                        Backup
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => handleDropDatabase(db.name)}>
-                                        Drop
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
-            ) : (
-                users.length === 0 ? (
-                    <EmptyState
-                        icon={Users}
-                        title="No users"
-                        description="Create your first MySQL user."
-                    />
-                ) : (
-                    <div className="db-list">
-                        {users.map(user => (
-                            <div key={`${user.user}@${user.host}`} className="db-item">
-                                <div className="db-item-info">
-                                    <div className="db-item-icon user">
-                                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                            <circle cx="12" cy="7" r="4"/>
-                                        </svg>
-                                    </div>
-                                    <div className="db-item-details">
-                                        <h3>{user.user}</h3>
-                                        <div className="db-item-meta">
-                                            <span>Host: {user.host}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="db-item-actions">
-                                    <Button size="sm" variant="outline" onClick={() => handleDropUser(user.user, user.host)}>
-                                        Drop
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
+            {/* ─── Status bar ─────────────────────────────── */}
+            <footer className="dbx-statusbar">
+                <div className="dbx-statusbar-left">
+                    {activeStatus ? (
+                        <>
+                            <span className="dbx-status-item"><Database size={12} aria-hidden="true" /> {activeStatus.connText}</span>
+                            {activeStatus.readonly != null && (
+                                <span className={`dbx-status-item ${activeStatus.readonly ? '' : 'is-write'}`}>
+                                    {activeStatus.readonly ? <><Lock size={11} aria-hidden="true" /> Read-only</> : 'Writes enabled'}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="dbx-status-item dbx-status-muted">No tab open</span>
+                    )}
+                </div>
+                <div className="dbx-statusbar-right">
+                    {activeStatus?.rangeText && <span className="dbx-status-item">{activeStatus.rangeText}</span>}
+                    {activeStatus?.rowCount != null && (
+                        <span className="dbx-status-item">{activeStatus.rowCount} row{activeStatus.rowCount === 1 ? '' : 's'}{activeStatus.truncated ? ` of ${activeStatus.totalRows}` : ''}</span>
+                    )}
+                    {activeStatus?.execTime != null && <span className="dbx-status-item dbx-mono">{activeStatus.execTime}s</span>}
+                </div>
+            </footer>
+
+            {/* ─── Context menu ───────────────────────────── */}
+            {ctxMenu && (
+                <div className="dbx-context" style={{ left: ctxMenu.x, top: ctxMenu.y }} role="menu">
+                    {ctxActions(ctxMenu.node).map((a) => (
+                        <button
+                            key={a.label}
+                            type="button"
+                            role="menuitem"
+                            className={a.danger ? 'is-danger' : ''}
+                            onClick={() => { a.onClick(); setCtxMenu(null); }}
+                        >
+                            <a.icon size={14} aria-hidden="true" /> {a.label}
+                        </button>
+                    ))}
+                </div>
             )}
 
-            {showCreateDbModal && (
-                <CreateMySQLDatabaseModal
-                    onClose={() => setShowCreateDbModal(false)}
-                    onCreated={loadData}
-                />
-            )}
+            {/* ─── Modals ─────────────────────────────────── */}
+            {modal?.type === 'mysql-db' && <CreateMySQLDatabaseModal onClose={() => setModal(null)} onCreated={onModalCreated} />}
+            {modal?.type === 'pg-db' && <CreatePostgreSQLDatabaseModal onClose={() => setModal(null)} onCreated={onModalCreated} />}
+            {modal?.type === 'mysql-user' && <CreateMySQLUserModal databases={modal.databases} onClose={() => setModal(null)} onCreated={onModalCreated} />}
+            {modal?.type === 'pg-user' && <CreatePostgreSQLUserModal databases={modal.databases} onClose={() => setModal(null)} onCreated={onModalCreated} />}
 
-            {showCreateUserModal && (
-                <CreateMySQLUserModal
-                    databases={databases}
-                    onClose={() => setShowCreateUserModal(false)}
-                    onCreated={loadData}
-                />
-            )}
-
-            {selectedDb && (
-                <TablesModal
-                    database={selectedDb}
-                    dbType="mysql"
-                    onClose={() => setSelectedDb(null)}
-                />
-            )}
-
-            {queryDb && (
-                <QueryRunner
-                    database={queryDb}
-                    dbType="mysql"
-                    onClose={() => setQueryDb(null)}
-                />
-            )}
             <ConfirmDialog
                 isOpen={confirmState.isOpen}
                 title={confirmState.title}
@@ -424,1377 +579,4 @@ const MySQLTab = ({ status }) => {
             />
         </div>
     );
-};
-
-const PostgreSQLTab = ({ status }) => {
-    const toast = useToast();
-    const { confirm: confirmPg, confirmState: confirmPgState, handleConfirm: handlePgConfirm, handleCancel: handlePgCancel } = useConfirm();
-    const [databases, setDatabases] = useState([]);
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [view, setView] = useState('databases');
-    const [showCreateDbModal, setShowCreateDbModal] = useState(false);
-    const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-    const [selectedDb, setSelectedDb] = useState(null);
-    const [queryDb, setQueryDb] = useState(null);
-
-    useEffect(() => {
-        if (status?.running) {
-            loadData();
-        } else {
-            setLoading(false);
-        }
-    }, [status]);
-
-    async function loadData() {
-        setLoading(true);
-        try {
-            const [dbData, userData] = await Promise.all([
-                api.getPostgreSQLDatabases(),
-                api.getPostgreSQLUsers()
-            ]);
-            setDatabases(dbData.databases || []);
-            setUsers(userData.users || []);
-        } catch (err) {
-            console.error('Failed to load PostgreSQL data:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function handleDropDatabase(name) {
-        const confirmed = await confirmPg({ title: 'Drop Database', message: `Drop database "${name}"? This cannot be undone!` });
-        if (!confirmed) return;
-
-        try {
-            await api.dropPostgreSQLDatabase(name);
-            toast.success(`Database "${name}" dropped successfully`);
-            loadData();
-        } catch (err) {
-            console.error('Failed to drop database:', err);
-            toast.error('Failed to drop database');
-        }
-    }
-
-    async function handleBackupDatabase(name) {
-        try {
-            const result = await api.backupPostgreSQLDatabase(name);
-            if (result.success) {
-                toast.success(`Backup created: ${result.backup_path}`);
-            }
-        } catch (err) {
-            console.error('Failed to backup database:', err);
-            toast.error('Failed to create backup');
-        }
-    }
-
-    async function handleDropUser(username) {
-        const confirmed = await confirmPg({ title: 'Drop User', message: `Drop user "${username}"?` });
-        if (!confirmed) return;
-
-        try {
-            await api.dropPostgreSQLUser(username);
-            toast.success(`User "${username}" dropped successfully`);
-            loadData();
-        } catch (err) {
-            console.error('Failed to drop user:', err);
-            toast.error('Failed to drop user');
-        }
-    }
-
-    if (!status?.installed) {
-        return (
-            <EmptyState
-                icon={Database}
-                title="PostgreSQL is not installed"
-                description="Install PostgreSQL on your server to manage databases."
-            />
-        );
-    }
-
-    if (!status?.running) {
-        return (
-            <EmptyState
-                icon={Database}
-                title="PostgreSQL is not running"
-                description="Start the PostgreSQL server to manage databases."
-            />
-        );
-    }
-
-    if (loading) {
-        return <div className="loading">Loading PostgreSQL data...</div>;
-    }
-
-    return (
-        <div>
-            <div className="section-header">
-                <div className="view-toggle">
-                    <Button
-                        size="sm"
-                        variant={view === 'databases' ? 'default' : 'outline'}
-                        onClick={() => setView('databases')}
-                    >
-                        Databases ({databases.length})
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant={view === 'users' ? 'default' : 'outline'}
-                        onClick={() => setView('users')}
-                    >
-                        Users ({users.length})
-                    </Button>
-                </div>
-                {view === 'databases' ? (
-                    <Button onClick={() => setShowCreateDbModal(true)}>
-                        Create Database
-                    </Button>
-                ) : (
-                    <Button onClick={() => setShowCreateUserModal(true)}>
-                        Create User
-                    </Button>
-                )}
-            </div>
-
-            {view === 'databases' ? (
-                databases.length === 0 ? (
-                    <EmptyState
-                        icon={Database}
-                        title="No databases"
-                        description="Create your first PostgreSQL database."
-                    />
-                ) : (
-                    <div className="db-list">
-                        {databases.map(db => (
-                            <div key={db.name} className="db-item">
-                                <div className="db-item-info">
-                                    <div className="db-item-icon postgresql">
-                                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                                        </svg>
-                                    </div>
-                                    <div className="db-item-details">
-                                        <h3>{db.name}</h3>
-                                        <div className="db-item-meta">
-                                            <span>{formatBytes(db.size)}</span>
-                                            <span>PostgreSQL</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="db-item-actions">
-                                    <Button size="sm" onClick={() => setQueryDb(db)}>
-                                        Query
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => setSelectedDb(db)}>
-                                        Tables
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => handleBackupDatabase(db.name)}>
-                                        Backup
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => handleDropDatabase(db.name)}>
-                                        Drop
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
-            ) : (
-                users.length === 0 ? (
-                    <EmptyState
-                        icon={Users}
-                        title="No users"
-                        description="Create your first PostgreSQL user."
-                    />
-                ) : (
-                    <div className="db-list">
-                        {users.map(user => (
-                            <div key={user.user} className="db-item">
-                                <div className="db-item-info">
-                                    <div className="db-item-icon user">
-                                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                            <circle cx="12" cy="7" r="4"/>
-                                        </svg>
-                                    </div>
-                                    <div className="db-item-details">
-                                        <h3>{user.user}</h3>
-                                        <div className="db-item-meta">
-                                            <span>PostgreSQL User</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="db-item-actions">
-                                    <Button size="sm" variant="outline" onClick={() => handleDropUser(user.user)}>
-                                        Drop
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
-            )}
-
-            {showCreateDbModal && (
-                <CreatePostgreSQLDatabaseModal
-                    onClose={() => setShowCreateDbModal(false)}
-                    onCreated={loadData}
-                />
-            )}
-
-            {showCreateUserModal && (
-                <CreatePostgreSQLUserModal
-                    databases={databases}
-                    onClose={() => setShowCreateUserModal(false)}
-                    onCreated={loadData}
-                />
-            )}
-
-            {selectedDb && (
-                <TablesModal
-                    database={selectedDb}
-                    dbType="postgresql"
-                    onClose={() => setSelectedDb(null)}
-                />
-            )}
-
-            {queryDb && (
-                <QueryRunner
-                    database={queryDb}
-                    dbType="postgresql"
-                    onClose={() => setQueryDb(null)}
-                />
-            )}
-            <ConfirmDialog
-                isOpen={confirmPgState.isOpen}
-                title={confirmPgState.title}
-                message={confirmPgState.message}
-                confirmText={confirmPgState.confirmText}
-                cancelText={confirmPgState.cancelText}
-                variant={confirmPgState.variant}
-                onConfirm={handlePgConfirm}
-                onCancel={handlePgCancel}
-            />
-        </div>
-    );
-};
-
-const BackupsTab = () => {
-    const { confirm: confirmBackup, confirmState: confirmBackupState, handleConfirm: handleBackupConfirm, handleCancel: handleBackupCancel } = useConfirm();
-    const [backups, setBackups] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all');
-
-    useEffect(() => {
-        loadBackups();
-    }, [filter]);
-
-    async function loadBackups() {
-        setLoading(true);
-        try {
-            const type = filter === 'all' ? null : filter;
-            const data = await api.getDatabaseBackups(type);
-            setBackups(data.backups || []);
-        } catch (err) {
-            console.error('Failed to load backups:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function handleDelete(filename) {
-        const confirmed = await confirmBackup({ title: 'Delete Backup', message: 'Delete this backup?' });
-        if (!confirmed) return;
-
-        try {
-            await api.deleteDatabaseBackup(filename);
-            loadBackups();
-        } catch (err) {
-            console.error('Failed to delete backup:', err);
-        }
-    }
-
-    if (loading) {
-        return <div className="loading">Loading backups...</div>;
-    }
-
-    return (
-        <div>
-            <div className="section-header">
-                <div className="view-toggle">
-                    <Button size="sm" variant={filter === 'all' ? 'default' : 'outline'} onClick={() => setFilter('all')}>
-                        All
-                    </Button>
-                    <Button size="sm" variant={filter === 'mysql' ? 'default' : 'outline'} onClick={() => setFilter('mysql')}>
-                        MySQL
-                    </Button>
-                    <Button size="sm" variant={filter === 'postgresql' ? 'default' : 'outline'} onClick={() => setFilter('postgresql')}>
-                        PostgreSQL
-                    </Button>
-                </div>
-            </div>
-
-            {backups.length === 0 ? (
-                <EmptyState
-                    icon={Archive}
-                    title="No backups"
-                    description="Database backups will appear here."
-                />
-            ) : (
-                <div className="db-list">
-                    {backups.map(backup => (
-                        <div key={backup.filename} className="db-item">
-                            <div className="db-item-info">
-                                <div className={`db-item-icon ${backup.type}`}>
-                                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                        <polyline points="7 10 12 15 17 10"/>
-                                        <line x1="12" y1="15" x2="12" y2="3"/>
-                                    </svg>
-                                </div>
-                                <div className="db-item-details">
-                                    <h3>{backup.database}</h3>
-                                    <div className="db-item-meta">
-                                        <span className="mono">{backup.filename}</span>
-                                        <span>{formatBytes(backup.size)}</span>
-                                        <span>{new Date(backup.created_at).toLocaleString()}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="db-item-actions">
-                                <span className={`db-type-badge ${backup.type}`}>
-                                    {backup.type === 'mysql' ? 'MySQL' : 'PostgreSQL'}
-                                </span>
-                                <Button size="sm" variant="outline" onClick={() => handleDelete(backup.filename)}>
-                                    Delete
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-            <ConfirmDialog
-                isOpen={confirmBackupState.isOpen}
-                title={confirmBackupState.title}
-                message={confirmBackupState.message}
-                confirmText={confirmBackupState.confirmText}
-                cancelText={confirmBackupState.cancelText}
-                variant={confirmBackupState.variant}
-                onConfirm={handleBackupConfirm}
-                onCancel={handleBackupCancel}
-            />
-        </div>
-    );
-};
-
-const CreateMySQLDatabaseModal = ({ onClose, onCreated }) => {
-    const [formData, setFormData] = useState({
-        name: '',
-        charset: 'utf8mb4',
-        collation: 'utf8mb4_unicode_ci',
-        create_user: true,
-        user_password: '',
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [createdInfo, setCreatedInfo] = useState(null);
-
-    async function handleSubmit(e) {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            const result = await api.createMySQLDatabase(formData);
-            if (result.success) {
-                if (result.password) {
-                    setCreatedInfo({
-                        database: formData.name,
-                        user: result.user,
-                        password: result.password
-                    });
-                } else {
-                    onCreated();
-                    onClose();
-                }
-            }
-        } catch (err) {
-            setError(err.message || 'Failed to create database');
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    if (createdInfo) {
-        return (
-            <div className="modal-overlay" onClick={onClose}>
-                <div className="modal" onClick={e => e.stopPropagation()}>
-                    <div className="modal-header">
-                        <h2>Database Created</h2>
-                        <button className="modal-close" onClick={() => { onCreated(); onClose(); }}>&times;</button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="credentials-box">
-                            <p>Save these credentials - the password won&apos;t be shown again!</p>
-                            <div className="credential-item">
-                                <label>Database:</label>
-                                <code>{createdInfo.database}</code>
-                            </div>
-                            <div className="credential-item">
-                                <label>Username:</label>
-                                <code>{createdInfo.user}</code>
-                            </div>
-                            <div className="credential-item">
-                                <label>Password:</label>
-                                <code>{createdInfo.password}</code>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="modal-actions">
-                        <Button onClick={() => { onCreated(); onClose(); }}>
-                            Done
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Create MySQL Database</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-
-                {error && <div className="error-message">{error}</div>}
-
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Database Name *</label>
-                        <Input
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            placeholder="my_database"
-                            required
-                            pattern="[a-zA-Z0-9_]+"
-                        />
-                    </div>
-
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>Character Set</label>
-                            <select
-                                value={formData.charset}
-                                onChange={(e) => setFormData({ ...formData, charset: e.target.value })}
-                            >
-                                <option value="utf8mb4">utf8mb4</option>
-                                <option value="utf8">utf8</option>
-                                <option value="latin1">latin1</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label>Collation</label>
-                            <select
-                                value={formData.collation}
-                                onChange={(e) => setFormData({ ...formData, collation: e.target.value })}
-                            >
-                                <option value="utf8mb4_unicode_ci">utf8mb4_unicode_ci</option>
-                                <option value="utf8mb4_general_ci">utf8mb4_general_ci</option>
-                                <option value="utf8_general_ci">utf8_general_ci</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label className="checkbox-label">
-                            <input
-                                type="checkbox"
-                                checked={formData.create_user}
-                                onChange={(e) => setFormData({ ...formData, create_user: e.target.checked })}
-                            />
-                            Create user with same name and full privileges
-                        </label>
-                    </div>
-
-                    <div className="modal-actions">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create Database'}
-                        </Button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const CreateMySQLUserModal = ({ databases, onClose, onCreated }) => {
-    const [formData, setFormData] = useState({
-        username: '',
-        password: '',
-        host: 'localhost',
-        database: '',
-        privileges: 'ALL',
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [createdInfo, setCreatedInfo] = useState(null);
-
-    async function generatePassword() {
-        try {
-            const result = await api.generateDatabasePassword();
-            setFormData({ ...formData, password: result.password });
-        } catch (err) {
-            console.error('Failed to generate password:', err);
-        }
-    }
-
-    async function handleSubmit(e) {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            const result = await api.createMySQLUser(formData);
-            if (result.success) {
-                setCreatedInfo({
-                    username: formData.username,
-                    password: result.password,
-                    host: formData.host
-                });
-            }
-        } catch (err) {
-            setError(err.message || 'Failed to create user');
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    if (createdInfo) {
-        return (
-            <div className="modal-overlay" onClick={onClose}>
-                <div className="modal" onClick={e => e.stopPropagation()}>
-                    <div className="modal-header">
-                        <h2>User Created</h2>
-                        <button className="modal-close" onClick={() => { onCreated(); onClose(); }}>&times;</button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="credentials-box">
-                            <p>Save these credentials!</p>
-                            <div className="credential-item">
-                                <label>Username:</label>
-                                <code>{createdInfo.username}</code>
-                            </div>
-                            <div className="credential-item">
-                                <label>Password:</label>
-                                <code>{createdInfo.password}</code>
-                            </div>
-                            <div className="credential-item">
-                                <label>Host:</label>
-                                <code>{createdInfo.host}</code>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="modal-actions">
-                        <Button onClick={() => { onCreated(); onClose(); }}>
-                            Done
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Create MySQL User</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-
-                {error && <div className="error-message">{error}</div>}
-
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Username *</label>
-                        <Input
-                            type="text"
-                            value={formData.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                            placeholder="db_user"
-                            required
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label>Password</label>
-                        <div className="input-with-button">
-                            <Input
-                                type="text"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                placeholder="Leave empty to auto-generate"
-                            />
-                            <Button type="button" variant="outline" size="sm" onClick={generatePassword}>
-                                Generate
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label>Host</label>
-                        <select
-                            value={formData.host}
-                            onChange={(e) => setFormData({ ...formData, host: e.target.value })}
-                        >
-                            <option value="localhost">localhost</option>
-                            <option value="%">% (any host)</option>
-                            <option value="127.0.0.1">127.0.0.1</option>
-                        </select>
-                    </div>
-
-                    <div className="form-group">
-                        <label>Grant privileges on database</label>
-                        <select
-                            value={formData.database}
-                            onChange={(e) => setFormData({ ...formData, database: e.target.value })}
-                        >
-                            <option value="">-- None --</option>
-                            {databases.map(db => (
-                                <option key={db.name} value={db.name}>{db.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="modal-actions">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create User'}
-                        </Button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const CreatePostgreSQLDatabaseModal = ({ onClose, onCreated }) => {
-    const [formData, setFormData] = useState({
-        name: '',
-        encoding: 'UTF8',
-        create_user: true,
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [createdInfo, setCreatedInfo] = useState(null);
-
-    async function handleSubmit(e) {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            const result = await api.createPostgreSQLDatabase(formData);
-            if (result.success) {
-                if (result.password) {
-                    setCreatedInfo({
-                        database: formData.name,
-                        user: result.user,
-                        password: result.password
-                    });
-                } else {
-                    onCreated();
-                    onClose();
-                }
-            }
-        } catch (err) {
-            setError(err.message || 'Failed to create database');
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    if (createdInfo) {
-        return (
-            <div className="modal-overlay" onClick={onClose}>
-                <div className="modal" onClick={e => e.stopPropagation()}>
-                    <div className="modal-header">
-                        <h2>Database Created</h2>
-                        <button className="modal-close" onClick={() => { onCreated(); onClose(); }}>&times;</button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="credentials-box">
-                            <p>Save these credentials!</p>
-                            <div className="credential-item">
-                                <label>Database:</label>
-                                <code>{createdInfo.database}</code>
-                            </div>
-                            <div className="credential-item">
-                                <label>Username:</label>
-                                <code>{createdInfo.user}</code>
-                            </div>
-                            <div className="credential-item">
-                                <label>Password:</label>
-                                <code>{createdInfo.password}</code>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="modal-actions">
-                        <Button onClick={() => { onCreated(); onClose(); }}>
-                            Done
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Create PostgreSQL Database</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-
-                {error && <div className="error-message">{error}</div>}
-
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Database Name *</label>
-                        <Input
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            placeholder="my_database"
-                            required
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label>Encoding</label>
-                        <select
-                            value={formData.encoding}
-                            onChange={(e) => setFormData({ ...formData, encoding: e.target.value })}
-                        >
-                            <option value="UTF8">UTF8</option>
-                            <option value="LATIN1">LATIN1</option>
-                            <option value="SQL_ASCII">SQL_ASCII</option>
-                        </select>
-                    </div>
-
-                    <div className="form-group">
-                        <label className="checkbox-label">
-                            <input
-                                type="checkbox"
-                                checked={formData.create_user}
-                                onChange={(e) => setFormData({ ...formData, create_user: e.target.checked })}
-                            />
-                            Create user with same name and full privileges
-                        </label>
-                    </div>
-
-                    <div className="modal-actions">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create Database'}
-                        </Button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const CreatePostgreSQLUserModal = ({ databases, onClose, onCreated }) => {
-    const [formData, setFormData] = useState({
-        username: '',
-        password: '',
-        database: '',
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [createdInfo, setCreatedInfo] = useState(null);
-
-    async function generatePassword() {
-        try {
-            const result = await api.generateDatabasePassword();
-            setFormData({ ...formData, password: result.password });
-        } catch (err) {
-            console.error('Failed to generate password:', err);
-        }
-    }
-
-    async function handleSubmit(e) {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            const result = await api.createPostgreSQLUser(formData);
-            if (result.success) {
-                setCreatedInfo({
-                    username: formData.username,
-                    password: result.password
-                });
-            }
-        } catch (err) {
-            setError(err.message || 'Failed to create user');
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    if (createdInfo) {
-        return (
-            <div className="modal-overlay" onClick={onClose}>
-                <div className="modal" onClick={e => e.stopPropagation()}>
-                    <div className="modal-header">
-                        <h2>User Created</h2>
-                        <button className="modal-close" onClick={() => { onCreated(); onClose(); }}>&times;</button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="credentials-box">
-                            <p>Save these credentials!</p>
-                            <div className="credential-item">
-                                <label>Username:</label>
-                                <code>{createdInfo.username}</code>
-                            </div>
-                            <div className="credential-item">
-                                <label>Password:</label>
-                                <code>{createdInfo.password}</code>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="modal-actions">
-                        <Button onClick={() => { onCreated(); onClose(); }}>
-                            Done
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Create PostgreSQL User</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-
-                {error && <div className="error-message">{error}</div>}
-
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Username *</label>
-                        <Input
-                            type="text"
-                            value={formData.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                            placeholder="db_user"
-                            required
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label>Password</label>
-                        <div className="input-with-button">
-                            <Input
-                                type="text"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                placeholder="Leave empty to auto-generate"
-                            />
-                            <Button type="button" variant="outline" size="sm" onClick={generatePassword}>
-                                Generate
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label>Grant privileges on database</label>
-                        <select
-                            value={formData.database}
-                            onChange={(e) => setFormData({ ...formData, database: e.target.value })}
-                        >
-                            <option value="">-- None --</option>
-                            {databases.map(db => (
-                                <option key={db.name} value={db.name}>{db.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="modal-actions">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create User'}
-                        </Button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const TablesModal = ({ database, dbType, onClose }) => {
-    const [tables, setTables] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        loadTables();
-    }, [database, dbType]);
-
-    async function loadTables() {
-        try {
-            let data;
-            if (dbType === 'mysql') {
-                data = await api.getMySQLTables(database.name);
-            } else {
-                data = await api.getPostgreSQLTables(database.name);
-            }
-            setTables(data.tables || []);
-        } catch (err) {
-            console.error('Failed to load tables:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Tables in {database.name}</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-                <div className="modal-body">
-                    {loading ? (
-                        <div className="loading">Loading tables...</div>
-                    ) : tables.length === 0 ? (
-                        <p className="hint">No tables in this database.</p>
-                    ) : (
-                        <div className="tables-list">
-                            {tables.map(table => (
-                                <div key={table.name} className="table-item">
-                                    <span className="table-name">{table.name}</span>
-                                    <span className="table-rows">{table.rows.toLocaleString()} rows</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <div className="modal-actions">
-                    <Button onClick={onClose}>Close</Button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const SQLiteTab = () => {
-    const [databases, setDatabases] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [queryDb, setQueryDb] = useState(null);
-    const [selectedDb, setSelectedDb] = useState(null);
-
-    useEffect(() => {
-        loadDatabases();
-    }, []);
-
-    async function loadDatabases() {
-        setLoading(true);
-        try {
-            const data = await api.getSQLiteDatabases();
-            setDatabases(data.databases || []);
-        } catch (err) {
-            console.error('Failed to load SQLite databases:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    if (loading) {
-        return <div className="loading">Scanning for SQLite databases...</div>;
-    }
-
-    return (
-        <div>
-            <div className="section-header">
-                <div className="hint">
-                    Showing .db, .sqlite, and .sqlite3 files found in /var/www, /home, and /opt
-                </div>
-                <Button variant="outline" onClick={loadDatabases}>
-                    Refresh
-                </Button>
-            </div>
-
-            {databases.length === 0 ? (
-                <EmptyState
-                    icon={HardDrive}
-                    title="No SQLite databases found"
-                    description="No .db, .sqlite, or .sqlite3 files were found in the scanned directories."
-                />
-            ) : (
-                <div className="db-list">
-                    {databases.map(db => (
-                        <div key={db.path} className="db-item">
-                            <div className="db-item-info">
-                                <div className="db-item-icon sqlite">
-                                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                                    </svg>
-                                </div>
-                                <div className="db-item-details">
-                                    <h3>{db.name}</h3>
-                                    <div className="db-item-meta">
-                                        <span className="mono">{db.path}</span>
-                                        <span>{formatBytes(db.size)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="db-item-actions">
-                                <Button size="sm" onClick={() => setQueryDb(db)}>
-                                    Query
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setSelectedDb(db)}>
-                                    Tables
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {selectedDb && (
-                <SQLiteTablesModal
-                    database={selectedDb}
-                    onClose={() => setSelectedDb(null)}
-                />
-            )}
-
-            {queryDb && (
-                <QueryRunner
-                    database={queryDb}
-                    dbType="sqlite"
-                    onClose={() => setQueryDb(null)}
-                />
-            )}
-        </div>
-    );
-};
-
-const SQLiteTablesModal = ({ database, onClose }) => {
-    const [tables, setTables] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        loadTables();
-    }, [database]);
-
-    async function loadTables() {
-        try {
-            const data = await api.getSQLiteTables(database.path);
-            setTables(data.tables || []);
-        } catch (err) {
-            console.error('Failed to load tables:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Tables in {database.name}</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-                <div className="modal-body">
-                    {loading ? (
-                        <div className="loading">Loading tables...</div>
-                    ) : tables.length === 0 ? (
-                        <p className="hint">No tables in this database.</p>
-                    ) : (
-                        <div className="tables-list">
-                            {tables.map(table => (
-                                <div key={table.name} className="table-item">
-                                    <span className="table-name">{table.name}</span>
-                                    <span className="table-rows">{table.rows.toLocaleString()} rows</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <div className="modal-actions">
-                    <Button onClick={onClose}>Close</Button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const DockerDatabasesTab = () => {
-    const toast = useToast();
-    const [containers, setContainers] = useState([]);
-    const [apps, setApps] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedApp, setSelectedApp] = useState(null);
-    const [appDbInfo, setAppDbInfo] = useState(null);
-    const [queryDb, setQueryDb] = useState(null);
-
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    async function loadData() {
-        setLoading(true);
-        try {
-            const [containerData, appsData] = await Promise.all([
-                api.getDockerDatabases(),
-                api.getApps()
-            ]);
-            setContainers(containerData.containers || []);
-            // Filter to only Docker apps
-            const dockerApps = (appsData.apps || []).filter(app => app.app_type === 'docker');
-            setApps(dockerApps);
-        } catch (err) {
-            console.error('Failed to load Docker databases:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function loadAppDbInfo(app) {
-        try {
-            const data = await api.getAppDatabases(app.id);
-            setAppDbInfo(data.databases || []);
-            setSelectedApp(app);
-        } catch (err) {
-            console.error('Failed to load app database info:', err);
-            toast.error('Failed to load database info');
-        }
-    }
-
-    if (loading) {
-        return <div className="loading">Loading Docker databases...</div>;
-    }
-
-    return (
-        <div>
-            <div className="section-header">
-                <div className="hint">
-                    Databases running inside Docker containers from your deployed apps
-                </div>
-                <Button variant="outline" onClick={loadData}>
-                    Refresh
-                </Button>
-            </div>
-
-            {apps.length === 0 ? (
-                <EmptyState
-                    icon={Box}
-                    title="No Docker apps"
-                    description="Deploy an app from a template to see its databases here."
-                />
-            ) : (
-                <div className="db-list">
-                    {apps.map(app => (
-                        <div key={app.id} className="db-item">
-                            <div className="db-item-info">
-                                <div className="db-item-icon docker">
-                                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                        <path d="M21 10c0-3-2-6-7-6s-7 3-7 6"/>
-                                        <rect x="3" y="10" width="18" height="10" rx="2"/>
-                                        <circle cx="8" cy="15" r="1"/>
-                                        <circle cx="12" cy="15" r="1"/>
-                                        <circle cx="16" cy="15" r="1"/>
-                                    </svg>
-                                </div>
-                                <div className="db-item-details">
-                                    <h3>{app.name}</h3>
-                                    <div className="db-item-meta">
-                                        <span className={`status-badge ${app.status}`}>{app.status}</span>
-                                        <span>Port {app.port}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="db-item-actions">
-                                <Button size="sm" onClick={() => loadAppDbInfo(app)}>
-                                    View Databases
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {selectedApp && appDbInfo && (
-                <DockerAppDbModal
-                    app={selectedApp}
-                    databases={appDbInfo}
-                    onClose={() => { setSelectedApp(null); setAppDbInfo(null); }}
-                    onQuery={(db) => setQueryDb(db)}
-                />
-            )}
-
-            {queryDb && (
-                <QueryRunner
-                    database={queryDb}
-                    dbType="docker"
-                    onClose={() => setQueryDb(null)}
-                />
-            )}
-        </div>
-    );
-};
-
-const DockerAppDbModal = ({ app, databases, onClose, onQuery }) => {
-    const [tables, setTables] = useState({});
-    const [loadingTables, setLoadingTables] = useState({});
-
-    async function loadTables(db) {
-        if (tables[db.container + db.database]) return;
-
-        setLoadingTables(prev => ({ ...prev, [db.container + db.database]: true }));
-        try {
-            const data = await api.getDockerDatabaseTables(db.container, db.database, db.password);
-            setTables(prev => ({ ...prev, [db.container + db.database]: data.tables || [] }));
-        } catch (err) {
-            console.error('Failed to load tables:', err);
-        } finally {
-            setLoadingTables(prev => ({ ...prev, [db.container + db.database]: false }));
-        }
-    }
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Databases in {app.name}</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-                <div className="modal-body">
-                    {databases.length === 0 ? (
-                        <p className="hint">No databases found in this app&apos;s containers.</p>
-                    ) : (
-                        <div className="db-list">
-                            {databases.map((db, idx) => (
-                                <div key={idx} className="db-item">
-                                    <div className="db-item-info">
-                                        <div className={`db-item-icon ${db.type}`}>
-                                            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
-                                                <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                                            </svg>
-                                        </div>
-                                        <div className="db-item-details">
-                                            <h3>{db.database || 'Default'}</h3>
-                                            <div className="db-item-meta">
-                                                <span>Container: {db.container}</span>
-                                                <span>{db.type === 'mysql' ? 'MySQL' : 'PostgreSQL'}</span>
-                                                {db.user && <span>User: {db.user}</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="db-item-actions">
-                                        <Button
-                                            size="sm"
-                                            onClick={() => onQuery({
-                                                name: db.database,
-                                                container: db.container,
-                                                password: db.password || db.root_password,
-                                                user: db.user
-                                            })}
-                                        >
-                                            Query
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={() => loadTables(db)}>
-                                            Tables
-                                        </Button>
-                                    </div>
-                                    {tables[db.container + db.database] && (
-                                        <div className="tables-inline">
-                                            {tables[db.container + db.database].length === 0 ? (
-                                                <p className="hint">No tables</p>
-                                            ) : (
-                                                <div className="tables-list compact">
-                                                    {tables[db.container + db.database].map(table => (
-                                                        <div key={table.name} className="table-item">
-                                                            <span className="table-name">{table.name}</span>
-                                                            <span className="table-rows">{table.rows} rows</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="credentials-info">
-                        <h4>Connection Info</h4>
-                        <p className="hint">These databases run inside Docker containers. Use these credentials to connect:</p>
-                        {databases.map((db, idx) => (
-                            <div key={idx} className="credentials-box">
-                                <div className="credential-item">
-                                    <label>Container:</label>
-                                    <code>{db.container}</code>
-                                </div>
-                                {db.database && (
-                                    <div className="credential-item">
-                                        <label>Database:</label>
-                                        <code>{db.database}</code>
-                                    </div>
-                                )}
-                                <div className="credential-item">
-                                    <label>User:</label>
-                                    <code>{db.user || 'root'}</code>
-                                </div>
-                                {db.password && (
-                                    <div className="credential-item">
-                                        <label>Password:</label>
-                                        <code>{db.password}</code>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="modal-actions">
-                    <Button onClick={onClose}>Close</Button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-function formatBytes(bytes) {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
-
-export default Databases;
