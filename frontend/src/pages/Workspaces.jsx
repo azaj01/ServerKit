@@ -21,7 +21,7 @@ const Workspaces = () => {
     const [members, setMembers] = useState([]);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [allUsers, setAllUsers] = useState([]);
-    const [form, setForm] = useState({ name: '', description: '', max_servers: 0, max_users: 0 });
+    const [form, setForm] = useState({ name: '', description: '', max_servers: 0, max_users: 0, primary_color: '#6366f1' });
 
     const loadWorkspaces = useCallback(async () => {
         try {
@@ -41,7 +41,7 @@ const Workspaces = () => {
             await api.createWorkspace(form);
             toast.success('Workspace created');
             setShowCreateModal(false);
-            setForm({ name: '', description: '', max_servers: 0, max_users: 0 });
+            setForm({ name: '', description: '', max_servers: 0, max_users: 0, primary_color: '#6366f1' });
             loadWorkspaces();
         } catch (err) {
             toast.error(err.message);
@@ -189,6 +189,17 @@ const Workspaces = () => {
                                     <label>Max Users (0 = unlimited)</label>
                                     <Input type="number" value={form.max_users} onChange={e => setForm({...form, max_users: parseInt(e.target.value) || 0})} />
                                 </div>
+                            </div>
+                            <div className="form-group">
+                                <label>Brand Color</label>
+                                <input
+                                    type="color"
+                                    className="workspace-color-input"
+                                    value={form.primary_color}
+                                    onChange={e => setForm({...form, primary_color: e.target.value})}
+                                    aria-label="Workspace brand color"
+                                />
+                                <span className="form-hint">Recolors the panel for anyone viewing this workspace. Leave the default for no custom branding.</span>
                             </div>
                         </div>
                         <div className="modal-footer">

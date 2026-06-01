@@ -76,6 +76,12 @@ export function ThemeProvider({ children }) {
         }
     });
 
+    // Active-workspace branding (#33): when a workspace is selected, its accent
+    // color (written to localStorage by the WorkspaceSwitcher) takes precedence
+    // over the user's personal accent. It only changes on reload — the switcher
+    // reloads on switch — so a one-time read is deterministic and sufficient.
+    const workspaceAccent = localStorage.getItem('workspace_accent') || null;
+
     // Update the DOM attribute and resolved theme
     const applyTheme = useCallback((newTheme) => {
         document.documentElement.setAttribute('data-theme', newTheme);
@@ -89,12 +95,13 @@ export function ThemeProvider({ children }) {
         applyTheme(newTheme);
     }, [applyTheme]);
 
-    // Public setter for accent color
+    // Public setter for accent color. Persists the user's choice but keeps an
+    // active workspace's brand color in precedence while one is selected.
     const setAccentColor = useCallback((hex) => {
         setAccentColorState(hex);
         localStorage.setItem('accent_color', hex);
-        applyAccentToDOM(hex);
-    }, []);
+        applyAccentToDOM(workspaceAccent || hex);
+    }, [workspaceAccent]);
 
     // Public setter for white label config (accepts partial updates)
     const setWhiteLabel = useCallback((partial) => {
@@ -119,11 +126,11 @@ export function ThemeProvider({ children }) {
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, [theme]);
 
-    // Apply theme and accent on mount
+    // Apply theme and accent on mount (workspace brand color wins when active).
     useEffect(() => {
         applyTheme(theme);
-        applyAccentToDOM(accentColor);
-    }, [theme, applyTheme, accentColor]);
+        applyAccentToDOM(workspaceAccent || accentColor);
+    }, [theme, applyTheme, accentColor, workspaceAccent]);
 
     const value = {
         theme,           // Current setting: 'dark' | 'light' | 'system'

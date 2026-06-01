@@ -32,6 +32,7 @@ class ApiClient {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('active_workspace_id');  // drop workspace context on logout
+        localStorage.removeItem('workspace_accent');
     }
 
     async request(endpoint, options = {}) {
