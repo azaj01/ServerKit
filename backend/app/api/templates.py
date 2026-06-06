@@ -13,6 +13,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import User, Application
 from app.services.deployment_job_service import DeploymentJobService
 from app.services.template_service import TemplateService
+from app.services.resource_grant_service import ResourceGrantService
 
 templates_bp = Blueprint('templates', __name__)
 
@@ -305,7 +306,7 @@ def check_app_update(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     result = TemplateService.check_updates(app_id)
@@ -338,7 +339,7 @@ def get_app_template_info(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     info = TemplateService.get_installed_info(app_id)

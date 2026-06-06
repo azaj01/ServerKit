@@ -5,6 +5,7 @@ from app import db
 from app.models import Domain, Application, User
 from app.services.nginx_service import NginxService
 from app.services.ssl_service import SSLService
+from app.services.resource_grant_service import ResourceGrantService
 
 domains_bp = Blueprint('domains', __name__)
 
@@ -111,7 +112,7 @@ def get_domain(domain_id):
         return jsonify({'error': 'Domain not found'}), 404
 
     app = Application.query.get(domain.application_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     return jsonify({'domain': domain.to_dict()}), 200
@@ -150,7 +151,7 @@ def create_domain():
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     # For Docker apps, validate port configuration
@@ -229,7 +230,7 @@ def update_domain(domain_id):
         return jsonify({'error': 'Domain not found'}), 404
 
     app = Application.query.get(domain.application_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.get_json()
@@ -263,7 +264,7 @@ def delete_domain(domain_id):
         return jsonify({'error': 'Domain not found'}), 404
 
     app = Application.query.get(domain.application_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     application_id = domain.application_id
@@ -308,7 +309,7 @@ def enable_ssl(domain_id):
         return jsonify({'error': 'Domain not found'}), 404
 
     app = Application.query.get(domain.application_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.get_json() or {}
@@ -360,7 +361,7 @@ def disable_ssl(domain_id):
         return jsonify({'error': 'Domain not found'}), 404
 
     app = Application.query.get(domain.application_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     domain.ssl_enabled = False
@@ -383,7 +384,7 @@ def renew_ssl(domain_id):
         return jsonify({'error': 'Domain not found'}), 404
 
     app = Application.query.get(domain.application_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     if not domain.ssl_enabled:

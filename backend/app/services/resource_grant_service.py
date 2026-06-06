@@ -39,6 +39,24 @@ class ResourceGrantService:
         ).first()
         return row.role if row else None
 
+    # --- access helpers (the shared seam used by every app-related blueprint) ---
+
+    @staticmethod
+    def can_access_app(user, app):
+        """Read access to an application: owner, admin, or ANY grant (#33 ACL).
+        Uses user.id (int) — get_jwt_identity() is the stringified token id."""
+        if user.is_admin or app.user_id == user.id:
+            return True
+        return ResourceGrantService.user_has_grant(user.id, 'application', app.id)
+
+    @staticmethod
+    def can_edit_app(user, app):
+        """Write/operate access to an application: owner, admin, or an EDITOR
+        grant (#33 ACL). A viewer grant confers read access only."""
+        if user.is_admin or app.user_id == user.id:
+            return True
+        return ResourceGrantService.grant_role(user.id, 'application', app.id) == 'editor'
+
     @staticmethod
     def list_for_resource(resource_type, resource_id):
         from app.models.workspace import ResourceGrant

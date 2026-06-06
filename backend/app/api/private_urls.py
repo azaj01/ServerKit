@@ -6,6 +6,7 @@ from app import db
 from app.models import Application, User
 from app.services.private_url_service import PrivateURLService
 from app.services.nginx_service import NginxService
+from app.services.resource_grant_service import ResourceGrantService
 
 private_urls_bp = Blueprint('private_urls', __name__)
 
@@ -30,7 +31,7 @@ def enable_private_url(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     # Check if already enabled
@@ -92,7 +93,7 @@ def get_private_url(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     return jsonify({
@@ -122,7 +123,7 @@ def update_private_url(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     if not app.private_url_enabled:
@@ -174,7 +175,7 @@ def disable_private_url(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     if not app.private_url_enabled:
@@ -211,7 +212,7 @@ def regenerate_private_url(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     if not app.private_url_enabled:

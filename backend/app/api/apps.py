@@ -368,21 +368,15 @@ def set_app_workspace(app_id):
 
 
 def _can_access_app(user, app):
-    """Read access (#33 ACL): owner, admin, or ANY grant (viewer or editor).
-    Uses user.id (int) — get_jwt_identity() is the stringified token id."""
-    if user.is_admin or app.user_id == user.id:
-        return True
+    """Read access (#33 ACL) — delegates to the shared seam."""
     from app.services.resource_grant_service import ResourceGrantService
-    return ResourceGrantService.user_has_grant(user.id, 'application', app.id)
+    return ResourceGrantService.can_access_app(user, app)
 
 
 def _can_edit_app(user, app):
-    """Write/operate access (#33 ACL): owner, admin, or an EDITOR grant. A viewer
-    grant confers read access only."""
-    if user.is_admin or app.user_id == user.id:
-        return True
+    """Write/operate access (#33 ACL) — delegates to the shared seam."""
     from app.services.resource_grant_service import ResourceGrantService
-    return ResourceGrantService.grant_role(user.id, 'application', app.id) == 'editor'
+    return ResourceGrantService.can_edit_app(user, app)
 
 
 @apps_bp.route('/<int:app_id>', methods=['GET'])

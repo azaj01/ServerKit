@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import User, Application
 from app.services.git_service import GitService
+from app.services.resource_grant_service import ResourceGrantService
 
 deploy_bp = Blueprint('deploy', __name__)
 
@@ -31,7 +32,7 @@ def get_deploy_config(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     config = GitService.get_app_config(app_id)
@@ -93,7 +94,7 @@ def trigger_deploy(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.get_json() or {}
@@ -113,7 +114,7 @@ def pull_changes(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.get_json() or {}
@@ -133,7 +134,7 @@ def get_git_status(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     status = GitService.get_git_status(app.root_path)
@@ -151,7 +152,7 @@ def get_commit_info(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     commit_info = GitService.get_commit_info(app.root_path)
@@ -206,7 +207,7 @@ def get_branches(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     result = GitService.get_remote_branches(app.root_path)

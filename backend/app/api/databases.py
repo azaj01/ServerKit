@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import User, Application
 from app.services.database_service import DatabaseService
 from app.middleware.rbac import admin_required
+from app.services.resource_grant_service import ResourceGrantService
 
 databases_bp = Blueprint('databases', __name__)
 
@@ -621,7 +622,7 @@ def get_app_databases(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     if app.app_type != 'docker' or not app.root_path:

@@ -163,6 +163,29 @@ def test_grant_role_validation_and_default(app, client):
     assert r.status_code == 400
 
 
+def test_grant_extends_to_other_app_blueprints(app, client):
+    """The grant-aware helper now gates the other app blueprints too — verify the
+    sweep wired it into builds.py (a separate blueprint from apps.py)."""
+    from app import db
+    from app.models import Application
+    from app.services.resource_grant_service import ResourceGrantService
+
+    owner = _mk_user(db, 'bp_owner')
+    grantee = _mk_user(db, 'bp_grantee')
+    stranger = _mk_user(db, 'bp_stranger')
+    a = Application(name='bp-app', app_type='php', user_id=owner.id)
+    db.session.add(a)
+    db.session.commit()
+
+    url = f'/api/v1/builds/apps/{a.id}/deployments'  # GET, read
+    assert client.get(url, headers=_token(stranger.id)).status_code == 403
+    assert client.get(url, headers=_token(owner.id)).status_code == 200
+
+    ResourceGrantService.grant(user_id=grantee.id, resource_type='application',
+                               resource_id=a.id, granted_by=owner.id, role='viewer')
+    assert client.get(url, headers=_token(grantee.id)).status_code == 200
+
+
 def test_grant_enables_wordpress_per_site_routes(app, client):
     from app import db
     from app.models import Application, WordPressSite

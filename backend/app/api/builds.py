@@ -13,6 +13,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import User, Application, Deployment
 from app.services.build_service import BuildService
 from app.services.deployment_service import DeploymentService
+from app.services.resource_grant_service import ResourceGrantService
 
 builds_bp = Blueprint('builds', __name__)
 
@@ -44,7 +45,7 @@ def get_build_config(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     config = BuildService.get_app_build_config(app_id)
@@ -110,7 +111,7 @@ def detect_build_method(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     detection = BuildService.detect_build_method(app.root_path)
@@ -128,7 +129,7 @@ def get_nixpacks_plan(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     result = BuildService.get_nixpacks_plan(app.root_path)
@@ -148,7 +149,7 @@ def trigger_build(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.get_json() or {}
@@ -169,7 +170,7 @@ def get_build_logs(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     limit = request.args.get('limit', 20, type=int)
@@ -188,7 +189,7 @@ def get_build_log_detail(app_id, timestamp):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     log = BuildService.get_build_log_detail(app_id, timestamp)
@@ -219,7 +220,7 @@ def deploy_app(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.get_json() or {}
@@ -246,7 +247,7 @@ def get_deployments(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     limit = request.args.get('limit', 20, type=int)
@@ -273,7 +274,7 @@ def get_deployment(deployment_id):
         return jsonify({'error': 'Deployment not found'}), 404
 
     app = Application.query.get(deployment.app_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     include_logs = request.args.get('include_logs', 'false').lower() == 'true'
@@ -292,7 +293,7 @@ def get_deployment_diff(deployment_id):
         return jsonify({'error': 'Deployment not found'}), 404
 
     app = Application.query.get(deployment.app_id)
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     diff = DeploymentService.get_deployment_diff(deployment_id)
@@ -314,7 +315,7 @@ def rollback(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.get_json() or {}
@@ -340,7 +341,7 @@ def get_current_deployment(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     deployment = DeploymentService.get_current_deployment(app_id)
