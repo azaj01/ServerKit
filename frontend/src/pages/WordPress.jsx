@@ -7,6 +7,8 @@ import ResourceGate from '../components/ResourceGate';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
 import { Globe } from 'lucide-react';
+import { PageTopbar } from '@/components/ds';
+import { WORDPRESS_TABS } from '../components/wordpress/wordpressTabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -111,12 +113,7 @@ function WordPress() {
     if (loading) {
         return (
             <div className="page-container wordpress-page">
-                <div className="page-header">
-                    <div className="page-header-content">
-                        <h1>WordPress</h1>
-                        <p className="page-description">Manage your WordPress sites</p>
-                    </div>
-                </div>
+                <PageTopbar icon={<Globe size={18} />} title="WordPress" tabs={WORDPRESS_TABS} />
                 <div className="wp-sites-grid">
                     {[1, 2, 3].map(i => (
                         <div key={i} className="wp-site-card-skeleton">
@@ -158,22 +155,23 @@ function WordPress() {
 
     return (
         <div className="page-container wordpress-page">
-            <div className="page-header">
-                <div className="page-header-content">
-                    <h1>WordPress</h1>
-                    <p className="page-description">Manage your WordPress sites</p>
-                </div>
-                <div className="page-header-actions">
-                    <Button variant="outline" onClick={() => setShowImportModal(true)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Import Site
-                    </Button>
-                    <Button onClick={() => setShowCreateModal(true)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        Create Site
-                    </Button>
-                </div>
-            </div>
+            <PageTopbar
+                icon={<Globe size={18} />}
+                title="WordPress"
+                tabs={WORDPRESS_TABS}
+                actions={(
+                    <>
+                        <Button variant="outline" size="sm" onClick={() => setShowImportModal(true)}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Import Site
+                        </Button>
+                        <Button size="sm" onClick={() => setShowCreateModal(true)}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Create Site
+                        </Button>
+                    </>
+                )}
+            />
 
             {createdCreds && (
                 <div className="wp-creds-banner">

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, Plus, GitBranch, Layers } from 'lucide-react';
+import { PageTopbar } from '@/components/ds';
+import { WORDPRESS_TABS } from '../components/wordpress/wordpressTabs';
 import wordpressApi from '../services/wordpress';
 import { useToast } from '../contexts/ToastContext';
 import EmptyState from '../components/EmptyState';
@@ -35,12 +37,7 @@ const WordPressProjects = () => {
 
     return (
         <div className="wp-projects-page">
-            <div className="page-header">
-                <div className="page-header-content">
-                    <h1>WordPress Projects</h1>
-                    <p className="page-description">Manage WordPress sites with environment pipelines</p>
-                </div>
-            </div>
+            <PageTopbar icon={<GitBranch size={18} />} title="Pipeline" tabs={WORDPRESS_TABS} />
 
             {projects.length === 0 ? (
                 <EmptyState

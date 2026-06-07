@@ -56,14 +56,14 @@ export const SIDEBAR_ITEMS = [
         icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'
     },
     {
+        // Redesign: WordPress uses the top-bar layout (REDESIGN_MAP §6 dec. 3).
+        // Pipeline now lives in the page's top bar (PageTopbar WORDPRESS_TABS),
+        // not as a sidebar sub-item. Route /wordpress/projects is unchanged.
         id: 'wordpress',
         label: 'WordPress',
         route: '/wordpress',
         category: 'infrastructure',
-        icon: '<circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M3.5 9h17M3.5 15h17"/>',
-        subItems: [
-            { id: 'wp-pipeline', label: 'Pipeline', route: '/wordpress/projects', requiresCondition: 'wpInstalled', icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' }
-        ]
+        icon: '<circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M3.5 9h17M3.5 15h17"/>'
     },
     {
         id: 'workflow',
