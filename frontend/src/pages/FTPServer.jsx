@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { FolderUp, UserPlus, Network } from 'lucide-react';
 import useTabParam from '../hooks/useTabParam';
 import { api } from '../services/api';
+import { PageTopbar } from '@/components/ds';
+import { FILE_TABS } from '../components/files/fileTabs';
 import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
@@ -241,12 +243,12 @@ function FTPServer() {
 
     return (
         <div className="page-container ftp-server">
-            <div className="page-header">
-                <div className="page-header-content">
-                    <h1>FTP Server</h1>
-                    <p className="page-description">Manage FTP users and file transfer settings</p>
-                </div>
-                <div className="page-header-actions">
+            <PageTopbar
+                icon={<Network size={18} />}
+                title="FTP Server"
+                tabs={FILE_TABS}
+                actions={(
+                    <>
                     {!isInstalled ? (
                         <Button onClick={() => setShowInstallModal(true)}>
                             Install FTP Server
@@ -287,8 +289,9 @@ function FTPServer() {
                             )}
                         </>
                     )}
-                </div>
-            </div>
+                    </>
+                )}
+            />
 
             {!isInstalled ? (
                 <EmptyState
@@ -563,7 +566,7 @@ function FTPServer() {
                                 {selectedService === 'vsftpd' ? (
                                     <p>
                                         <strong>vsftpd</strong> is a secure, fast, and stable FTP server.
-                                        It's the default choice for most Ubuntu/Debian systems.
+                                        It&apos;s the default choice for most Ubuntu/Debian systems.
                                     </p>
                                 ) : (
                                     <p>

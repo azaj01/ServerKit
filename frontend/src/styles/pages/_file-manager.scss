@@ -33,6 +33,15 @@ $ft-default:  #94a3b8;
         box-sizing: border-box;
     }
 
+    // Redesign top bar (Files / FTP tabs) sits flush at the top; the browser
+    // body keeps filling the remaining height.
+    > .sk-topbar {
+        flex-shrink: 0;
+        padding-left: 0;
+        padding-right: 0;
+        margin-bottom: 0;
+    }
+
     // ─── Page header ────────────────────────────────────
     .page-header {
         display: flex;

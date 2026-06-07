@@ -93,14 +93,14 @@ export const SIDEBAR_ITEMS = [
     // core 'git' item here. Sidebar presets that list 'git' still hide the
     // plugin's nav item via getHiddenItemIds().
     {
+        // Redesign: Files uses the top-bar layout (REDESIGN_MAP §6 decision 3).
+        // FTP Server now lives in the page's top bar (PageTopbar FILE_TABS), not
+        // as a sidebar sub-item. Route /ftp is unchanged, reachable from the tab.
         id: 'files',
         label: 'Files',
         route: '/files',
         category: 'operations',
-        icon: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
-        subItems: [
-            { id: 'ftp', label: 'FTP Server', route: '/ftp', icon: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>' }
-        ]
+        icon: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'
     },
     {
         id: 'monitoring',
