@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Layers, Plus } from 'lucide-react';
+import { Box, Layers, Plus } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { getServiceType, getStatusConfig, formatRelativeTime } from '../utils/serviceTypes';
 import EmptyState from '../components/EmptyState';
 import { StatStrip, Stat } from '../components/StatCard';
+import { PageTopbar } from '@/components/ds';
+import { SERVICE_TABS } from '../components/services/serviceTabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -138,20 +140,22 @@ const Services = () => {
 
     return (
         <div className="page-container services-page">
-            <div className="services-page__header">
-                <div>
-                    <h1>Services</h1>
-                    <p className="services-page__subtitle">
-                        {stats.total} services &middot; {stats.running} live
-                    </p>
-                </div>
-                <Button asChild>
-                    <Link to="/services/new">
-                        <Plus size={16} />
-                        New Service
-                    </Link>
-                </Button>
-            </div>
+            <PageTopbar
+                icon={<Box size={18} />}
+                title="Services"
+                meta={`${stats.total} services · ${stats.running} live`}
+                tabs={SERVICE_TABS}
+                actions={(
+                    <>
+                        <Button size="sm" asChild>
+                            <Link to="/services/new">
+                                <Plus size={16} />
+                                New Service
+                            </Link>
+                        </Button>
+                    </>
+                )}
+            />
 
             {/* Summary */}
             {apps.length > 0 && (

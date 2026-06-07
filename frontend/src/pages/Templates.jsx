@@ -11,6 +11,8 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PageTopbar } from '@/components/ds';
+import { SERVICE_TABS } from '../components/services/serviceTabs';
 import EmptyState from '../components/EmptyState';
 
 // Featured templates (curated list)
@@ -306,23 +308,27 @@ const Templates = () => {
 
     return (
         <div className="page-container templates-page">
-            <div className="page-header templates-page-header">
-                <h1>App Templates</h1>
-                <div className="search-box">
-                    <Search size={18} className="search-icon" />
-                    <Input
-                        type="text"
-                        placeholder="Search templates..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQueryFilter(e.target.value)}
-                    />
-                    {searchQuery && (
-                        <Button variant="ghost" size="icon" className="search-clear" onClick={() => setSearchQueryFilter('')}>
-                            <X size={16} />
-                        </Button>
-                    )}
-                </div>
-            </div>
+            <PageTopbar
+                icon={<LayoutTemplate size={18} />}
+                title="App Templates"
+                tabs={SERVICE_TABS}
+                actions={(
+                    <div className="search-box">
+                        <Search size={18} className="search-icon" />
+                        <Input
+                            type="text"
+                            placeholder="Search templates..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQueryFilter(e.target.value)}
+                        />
+                        {searchQuery && (
+                            <Button variant="ghost" size="icon" className="search-clear" onClick={() => setSearchQueryFilter('')}>
+                                <X size={16} />
+                            </Button>
+                        )}
+                    </div>
+                )}
+            />
 
             {/* Results and Filters */}
             <div className="templates-results-header">

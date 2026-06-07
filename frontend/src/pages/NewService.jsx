@@ -10,6 +10,7 @@ import {
     Link2,
     Lock,
     Package,
+    Plus,
     RefreshCw,
     Rocket,
     Search,
@@ -20,6 +21,8 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
+import { PageTopbar } from '@/components/ds';
+import { SERVICE_TABS } from '../components/services/serviceTabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -336,24 +339,19 @@ const NewService = () => {
 
     return (
         <div className="page-container new-service-page">
-            <div className="new-service-page__breadcrumb">
-                <Link to="/services">Services</Link>
-                <span>/</span>
-                <span>New</span>
-            </div>
-
-            <div className="new-service-page__header">
-                <div>
-                    <h1>New Service</h1>
-                    <p>Connect GitHub, pick a repository, and let ServerKit prepare the deployable service.</p>
-                </div>
-                <Button type="button" variant="outline" asChild>
-                    <Link to="/settings/connections">
-                        <Link2 size={16} />
-                        Connections
-                    </Link>
-                </Button>
-            </div>
+            <PageTopbar
+                icon={<Plus size={18} />}
+                title="New Service"
+                tabs={SERVICE_TABS}
+                actions={(
+                    <Button type="button" variant="outline" size="sm" asChild>
+                        <Link to="/settings/connections">
+                            <Link2 size={16} />
+                            Connections
+                        </Link>
+                    </Button>
+                )}
+            />
 
             <div className="new-service-page__mode-strip" aria-label="Service source options">
                 <button
