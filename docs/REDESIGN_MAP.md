@@ -294,10 +294,13 @@ subtitle (source host/OS). Cosmetic: breadcrumb `›` icons vs demo mono `/`, ex
 KPI icon tone-wash not applying (verify `.sk-kpi__icon--*` rules actually color the lucide SVG), per-container
 accent dot in name cell, Projects KPI (compose-label count), logs modal→drawer (blocked on §6.3).
 
-### 8.7 Workspaces — list ≈ parity; detail page doesn't exist
-Card grid/typography/hover match the demo ✓. Missing: **`/workspaces/:id` WorkspaceDetail** (hero + plan &
-billing + resource usage + members/servers/services tabs — net-new, §5 data), per-card CPU/MEM `usebar`s +
-Servers/Services/Sites counts (§5 aggregation), `.ws-card.active` highlight for the active workspace.
+### 8.7 Workspaces — ✅ **done 2026-06-11 (commit 2312cf4)**
+Built `/workspaces/:id` **WorkspaceDetail** on real data: site-header hero (brand tile, active/status Pill, mono
+meta), Workspace info card + live Resources counts, accent-underline tabs (Servers/Services/Sites/Members) over
+`sk-dtable` rows with Manage links + move-in/out pickers; member add/remove + per-app Share ACL re-homed from the
+old list modals; Set active (mirrors WorkspaceSwitcher localStorage scope), Settings edit (updateWorkspace),
+Archive/Restore/Delete. List cards now navigate to detail (demo "Open ›" footer) and the scoped workspace gets the
+`.ws-card.active` accent wash. Still §5-deferred: plan/billing, aggregated CPU/MEM usage bars, member `last_active`.
 
 ### 8.8 Marketplace — effectively done
 Matches the demo's spirit; intentional IA deltas (tabs, sidebar categories) preserve live capabilities.
@@ -310,7 +313,7 @@ Optional: horizontal `.cat-chips` row above the grid, 3rd-party integration card
 3. **8.2 Services list → `.sk-dtable` + `SegControl` + src-badge.**
 4. **8.4 WP list bulk-select + detail ScoreGauge/gauges** (JSX-only parts).
 5. **8.5 Files highlight.js + quick-access.** 6. **8.6 Docker smalls.** 7. **8.3 Terminal IA** (needs §5).
-8. **8.7 WorkspaceDetail** (needs §5). 9. **8.8 Marketplace optionals.**
+8. ~~**8.7 WorkspaceDetail**~~ ✅ **done 2026-06-11** (plan/billing/usage still §5). 9. **8.8 Marketplace optionals.**
 
 ---
 
