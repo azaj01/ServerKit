@@ -31,28 +31,30 @@ export default function RemoteTerminal({ serverId, onClose }) {
             cursorBlink: true,
             fontSize: 14,
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            // Redesign palette (xterm needs literal hex — keep in sync with
+            // the .terminal-content well in _logs-drawer.scss).
             theme: {
-                background: '#1e1e1e',
-                foreground: '#d4d4d4',
-                cursor: '#ffffff',
-                cursorAccent: '#1e1e1e',
-                selection: 'rgba(255, 255, 255, 0.3)',
-                black: '#000000',
-                red: '#cd3131',
-                green: '#0dbc79',
-                yellow: '#e5e510',
-                blue: '#2472c8',
-                magenta: '#bc3fbc',
-                cyan: '#11a8cd',
-                white: '#e5e5e5',
-                brightBlack: '#666666',
-                brightRed: '#f14c4c',
-                brightGreen: '#23d18b',
-                brightYellow: '#f5f543',
-                brightBlue: '#3b8eea',
-                brightMagenta: '#d670d6',
-                brightCyan: '#29b8db',
-                brightWhite: '#ffffff'
+                background: '#0a0b0e',
+                foreground: '#c4cdda',
+                cursor: '#8b93ff',
+                cursorAccent: '#0a0b0e',
+                selectionBackground: 'rgba(109, 124, 255, 0.35)',
+                black: '#1c2029',
+                red: '#fb6f6f',
+                green: '#3ddc97',
+                yellow: '#f5b945',
+                blue: '#6d7cff',
+                magenta: '#b07bf5',
+                cyan: '#49c7f0',
+                white: '#c4cdda',
+                brightBlack: '#646b7a',
+                brightRed: '#ff9292',
+                brightGreen: '#6ae8b2',
+                brightYellow: '#ffd075',
+                brightBlue: '#8b93ff',
+                brightMagenta: '#c79bf8',
+                brightCyan: '#74d9f5',
+                brightWhite: '#e9ebf0'
             },
             allowProposedApi: true
         });
@@ -216,10 +218,17 @@ export default function RemoteTerminal({ serverId, onClose }) {
     return (
         <div className="remote-terminal-container">
             <div className="terminal-header">
-                <div className="terminal-title">
-                    <span className={`terminal-status ${connected ? 'connected' : 'disconnected'}`} />
-                    <span>{shellName || 'Terminal'}</span>
-                    {sessionId && <span className="session-id">({sessionId})</span>}
+                <span className="terminal-ico">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
+                        <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                    </svg>
+                </span>
+                <div className="terminal-titles">
+                    <div className="terminal-title">
+                        <span className={`terminal-status ${connected ? 'connected' : 'disconnected'}`} />
+                        <span>{shellName || 'Terminal'}</span>
+                    </div>
+                    {sessionId && <span className="session-id">{sessionId}</span>}
                 </div>
                 <div className="terminal-actions">
                     <button
@@ -227,7 +236,9 @@ export default function RemoteTerminal({ serverId, onClose }) {
                         onClick={handleClose}
                         title="Close terminal"
                     >
-                        &times;
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -237,92 +248,10 @@ export default function RemoteTerminal({ serverId, onClose }) {
                 onClick={handleClick}
             />
             {error && (
-                <div className="alert alert-danger">
+                <div className="terminal-alert">
                     {error}
                 </div>
             )}
-            <style>{`
-                .remote-terminal-container {
-                    display: flex;
-                    flex-direction: column;
-                    height: 100%;
-                    background: #1e1e1e;
-                    border-radius: 6px;
-                    overflow: hidden;
-                }
-
-                .terminal-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    padding: 8px 12px;
-                    background: #252526;
-                    border-bottom: 1px solid #3c3c3c;
-                }
-
-                .terminal-title {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    color: #cccccc;
-                    font-size: 13px;
-                }
-
-                .terminal-status {
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 50%;
-                    background: #666;
-                }
-
-                .terminal-status.connected {
-                    background: #0dbc79;
-                }
-
-                .terminal-status.disconnected {
-                    background: #cd3131;
-                }
-
-                .session-id {
-                    color: #666;
-                    font-size: 11px;
-                }
-
-                .terminal-actions {
-                    display: flex;
-                    gap: 4px;
-                }
-
-                .terminal-close-btn {
-                    background: none;
-                    border: none;
-                    color: #cccccc;
-                    font-size: 18px;
-                    cursor: pointer;
-                    padding: 2px 6px;
-                    border-radius: 4px;
-                }
-
-                .terminal-close-btn:hover {
-                    background: #3c3c3c;
-                }
-
-                .terminal-content {
-                    flex: 1;
-                    padding: 8px;
-                }
-
-                .terminal-content .xterm {
-                    height: 100%;
-                }
-
-                .terminal-error {
-                    padding: 8px 12px;
-                    background: #5a1d1d;
-                    color: #f48771;
-                    font-size: 13px;
-                }
-            `}</style>
         </div>
     );
 }

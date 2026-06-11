@@ -1062,8 +1062,9 @@
     max-width: 100%;
     height: 400px;
     z-index: 200;
-    box-shadow: -4px -4px 24px rgba(0, 0, 0, 0.3);
-    border-radius: $radius-lg $radius-lg 0 0;
+    // Up-facing variant of --shadow-lg (token shadows cast downward).
+    box-shadow: 0 -16px 48px -12px rgba(0, 0, 0, 0.5);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     overflow: hidden;
 
     @media (max-width: $breakpoint-md) {
@@ -1075,66 +1076,105 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: $bg-body;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-lg $radius-lg 0 0;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .container-logs-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: $space-3 $space-4;
-    border-bottom: 1px solid $border-subtle;
-    background: $bg-elevated;
+    gap: $space-3;
+    padding: $space-2 $space-3;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--surface);
 }
 
 .container-logs-title {
     display: flex;
     align-items: center;
-    gap: $space-2;
-    font-size: $font-size-sm;
+    gap: $space-3;
+    min-width: 0;
+    color: var(--text);
+}
+
+.container-logs-ico {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: var(--cyan-bg);
+    color: var(--cyan);
+    flex-shrink: 0;
+}
+
+.container-logs-titles {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-size: 13px;
     font-weight: $font-weight-semibold;
-    color: $text-primary;
+}
+
+.container-logs-sub {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: $font-weight-normal;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .container-logs-controls {
     display: flex;
     align-items: center;
     gap: $space-2;
+    flex-shrink: 0;
 }
 
 .logs-service-select,
 .logs-lines-select {
-    padding: 4px 8px;
-    font-size: $font-size-xs;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-sm;
-    background: $bg-card;
-    color: $text-primary;
+    padding: 4px $space-2;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    border: 1px solid var(--border);
+    border-radius: $radius-md;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    transition: border-color $transition-fast, color $transition-fast;
+
+    &:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
+    }
 }
 
 .container-logs-body {
     flex: 1;
     overflow-y: auto;
-    background: $bg-body;
+    background: var(--bg-code);
+    scrollbar-width: thin;
 }
 
 .logs-loading,
 .logs-empty {
     padding: $space-6;
     text-align: center;
-    color: $text-tertiary;
+    color: var(--text-faint);
+    font-family: var(--mono);
     font-size: $font-size-sm;
 }
 
 .logs-content {
     margin: 0;
-    padding: $space-3;
-    font-family: $font-family-mono;
+    padding: $space-3 $space-4;
+    font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.6;
-    color: $text-secondary;
+    line-height: 1.7;
+    color: var(--text-dim);
     white-space: pre-wrap;
     word-break: break-all;
 }

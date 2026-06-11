@@ -57,8 +57,13 @@ const ContainerLogs = ({ projectId, envId, onClose }) => {
         <div className="container-logs-panel">
             <div className="container-logs-header">
                 <div className="container-logs-title">
-                    <Terminal size={16} />
-                    <span>Container Logs</span>
+                    <span className="container-logs-ico">
+                        <Terminal size={15} />
+                    </span>
+                    <div className="container-logs-titles">
+                        <span>Container Logs</span>
+                        <span className="container-logs-sub">env-{envId} · {service}</span>
+                    </div>
                 </div>
                 <div className="container-logs-controls">
                     <Select value={service} onValueChange={setService}>

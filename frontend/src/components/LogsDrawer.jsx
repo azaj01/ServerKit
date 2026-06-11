@@ -38,7 +38,7 @@ const LogsDrawer = () => {
                     const initial = data.logs.split('\n').filter(Boolean);
                     setLines(initial.slice(-MAX_LINES));
                 }
-            } catch {}
+            } catch { /* initial snapshot is best-effort; live stream still attaches */ }
         }
         loadInitial();
 
@@ -103,11 +103,16 @@ const LogsDrawer = () => {
     if (drawerState === 'closed' || !service) return null;
 
     const lastLine = lines.length > 0 ? lines[lines.length - 1] : 'Waiting for logs...';
+    const sourceLabel = service.logPath
+        || (service.containerId ? `docker · ${String(service.containerId).slice(0, 12)}` : null)
+        || service.appType
+        || 'live stream';
 
     if (drawerState === 'collapsed') {
         return (
             <div className="logs-drawer logs-drawer--collapsed" onClick={expandDrawer}>
                 <div className="logs-drawer__collapsed-bar">
+                    <span className="logs-drawer__live-dot" />
                     <span className="logs-drawer__service-name">{service.name}</span>
                     <span className="logs-drawer__last-line">{lastLine}</span>
                     <div className="logs-drawer__collapsed-actions">
@@ -135,11 +140,21 @@ const LogsDrawer = () => {
             {/* Header */}
             <div className="logs-drawer__header">
                 <div className="logs-drawer__header-left">
-                    <span className="logs-drawer__live-dot" />
-                    <span className="logs-drawer__service-name">{service.name}</span>
-                    <span className="logs-drawer__line-count">{lines.length} lines</span>
+                    <span className="logs-drawer__ico">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" strokeWidth="2">
+                            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                        </svg>
+                    </span>
+                    <div className="logs-drawer__titles">
+                        <span className="logs-drawer__service-name">{service.name}</span>
+                        <span className="logs-drawer__source">{sourceLabel}</span>
+                    </div>
                 </div>
                 <div className="logs-drawer__header-right">
+                    <span className="logs-drawer__live">
+                        <span className="logs-drawer__live-dot" />
+                        {lines.length} lines
+                    </span>
                     <label className="logs-drawer__toggle">
                         <Switch checked={autoScroll} onCheckedChange={setAutoScroll} />
                         <span>Auto-scroll</span>
