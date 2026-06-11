@@ -8,13 +8,11 @@ import EmptyState from '../components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { PageTopbar } from '@/components/ds';
+import { PageTopbar, Pill } from '@/components/ds';
 import { MONITOR_TABS } from '../components/monitoring/monitorTabs';
 import {
     Activity,
-    AlertTriangle,
     CheckCircle2,
     Copy,
     ExternalLink,
@@ -24,16 +22,15 @@ import {
     Plus,
     RefreshCw,
     Trash2,
-    Wrench,
-    XCircle,
 } from 'lucide-react';
 
+// pill → ds Pill kind · tone → .status-dot modifier · dot → .comp-dots square
 const STATUS_META = {
-    operational: { label: 'Operational', badge: 'success', tone: 'success', icon: CheckCircle2 },
-    degraded: { label: 'Degraded', badge: 'warning', tone: 'warning', icon: AlertTriangle },
-    partial_outage: { label: 'Partial outage', badge: 'warning', tone: 'warning', icon: AlertTriangle },
-    major_outage: { label: 'Major outage', badge: 'destructive', tone: 'danger', icon: XCircle },
-    maintenance: { label: 'Maintenance', badge: 'info', tone: 'info', icon: Wrench },
+    operational: { label: 'Operational', pill: 'green', tone: 'success', dot: '' },
+    degraded: { label: 'Degraded', pill: 'amber', tone: 'warning', dot: 'degraded' },
+    partial_outage: { label: 'Partial outage', pill: 'amber', tone: 'warning', dot: 'degraded' },
+    major_outage: { label: 'Major outage', pill: 'red', tone: 'danger', dot: 'down' },
+    maintenance: { label: 'Maintenance', pill: 'cyan', tone: 'info', dot: 'maintenance' },
 };
 
 const INCIDENT_STATUS = [
@@ -57,7 +54,7 @@ const CHECK_TARGET_PLACEHOLDERS = {
     ping: 'example.com',
 };
 
-const defaultPageForm = { name: '', slug: '', description: '', primary_color: '#4f46e5' };
+const defaultPageForm = { name: '', slug: '', description: '', primary_color: '#6d7cff' };
 const defaultCompForm = {
     name: '',
     group: 'Services',
@@ -136,7 +133,6 @@ const StatusPages = () => {
 
     const overallStatus = useMemo(() => getOverallStatus(components), [components]);
     const overallMeta = STATUS_META[overallStatus] || STATUS_META.operational;
-    const OverallIcon = overallMeta.icon;
     const selectedUrl = getPublicStatusUrl(selectedPage);
 
     const loadPageDetails = async (page) => {
@@ -337,10 +333,15 @@ const StatusPages = () => {
                             className={`status-page-item ${selectedPage?.id === page.id ? 'active' : ''}`}
                             onClick={() => loadPageDetails(page)}
                         >
-                            <span className="status-page-item__name">{page.name}</span>
-                            <span className="status-page-item__slug">/{page.slug}</span>
+                            <span className="status-page-item__top">
+                                <span className="status-page-item__name">{page.name}</span>
+                                <Pill kind={page.is_public ? 'green' : 'gray'} dot={false}>
+                                    {page.is_public ? 'Public' : 'Private'}
+                                </Pill>
+                            </span>
+                            <span className="status-page-item__slug">/status/{page.slug}</span>
                             <span className="status-page-item__meta">
-                                <Globe2 size={14} />
+                                <Globe2 size={13} />
                                 {page.component_count} component{page.component_count !== 1 ? 's' : ''}
                             </span>
                         </button>
@@ -354,12 +355,19 @@ const StatusPages = () => {
                     <section className="status-detail-panel">
                         <div className="status-detail-panel__hero">
                             <div>
-                                <Badge variant={overallMeta.badge} className="status-overall-badge">
-                                    <OverallIcon size={15} />
+                                <Pill kind={overallMeta.pill} className="status-overall-pill">
                                     {overallMeta.label}
-                                </Badge>
+                                </Pill>
                                 <h2>{selectedPage.name}</h2>
                                 {selectedPage.description && <p>{selectedPage.description}</p>}
+                                {components.length > 0 && (
+                                    <div className="comp-dots" aria-hidden="true">
+                                        {components.map((component) => {
+                                            const meta = STATUS_META[component.status] || STATUS_META.operational;
+                                            return <i key={component.id} className={meta.dot} title={component.name} />;
+                                        })}
+                                    </div>
+                                )}
                             </div>
                             <div className="status-url-card">
                                 <span>Public URL</span>
@@ -380,21 +388,21 @@ const StatusPages = () => {
                         </div>
 
                         <div className="status-detail-metrics">
-                            <div>
-                                <span>Components</span>
-                                <strong>{components.length}</strong>
+                            <div className="sk-spec-card">
+                                <div className="sk-spec-card__label">Components</div>
+                                <div className="sk-spec-card__value">{components.length}</div>
                             </div>
-                            <div>
-                                <span>Active incidents</span>
-                                <strong>{activeIncidents.length}</strong>
+                            <div className="sk-spec-card">
+                                <div className="sk-spec-card__label">Active incidents</div>
+                                <div className="sk-spec-card__value">{activeIncidents.length}</div>
                             </div>
-                            <div>
-                                <span>30 day uptime</span>
-                                <strong>{formatUptime(
+                            <div className="sk-spec-card">
+                                <div className="sk-spec-card__label">30 day uptime</div>
+                                <div className="sk-spec-card__value">{formatUptime(
                                     components.length
                                         ? components.reduce((total, component) => total + (component.uptime_30d || 100), 0) / components.length
                                         : 100
-                                )}</strong>
+                                )}</div>
                             </div>
                         </div>
 
@@ -421,21 +429,17 @@ const StatusPages = () => {
                                             <h3>{groupName}</h3>
                                             {groupComponents.map((component) => {
                                                 const meta = STATUS_META[component.status] || STATUS_META.operational;
-                                                const Icon = meta.icon;
                                                 return (
                                                     <div key={component.id} className="component-row">
                                                         <div className="component-row__info">
                                                             <span className={`status-dot status-dot--${meta.tone}`} />
                                                             <div>
                                                                 <strong>{component.name}</strong>
-                                                                <span>{component.check_type.toUpperCase()} - {component.check_target || 'No target'}</span>
+                                                                <span>{component.check_type.toUpperCase()} · {component.check_target || 'No target'}</span>
                                                             </div>
                                                         </div>
                                                         <div className="component-row__stats">
-                                                            <Badge variant={meta.badge}>
-                                                                <Icon size={14} />
-                                                                {meta.label}
-                                                            </Badge>
+                                                            <Pill kind={meta.pill}>{meta.label}</Pill>
                                                             <span>{formatUptime(component.uptime_30d)} uptime</span>
                                                             <span>{component.last_response_time ? `${component.last_response_time}ms` : 'No response'}</span>
                                                             <span>{formatDate(component.last_check_at)}</span>
@@ -479,13 +483,13 @@ const StatusPages = () => {
                                                     <strong>{incident.title}</strong>
                                                     <span>{formatDate(incident.created_at)}</span>
                                                 </div>
-                                                <div>
-                                                    <Badge variant={incident.status === 'resolved' ? 'success' : 'warning'}>
+                                                <div className="incident-row__badges">
+                                                    <span className={`inc-state inc-state--${incident.status}`}>
                                                         {incident.status}
-                                                    </Badge>
-                                                    <Badge variant={incident.impact === 'critical' ? 'destructive' : 'secondary'}>
+                                                    </span>
+                                                    <span className={`inc-impact inc-impact--${incident.impact}`}>
                                                         {incident.impact}
-                                                    </Badge>
+                                                    </span>
                                                 </div>
                                             </div>
                                             {incident.body && <p>{incident.body}</p>}
@@ -537,9 +541,9 @@ const StatusPages = () => {
                                     </div>
                                     <div>
                                         <span>Visibility</span>
-                                        <Badge variant={selectedPage.is_public ? 'success' : 'secondary'}>
+                                        <Pill kind={selectedPage.is_public ? 'green' : 'gray'}>
                                             {selectedPage.is_public ? 'Public' : 'Private'}
-                                        </Badge>
+                                        </Pill>
                                     </div>
                                     <div>
                                         <span>Created</span>

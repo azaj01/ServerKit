@@ -3,7 +3,7 @@ import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Pill } from '../ds';
 import Modal from '../Modal';
 
 const STATE_FILTERS = [
@@ -12,6 +12,19 @@ const STATE_FILTERS = [
     { value: 'failed', label: 'Failed' },
     { value: 'inactive', label: 'Inactive' },
 ];
+
+// systemd active/sub state → ds Pill kind
+const STATE_PILL = {
+    active: 'green',
+    running: 'green',
+    activating: 'amber',
+    reloading: 'amber',
+    restarting: 'amber',
+    failed: 'red',
+    inactive: 'gray',
+    dead: 'gray',
+    stopped: 'gray',
+};
 
 const ServicesTab = ({ serverId, serverStatus }) => {
     const toast = useToast();
@@ -144,9 +157,9 @@ const ServicesTab = ({ serverId, serverStatus }) => {
                             <tr key={u.unit}>
                                 <td className="mono">{u.unit}</td>
                                 <td>
-                                    <Badge variant={u.active === 'active' ? 'default' : 'outline'}>
+                                    <Pill kind={STATE_PILL[u.active] || STATE_PILL[u.sub] || 'gray'}>
                                         {u.active || u.sub || 'unknown'}
-                                    </Badge>
+                                    </Pill>
                                 </td>
                                 <td className="server-services__desc">{u.description}</td>
                                 <td className="server-services__row-actions">

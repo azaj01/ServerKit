@@ -1,5 +1,7 @@
 // Packages tab on Server Detail. Mirrors the layout of _cron.scss so
 // nothing feels foreign when bouncing between server tabs.
+// Base styles on the redesign tokens so the component looks right
+// everywhere — _servers.scss layers server-detail-scoped refinements on top.
 
 .server-packages {
     display: flex;
@@ -28,10 +30,12 @@
     &__results h3,
     &__installed h3 {
         margin: 0 0 0.5rem;
-        font-size: 0.95rem;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--muted-foreground);
+        color: var(--text-faint);
     }
 
     &__chips {
@@ -44,15 +48,17 @@
         padding: 0.4rem 0.85rem;
         border-radius: 999px;
         border: 1px solid var(--border);
-        background: var(--card);
-        color: var(--foreground);
+        background: var(--surface-2);
+        color: var(--text-dim);
         cursor: pointer;
-        font-size: 0.85rem;
-        transition: background 120ms ease, border-color 120ms ease;
+        font-family: var(--mono);
+        font-size: 12px;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 
         &:hover {
-            background: var(--accent);
-            border-color: var(--primary);
+            background: var(--accent-bg);
+            border-color: var(--accent-dim);
+            color: var(--accent-bright);
         }
     }
 
@@ -62,8 +68,8 @@
         padding: 0;
         max-height: 360px;
         overflow-y: auto;
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-sm);
     }
 
     &__list-item {
@@ -72,16 +78,22 @@
         justify-content: space-between;
         gap: 0.75rem;
         padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--border-soft);
+        transition: background 0.12s;
 
         &:last-child {
             border-bottom: 0;
         }
+
+        &:hover {
+            background: var(--surface-2);
+        }
     }
 
     &__list-name {
-        font-family: var(--font-mono, monospace);
-        font-size: 0.85rem;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text-dim);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -92,24 +104,26 @@
         max-height: 320px;
         overflow: auto;
         padding: 0.75rem;
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        background: var(--muted);
-        font-family: var(--font-mono, monospace);
-        font-size: 0.8rem;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-sm);
+        background: var(--bg-code);
+        color: var(--text-dim);
+        font-family: var(--mono);
+        font-size: 12px;
         white-space: pre-wrap;
     }
 
     &__hint {
         font-size: 0.85rem;
+        color: var(--text-dim);
     }
 
     &__remove-tip {
-        font-size: 0.85rem;
+        font-size: 12.5px;
         padding: 0.75rem;
         border: 1px dashed var(--border);
-        border-radius: 0.5rem;
-        background: var(--muted);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
     }
 
     &__remove-form {
@@ -134,15 +148,16 @@
         gap: 0.75rem;
         padding-bottom: 1rem;
         margin-bottom: 1rem;
-        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+        border-bottom: 1px solid var(--border-soft);
 
         h3 {
             margin: 0;
-            font-size: 0.7rem;
+            font-family: var(--mono);
+            font-size: 10.5px;
             font-weight: 600;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: var(--text-tertiary, #8b92a5);
+            color: var(--text-faint);
         }
     }
 
@@ -157,12 +172,13 @@
         align-items: center;
         gap: 0.65rem;
         font-size: 0.85rem;
-        color: var(--muted-foreground);
+        color: var(--text-dim);
     }
 
     &__probed-at {
-        font-size: 0.75rem;
-        color: var(--text-tertiary, #8b92a5);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-faint);
         font-variant-numeric: tabular-nums;
     }
 
@@ -178,7 +194,7 @@
         gap: 1rem;
         align-items: center;
         padding: 0.6rem 0;
-        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
+        border-bottom: 1px solid var(--border-soft);
         min-height: 40px;
 
         &:last-child {
@@ -187,8 +203,9 @@
     }
 
     &__row-label {
-        font-size: 0.7rem;
-        color: var(--text-tertiary, #8b92a5);
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--text-faint);
         text-transform: uppercase;
         letter-spacing: 0.08em;
         font-weight: 600;
@@ -196,7 +213,7 @@
 
     &__row-value {
         font-size: 0.875rem;
-        color: var(--text-primary, #e8eaed);
+        color: var(--text);
         display: flex;
         align-items: center;
         flex-wrap: wrap;
@@ -227,17 +244,18 @@
     gap: 0.75rem;
     padding: 0.65rem 0.85rem;
     margin-bottom: 0.75rem;
-    border: 1px solid var(--destructive, #ef4444);
-    border-radius: 0.5rem;
-    background: color-mix(in srgb, var(--destructive, #ef4444) 8%, transparent);
+    border: 1px solid rgba(251, 111, 111, 0.35);
+    border-radius: var(--radius-sm);
+    background: var(--red-bg);
+    color: var(--red);
     font-size: 0.9rem;
 }
 
 .docker-empty-state {
     padding: 1.5rem;
     border: 1px dashed var(--border);
-    border-radius: 0.5rem;
-    background: var(--muted);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
 
     h4 {
         margin: 0 0 0.5rem;
@@ -249,11 +267,11 @@
     }
 
     code {
-        font-family: var(--font-mono, monospace);
-        font-size: 0.85rem;
+        font-family: var(--mono);
+        font-size: 12px;
         padding: 0.05rem 0.3rem;
         border-radius: 0.25rem;
-        background: var(--card);
+        background: var(--surface-3);
     }
 }
 
@@ -268,21 +286,21 @@
 
 .cloudflared-login-card {
     padding: 1rem;
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    background: var(--card);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
 
     &--success {
-        border-color: var(--success, #16a34a);
-        background: color-mix(in srgb, var(--success, #16a34a) 8%, transparent);
+        border-color: rgba(61, 220, 151, 0.35);
+        background: var(--green-bg);
     }
 
     &--error {
-        border-color: var(--destructive, #ef4444);
-        background: color-mix(in srgb, var(--destructive, #ef4444) 8%, transparent);
+        border-color: rgba(251, 111, 111, 0.35);
+        background: var(--red-bg);
     }
 
     &__actions {
@@ -293,7 +311,7 @@
 
     &__hint {
         font-size: 0.85rem;
-        color: var(--muted-foreground);
+        color: var(--text-dim);
         margin: 0;
     }
 }
@@ -305,11 +323,12 @@
         max-height: 60vh;
         overflow: auto;
         padding: 0.75rem;
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        background: var(--muted);
-        font-family: var(--font-mono, monospace);
-        font-size: 0.8rem;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-sm);
+        background: var(--bg-code);
+        color: var(--text-code);
+        font-family: var(--mono);
+        font-size: 12px;
         white-space: pre-wrap;
         margin: 0;
     }
