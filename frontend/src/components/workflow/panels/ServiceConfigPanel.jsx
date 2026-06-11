@@ -6,17 +6,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
+// Service brand colors stay literal; queue/fallback use the redesign's
+// violet/accent.
 const serviceTypeConfig = {
     redis: { color: '#dc382d', defaultPort: 6379 },
     memcached: { color: '#00a65a', defaultPort: 11211 },
     rabbitmq: { color: '#ff6600', defaultPort: 5672 },
-    queue: { color: '#8b5cf6', defaultPort: 5555 }
+    queue: { color: '#b07bf5', defaultPort: 5555 }
 };
 
 const ServiceConfigPanel = ({ node, onChange, onClose }) => {
     const data = node?.data || {};
     const serviceType = data.serviceType || 'redis';
-    const headerColor = serviceTypeConfig[serviceType]?.color || '#6366f1';
+    const headerColor = serviceTypeConfig[serviceType]?.color || '#6d7cff';
 
     const handleChange = (field, value) => {
         const updates = { ...data, [field]: value };

@@ -12,7 +12,7 @@ const ConfigPanel = ({
     children,
     footer
 }) => {
-    const borderColor = color || headerColor || '#6366f1';
+    const borderColor = color || headerColor || '#6d7cff';
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Escape') {

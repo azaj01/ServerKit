@@ -1,5 +1,8 @@
 // ============================================
-// WORKFLOW BUILDER PAGE STYLES
+// WORKFLOW BUILDER — redesign "infra console" look (demo wf-head / wf-rail):
+// flush header bar + left node-palette rail + ReactFlow canvas, joined by
+// 1px borders instead of floating cards. ReactFlow geometry (node paddings,
+// min-widths, handle sizes/offsets) is intentionally unchanged.
 // ============================================
 
 .workflow-page {
@@ -17,33 +20,19 @@
             border: none;
         }
     }
-
-    .page-header {
-        flex-shrink: 0;
-        margin-bottom: $space-4;
-
-        h1 {
-            margin: 0 0 $space-1;
-            font-size: $font-size-xl;
-            font-weight: $font-weight-semibold;
-        }
-
-        .page-subtitle {
-            margin: 0;
-            color: $text-secondary;
-            font-size: $font-size-sm;
-        }
-    }
 }
 
 // ============================================
-// CANVAS CONTAINER
+// CANVAS CONTAINER (page shell: head + body)
 // ============================================
 
 .workflow-canvas {
     flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     background: $bg-body;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border-soft);
     border-radius: $radius-lg;
     overflow: hidden;
     position: relative;
@@ -54,21 +43,22 @@
 
     // React Flow Controls
     .react-flow__controls {
-        background: $bg-card;
-        border: 1px solid $border-subtle;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: $radius-md;
-        box-shadow: $shadow-lg;
+        box-shadow: var(--shadow-md);
+        overflow: hidden;
 
         button {
-            background: $bg-card;
+            background: var(--surface);
             border: none;
-            border-bottom: 1px solid $border-subtle;
+            border-bottom: 1px solid var(--border-soft);
             color: $text-secondary;
             width: 28px;
             height: 28px;
 
             &:hover {
-                background: $bg-hover;
+                background: var(--surface-hover);
                 color: $text-primary;
             }
 
@@ -84,38 +74,354 @@
 
     // React Flow MiniMap
     .react-flow__minimap {
-        background: $bg-card;
-        border: 1px solid $border-subtle;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: $radius-md;
-        box-shadow: $shadow-lg;
+        box-shadow: var(--shadow-md);
+        overflow: hidden;
+    }
+
+    .react-flow__minimap-mask {
+        fill: var(--bg-body);
+        fill-opacity: 0.85;
+    }
+
+    .react-flow__minimap-node {
+        stroke: none;
     }
 
     // React Flow Background
     .react-flow__background {
         background: $bg-body;
     }
+
+    // In-progress connection line
+    .react-flow__connection-path {
+        stroke: var(--accent);
+        stroke-width: 2;
+    }
+
+    // Drag-selection rectangle
+    .react-flow__selection {
+        background: var(--accent-bg-soft);
+        border: 1px dashed var(--accent-dim);
+    }
+
+    .react-flow__attribution {
+        background: transparent;
+
+        a {
+            color: var(--text-ghost);
+        }
+    }
 }
 
 // ============================================
-// NODE STYLES
+// HEAD BAR (demo wf-head: title + mono meta + actions)
+// ============================================
+
+.wf-head {
+    position: relative;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    padding: 9px 16px 9px 10px;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.wf-head__main {
+    flex: 1;
+    min-width: 200px;
+}
+
+.wf-head__titlerow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wf-head__meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 1px;
+    padding-left: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wf-head__actions {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex-wrap: wrap;
+}
+
+// Workflow name renders as the page title (ghost input).
+.workflow-name-input {
+    width: 220px;
+    height: auto;
+    padding: 5px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: $radius-lg;
+    color: $text-primary;
+    font-size: 15px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: -0.01em;
+    transition: border-color $transition-fast, background $transition-fast;
+
+    &:hover {
+        border-color: var(--border);
+    }
+
+    &:focus,
+    &:focus-visible {
+        outline: none;
+        border-color: var(--accent);
+        background: var(--surface-2);
+        box-shadow: none;
+    }
+
+    &::placeholder {
+        color: var(--text-ghost);
+    }
+}
+
+// Active/paused switch (persists Workflow.is_active)
+.wf-active-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-2;
+    margin-right: $space-1;
+    cursor: pointer;
+
+    span {
+        font-size: 12px;
+        color: var(--text-faint);
+    }
+}
+
+.toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: $radius-lg;
+    color: $text-secondary;
+    font-size: 12.5px;
+    font-weight: $font-weight-medium;
+    cursor: pointer;
+    transition: all $transition-fast;
+    white-space: nowrap;
+
+    svg {
+        flex-shrink: 0;
+    }
+
+    &:hover {
+        background: var(--surface-2);
+        border-color: var(--border-strong);
+        color: $text-primary;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+.toolbar-btn-execute {
+    color: var(--green);
+
+    &:hover:not(:disabled) {
+        background: var(--green-bg);
+        border-color: rgba($success, 0.35);
+        color: var(--green);
+    }
+}
+
+.toolbar-btn-primary {
+    background: linear-gradient(180deg, var(--accent), var(--accent-dim));
+    border-color: var(--accent-dim);
+    color: #fff;
+
+    &:hover:not(:disabled) {
+        background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+        border-color: var(--accent-dim);
+        color: #fff;
+    }
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 22px;
+    background: var(--border);
+    margin: 0 $space-1;
+}
+
+.toolbar-message {
+    position: absolute;
+    top: 100%;
+    right: $space-4;
+    margin-top: 6px;
+    padding: 5px 10px;
+    background: $success-bg;
+    border: 1px solid $success-border;
+    border-radius: $radius-md;
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 30;
+    animation: slideDown 0.2s ease-out;
+}
+
+// ============================================
+// BODY (rail + stage)
+// ============================================
+
+.wf-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+}
+
+// Node palette rail (demo wf-rail / pal-node)
+.wf-rail {
+    width: 212px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 10px 14px;
+    border-right: 1px solid var(--border-soft);
+    background: $bg-sidebar;
+    overflow-y: auto;
+    scrollbar-width: thin;
+
+    &::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: $border-default;
+        border-radius: $radius-sm;
+    }
+
+    @media (max-width: $breakpoint-md) {
+        width: 160px;
+        padding: 4px 7px 10px;
+    }
+}
+
+.wf-rail__grp {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-ghost);
+    padding: 11px 8px 6px;
+}
+
+.wf-rail__node {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 7px 9px;
+    margin-bottom: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: $radius-lg;
+    color: $text-secondary;
+    font-size: 12.5px;
+    font-weight: $font-weight-medium;
+    text-align: left;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    span:last-child {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    &:hover {
+        background: var(--surface-3);
+        border-color: rgba($accent-primary-raw, 0.45);
+        color: $text-primary;
+    }
+}
+
+.wf-rail__pi {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    background: var(--surface-3);
+    color: $text-secondary;
+
+    &--trigger {
+        color: var(--green);
+    }
+
+    &--action {
+        color: var(--accent-bright);
+    }
+
+    &--logic {
+        color: var(--amber);
+    }
+}
+
+.wf-rail__hint {
+    margin-top: auto;
+    padding: $space-3 $space-2 0;
+    border-top: 1px solid var(--border-soft);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-faint);
+}
+
+// Canvas stage (hosts ReactFlow + config panel + error toast)
+.wf-stage {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+// ============================================
+// NODE STYLES (geometry unchanged: min-width/padding/handles)
 // ============================================
 
 .workflow-node {
     min-width: 180px;
-    background: $bg-card;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-lg;
-    box-shadow: $shadow-md;
-    transition: all $transition-fast;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    transition: border-color $transition-fast, box-shadow $transition-fast;
 
     &:hover {
-        border-color: $border-active;
-        box-shadow: $shadow-lg;
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-lg);
     }
 
     &.selected {
-        border-color: $accent-primary;
-        box-shadow: 0 0 0 2px $accent-glow;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px $accent-glow, var(--shadow-lg);
     }
 }
 
@@ -124,9 +430,9 @@
     align-items: center;
     gap: $space-2;
     padding: $space-2 $space-3;
-    border-bottom: 2px solid $accent-primary;
-    border-top-left-radius: $radius-lg;
-    border-top-right-radius: $radius-lg;
+    border-bottom: 1px solid var(--border-soft);
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
 }
 
 .workflow-node-icon {
@@ -135,17 +441,19 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    background: $accent-primary;
-    border-radius: $radius-md;
-    color: white;
+    background: linear-gradient(140deg, var(--accent), var(--accent-dim));
+    border-radius: $radius-lg;
+    color: #fff;
+    flex-shrink: 0;
 }
 
 .workflow-node-type {
-    font-size: $font-size-xs;
+    font-family: var(--mono);
+    font-size: 10px;
     font-weight: $font-weight-semibold;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: $text-tertiary;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
 }
 
 .workflow-node-body {
@@ -153,8 +461,8 @@
 }
 
 .workflow-node-label {
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
+    font-size: 13px;
+    font-weight: $font-weight-semibold;
     color: $text-primary;
     margin-bottom: $space-1;
 }
@@ -164,23 +472,24 @@
     align-items: center;
     gap: $space-1;
     padding: $space-1 $space-2;
-    border-radius: $radius-full;
+    border-radius: $radius-md;
+    font-family: var(--mono);
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
 
     &.status-running {
         background: $success-bg;
-        color: $success;
+        color: var(--green);
     }
 
     &.status-stopped {
-        background: fade($text-tertiary-raw, 10%);
-        color: $text-tertiary;
+        background: var(--surface-3);
+        color: var(--text-faint);
     }
 
     &.status-error {
         background: $danger-bg;
-        color: $danger;
+        color: var(--red);
     }
 }
 
@@ -201,8 +510,8 @@
     position: relative;
 
     &.node-selected {
-        border-color: $accent-primary;
-        box-shadow: 0 0 0 2px $accent-glow;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px $accent-glow, var(--shadow-lg);
     }
 }
 
@@ -213,8 +522,8 @@
     width: 32px;
     height: 32px;
     min-width: 32px;
-    background: $bg-elevated;
-    border-radius: $radius-md;
+    background: var(--surface-2);
+    border-radius: $radius-lg;
     color: $text-secondary;
 }
 
@@ -224,8 +533,8 @@
 }
 
 .node-label {
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
+    font-size: 13px;
+    font-weight: $font-weight-semibold;
     color: $text-primary;
     white-space: nowrap;
     overflow: hidden;
@@ -233,31 +542,33 @@
 }
 
 .node-sublabel {
-    font-size: $font-size-xs;
-    color: $text-tertiary;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
     margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-// Node icon color variants
-.node-icon-manual { color: $info; }
-.node-icon-cron { color: #a855f7; }
-.node-icon-webhook { color: $success; }
-.node-icon-event { color: $warning; }
+// Node icon color variants (categorical tints; pink stays literal — it has
+// no semantic token, matching the file-type palette convention)
+.node-icon-manual { color: var(--cyan); }
+.node-icon-cron { color: var(--violet); }
+.node-icon-webhook { color: var(--green); }
+.node-icon-event { color: var(--amber); }
 .node-icon-bash { color: $text-secondary; }
-.node-icon-python { color: #93c5fd; }
+.node-icon-python { color: var(--cyan); }
 .node-icon-logic { color: #f97316; }
-.node-icon-discord { color: #818cf8; }
+.node-icon-discord { color: var(--violet); }
 .node-icon-slack { color: #ec4899; }
-.node-icon-email { color: $info; }
+.node-icon-email { color: var(--cyan); }
 
 // Node status glow variants
-.node-status-active { border-color: $info; box-shadow: 0 0 10px fade($info, 30%); }
-.node-status-success { border-color: $success; box-shadow: 0 0 10px fade($success, 30%); }
-.node-status-error { border-color: $danger; box-shadow: 0 0 10px fade($danger, 30%); }
-.node-status-inactive { border-color: $border-subtle; }
+.node-status-active { border-color: var(--cyan); box-shadow: 0 0 10px fade($info, 30%); }
+.node-status-success { border-color: var(--green); box-shadow: 0 0 10px fade($success, 30%); }
+.node-status-error { border-color: var(--red); box-shadow: 0 0 10px fade($danger, 30%); }
+.node-status-inactive { border-color: var(--border-soft); }
 
 // Logic If/Else branching outputs
 .node-outputs {
@@ -266,7 +577,7 @@
     width: 100%;
     margin-top: $space-2;
     padding-top: $space-2;
-    border-top: 1px solid $border-subtle;
+    border-top: 1px solid var(--border-soft);
 }
 
 .node-output-branch {
@@ -276,54 +587,56 @@
 }
 
 .node-branch-label {
+    font-family: var(--mono);
     font-size: 10px;
     font-weight: 700;
+    letter-spacing: 0.05em;
     margin-bottom: $space-1;
 
-    &.node-branch-true { color: $success; }
-    &.node-branch-false { color: $danger; }
+    &.node-branch-true { color: var(--green); }
+    &.node-branch-false { color: var(--red); }
 }
 
-// Compact handle styles
+// Compact handle styles (sizes unchanged)
 .handle-input,
 .handle-output {
     width: 10px !important;
     height: 10px !important;
-    background: $bg-card !important;
-    border: 2px solid $border-active !important;
+    background: var(--surface-3) !important;
+    border: 2px solid var(--border-strong) !important;
     transition: all $transition-fast;
 
     &:hover {
-        background: $accent-primary !important;
-        border-color: $accent-primary !important;
+        background: var(--accent) !important;
+        border-color: var(--accent) !important;
         transform: scale(1.2);
     }
 }
 
 .handle-true {
-    border-color: $success !important;
-    &:hover { background: $success !important; }
+    border-color: var(--green) !important;
+    &:hover { background: var(--green) !important; }
 }
 
 .handle-false {
-    border-color: $danger !important;
-    &:hover { background: $danger !important; }
+    border-color: var(--red) !important;
+    &:hover { background: var(--red) !important; }
 }
 
 // ============================================
-// HANDLE STYLES
+// HANDLE STYLES (sizes/offsets unchanged)
 // ============================================
 
 .workflow-handle {
     width: 12px !important;
     height: 12px !important;
-    background: $bg-card !important;
-    border: 2px solid $border-active !important;
+    background: var(--surface-3) !important;
+    border: 2px solid var(--border-strong) !important;
     transition: all $transition-fast;
 
     &:hover {
-        background: $accent-primary !important;
-        border-color: $accent-primary !important;
+        background: var(--accent) !important;
+        border-color: var(--accent) !important;
         transform: scale(1.2);
     }
 }
@@ -347,11 +660,11 @@
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-    stroke: $accent-primary;
+    stroke: var(--accent-bright);
 }
 
 .react-flow__edge:hover .react-flow__edge-path {
-    stroke: $accent-primary;
+    stroke: var(--accent);
 }
 
 // Animated edges
@@ -370,148 +683,40 @@
 }
 
 // ============================================
-// NODE PALETTE STYLES
-// ============================================
-
-.workflow-palette {
-    position: absolute;
-    top: $space-4;
-    left: $space-4;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    gap: $space-1;
-    background: $bg-card;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-lg;
-    padding: $space-2;
-    box-shadow: $shadow-lg;
-    max-height: calc(100% - 120px);
-    overflow-y: auto;
-}
-
-.palette-section {
-    display: flex;
-    flex-direction: column;
-    gap: $space-1;
-
-    &:not(:last-child) {
-        padding-bottom: $space-2;
-        border-bottom: 1px solid $border-subtle;
-        margin-bottom: $space-1;
-    }
-}
-
-.palette-header {
-    font-size: $font-size-xs;
-    font-weight: $font-weight-semibold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: $text-tertiary;
-    padding: $space-1 $space-2;
-}
-
-.palette-item {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    padding: $space-2 $space-3;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: $radius-md;
-    color: $text-secondary;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-    transition: all $transition-fast;
-    white-space: nowrap;
-    text-align: left;
-
-    svg {
-        flex-shrink: 0;
-    }
-
-    &:hover {
-        background: $bg-hover;
-        color: $text-primary;
-    }
-
-    &.palette-item-docker:hover {
-        background: fade(#2496ed, 15%);
-        color: #2496ed;
-        border-color: fade(#2496ed, 30%);
-    }
-
-    &.palette-item-database:hover {
-        background: fade($warning, 15%);
-        color: $warning;
-        border-color: fade($warning, 30%);
-    }
-
-    &.palette-item-domain:hover {
-        background: fade($success, 15%);
-        color: $success;
-        border-color: fade($success, 30%);
-    }
-
-    &.palette-item-service:hover {
-        background: fade($accent-primary-raw, 15%);
-        color: $accent-primary;
-        border-color: fade($accent-primary-raw, 30%);
-    }
-}
-
-// ============================================
-// NODE TYPE-SPECIFIC STYLES
+// NODE TYPE-SPECIFIC STYLES (categorical gradients; docker brand kept)
 // ============================================
 
 // Docker App Node
 .workflow-node-docker {
-    .node-header-docker {
-        border-color: #2496ed;
-    }
-
     .node-icon-docker {
-        background: #2496ed;
+        background: linear-gradient(140deg, #2496ed, #1d77c4);
     }
 }
 
 // Database Node
 .workflow-node-database {
-    .node-header-database {
-        border-color: $warning;
-    }
-
     .node-icon-database {
-        background: $warning;
+        background: linear-gradient(140deg, #f5b945, #cf9430);
     }
 }
 
 // Domain Node
 .workflow-node-domain {
-    .node-header-domain {
-        border-color: $success;
-    }
-
     .node-icon-domain {
-        background: $success;
+        background: linear-gradient(140deg, #3ddc97, #2aa873);
     }
 
     .node-label-domain {
-        font-size: $font-size-base;
-        font-weight: $font-weight-semibold;
         font-family: $font-mono;
+        font-size: 13.5px;
+        font-weight: $font-weight-semibold;
     }
 }
 
-// Service Node
+// Service Node (icon bg comes inline from the brand color; gradient fallback)
 .workflow-node-service {
-    .node-header-service {
-        border-color: $accent-primary;
-    }
-
     .node-icon-service {
-        background: $accent-primary;
+        background: linear-gradient(140deg, #6d7cff, #4a5cd0);
     }
 }
 
@@ -527,12 +732,17 @@
     font-size: $font-size-xs;
 
     .node-detail-label {
-        color: $text-tertiary;
+        color: var(--text-ghost);
+        font-family: var(--mono);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
     }
 
     .node-detail-value {
         color: $text-secondary;
         font-family: $font-mono;
+        font-size: 11px;
     }
 }
 
@@ -573,26 +783,28 @@
     display: inline-flex;
     align-items: center;
     padding: 2px $space-2;
-    background: fade($accent-primary-raw, 15%);
+    background: var(--accent-bg);
     border: 1px solid fade($accent-primary-raw, 30%);
-    border-radius: $radius-full;
+    border-radius: 5px;
     font-size: $font-size-xs;
     font-family: $font-mono;
-    color: $accent-primary;
+    color: var(--accent-bright);
 }
 
 // ============================================
-// TYPE BADGES
+// TYPE BADGES (db engine chip — solid brand bg set inline)
 // ============================================
 
 .node-type-badge {
     display: inline-flex;
     align-items: center;
     padding: 2px $space-2;
-    border-radius: $radius-sm;
+    border-radius: 5px;
+    font-family: var(--mono);
     font-size: $font-size-xs;
     font-weight: $font-weight-semibold;
-    color: white;
+    letter-spacing: 0.04em;
+    color: #fff;
     margin-top: $space-1;
 }
 
@@ -613,7 +825,9 @@
     gap: $space-1;
     padding: 2px $space-2;
     border: 1px solid;
-    border-radius: $radius-sm;
+    border-radius: 5px;
+    background: var(--surface-2);
+    font-family: var(--mono);
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
 }
@@ -623,18 +837,19 @@
     align-items: center;
     gap: $space-1;
     padding: 2px $space-2;
-    border-radius: $radius-sm;
+    border-radius: 5px;
+    font-family: var(--mono);
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
 
     &.dns-propagated {
         background: $success-bg;
-        color: $success;
+        color: var(--green);
     }
 
     &.dns-pending {
-        background: fade($warning, 15%);
-        color: $warning;
+        background: $warning-bg;
+        color: var(--amber);
     }
 }
 
@@ -649,17 +864,17 @@
     margin-left: auto;
 
     &.status-running {
-        background: $success;
+        background: var(--green);
         box-shadow: 0 0 0 2px fade($success, 30%);
         animation: pulseRunning 2s ease-in-out infinite;
     }
 
     &.status-stopped {
-        background: $text-tertiary;
+        background: var(--text-ghost);
     }
 
     &.status-error {
-        background: $danger;
+        background: var(--red);
         box-shadow: 0 0 0 2px fade($danger, 30%);
         animation: pulseError 1s ease-in-out infinite;
     }
@@ -703,9 +918,9 @@
     right: 0;
     width: 320px;
     height: 100%;
-    background: $bg-card;
-    border-left: 1px solid $border-subtle;
-    box-shadow: $shadow-lg;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
     z-index: 20;
     display: flex;
     flex-direction: column;
@@ -721,12 +936,13 @@
     }
 }
 
+// Per-type tint arrives inline via borderColor on the header.
 .config-panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: $space-4;
-    border-bottom: 2px solid $accent-primary;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-soft);
     flex-shrink: 0;
 }
 
@@ -737,7 +953,7 @@
 
     h3 {
         margin: 0;
-        font-size: $font-size-base;
+        font-size: 14px;
         font-weight: $font-weight-semibold;
         color: $text-primary;
     }
@@ -749,8 +965,8 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: $radius-md;
-    color: white;
+    border-radius: 9px;
+    color: #fff;
 }
 
 .config-panel-close {
@@ -783,9 +999,12 @@
 
         label {
             display: block;
-            font-size: $font-size-sm;
-            font-weight: $font-weight-medium;
-            color: $text-secondary;
+            font-family: var(--mono);
+            font-size: 10.5px;
+            font-weight: $font-weight-semibold;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-faint);
             margin-bottom: $space-2;
         }
 
@@ -795,7 +1014,7 @@
             width: 100%;
             padding: $space-2 $space-3;
             background: $bg-body;
-            border: 1px solid $border-subtle;
+            border: 1px solid var(--border);
             border-radius: $radius-md;
             color: $text-primary;
             font-size: $font-size-sm;
@@ -814,7 +1033,7 @@
         select {
             cursor: pointer;
             appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23646b7a' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right $space-3 center;
             padding-right: $space-8;
@@ -844,18 +1063,16 @@
         font-size: $font-size-xs;
         color: $text-tertiary;
         margin-top: $space-1;
+        text-transform: none;
+        letter-spacing: normal;
     }
 }
 
 .config-panel-footer {
     padding: $space-4;
-    border-top: 1px solid $border-subtle;
+    border-top: 1px solid var(--border-soft);
     flex-shrink: 0;
 }
-
-// ============================================
-// PORT LIST (Docker Config Panel)
-// ============================================
 
 // ============================================
 // CONFIG PANEL ELEMENTS
@@ -875,21 +1092,21 @@
     gap: $space-1;
     padding: $space-3;
     background: $bg-body;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border);
     border-radius: $radius-lg;
     color: $text-tertiary;
     cursor: pointer;
     transition: all $transition-fast;
 
     &:hover {
-        border-color: $border-active;
+        border-color: var(--border-strong);
         color: $text-secondary;
     }
 
     &.active {
-        background: rgba($accent-primary-raw, 0.1);
-        border-color: $accent-primary;
-        color: $accent-primary;
+        background: var(--accent-bg);
+        border-color: var(--accent);
+        color: var(--accent-bright);
     }
 
     .trigger-type-name {
@@ -919,7 +1136,7 @@
     gap: $space-1;
     padding: $space-2;
     background: $bg-body;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border);
     border-radius: $radius-md;
     color: $text-tertiary;
     font-size: $font-size-xs;
@@ -927,14 +1144,14 @@
     transition: all $transition-fast;
 
     &:hover {
-        border-color: $border-active;
+        border-color: var(--border-strong);
         color: $text-secondary;
     }
 
     &.active {
-        background: rgba($accent-primary-raw, 0.1);
-        border-color: $accent-primary;
-        color: $accent-primary;
+        background: var(--accent-bg);
+        border-color: var(--accent);
+        color: var(--accent-bright);
     }
 }
 
@@ -952,58 +1169,32 @@
     gap: $space-2;
     padding: $space-2;
     background: $bg-body;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border);
     border-radius: $radius-md;
     color: $text-tertiary;
     font-size: $font-size-sm;
     cursor: pointer;
     transition: all $transition-fast;
 
-    &:hover { border-color: $border-active; color: $text-secondary; }
-    &.active { background: rgba($accent-primary-raw, 0.1); border-color: $accent-primary; color: $accent-primary; }
+    &:hover { border-color: var(--border-strong); color: $text-secondary; }
+    &.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent-bright); }
 }
 
 // Script editor textarea
 .script-editor {
     min-height: 240px;
+    background: var(--bg-code) !important;
+    color: var(--text-code) !important;
     font-size: $font-size-xs;
     line-height: 1.6;
     tab-size: 4;
 }
 
-// Toggle switch
+// Toggle switch label row
 .toggle-label {
     display: flex !important;
     align-items: center;
     justify-content: space-between;
-}
-
-.toggle-switch {
-    position: relative;
-    width: 36px;
-    height: 20px;
-    background: $bg-tertiary;
-    border: none;
-    border-radius: $radius-full;
-    cursor: pointer;
-    transition: background $transition-fast;
-
-    &.active { background: $success; }
-
-    .toggle-knob {
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        width: 16px;
-        height: 16px;
-        background: white;
-        border-radius: 50%;
-        transition: transform $transition-fast;
-    }
-
-    &.active .toggle-knob {
-        transform: translateX(16px);
-    }
 }
 
 // Input with action button (e.g. copy)
@@ -1020,7 +1211,7 @@
     justify-content: center;
     padding: $space-2 $space-3;
     background: $bg-body;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border);
     border-radius: $radius-md;
     color: $text-secondary;
     cursor: pointer;
@@ -1032,8 +1223,8 @@
 // Info boxes in panels
 .panel-info-box {
     padding: $space-3;
-    background: rgba($accent-primary-raw, 0.08);
-    border: 1px solid rgba($accent-primary-raw, 0.2);
+    background: var(--accent-bg-soft);
+    border: 1px solid fade($accent-primary-raw, 20%);
     border-radius: $radius-md;
     font-size: $font-size-xs;
     color: $text-secondary;
@@ -1041,18 +1232,19 @@
     margin-top: $space-3;
 
     code {
-        background: rgba(0, 0, 0, 0.3);
+        background: var(--surface-3);
         padding: 1px 4px;
         border-radius: 3px;
+        font-family: var(--mono);
         font-size: $font-size-xs;
-        color: $accent-primary;
+        color: var(--accent-bright);
     }
 
     &.panel-info-warning {
-        background: rgba($warning, 0.08);
-        border-color: rgba($warning, 0.2);
+        background: $warning-bg;
+        border-color: $warning-border;
 
-        code { color: $warning; }
+        code { color: var(--amber); }
     }
 }
 
@@ -1096,8 +1288,8 @@
     height: 8px;
     border-radius: 50%;
 
-    &.branch-dot-true { background: $success; }
-    &.branch-dot-false { background: $danger; }
+    &.branch-dot-true { background: var(--green); }
+    &.branch-dot-false { background: var(--red); }
 }
 
 // 3-col form row
@@ -1173,7 +1365,7 @@
     color: $danger;
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
-    box-shadow: $shadow-lg;
+    box-shadow: var(--shadow-lg);
     animation: slideDown 0.2s ease-out;
 }
 
@@ -1189,20 +1381,23 @@
 }
 
 // ============================================
-// EDGE LABEL STYLES
+// EDGE LABEL STYLES (mono chip tinted by --edge-c, set inline per edge)
 // ============================================
 
 .edge-label {
     display: flex;
     align-items: center;
-    gap: $space-1;
-    padding: 2px $space-2;
-    border-radius: $radius-sm;
-    font-size: $font-size-xs;
+    gap: 5px;
+    padding: 2px 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--edge-c, var(--accent));
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
     font-weight: $font-weight-medium;
-    color: white;
+    color: var(--edge-c, var(--accent));
     white-space: nowrap;
-    transition: all $transition-fast;
+    transition: opacity $transition-fast;
     opacity: 0;
 
     .react-flow__edge:hover &,
@@ -1211,12 +1406,14 @@
     }
 
     &.edge-label-selected {
-        color: $bg-body;
+        background: var(--accent-bg);
+        border-color: var(--accent);
+        color: var(--accent-bright);
     }
 }
 
 .edge-label-text {
-    line-height: 1;
+    line-height: 1.5;
 }
 
 .edge-delete-btn {
@@ -1226,10 +1423,10 @@
     width: 16px;
     height: 16px;
     padding: 0;
-    margin-left: $space-1;
+    margin-left: 2px;
     background: $danger;
     border: none;
-    border-radius: $radius-sm;
+    border-radius: 4px;
     color: white;
     cursor: pointer;
     transition: all $transition-fast;
@@ -1272,164 +1469,18 @@
     cursor: pointer;
 
     &.selected .react-flow__edge-path {
-        stroke: white !important;
+        stroke: var(--accent-bright) !important;
         stroke-width: 2 !important;
     }
 }
 
 // ============================================
-// WORKFLOW TOOLBAR (SAVE/LOAD)
+// WORKFLOW LIST MODAL (shadcn Dialog internals)
 // ============================================
 
-.workflow-toolbar {
-    position: absolute;
-    top: $space-4;
-    right: $space-4;
-    z-index: 15;
-    display: flex;
-    align-items: center;
-    gap: $space-3;
-    background: $bg-card;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-lg;
-    padding: $space-2 $space-3;
-    box-shadow: $shadow-lg;
-}
-
-.toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: $space-3;
-}
-
-.toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-}
-
-.workflow-name-input {
-    width: 180px;
-    padding: $space-2 $space-3;
-    background: $bg-body;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-md;
-    color: $text-primary;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-    transition: border-color $transition-fast;
-
-    &:focus {
-        outline: none;
-        border-color: $accent-primary;
-    }
-
-    &::placeholder {
-        color: $text-tertiary;
-    }
-}
-
-.workflow-id-badge {
-    padding: $space-1 $space-2;
-    background: $bg-hover;
-    border-radius: $radius-sm;
-    font-size: $font-size-xs;
-    font-family: $font-mono;
-    color: $text-tertiary;
-}
-
-.toolbar-btn {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    padding: $space-2 $space-3;
-    background: transparent;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-md;
-    color: $text-secondary;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-    transition: all $transition-fast;
-    white-space: nowrap;
-
-    svg {
-        flex-shrink: 0;
-    }
-
-    &:hover {
-        background: $bg-hover;
-        border-color: $border-active;
-        color: $text-primary;
-    }
-
-    &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-}
-
-.toolbar-btn-primary {
-    background: $accent-primary;
-    border-color: $accent-primary;
-    color: white;
-
-    &:hover {
-        background: darken($accent-primary-raw, 5%);
-        border-color: darken($accent-primary-raw, 5%);
-        color: white;
-    }
-}
-
-.toolbar-btn-execute {
-    color: $success;
-
-    &:hover {
-        background: rgba($success, 0.1);
-        border-color: $success;
-    }
-}
-
-.toolbar-divider {
-    width: 1px;
-    height: 24px;
-    background: $border-subtle;
-    margin: 0 $space-1;
-}
-
-.toolbar-message {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: $space-2;
-    padding: $space-2 $space-3;
-    background: $success-bg;
-    border: 1px solid $success-border;
-    border-radius: $radius-md;
-    color: $success;
-    font-size: $font-size-xs;
-    font-weight: $font-weight-medium;
-    white-space: nowrap;
-    animation: slideDown 0.2s ease-out;
-}
-
-// ============================================
-// WORKFLOW LIST MODAL
-// ============================================
-
-.workflow-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: fade($bg-body-raw, 80%);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    animation: fadeIn 0.15s ease-out;
+.workflow-modal {
+    width: 500px;
+    max-width: 90vw;
 }
 
 @keyframes fadeIn {
@@ -1439,19 +1490,6 @@
     to {
         opacity: 1;
     }
-}
-
-.workflow-modal {
-    width: 500px;
-    max-width: 90vw;
-    max-height: 80vh;
-    background: $bg-card;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-xl;
-    box-shadow: $shadow-lg;
-    display: flex;
-    flex-direction: column;
-    animation: scaleIn 0.2s ease-out;
 }
 
 @keyframes scaleIn {
@@ -1465,44 +1503,9 @@
     }
 }
 
-.workflow-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $space-4 $space-5;
-    border-bottom: 1px solid $border-subtle;
-
-    h2 {
-        margin: 0;
-        font-size: $font-size-lg;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
-    }
-}
-
-.modal-close-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: transparent;
-    border: none;
-    border-radius: $radius-md;
-    color: $text-tertiary;
-    cursor: pointer;
-    transition: all $transition-fast;
-
-    &:hover {
-        background: $bg-hover;
-        color: $text-primary;
-    }
-}
-
 .workflow-modal-content {
     flex: 1;
     overflow-y: auto;
-    padding: $space-4;
     @include custom-scrollbar();
 }
 
@@ -1535,22 +1538,6 @@
     gap: $space-3;
     padding: $space-8;
     color: $danger;
-
-    button {
-        padding: $space-2 $space-4;
-        background: $danger;
-        border: none;
-        border-radius: $radius-md;
-        color: white;
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-        cursor: pointer;
-        transition: background $transition-fast;
-
-        &:hover {
-            background: darken($danger, 10%);
-        }
-    }
 }
 
 .workflow-list-empty {
@@ -1559,7 +1546,7 @@
     align-items: center;
     gap: $space-2;
     padding: $space-8;
-    color: $text-tertiary;
+    color: var(--text-ghost);
 
     p {
         margin: 0;
@@ -1570,6 +1557,7 @@
 
     span {
         font-size: $font-size-sm;
+        color: $text-tertiary;
     }
 }
 
@@ -1584,15 +1572,15 @@
     align-items: center;
     gap: $space-3;
     padding: $space-3 $space-4;
-    background: $bg-body;
-    border: 1px solid $border-subtle;
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
     border-radius: $radius-lg;
     cursor: pointer;
     transition: all $transition-fast;
 
     &:hover {
-        border-color: $accent-primary;
-        background: fade($accent-primary-raw, 5%);
+        border-color: var(--accent);
+        background: var(--accent-bg-soft);
     }
 }
 
@@ -1602,12 +1590,19 @@
 }
 
 .workflow-item-name {
-    font-size: $font-size-sm;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    font-size: 13px;
     font-weight: $font-weight-semibold;
     color: $text-primary;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+
+    > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 
 .workflow-item-desc {
@@ -1634,6 +1629,7 @@
         display: flex;
         align-items: center;
         gap: $space-1;
+        font-family: var(--mono);
         font-size: $font-size-xs;
         color: $text-tertiary;
     }
@@ -1643,8 +1639,9 @@
     display: flex;
     align-items: center;
     gap: $space-1;
+    font-family: var(--mono);
     font-size: $font-size-xs;
-    color: $text-tertiary;
+    color: var(--text-ghost);
 }
 
 .workflow-item-delete {
@@ -1678,101 +1675,24 @@
 }
 
 // ============================================
-// DEPLOY BUTTON
-// ============================================
-
-.toolbar-btn-deploy {
-    background: $success;
-    border-color: $success;
-    color: white;
-
-    &:hover:not(:disabled) {
-        background: darken($success, 5%);
-        border-color: darken($success, 5%);
-        color: white;
-    }
-
-    &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-}
-
-// ============================================
 // DEPLOYMENT PROGRESS MODAL
 // ============================================
-
-.deployment-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: fade($bg-body-raw, 80%);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    animation: fadeIn 0.15s ease-out;
-}
 
 .deployment-modal {
     width: 520px;
     max-width: 90vw;
-    max-height: 80vh;
-    background: $bg-card;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-xl;
-    box-shadow: $shadow-lg;
-    display: flex;
-    flex-direction: column;
-    animation: scaleIn 0.2s ease-out;
-}
-
-.deployment-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $space-4 $space-5;
-    border-bottom: 1px solid $border-subtle;
-
-    h2 {
-        margin: 0;
-        font-size: $font-size-lg;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
-    }
 }
 
 .deployment-modal-content {
     flex: 1;
     overflow-y: auto;
-    padding: $space-4;
     @include custom-scrollbar();
 }
 
 .deployment-modal-footer {
-    padding: $space-4;
-    border-top: 1px solid $border-subtle;
+    padding: $space-4 0 0;
     display: flex;
     justify-content: flex-end;
-
-    .btn-primary {
-        padding: $space-2 $space-5;
-        background: $accent-primary;
-        border: none;
-        border-radius: $radius-md;
-        color: white;
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-        cursor: pointer;
-        transition: background $transition-fast;
-
-        &:hover {
-            background: darken($accent-primary-raw, 5%);
-        }
-    }
 }
 
 .deployment-loading {
@@ -1812,13 +1732,13 @@
     &.success {
         background: $success-bg;
         border: 1px solid $success-border;
-        color: $success;
+        color: var(--green);
     }
 
     &.has-errors {
         background: $danger-bg;
         border: 1px solid $danger-border;
-        color: $danger;
+        color: var(--red);
     }
 }
 
@@ -1833,18 +1753,18 @@
     align-items: center;
     gap: $space-3;
     padding: $space-3 $space-4;
-    background: $bg-body;
-    border: 1px solid $border-subtle;
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
     border-radius: $radius-md;
     transition: all $transition-fast;
 
     &.success {
-        border-color: fade($success, 30%);
+        border-color: $success-border;
     }
 
     &.error {
-        border-color: fade($danger, 30%);
-        background: fade($danger, 5%);
+        border-color: $danger-border;
+        background: $danger-bg;
     }
 
     &.pending {
@@ -1858,8 +1778,8 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: $radius-md;
-    color: white;
+    border-radius: $radius-lg;
+    color: #fff;
     flex-shrink: 0;
 }
 
@@ -1878,6 +1798,7 @@
 }
 
 .result-type {
+    font-family: var(--mono);
     font-size: $font-size-xs;
     color: $text-tertiary;
 }
@@ -1893,14 +1814,15 @@
     }
 
     .status-success {
-        color: $success;
+        color: var(--green);
     }
 
     .status-error {
-        color: $danger;
+        color: var(--red);
     }
 
     .status-pending {
+        font-family: var(--mono);
         font-size: $font-size-xs;
         color: $text-tertiary;
     }
@@ -1913,7 +1835,7 @@
     width: 28px;
     height: 28px;
     background: transparent;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border);
     border-radius: $radius-sm;
     color: $text-tertiary;
     text-decoration: none;
@@ -1961,11 +1883,225 @@
 }
 
 // ============================================
+// EXECUTION HISTORY (framed two-pane console in the modal)
+// ============================================
+
+.wf-history {
+    display: flex;
+    height: min(62vh, 600px);
+    border: 1px solid var(--border-soft);
+    border-radius: $radius-lg;
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.wf-history__list {
+    width: 230px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-soft);
+    background: $bg-sidebar;
+    overflow-y: auto;
+    @include custom-scrollbar();
+
+    @media (max-width: $breakpoint-sm) {
+        width: 150px;
+    }
+}
+
+.wf-history__item {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    cursor: pointer;
+    transition: background $transition-fast;
+
+    &:hover {
+        background: var(--surface-2);
+    }
+
+    &.is-on {
+        background: var(--accent-bg);
+        box-shadow: inset 2px 0 0 var(--accent);
+    }
+}
+
+.wf-history__item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
+    margin-bottom: 4px;
+}
+
+.wf-history__id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+}
+
+.wf-history__trigger {
+    font-size: 12.5px;
+    font-weight: $font-weight-medium;
+    color: $text-primary;
+}
+
+.wf-history__time {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-faint);
+
+    svg {
+        flex-shrink: 0;
+    }
+}
+
+.wf-history__detail {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.wf-history__head {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    flex-shrink: 0;
+}
+
+.wf-history__title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: $font-weight-semibold;
+    color: $text-primary;
+}
+
+.wf-history__dur {
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+}
+
+.wf-history__logs {
+    flex: 1;
+    overflow-y: auto;
+    padding: $space-3 $space-4;
+    background: var(--bg-code);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    @include custom-scrollbar();
+}
+
+.wf-history__logs-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-bottom: $space-2;
+    margin-bottom: $space-2;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+}
+
+.wf-history__lines {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.wf-log {
+    display: flex;
+    gap: 10px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    transition: background $transition-fast;
+
+    &:hover {
+        background: var(--surface-2);
+    }
+}
+
+.wf-log__ts {
+    color: var(--text-ghost);
+    flex-shrink: 0;
+}
+
+.wf-log__lvl {
+    flex-shrink: 0;
+    width: 56px;
+    font-weight: $font-weight-bold;
+
+    &--error { color: var(--red); }
+    &--warning { color: var(--amber); }
+    &--debug { color: var(--text-faint); }
+    &--info { color: var(--cyan); }
+}
+
+.wf-log__node {
+    color: var(--accent-bright);
+    flex-shrink: 0;
+}
+
+.wf-log__msg {
+    color: var(--text-code);
+    overflow-wrap: anywhere;
+}
+
+.wf-history__nolog {
+    color: var(--text-faint);
+    font-style: italic;
+}
+
+.wf-history__loading {
+    display: flex;
+    justify-content: center;
+    padding: $space-8;
+    color: var(--text-faint);
+}
+
+.wf-history__empty {
+    padding: $space-6 $space-4;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-faint);
+}
+
+.wf-history__placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: $space-3;
+    color: var(--text-ghost);
+
+    svg {
+        opacity: 0.35;
+    }
+
+    p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-faint);
+    }
+}
+
+// ============================================
 // DEPLOYED NODE INDICATOR
 // ============================================
 
 .workflow-node.deployed {
-    border-color: $success;
+    border-color: var(--green);
 
     &::after {
         content: '';
@@ -1974,8 +2110,8 @@
         right: -4px;
         width: 12px;
         height: 12px;
-        background: $success;
-        border: 2px solid $bg-card;
+        background: var(--green);
+        border: 2px solid var(--surface);
         border-radius: 50%;
     }
 }
@@ -1985,70 +2121,15 @@
 // ============================================
 
 .workflow-node.is-real {
-    border-color: $accent-primary;
+    border-color: fade($accent-primary-raw, 40%);
+
+    &.selected {
+        border-color: var(--accent);
+    }
 
     .workflow-node-header {
-        background: fade($accent-primary-raw, 15%);
+        background: var(--accent-bg-soft);
     }
-}
-
-// ============================================
-// PALETTE SUBMENU
-// ============================================
-
-.palette-submenu {
-    display: flex;
-    flex-direction: column;
-    gap: $space-1;
-    margin-left: $space-3;
-    margin-bottom: $space-2;
-    padding-left: $space-2;
-    border: 1px solid $border-subtle;
-}
-
-.palette-subitem {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: $space-2;
-    padding: $space-2;
-    background: $bg-body;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-sm;
-    color: $text-secondary;
-    font-size: $font-size-xs;
-    cursor: pointer;
-    transition: all $transition-fast;
-
-    &:hover {
-        background: $bg-hover;
-        border-color: $accent-primary;
-        color: $text-primary;
-    }
-
-    .status-badge {
-        font-size: 10px;
-        padding: 1px 6px;
-    }
-}
-
-.palette-empty {
-    padding: $space-2;
-    color: $text-tertiary;
-    font-size: $font-size-xs;
-    font-style: italic;
-}
-
-.palette-section-info {
-    margin-top: auto;
-    padding-top: $space-3;
-    border-top: 1px solid $border-subtle;
-}
-
-.palette-hint {
-    font-size: $font-size-xs;
-    color: $text-tertiary;
-    line-height: 1.4;
 }
 
 // ============================================
@@ -2067,11 +2148,12 @@
     align-items: center;
     gap: 4px;
     padding: 2px $space-2;
-    background: fade($success, 15%);
+    background: $success-bg;
     border: 1px solid fade($success, 30%);
-    border-radius: $radius-full;
+    border-radius: 5px;
+    font-family: var(--mono);
     font-size: 10px;
-    color: $success;
+    color: var(--green);
 
     svg {
         opacity: 0.7;
@@ -2079,6 +2161,7 @@
 }
 
 .node-domain-more {
+    font-family: var(--mono);
     font-size: 10px;
     color: $text-tertiary;
     padding: 2px $space-1;
@@ -2088,43 +2171,27 @@
 // PRIVATE URL IN NODE
 // ============================================
 
-$color-info: #22d3ee;
-
 .node-detail-private-url {
     display: flex;
     align-items: center;
     gap: $space-1;
     margin-top: $space-2;
     padding: $space-1 $space-2;
-    background: fade($color-info, 10%);
-    border-radius: $radius-sm;
+    background: $info-bg;
+    border-radius: 5px;
 
     svg {
-        color: $color-info;
+        color: var(--cyan);
         flex-shrink: 0;
     }
 
     .node-detail-value {
+        font-family: var(--mono);
         font-size: 10px;
-        color: $color-info;
+        color: var(--cyan);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-    }
-}
-
-// ============================================
-// SERVER OVERVIEW BUTTON
-// ============================================
-
-.toolbar-btn-overview {
-    background: fade($color-info, 15%) !important;
-    border-color: fade($color-info, 30%) !important;
-    color: $color-info !important;
-
-    &:hover:not(:disabled) {
-        background: fade($color-info, 25%) !important;
-        border-color: $color-info !important;
     }
 }
 
@@ -2135,7 +2202,7 @@ $color-info: #22d3ee;
 .form-value {
     padding: $space-2 $space-3;
     background: $bg-body;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border);
     border-radius: $radius-md;
     font-size: $font-size-sm;
     color: $text-primary;
@@ -2143,7 +2210,8 @@ $color-info: #22d3ee;
     &.status-badge {
         display: inline-flex;
         padding: $space-1 $space-2;
-        border-radius: $radius-sm;
+        border-radius: 6px;
+        font-family: var(--mono);
         font-size: $font-size-xs;
         font-weight: $font-weight-medium;
         text-transform: capitalize;
@@ -2152,19 +2220,19 @@ $color-info: #22d3ee;
     &.status-running {
         background: $success-bg;
         border-color: $success-border;
-        color: $success;
+        color: var(--green);
     }
 
     &.status-stopped {
-        background: $bg-body;
-        border-color: $border-subtle;
-        color: $text-tertiary;
+        background: var(--surface-3);
+        border-color: var(--border);
+        color: var(--text-faint);
     }
 
     &.status-error {
         background: $danger-bg;
         border-color: $danger-border;
-        color: $danger;
+        color: var(--red);
     }
 }
 
@@ -2197,22 +2265,23 @@ $color-info: #22d3ee;
     gap: $space-2;
     padding: $space-2;
     background: $bg-body;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border);
     border-radius: $radius-md;
     font-size: $font-size-sm;
 
     svg {
-        color: $success;
+        color: var(--green);
     }
 
     .ssl-badge {
         margin-left: auto;
         padding: 2px 6px;
         background: $success-bg;
-        border-radius: $radius-sm;
+        border-radius: 5px;
+        font-family: var(--mono);
         font-size: 10px;
         font-weight: $font-weight-medium;
-        color: $success;
+        color: var(--green);
     }
 }
 
@@ -2233,8 +2302,9 @@ $color-info: #22d3ee;
     background: $success-bg;
     border: 1px solid $success-border;
     border-radius: $radius-sm;
+    font-family: var(--mono);
     font-size: $font-size-xs;
-    color: $success;
+    color: var(--green);
     text-align: center;
 }
 

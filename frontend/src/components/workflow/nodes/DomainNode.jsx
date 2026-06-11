@@ -2,10 +2,11 @@ import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Globe, Shield, ShieldCheck, ShieldX, Radio } from 'lucide-react';
 
+// Semantic SSL tints (redesign palette literals — inline style props).
 const sslStatusConfig = {
-    valid: { icon: ShieldCheck, color: '#10b981', label: 'SSL Valid' },
-    expired: { icon: ShieldX, color: '#ef4444', label: 'SSL Expired' },
-    none: { icon: Shield, color: '#6b7280', label: 'No SSL' }
+    valid: { icon: ShieldCheck, color: '#3ddc97', label: 'SSL Valid' },
+    expired: { icon: ShieldX, color: '#fb6f6f', label: 'SSL Expired' },
+    none: { icon: Shield, color: '#646b7a', label: 'No SSL' }
 };
 
 const DomainNode = ({ data, selected }) => {

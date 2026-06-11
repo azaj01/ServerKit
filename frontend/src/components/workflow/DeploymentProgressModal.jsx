@@ -3,11 +3,12 @@ import { Loader, CheckCircle, XCircle, Server, Database, Globe, Box, ExternalLin
 import Modal from '../Modal';
 import { Button } from '@/components/ui/button';
 
+// Categorical node tints (redesign palette; docker brand blue kept).
 const nodeTypeConfig = {
     dockerApp: { icon: Server, label: 'Docker App', color: '#2496ed' },
-    database: { icon: Database, label: 'Database', color: '#f59e0b' },
-    domain: { icon: Globe, label: 'Domain', color: '#10b981' },
-    service: { icon: Box, label: 'Service', color: '#6366f1' }
+    database: { icon: Database, label: 'Database', color: '#f5b945' },
+    domain: { icon: Globe, label: 'Domain', color: '#3ddc97' },
+    service: { icon: Box, label: 'Service', color: '#6d7cff' }
 };
 
 const DeploymentProgressModal = ({ isDeploying, results, nodes, onClose }) => {

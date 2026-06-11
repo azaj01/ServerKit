@@ -1,7 +1,20 @@
 import React, { memo } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@xyflow/react';
 import { X } from 'lucide-react';
-import { connectionLabels, connectionColors, getConnectionType } from '../../utils/connectionRules';
+import { connectionLabels, getConnectionType } from '../../utils/connectionRules';
+
+// Categorical edge tints aligned to the redesign palette. Literal hex by
+// design: SVG stroke is set via ReactFlow inline style props where var()
+// does not resolve (docker brand blue kept).
+const edgeColors = {
+    'domain-dockerApp': '#3ddc97',
+    'domain-service': '#3ddc97',
+    'dockerApp-dockerApp': '#2496ed',
+    'dockerApp-database': '#f5b945',
+    'service-dockerApp': '#6d7cff',
+    'service-database': '#f5b945',
+    'service-service': '#6d7cff'
+};
 
 const ConnectionEdge = ({
     id,
@@ -35,7 +48,7 @@ const ConnectionEdge = ({
     );
 
     const label = connectionLabels[connectionType] || 'Connected';
-    const color = connectionColors[connectionType] || '#6366f1';
+    const color = edgeColors[connectionType] || '#6d7cff';
 
     return (
         <>
@@ -44,9 +57,9 @@ const ConnectionEdge = ({
                 path={edgePath}
                 markerEnd={markerEnd}
                 style={{
-                    stroke: selected ? '#fff' : color,
+                    stroke: selected ? '#8b93ff' : color,
                     strokeWidth: selected ? 2 : 1.5,
-                    filter: selected ? 'drop-shadow(0 0 4px rgba(255,255,255,0.5))' : 'none'
+                    filter: selected ? 'drop-shadow(0 0 4px rgba(109, 124, 255, 0.55))' : 'none'
                 }}
             />
             <EdgeLabelRenderer>
@@ -56,7 +69,7 @@ const ConnectionEdge = ({
                         position: 'absolute',
                         transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
                         pointerEvents: 'all',
-                        backgroundColor: selected ? '#fff' : color
+                        '--edge-c': color
                     }}
                 >
                     <span className="edge-label-text">{label}</span>

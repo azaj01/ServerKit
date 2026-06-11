@@ -9,11 +9,12 @@ const iconMap = {
     default: Box
 };
 
+// Categorical node tints (redesign palette; docker brand blue kept).
 const colorMap = {
     docker: '#2496ed',
-    database: '#f59e0b',
-    domain: '#10b981',
-    default: '#6366f1'
+    database: '#f5b945',
+    domain: '#3ddc97',
+    default: '#6d7cff'
 };
 
 const BaseNode = ({ data, selected }) => {

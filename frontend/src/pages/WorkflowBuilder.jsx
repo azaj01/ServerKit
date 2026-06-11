@@ -36,6 +36,8 @@ import { isValidConnection as checkValidConnection, getConnectionError, getConne
 import ConnectionEdge from '../components/workflow/ConnectionEdge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Pill } from '../components/ds';
 
 const initialNodes = [];
 const initialEdges = [];
@@ -51,14 +53,17 @@ const nodeTypes = {
     logic_if: LogicIfNode
 };
 
+// Categorical node palette (minimap tints). Literal hex by design: these feed
+// ReactFlow inline color props, where var() does not resolve — values are
+// aligned to the redesign palette (docker brand blue kept).
 const nodeColorMap = {
     dockerApp: '#2496ed',
-    database: '#f59e0b',
-    domain: '#10b981',
-    service: '#6366f1',
-    trigger: '#3b82f6',
-    script: '#6b7280',
-    notification: '#8b5cf6',
+    database: '#f5b945',
+    domain: '#3ddc97',
+    service: '#6d7cff',
+    trigger: '#49c7f0',
+    script: '#646b7a',
+    notification: '#b07bf5',
     logic_if: '#f97316'
 };
 
@@ -69,76 +74,89 @@ const edgeTypes = {
 let nodeId = 0;
 const getId = () => `node_${nodeId++}`;
 
+// Compact relative timestamp for the header meta (backend stores naive UTC,
+// so clamp negatives to "just now" rather than showing future times).
+const timeAgo = (dateStr) => {
+    if (!dateStr) return null;
+    const diff = Date.now() - new Date(dateStr).getTime();
+    if (Number.isNaN(diff)) return null;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+};
+
 const NodePalette = ({ onAddNode }) => {
     return (
-        <div className="workflow-palette">
-            <div className="palette-section">
-                <div className="palette-header">Triggers</div>
-                <button
-                    className="palette-item palette-item-trigger"
-                    onClick={() => onAddNode('trigger', { label: 'Manual Trigger', triggerType: 'manual', isActive: true })}
-                >
-                    <Play size={16} />
-                    <span>Manual</span>
-                </button>
-                <button
-                    className="palette-item palette-item-trigger"
-                    onClick={() => onAddNode('trigger', { label: 'Scheduled Task', triggerType: 'cron', isActive: true, triggerConfig: { cron: '0 * * * *' } })}
-                >
-                    <Activity size={16} />
-                    <span>Schedule (Cron)</span>
-                </button>
-                <button
-                    className="palette-item palette-item-trigger"
-                    onClick={() => onAddNode('trigger', { label: 'Webhook Trigger', triggerType: 'webhook', isActive: true, triggerConfig: {} })}
-                >
-                    <Globe size={16} />
-                    <span>Webhook</span>
-                </button>
-                <button
-                    className="palette-item palette-item-trigger"
-                    onClick={() => onAddNode('trigger', { label: 'Event Listener', triggerType: 'event', isActive: true, triggerConfig: { eventType: 'health_check_failed' } })}
-                >
-                    <Eye size={16} />
-                    <span>System Event</span>
-                </button>
-            </div>
+        <aside className="wf-rail">
+            <div className="wf-rail__grp">Triggers</div>
+            <button
+                type="button"
+                className="wf-rail__node"
+                onClick={() => onAddNode('trigger', { label: 'Manual Trigger', triggerType: 'manual', isActive: true })}
+            >
+                <span className="wf-rail__pi wf-rail__pi--trigger"><Play size={13} /></span>
+                <span>Manual</span>
+            </button>
+            <button
+                type="button"
+                className="wf-rail__node"
+                onClick={() => onAddNode('trigger', { label: 'Scheduled Task', triggerType: 'cron', isActive: true, triggerConfig: { cron: '0 * * * *' } })}
+            >
+                <span className="wf-rail__pi wf-rail__pi--trigger"><Activity size={13} /></span>
+                <span>Schedule (Cron)</span>
+            </button>
+            <button
+                type="button"
+                className="wf-rail__node"
+                onClick={() => onAddNode('trigger', { label: 'Webhook Trigger', triggerType: 'webhook', isActive: true, triggerConfig: {} })}
+            >
+                <span className="wf-rail__pi wf-rail__pi--trigger"><Globe size={13} /></span>
+                <span>Webhook</span>
+            </button>
+            <button
+                type="button"
+                className="wf-rail__node"
+                onClick={() => onAddNode('trigger', { label: 'Event Listener', triggerType: 'event', isActive: true, triggerConfig: { eventType: 'health_check_failed' } })}
+            >
+                <span className="wf-rail__pi wf-rail__pi--trigger"><Eye size={13} /></span>
+                <span>System Event</span>
+            </button>
 
-            <div className="palette-section">
-                <div className="palette-header">Actions</div>
-                <button
-                    className="palette-item palette-item-script"
-                    onClick={() => onAddNode('script', { label: 'Run Script', language: 'bash', content: '' })}
-                >
-                    <Terminal size={16} />
-                    <span>Run Script</span>
-                </button>
-                <button
-                    className="palette-item palette-item-notification"
-                    onClick={() => onAddNode('notification', { label: 'Send Notification', channel: 'system', message: '' })}
-                >
-                    <Bell size={16} />
-                    <span>Notification</span>
-                </button>
-            </div>
+            <div className="wf-rail__grp">Actions</div>
+            <button
+                type="button"
+                className="wf-rail__node"
+                onClick={() => onAddNode('script', { label: 'Run Script', language: 'bash', content: '' })}
+            >
+                <span className="wf-rail__pi wf-rail__pi--action"><Terminal size={13} /></span>
+                <span>Run Script</span>
+            </button>
+            <button
+                type="button"
+                className="wf-rail__node"
+                onClick={() => onAddNode('notification', { label: 'Send Notification', channel: 'system', message: '' })}
+            >
+                <span className="wf-rail__pi wf-rail__pi--action"><Bell size={13} /></span>
+                <span>Notification</span>
+            </button>
 
-            <div className="palette-section">
-                <div className="palette-header">Flow Control</div>
-                <button
-                    className="palette-item palette-item-logic"
-                    onClick={() => onAddNode('logic_if', { label: 'If/Else', condition: '' })}
-                >
-                    <Layout size={16} />
-                    <span>Condition (If/Else)</span>
-                </button>
-            </div>
+            <div className="wf-rail__grp">Flow Control</div>
+            <button
+                type="button"
+                className="wf-rail__node"
+                onClick={() => onAddNode('logic_if', { label: 'If/Else', condition: '' })}
+            >
+                <span className="wf-rail__pi wf-rail__pi--logic"><Layout size={13} /></span>
+                <span>Condition (If/Else)</span>
+            </button>
 
-            <div className="palette-section palette-section-info">
-                <div className="palette-hint">
-                    Add a trigger, connect actions, then save and execute. Press Delete to remove selected nodes.
-                </div>
+            <div className="wf-rail__hint">
+                Add a trigger, connect actions, then save and execute. Press Delete to remove selected nodes.
             </div>
-        </div>
+        </aside>
     );
 };
 
@@ -158,6 +176,7 @@ const WorkflowCanvas = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [showLoadModal, setShowLoadModal] = useState(false);
     const [saveMessage, setSaveMessage] = useState(null);
+    const [isTogglingActive, setIsTogglingActive] = useState(false);
 
     // Server data state
     const [templates, setTemplates] = useState([]);
@@ -710,6 +729,43 @@ const WorkflowCanvas = () => {
         }
     }, [currentWorkflow]);
 
+    // Toggle the workflow-level active/paused flag (persisted by the backend:
+    // Workflow.is_active gates scheduled/webhook/event trigger runs).
+    const toggleWorkflowActive = useCallback(async () => {
+        if (!currentWorkflow || isTogglingActive) return;
+
+        const next = !currentWorkflow.is_active;
+        setIsTogglingActive(true);
+
+        try {
+            const response = await api.updateWorkflow(currentWorkflow.id, { is_active: next });
+            setCurrentWorkflow(response.workflow || { ...currentWorkflow, is_active: next });
+            setSaveMessage(next ? 'Workflow activated' : 'Workflow paused');
+        } catch (error) {
+            console.error('Failed to toggle workflow active state:', error);
+            setSaveMessage('Failed to update workflow');
+        } finally {
+            setIsTogglingActive(false);
+            setTimeout(() => setSaveMessage(null), 3000);
+        }
+    }, [currentWorkflow, isTogglingActive]);
+
+    // Mono meta line under the workflow name (real payload fields only).
+    const headMeta = useMemo(() => {
+        const parts = [];
+        if (currentWorkflow) parts.push(currentWorkflow.trigger_type || 'manual');
+        parts.push(`${nodes.length} nodes`);
+        parts.push(`${edges.length} edges`);
+        if (currentWorkflow) {
+            const ran = timeAgo(currentWorkflow.last_run_at);
+            parts.push(ran ? `last run ${ran}` : 'never run');
+            if (currentWorkflow.last_status) parts.push(currentWorkflow.last_status);
+        } else {
+            parts.push('unsaved view');
+        }
+        return parts.join(' · ');
+    }, [currentWorkflow, nodes.length, edges.length]);
+
     const onConnect = useCallback(
         (params) => {
             if (checkValidConnection(params, nodes)) {
@@ -768,7 +824,7 @@ const WorkflowCanvas = () => {
     }, [screenToFlowPosition, setNodes]);
 
     const getNodeColor = useCallback((node) => {
-        return nodeColorMap[node.type] || '#6366f1';
+        return nodeColorMap[node.type] || '#6d7cff';
     }, []);
 
     const handleNodeClick = useCallback((event, node) => {
@@ -863,20 +919,35 @@ const WorkflowCanvas = () => {
 
     return (
         <div className="workflow-canvas" ref={reactFlowWrapper}>
-            <div className="workflow-toolbar">
-                <div className="toolbar-left">
-                    <Input
-                        type="text"
-                        className="workflow-name-input"
-                        value={workflowName}
-                        onChange={(e) => setWorkflowName(e.target.value)}
-                        placeholder="View name..."
-                    />
-                    {currentWorkflow && (
-                        <span className="workflow-id-badge">Saved View</span>
-                    )}
+            <div className="wf-head">
+                <div className="wf-head__main">
+                    <div className="wf-head__titlerow">
+                        <Input
+                            type="text"
+                            className="workflow-name-input"
+                            value={workflowName}
+                            onChange={(e) => setWorkflowName(e.target.value)}
+                            placeholder="View name..."
+                        />
+                        {currentWorkflow && (
+                            <Pill kind={currentWorkflow.is_active ? 'green' : 'gray'}>
+                                {currentWorkflow.is_active ? 'active' : 'paused'}
+                            </Pill>
+                        )}
+                    </div>
+                    <div className="wf-head__meta">{headMeta}</div>
                 </div>
-                <div className="toolbar-right">
+                <div className="wf-head__actions">
+                    {currentWorkflow && (
+                        <label className="wf-active-toggle" title="Enable automated trigger runs for this workflow">
+                            <span>Active</span>
+                            <Switch
+                                checked={!!currentWorkflow.is_active}
+                                onCheckedChange={toggleWorkflowActive}
+                                disabled={isTogglingActive}
+                            />
+                        </label>
+                    )}
                     <Button
                         variant="ghost"
                         size="sm"
@@ -884,7 +955,7 @@ const WorkflowCanvas = () => {
                         onClick={newWorkflow}
                         title="New workflow"
                     >
-                        <Plus size={16} />
+                        <Plus size={15} />
                         <span>New</span>
                     </Button>
                     <Button
@@ -894,7 +965,7 @@ const WorkflowCanvas = () => {
                         onClick={() => setShowLoadModal(true)}
                         title="Load saved workflow"
                     >
-                        <FolderOpen size={16} />
+                        <FolderOpen size={15} />
                         <span>Load</span>
                     </Button>
                     <div className="toolbar-divider" />
@@ -906,7 +977,7 @@ const WorkflowCanvas = () => {
                         disabled={isExecuting || !currentWorkflow}
                         title="Execute workflow"
                     >
-                        <Play size={16} />
+                        <Play size={15} />
                         <span>{isExecuting ? 'Running...' : 'Execute'}</span>
                     </Button>
                     <Button
@@ -917,7 +988,7 @@ const WorkflowCanvas = () => {
                         disabled={!currentWorkflow}
                         title="Execution history"
                     >
-                        <Activity size={16} />
+                        <Activity size={15} />
                         <span>History</span>
                     </Button>
                     <div className="toolbar-divider" />
@@ -928,7 +999,7 @@ const WorkflowCanvas = () => {
                         disabled={isSaving}
                         title="Save workflow"
                     >
-                        <Save size={16} />
+                        <Save size={15} />
                         <span>{isSaving ? 'Saving...' : 'Save'}</span>
                     </Button>
                 </div>
@@ -936,56 +1007,54 @@ const WorkflowCanvas = () => {
                     <div className="toolbar-message">{saveMessage}</div>
                 )}
             </div>
-            <NodePalette onAddNode={addNode} />
-            {connectionError && (
-                <div className="connection-error-toast">
-                    {connectionError}
+            <div className="wf-body">
+                <NodePalette onAddNode={addNode} />
+                <div className="wf-stage">
+                    {connectionError && (
+                        <div className="connection-error-toast">
+                            {connectionError}
+                        </div>
+                    )}
+                    <ReactFlow
+                        nodes={nodes}
+                        edges={edges}
+                        nodeTypes={memoizedNodeTypes}
+                        edgeTypes={memoizedEdgeTypes}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        onConnectStart={onConnectStart}
+                        onConnectEnd={onConnectEnd}
+                        isValidConnection={isValidConnection}
+                        onNodeClick={handleNodeClick}
+                        onEdgeClick={handleEdgeClick}
+                        onPaneClick={handlePaneClick}
+                        fitView
+                        panOnScroll
+                        selectionOnDrag
+                        panOnDrag={[1, 2]}
+                        selectNodesOnDrag={false}
+                        defaultEdgeOptions={{
+                            type: 'connection',
+                            animated: true
+                        }}
+                    >
+                        <Background
+                            variant="dots"
+                            gap={22}
+                            size={1}
+                            color="var(--border)"
+                        />
+                        <Controls
+                            showZoom={true}
+                            showFitView={true}
+                            showInteractive={false}
+                        />
+                        <MiniMap nodeColor={getNodeColor} />
+                    </ReactFlow>
+                    {renderConfigPanel()}
                 </div>
-            )}
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={memoizedNodeTypes}
-                edgeTypes={memoizedEdgeTypes}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                onConnectStart={onConnectStart}
-                onConnectEnd={onConnectEnd}
-                isValidConnection={isValidConnection}
-                onNodeClick={handleNodeClick}
-                onEdgeClick={handleEdgeClick}
-                onPaneClick={handlePaneClick}
-                fitView
-                panOnScroll
-                selectionOnDrag
-                panOnDrag={[1, 2]}
-                selectNodesOnDrag={false}
-                defaultEdgeOptions={{
-                    type: 'connection',
-                    animated: true
-                }}
-            >
-                <Background
-                    variant="dots"
-                    gap={20}
-                    size={1}
-                    color="#333"
-                />
-                <Controls
-                    showZoom={true}
-                    showFitView={true}
-                    showInteractive={false}
-                />
-                <MiniMap
-                    nodeColor={getNodeColor}
-                    maskColor="rgba(0, 0, 0, 0.8)"
-                    style={{
-                        backgroundColor: '#1a1a1e'
-                    }}
-                />
-            </ReactFlow>
-            {renderConfigPanel()}
+            </div>
             {showLoadModal && (
                 <WorkflowListModal
                     onLoad={loadWorkflow}

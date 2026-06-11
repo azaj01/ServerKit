@@ -21,7 +21,7 @@ const ScriptConfigPanel = ({ node, onChange, onClose, onDelete }) => {
         <ConfigPanel
             title="Script"
             icon={<Terminal size={16} />}
-            color="#71717a"
+            color="#646b7a"
             onClose={onClose}
             footer={onDelete && (
                 <Button variant="destructive" size="sm" className="btn-delete-node" onClick={onDelete}>

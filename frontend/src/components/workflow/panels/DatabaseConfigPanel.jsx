@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 
+// Engine brand colors stay literal; fallback is the redesign's database amber.
 const dbTypeConfig = {
     mysql: { color: '#00758f', defaultPort: 3306 },
     postgresql: { color: '#336791', defaultPort: 5432 },
@@ -15,7 +16,7 @@ const dbTypeConfig = {
 const DatabaseConfigPanel = ({ node, onChange, onClose }) => {
     const data = node?.data || {};
     const dbType = data.type || 'mysql';
-    const headerColor = dbTypeConfig[dbType]?.color || '#f59e0b';
+    const headerColor = dbTypeConfig[dbType]?.color || '#f5b945';
 
     const handleChange = (field, value) => {
         const updates = { ...data, [field]: value };

@@ -23,7 +23,7 @@ const NotificationConfigPanel = ({ node, onChange, onClose, onDelete }) => {
         <ConfigPanel
             title="Notification"
             icon={<Bell size={16} />}
-            color="#818cf8"
+            color="#b07bf5"
             onClose={onClose}
             footer={onDelete && (
                 <Button variant="destructive" size="sm" className="btn-delete-node" onClick={onDelete}>

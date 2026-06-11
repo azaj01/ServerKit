@@ -60,7 +60,7 @@ const TriggerConfigPanel = ({ node, onChange, onClose, onDelete }) => {
         <ConfigPanel
             title="Trigger"
             icon={<Play size={16} />}
-            color="#3b82f6"
+            color="#49c7f0"
             onClose={onClose}
             footer={onDelete && (
                 <Button variant="destructive" size="sm" className="btn-delete-node" onClick={onDelete}>

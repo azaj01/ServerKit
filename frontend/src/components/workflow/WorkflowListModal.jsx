@@ -3,6 +3,7 @@ import { Trash2, Clock, Layers, GitBranch, Loader } from 'lucide-react';
 import api from '../../services/api';
 import Modal from '../Modal';
 import { Button } from '@/components/ui/button';
+import { Pill } from '../ds';
 
 const WorkflowListModal = ({ onLoad, onClose }) => {
     const [workflows, setWorkflows] = useState([]);
@@ -94,7 +95,12 @@ const WorkflowListModal = ({ onLoad, onClose }) => {
                                     onClick={() => handleLoad(workflow)}
                                 >
                                     <div className="workflow-item-main">
-                                        <div className="workflow-item-name">{workflow.name}</div>
+                                        <div className="workflow-item-name">
+                                            <span>{workflow.name}</span>
+                                            <Pill kind={workflow.is_active ? 'green' : 'gray'}>
+                                                {workflow.is_active ? 'active' : 'paused'}
+                                            </Pill>
+                                        </div>
                                         {workflow.description && (
                                             <div className="workflow-item-desc">{workflow.description}</div>
                                         )}

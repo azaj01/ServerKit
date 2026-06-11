@@ -2,12 +2,14 @@ import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Box, Zap, MemoryStick, MessageSquare, Layers } from 'lucide-react';
 
+// Service brand colors stay literal (brand palette); queue/default use the
+// redesign's violet/accent.
 const serviceTypeConfig = {
     redis: { icon: Zap, color: '#dc382d', label: 'Redis' },
     memcached: { icon: MemoryStick, color: '#00a65a', label: 'Memcached' },
     rabbitmq: { icon: MessageSquare, color: '#ff6600', label: 'RabbitMQ' },
-    queue: { icon: Layers, color: '#8b5cf6', label: 'Queue' },
-    default: { icon: Box, color: '#6366f1', label: 'Service' }
+    queue: { icon: Layers, color: '#b07bf5', label: 'Queue' },
+    default: { icon: Box, color: '#6d7cff', label: 'Service' }
 };
 
 const ServiceNode = ({ data, selected }) => {

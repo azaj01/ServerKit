@@ -2,12 +2,14 @@ import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Database, HardDrive } from 'lucide-react';
 
+// Engine brand colors stay literal (brand palette); fallback is the
+// redesign's categorical database amber.
 const dbTypeColors = {
     mysql: '#00758f',
     postgresql: '#336791',
     mongodb: '#4db33d',
     redis: '#dc382d',
-    default: '#f59e0b'
+    default: '#f5b945'
 };
 
 const dbTypeLabels = {

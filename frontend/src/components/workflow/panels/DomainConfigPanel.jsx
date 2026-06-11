@@ -24,7 +24,7 @@ const DomainConfigPanel = ({ node, onChange, onClose }) => {
             isOpen={!!node}
             title="Domain"
             icon={Globe}
-            headerColor="#10b981"
+            headerColor="#3ddc97"
             onClose={onClose}
         >
             <div className="form-group">
