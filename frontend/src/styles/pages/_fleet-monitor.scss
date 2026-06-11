@@ -1,6 +1,76 @@
 // ============================================
-// FLEET MONITOR PAGE
+// FLEET PAGES (Agent Fleet + Fleet Monitor)
 // ============================================
+
+// KPI strip (MetricCard grid) on the Agent Fleet dashboard
+.fleet-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: $space-3;
+
+    @media (max-width: $breakpoint-md) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+// Amber warning row (queued commands, forecast errors)
+.fleet-warnrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-2;
+    padding: $space-3;
+    background: $warning-bg;
+    border: 1px solid $warning-border;
+    border-radius: $radius-md;
+    color: $warning;
+    font-size: $font-size-sm;
+}
+
+// Accent-washed icon chip (discovery cards)
+.fleet-ico {
+    display: inline-flex;
+    padding: $space-2;
+    border-radius: $radius-md;
+    background: var(--accent-bg);
+    color: var(--accent-bright);
+}
+
+// Small centered stat box (diagnostics, forecast)
+.fleet-statbox {
+    padding: $space-3;
+    background: $bg-elevated;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-md;
+    text-align: center;
+
+    &.is-green { background: $success-bg; border-color: $success-border; }
+    &.is-red { background: $danger-bg; border-color: $danger-border; }
+    &.is-amber { background: $warning-bg; border-color: $warning-border; }
+}
+
+.fleet-statrow {
+    background: $bg-elevated;
+    border: 1px solid $border-subtle;
+}
+
+// Capacity-forecast prediction tiles
+.fleet-predbox {
+    padding: $space-4;
+    border-radius: $radius-lg;
+    border: 1px solid $border-default;
+
+    &.is-red { background: $danger-bg; border-color: $danger-border; }
+    &.is-amber { background: $warning-bg; border-color: $warning-border; }
+}
+
+// Diagnostics overlay panel (token home for the old bg-white modal)
+.fleet-modal {
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    box-shadow: var(--shadow-lg);
+}
 
 .fleet-heatmap {
     width: 100%;

@@ -24,8 +24,7 @@ import { useToast } from '../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { PageTopbar } from '@/components/ds';
+import { PageTopbar, Pill } from '@/components/ds';
 import { SERVER_TABS } from '../components/servers/serverTabs';
 
 const CHART_COLORS = [
@@ -44,10 +43,10 @@ const METRIC_LABELS = {
 
 const heatColor = (value) => {
     if (value == null) return 'var(--card-bg)';
-    if (value >= 90) return '#ef4444';
+    if (value >= 90) return 'var(--red)';
     if (value >= 75) return '#f97316';
-    if (value >= 50) return '#eab308';
-    return '#22c55e';
+    if (value >= 50) return 'var(--amber)';
+    return 'var(--green)';
 };
 
 const FleetMonitor = () => {
@@ -320,9 +319,7 @@ const FleetMonitor = () => {
                                                     {server.containers ?? '-'}
                                                 </div>
                                                 <div className="fleet-heatmap__cell">
-                                                    <Badge variant={server.status === 'online' ? 'success' : 'destructive'}>
-                                                        {server.status}
-                                                    </Badge>
+                                                    <Pill kind={server.status === 'online' ? 'green' : 'red'}>{server.status}</Pill>
                                                 </div>
                                             </div>
                                         ))}
@@ -337,10 +334,10 @@ const FleetMonitor = () => {
                         </div>
                         <div className="flex gap-3 items-center text-sm text-gray-500">
                             <span>Legend:</span>
-                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: '#22c55e' }}></span> 0-50%</span>
-                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: '#eab308' }}></span> 50-75%</span>
+                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: 'var(--green)' }}></span> 0-50%</span>
+                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: 'var(--amber)' }}></span> 50-75%</span>
                             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: '#f97316' }}></span> 75-90%</span>
-                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: '#ef4444' }}></span> 90-100%</span>
+                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: 'var(--red)' }}></span> 90-100%</span>
                         </div>
                     </div>
                 )}
@@ -492,14 +489,12 @@ const FleetMonitor = () => {
                                                     <td className="font-mono">{a.value}%</td>
                                                     <td className="font-mono">{a.threshold}%</td>
                                                     <td>
-                                                        <Badge variant={a.severity === 'critical' ? 'destructive' : 'warning'}>
-                                                            {a.severity}
-                                                        </Badge>
+                                                        <Pill kind={a.severity === 'critical' ? 'red' : 'amber'}>{a.severity}</Pill>
                                                     </td>
                                                     <td>
-                                                        <Badge variant={a.status === 'active' ? 'destructive' : a.status === 'acknowledged' ? 'warning' : 'success'}>
+                                                        <Pill kind={a.status === 'active' ? 'red' : a.status === 'acknowledged' ? 'amber' : 'green'}>
                                                             {a.status}
-                                                        </Badge>
+                                                        </Pill>
                                                     </td>
                                                     <td className="text-sm">{new Date(a.created_at).toLocaleString()}</td>
                                                     <td className="actions">
@@ -653,9 +648,9 @@ const FleetMonitor = () => {
                                                     <td className="font-mono">{a.stddev}</td>
                                                     <td className="font-mono font-bold">{a.z_score}</td>
                                                     <td>
-                                                        <Badge variant={a.direction === 'high' ? 'destructive' : 'info'}>
+                                                        <Pill kind={a.direction === 'high' ? 'red' : 'cyan'}>
                                                             {a.direction === 'high' ? 'Unusually High' : 'Unusually Low'}
-                                                        </Badge>
+                                                        </Pill>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -701,15 +696,15 @@ const FleetMonitor = () => {
                                 {forecast && !forecast.error && (
                                     <div className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div className="p-4 bg-gray-50 rounded-lg text-center">
+                                            <div className="fleet-statbox p-4">
                                                 <div className="text-sm text-gray-500">Current</div>
                                                 <div className="text-2xl font-bold">{forecast.current_value}%</div>
                                             </div>
-                                            <div className="p-4 bg-gray-50 rounded-lg text-center">
+                                            <div className="fleet-statbox p-4">
                                                 <div className="text-sm text-gray-500">Growth Rate</div>
                                                 <div className="text-2xl font-bold">{forecast.growth_rate_per_day}%/day</div>
                                             </div>
-                                            <div className="p-4 bg-gray-50 rounded-lg text-center">
+                                            <div className="fleet-statbox p-4">
                                                 <div className="text-sm text-gray-500">Trend</div>
                                                 <div className={`text-2xl font-bold ${forecast.trend === 'increasing' ? 'text-red-600' : forecast.trend === 'decreasing' ? 'text-green-600' : ''}`}>
                                                     {forecast.trend}
@@ -719,7 +714,7 @@ const FleetMonitor = () => {
 
                                         {forecast.predictions && (
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className={`p-4 rounded-lg border ${forecast.predictions.days_to_90pct === 0 ? 'border-red-300 bg-red-50' : 'border-yellow-300 bg-yellow-50'}`}>
+                                                <div className={`fleet-predbox ${forecast.predictions.days_to_90pct === 0 ? 'is-red' : 'is-amber'}`}>
                                                     <div className="text-sm font-medium">Reaches 90%</div>
                                                     <div className="text-lg font-bold">
                                                         {forecast.predictions.date_90pct || 'N/A'}
@@ -728,7 +723,7 @@ const FleetMonitor = () => {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className={`p-4 rounded-lg border ${forecast.predictions.days_to_100pct === 0 ? 'border-red-300 bg-red-50' : 'border-red-200 bg-red-50'}`}>
+                                                <div className="fleet-predbox is-red">
                                                     <div className="text-sm font-medium">Reaches 100%</div>
                                                     <div className="text-lg font-bold">
                                                         {forecast.predictions.date_100pct || 'N/A'}
@@ -748,8 +743,8 @@ const FleetMonitor = () => {
                                                     <YAxis stroke="var(--text-secondary)" fontSize={12} unit="%" domain={[0, 100]} />
                                                     <Tooltip contentStyle={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)' }} />
                                                     <Legend />
-                                                    <Line type="monotone" dataKey="actual" stroke="#6366f1" strokeWidth={2} dot={false} name="Actual" />
-                                                    <Line type="monotone" dataKey="trend" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Trend" />
+                                                    <Line type="monotone" dataKey="actual" stroke="var(--accent-bright)" strokeWidth={2} dot={false} name="Actual" />
+                                                    <Line type="monotone" dataKey="trend" stroke="var(--red)" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Trend" />
                                                 </LineChart>
                                             </ResponsiveContainer>
                                         )}
@@ -757,7 +752,7 @@ const FleetMonitor = () => {
                                 )}
 
                                 {forecast?.error && (
-                                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
+                                    <div className="fleet-warnrow text-sm">
                                         {forecast.error}
                                     </div>
                                 )}
@@ -815,13 +810,13 @@ const FleetMonitor = () => {
                                             {searchResults.map((r, i) => (
                                                 <tr key={i}>
                                                     <td className="font-semibold">{r.server_name}</td>
-                                                    <td><Badge variant="secondary">{r.match_type}</Badge></td>
+                                                    <td><Pill kind="gray" dot={false}>{r.match_type}</Pill></td>
                                                     <td>{r.match_name}</td>
                                                     <td className="text-sm text-gray-500">{r.match_detail}</td>
                                                     <td>
-                                                        <Badge variant={r.status === 'online' || r.status === 'running' ? 'success' : 'destructive'}>
+                                                        <Pill kind={r.status === 'online' || r.status === 'running' ? 'green' : 'red'}>
                                                             {r.status}
-                                                        </Badge>
+                                                        </Pill>
                                                     </td>
                                                 </tr>
                                             ))}
