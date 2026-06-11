@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Box, Layers, Plus, Activity, Square, Clock } from 'lucide-react';
+import { Box, Layers, Plus, Activity, Square, Clock, Play, RotateCw, GitBranch, Github } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { getServiceType, getStatusConfig, formatRelativeTime } from '../utils/serviceTypes';
 import EmptyState from '../components/EmptyState';
-import { PageTopbar, MetricCard, Pill } from '@/components/ds';
+import { PageTopbar, MetricCard, Pill, SegControl } from '@/components/ds';
 import { SERVICE_TABS } from '../components/services/serviceTabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const SERVICE_TYPE_OPTIONS = ['all', 'docker', 'flask', 'django', 'php', 'static', 'wordpress'];
-const STATUS_OPTIONS = ['all', 'running', 'stopped'];
+const STATUS_PILL = { running: 'green', stopped: 'gray', deploying: 'amber', building: 'amber', failed: 'red' };
 const SORT_OPTIONS = [
     { value: 'name-asc', label: 'Name A-Z' },
     { value: 'name-desc', label: 'Name Z-A' },
@@ -204,17 +204,15 @@ const Services = () => {
                         </option>
                     ))}
                 </select>
-                <select
+                <SegControl
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="services-page__filter-select"
-                >
-                    {STATUS_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>
-                            {opt === 'all' ? 'All Status' : opt.charAt(0).toUpperCase() + opt.slice(1)}
-                        </option>
-                    ))}
-                </select>
+                    onChange={setStatusFilter}
+                    options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'running', label: 'Running' },
+                        { value: 'stopped', label: 'Stopped' },
+                    ]}
+                />
                 <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
@@ -262,144 +260,130 @@ const Services = () => {
                     )}
                 />
             ) : (
-                <div className="services-page__list">
-                    {/* List Header */}
-                    <div className="services-page__list-header">
-                        <div className="services-page__list-header-left">
-                            <Checkbox
-                                checked={selectedIds.size === filteredApps.length && filteredApps.length > 0}
-                                onCheckedChange={toggleSelectAll}
-                                className="services-page__checkbox"
-                            />
-                            <span>Service</span>
-                        </div>
-                        <div className="services-page__list-header-right">
-                            <span>Status</span>
-                            <span>Last Deploy</span>
-                            <span>Actions</span>
-                        </div>
-                    </div>
-
-                    {filteredApps.map(app => {
-                        const typeInfo = getServiceType(app.app_type);
-                        const statusInfo = getStatusConfig(app.status);
-                        const isRunning = app.status === 'running';
-
-                        return (
-                            <div
-                                key={app.id}
-                                className={`services-page__row ${selectedIds.has(app.id) ? 'services-page__row--selected' : ''}`}
-                                onClick={() => {
-                                    if (app.app_type === 'wordpress') {
-                                        navigate(`/wordpress/${app.id}`);
-                                    } else {
-                                        navigate(`/services/${app.id}`);
-                                    }
-                                }}
-                            >
-                                <div className="services-page__row-main">
+                <div className="services-page__tablecard">
+                    <table className="sk-dtable services-page__table">
+                        <thead>
+                            <tr>
+                                <th className="services-page__ck">
                                     <Checkbox
-                                        checked={selectedIds.has(app.id)}
-                                        onCheckedChange={(checked) => {
-                                            setSelectedIds(prev => {
-                                                const next = new Set(prev);
-                                                if (checked) next.add(app.id);
-                                                else next.delete(app.id);
-                                                return next;
-                                            });
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
+                                        checked={selectedIds.size === filteredApps.length && filteredApps.length > 0}
+                                        onCheckedChange={toggleSelectAll}
                                         className="services-page__checkbox"
+                                        aria-label="Select all services"
                                     />
-                                    <div
-                                        className="services-page__type-icon"
-                                        style={{ backgroundColor: typeInfo.bgColor, color: typeInfo.color }}
+                                </th>
+                                <th>Service</th>
+                                <th>Source</th>
+                                <th>Domain</th>
+                                <th>Status</th>
+                                <th>Last Deploy</th>
+                                <th className="services-page__th-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredApps.map(app => {
+                                const typeInfo = getServiceType(app.app_type);
+                                const statusInfo = getStatusConfig(app.status);
+                                const isRunning = app.status === 'running';
+                                const isGithub = (app.deploy_repo_url || '').includes('github.com');
+
+                                return (
+                                    <tr
+                                        key={app.id}
+                                        className={`is-clickable ${selectedIds.has(app.id) ? 'is-selected' : ''}`}
+                                        onClick={() => {
+                                            if (app.app_type === 'wordpress') {
+                                                navigate(`/wordpress/${app.id}`);
+                                            } else {
+                                                navigate(`/services/${app.id}`);
+                                            }
+                                        }}
                                     >
-                                        <ServiceTypeIcon type={app.app_type} />
-                                    </div>
-                                    <div className="services-page__row-info">
-                                        <div className="services-page__row-name">
-                                            {app.name}
-                                        </div>
-                                        <div className="services-page__row-meta">
-                                            <span
-                                                className="services-page__type-badge"
-                                                style={{ backgroundColor: typeInfo.bgColor, color: typeInfo.color, borderColor: typeInfo.borderColor }}
-                                            >
-                                                {typeInfo.label}
-                                            </span>
-                                            {app.domain && (
-                                                <span className="services-page__domain">{app.domain}</span>
+                                        <td className="services-page__ck" onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                                checked={selectedIds.has(app.id)}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedIds(prev => {
+                                                        const next = new Set(prev);
+                                                        if (checked) next.add(app.id);
+                                                        else next.delete(app.id);
+                                                        return next;
+                                                    });
+                                                }}
+                                                className="services-page__checkbox"
+                                                aria-label={`Select ${app.name}`}
+                                            />
+                                        </td>
+                                        <td>
+                                            <div className="sk-cell-name">
+                                                <div
+                                                    className="services-page__type-icon"
+                                                    style={{ backgroundColor: typeInfo.bgColor, color: typeInfo.color }}
+                                                >
+                                                    <ServiceTypeIcon type={app.app_type} />
+                                                </div>
+                                                <div>
+                                                    <div>{app.name}</div>
+                                                    <div className="sk-cell-sub">{typeInfo.label}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {app.deploy_repo_url ? (
+                                                <span className="services-page__src-badge" title={app.deploy_repo_url}>
+                                                    {isGithub ? <Github size={12} /> : <GitBranch size={12} />}
+                                                    {extractRepoName(app.deploy_repo_url)}
+                                                </span>
+                                            ) : (
+                                                <span className="services-page__nil">—</span>
                                             )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="services-page__row-right">
-                                    <Pill kind={app.status === 'running' ? 'green' : 'gray'}>{statusInfo.label}</Pill>
-
-                                    {app.deploy_repo_url && (
-                                        <div className="services-page__repo-pill">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <circle cx="18" cy="18" r="3"/>
-                                                <circle cx="6" cy="6" r="3"/>
-                                                <path d="M6 21V9a9 9 0 0 0 9 9"/>
-                                            </svg>
-                                            {extractRepoName(app.deploy_repo_url)}
-                                        </div>
-                                    )}
-
-                                    {app.last_deploy_at && (
-                                        <span className="services-page__last-deploy">
-                                            {formatRelativeTime(app.last_deploy_at)}
-                                        </span>
-                                    )}
-
-                                    <div className="services-page__actions" onClick={e => e.stopPropagation()}>
-                                        {isRunning ? (
-                                            <>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={(e) => handleAction(e, app.id, 'restart')}
-                                                    disabled={actionLoading === `${app.id}-restart`}
-                                                    title="Restart"
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <polyline points="23 4 23 10 17 10"/>
-                                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                                                    </svg>
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={(e) => handleAction(e, app.id, 'stop')}
-                                                    disabled={actionLoading === `${app.id}-stop`}
-                                                    title="Stop"
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                                        <rect x="6" y="6" width="12" height="12" rx="1"/>
-                                                    </svg>
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={(e) => handleAction(e, app.id, 'start')}
-                                                disabled={actionLoading === `${app.id}-start`}
-                                                title="Start"
-                                            >
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                                    <polygon points="5 3 19 12 5 21 5 3"/>
-                                                </svg>
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
+                                        </td>
+                                        <td className="sk-cell-mono">{app.domain || <span className="services-page__nil">—</span>}</td>
+                                        <td><Pill kind={STATUS_PILL[app.status] || 'gray'}>{statusInfo.label}</Pill></td>
+                                        <td className="sk-cell-mono">
+                                            {app.last_deploy_at ? formatRelativeTime(app.last_deploy_at) : <span className="services-page__nil">—</span>}
+                                        </td>
+                                        <td onClick={(e) => e.stopPropagation()}>
+                                            <div className="services-page__actions">
+                                                {isRunning ? (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => handleAction(e, app.id, 'restart')}
+                                                            disabled={actionLoading === `${app.id}-restart`}
+                                                            title="Restart"
+                                                        >
+                                                            <RotateCw size={14} />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => handleAction(e, app.id, 'stop')}
+                                                            disabled={actionLoading === `${app.id}-stop`}
+                                                            title="Stop"
+                                                        >
+                                                            <Square size={14} />
+                                                        </Button>
+                                                    </>
+                                                ) : (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={(e) => handleAction(e, app.id, 'start')}
+                                                        disabled={actionLoading === `${app.id}-start`}
+                                                        title="Start"
+                                                    >
+                                                        <Play size={14} />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             )}
         </div>

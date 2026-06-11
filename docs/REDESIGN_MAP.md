@@ -262,13 +262,15 @@ toolbar/tree-panel/workspace/statusbar) — this alone makes it "not the demo". 
 - Small: tree status-dot glow (`box-shadow: 0 0 6px currentColor`), `+` new-tab pill, ctx-menu "Browse rows"
   / "Export as SQL", bold green row count.
 
-### 8.2 Services list — structure diverged from the demo
-- List is a **flex-row layout, not the dense `.dtable`**; filters are **three native `<select>`s, not
-  `SegControl`** (`Services.jsx:196–226, 265–404`). This is the page's main "doesn't match" driver.
-- **`.src-badge` missing** (template/github/gitea/docker/scratch source tile per row).
-- Detail: no back-link ("‹ All services"), title row stacks instead of inline h1+Pill. NewService: demo's 4
-  method cards (Template/Git/Docker/Scratch) vs live 3 (Docker-image + scratch = §5 backend gap); 2-col
-  review-panel layout is a deliberate improvement — keep.
+### 8.2 Services list — ✅ **list done 2026-06-11**
+List restyled to the demo: flex rows → dense `.sk-dtable` (ck / Service tile+type / **Source badge**
+(GitHub/git icon + owner/name from `deploy_repo_url`) / Domain / Status `Pill` (amber deploying·building, red
+failed) / Last Deploy / Actions with lucide icons); status `<select>` → `SegControl` (Type + Sort selects kept —
+capability superset); bulk-select/row-select kept via `is-selected`. Omitted CPU/Memory/Server columns (no list
+payload — §5). Remaining in this group:
+- Detail: no back-link ("‹ All services"), title row stacks instead of inline h1+Pill (LOW).
+- NewService: demo's 4 method cards vs live 3 (Docker-image + scratch = §5 backend gap); 2-col review-panel
+  layout is a deliberate improvement — keep.
 - Backend (§5): metrics-history AreaCharts, real template catalog (live has 1 hardcoded template).
 
 ### 8.3 Terminal / Console — biggest IA gap

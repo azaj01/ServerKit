@@ -91,164 +91,69 @@
         @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
     }
 
-    &__list {
-        display: flex;
-        flex-direction: column;
+    // dense list (demo .dtable) — surface card around an .sk-dtable
+    &__tablecard {
+        background: var(--surface);
         border: 1px solid var(--border-soft);
         border-radius: var(--radius);
         overflow: hidden;
     }
 
-    &__row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: $space-4 $space-5;
-        background: $bg-card;
-        cursor: pointer;
-        transition: background $transition-fast;
+    &__table {
+        td { white-space: nowrap; }
 
-        &:hover {
-            background: $bg-hover;
+        // checkbox gutter
+        .services-page__ck {
+            width: 36px;
+            padding-right: 0;
         }
 
-        & + & {
-            border-top: 1px solid $border-subtle;
-        }
-    }
+        .services-page__th-actions { text-align: right; }
 
-    &__row-main {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-        min-width: 0;
-        flex: 1;
+        @media (max-width: $breakpoint-md) {
+            // drop Source + Domain + Last Deploy on narrow screens
+            th:nth-child(3), td:nth-child(3),
+            th:nth-child(4), td:nth-child(4),
+            th:nth-child(6), td:nth-child(6) { display: none; }
+        }
     }
 
     &__type-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: $radius-lg;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
         display: flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
     }
 
-    &__row-info {
-        min-width: 0;
-    }
-
-    &__row-name {
-        font-weight: $font-weight-medium;
-        color: $text-primary;
-        font-size: $font-size-base;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    &__row-meta {
-        display: flex;
+    // source badge (demo .src-badge): repo provider icon + owner/name
+    &__src-badge {
+        display: inline-flex;
         align-items: center;
-        gap: $space-2;
-        margin-top: 2px;
-    }
-
-    &__type-badge {
-        font-size: $font-size-xs;
-        font-weight: $font-weight-medium;
-        padding: 1px $space-2;
-        border-radius: $radius-full;
-        border: 1px solid;
-        line-height: 1.4;
-    }
-
-    &__domain {
-        font-size: $font-size-xs;
-        color: $text-tertiary;
-        font-family: $font-mono;
-    }
-
-    &__row-right {
-        display: flex;
-        align-items: center;
-        gap: $space-4;
-        flex-shrink: 0;
-    }
-
-    &__status {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-        white-space: nowrap;
-
-        &--live {
-            color: $success;
-        }
-
-        &--stopped {
-            color: $text-tertiary;
-        }
-
-        &--deploying,
-        &--building {
-            color: $warning;
-        }
-
-        &--failed {
-            color: $danger;
-        }
-    }
-
-    &__status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: currentColor;
-        flex-shrink: 0;
-
-        .services-page__status--live & {
-            animation: pulse-dot 2s ease-in-out infinite;
-        }
-
-        .services-page__status--deploying &,
-        .services-page__status--building & {
-            animation: pulse-dot 1s ease-in-out infinite;
-        }
-    }
-
-    &__repo-pill {
-        display: flex;
-        align-items: center;
-        gap: $space-1;
-        font-size: $font-size-xs;
-        color: $text-tertiary;
-        background: $bg-secondary;
-        padding: 2px $space-2;
-        border-radius: $radius-full;
-        font-family: $font-mono;
-        max-width: 180px;
+        gap: 6px;
+        padding: 3px 9px;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: 6px;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--text-dim);
+        max-width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
 
-        svg {
-            flex-shrink: 0;
-        }
+        svg { flex-shrink: 0; color: var(--text-faint); }
     }
 
-    &__last-deploy {
-        font-size: $font-size-xs;
-        color: $text-tertiary;
-        white-space: nowrap;
-    }
+    &__nil { color: var(--text-ghost); }
 
     &__actions {
         display: flex;
         gap: $space-1;
+        justify-content: flex-end;
     }
 
     &__empty {
@@ -271,34 +176,6 @@
         opacity: 0.5;
     }
 
-    // List Header
-    &__list-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 11px $space-5;
-        font-family: var(--mono);
-        font-size: 10.5px;
-        color: var(--text-faint);
-        font-weight: $font-weight-semibold;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        border-bottom: 1px solid var(--border);
-        background: var(--surface-2);
-    }
-
-    &__list-header-left {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-    }
-
-    &__list-header-right {
-        display: flex;
-        align-items: center;
-        gap: $space-8;
-    }
-
     // Checkbox
     &__checkbox {
         width: 16px;
@@ -306,11 +183,6 @@
         accent-color: var(--accent-primary, $accent-primary);
         cursor: pointer;
         flex-shrink: 0;
-    }
-
-    // Row selected state
-    &__row--selected {
-        background: var(--accent-glow, fade($accent-primary-raw, 8%)) !important;
     }
 
     // Bulk Actions Bar
