@@ -4,22 +4,19 @@ import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import EmptyState from '../components/EmptyState';
-import { StatStrip, Stat } from '../components/StatCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { PageTopbar } from '@/components/ds';
+import { PageTopbar, MetricCard, Pill, Gauge } from '@/components/ds';
 import { MONITOR_TABS } from '../components/monitoring/monitorTabs';
 import {
     Activity,
     Bell,
-    CheckCircle2,
     Clock,
     Cpu,
-    Gauge,
+    Gauge as GaugeIcon,
     HardDrive,
     Mail,
     MemoryStick,
@@ -47,6 +44,14 @@ const CHANNEL_META = {
     generic_webhook: { label: 'Webhook', icon: Webhook },
 };
 
+// Gauge tints follow the Servers list convention (CPU accent / RAM cyan / disk green).
+const METRIC_COLORS = {
+    cpu_percent: 'var(--accent-bright)',
+    memory_percent: 'var(--cyan)',
+    disk_percent: 'var(--green)',
+    load_average: 'var(--violet)',
+};
+
 function formatTimestamp(timestamp) {
     if (!timestamp) return 'Never';
     return new Date(timestamp).toLocaleString();
@@ -62,16 +67,24 @@ function formatMetric(value, unit = '%') {
     return `${value.toFixed(unit === '' ? 2 : 1)}${unit}`;
 }
 
-function getAlertSeverityVariant(severity) {
+function formatBytes(bytes) {
+    if (typeof bytes !== 'number' || Number.isNaN(bytes)) return '-';
+    const gib = bytes / (1024 ** 3);
+    if (gib >= 100) return `${Math.round(gib)} GB`;
+    if (gib >= 1) return `${gib.toFixed(1)} GB`;
+    return `${Math.round(bytes / (1024 ** 2))} MB`;
+}
+
+function getSeverityTone(severity) {
     switch (severity) {
         case 'critical':
-            return 'destructive';
+            return 'red';
         case 'warning':
-            return 'warning';
+            return 'amber';
         case 'info':
-            return 'info';
+            return 'cyan';
         default:
-            return 'secondary';
+            return 'gray';
     }
 }
 
@@ -137,6 +150,8 @@ const Monitoring = () => {
                 current: metrics.cpu?.percent,
                 threshold: thresholdForm.cpu_percent,
                 persistedThreshold: thresholds.cpu_percent,
+                gaugePct: metrics.cpu?.percent ?? 0,
+                mini: [{ k: 'cores', v: metrics.cpu?.cores ?? '-' }],
             },
             {
                 key: 'memory_percent',
@@ -147,6 +162,8 @@ const Monitoring = () => {
                 current: metrics.memory?.percent,
                 threshold: thresholdForm.memory_percent,
                 persistedThreshold: thresholds.memory_percent,
+                gaugePct: metrics.memory?.percent ?? 0,
+                mini: [{ k: 'used', v: `${formatBytes(metrics.memory?.used)} / ${formatBytes(metrics.memory?.total)}` }],
             },
             {
                 key: 'disk_percent',
@@ -157,16 +174,25 @@ const Monitoring = () => {
                 current: metrics.disk?.percent,
                 threshold: thresholdForm.disk_percent,
                 persistedThreshold: thresholds.disk_percent,
+                gaugePct: metrics.disk?.percent ?? 0,
+                mini: [{ k: 'used', v: `${formatBytes(metrics.disk?.used)} / ${formatBytes(metrics.disk?.total)}` }],
             },
             {
                 key: 'load_average',
                 label: 'Load average',
                 description: 'load',
-                icon: Gauge,
+                icon: GaugeIcon,
                 unit: '',
                 current: metrics.load_average?.['1min'],
                 threshold: thresholdForm.load_average,
                 persistedThreshold: thresholds.load_average,
+                gaugePct: thresholds.load_average > 0
+                    ? ((metrics.load_average?.['1min'] ?? 0) / thresholds.load_average) * 100
+                    : 0,
+                mini: [
+                    { k: '5m', v: formatNumber(metrics.load_average?.['5min'], 2) },
+                    { k: '15m', v: formatNumber(metrics.load_average?.['15min'], 2) },
+                ],
             },
         ];
     }, [status, thresholdForm, thresholds]);
@@ -324,11 +350,10 @@ const Monitoring = () => {
                 <TabsContent value="overview">
                     <div className="monitoring-overview">
                         <section className={`monitoring-hero ${status?.enabled ? 'is-active' : ''}`}>
-                            <div>
-                                <Badge variant={status?.enabled ? 'success' : 'secondary'}>
-                                    {status?.enabled ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+                            <div className="monitoring-hero__main">
+                                <Pill kind={status?.enabled ? 'green' : 'gray'}>
                                     {status?.enabled ? 'Monitoring active' : 'Monitoring paused'}
-                                </Badge>
+                                </Pill>
                                 <h2>{activeAlerts.length > 0 ? `${activeAlerts.length} active alert${activeAlerts.length !== 1 ? 's' : ''}` : 'No active alerts'}</h2>
                                 <p>
                                     Checks run every {status?.check_interval || configForm.check_interval || 60} seconds.
@@ -342,36 +367,67 @@ const Monitoring = () => {
                             </div>
                         </section>
 
-                        <StatStrip ariaLabel="Monitoring summary">
-                            <Stat label="Alert rules" value={alertRuleCount} />
-                            <Stat label="Delivery channels" value={enabledChannelCount} />
-                            <Stat label="History" value={alertHistory.length} />
-                        </StatStrip>
+                        <div className="mon-kpis">
+                            <MetricCard
+                                tone={activeAlerts.length > 0 ? 'red' : 'green'}
+                                icon={<Siren size={16} />}
+                                value={activeAlerts.length}
+                                label="Active alerts"
+                            />
+                            <MetricCard
+                                tone="accent"
+                                icon={<GaugeIcon size={16} />}
+                                value={alertRuleCount}
+                                label="Alert rules"
+                            />
+                            <MetricCard
+                                tone="cyan"
+                                icon={<Bell size={16} />}
+                                value={enabledChannelCount}
+                                label="Delivery channels"
+                            >
+                                <div className="sk-kpi__sub"><span>{notificationChannels.length} total</span></div>
+                            </MetricCard>
+                            <MetricCard
+                                tone="violet"
+                                icon={<Clock size={16} />}
+                                value={alertHistory.length}
+                                label="History entries"
+                            />
+                        </div>
 
-                        <section className="monitoring-panel">
-                            <div className="monitoring-panel__header">
+                        <section>
+                            <div className="mon-section-head">
                                 <h3>Current Metrics</h3>
                                 <Button size="sm" variant="outline" onClick={() => setActiveTab('thresholds')}>
                                     <Settings size={14} />
                                     Rules
                                 </Button>
                             </div>
-                            <div className="metric-rule-grid metric-rule-grid--compact">
+                            <div className="mon-host-grid">
                                 {metricRules.map((rule) => {
                                     const Icon = rule.icon;
                                     const isTriggered = typeof rule.current === 'number' && rule.current > rule.persistedThreshold;
                                     return (
-                                        <article key={rule.key} className={`metric-rule-card ${isTriggered ? 'is-triggered' : ''}`}>
-                                            <div className="metric-rule-card__icon">
-                                                <Icon size={18} />
+                                        <article key={rule.key} className={`mon-host-card ${isTriggered ? 'is-alerting' : ''}`}>
+                                            <div className="mon-host-card__head">
+                                                <span className="mon-ico mon-ico--sm">
+                                                    <Icon size={14} />
+                                                </span>
+                                                <span className="mon-host-card__name">{rule.label}</span>
+                                                <Pill kind={isTriggered ? 'amber' : 'green'}>{isTriggered ? 'alerting' : 'ok'}</Pill>
                                             </div>
-                                            <div>
-                                                <span>{rule.label}</span>
-                                                <strong>{formatMetric(rule.current, rule.unit)}</strong>
+                                            <div className="mon-host-card__value">{formatMetric(rule.current, rule.unit)}</div>
+                                            <Gauge
+                                                value={rule.gaugePct}
+                                                color={isTriggered ? 'var(--amber)' : METRIC_COLORS[rule.key]}
+                                            />
+                                            <div className="mon-host-card__mini">
+                                                <span>limit <b>{formatMetric(rule.persistedThreshold, rule.unit)}</b></span>
+                                                {rule.mini.map((m) => (
+                                                    <span key={m.k}>{m.k} <b>{m.v}</b></span>
+                                                ))}
                                             </div>
-                                            <Badge variant={isTriggered ? 'warning' : 'success'}>
-                                                {isTriggered ? 'Alerting' : `Under ${formatMetric(rule.persistedThreshold, rule.unit)}`}
-                                            </Badge>
                                         </article>
                                     );
                                 })}
@@ -382,15 +438,17 @@ const Monitoring = () => {
                             <section className="monitoring-panel monitoring-panel--warning">
                                 <div className="monitoring-panel__header">
                                     <h3>Active Alerts</h3>
+                                    <span className="mon-firing-count">{activeAlerts.length} firing</span>
                                 </div>
-                                <div className="alert-list">
+                                <div className="mon-alert-list">
                                     {activeAlerts.map((alert, index) => (
-                                        <div key={`${alert.type}-${index}`} className="alert-item">
-                                            <Badge variant={getAlertSeverityVariant(alert.severity)}>
-                                                {alert.severity}
-                                            </Badge>
-                                            <span className="alert-message">{alert.message}</span>
-                                            <span className="alert-time">{formatNumber(alert.value)} / {alert.threshold}</span>
+                                        <div key={`${alert.type}-${index}`} className="mon-alert-row">
+                                            <span className={`mon-sev mon-sev--${alert.severity}`} />
+                                            <div className="mon-alert-row__body">
+                                                <div className="mon-alert-row__title">{alert.message}</div>
+                                                <div className="mon-alert-row__sub">{alert.type} · {formatNumber(alert.value)} / {alert.threshold}</div>
+                                            </div>
+                                            <span className="mon-state mon-state--red">firing</span>
                                         </div>
                                     ))}
                                 </div>
@@ -412,14 +470,14 @@ const Monitoring = () => {
                                 const Icon = rule.icon;
                                 const isTriggered = typeof rule.current === 'number' && rule.current > rule.threshold;
                                 return (
-                                    <article key={rule.key} className={`metric-rule-editor ${isTriggered ? 'is-triggered' : ''}`}>
+                                    <article key={rule.key} className={`metric-rule-editor ${isTriggered ? 'is-alerting' : ''}`}>
                                         <div className="metric-rule-editor__main">
-                                            <div className="metric-rule-card__icon">
-                                                <Icon size={18} />
-                                            </div>
+                                            <span className="mon-ico">
+                                                <Icon size={15} />
+                                            </span>
                                             <div>
                                                 <h4>{rule.label}</h4>
-                                                <span>Current: {formatMetric(rule.current, rule.unit)}</span>
+                                                <span>current {formatMetric(rule.current, rule.unit)}</span>
                                             </div>
                                         </div>
                                         <div className="metric-rule-editor__threshold">
@@ -434,9 +492,9 @@ const Monitoring = () => {
                                                 onChange={(e) => updateThreshold(rule.key, e.target.value)}
                                             />
                                         </div>
-                                        <Badge variant={isTriggered ? 'warning' : 'secondary'}>
-                                            {isTriggered ? 'Would alert now' : 'Quiet'}
-                                        </Badge>
+                                        <Pill kind={isTriggered ? 'amber' : 'gray'}>
+                                            {isTriggered ? 'would alert now' : 'quiet'}
+                                        </Pill>
                                     </article>
                                 );
                             })}
@@ -493,14 +551,14 @@ const Monitoring = () => {
                                     const ready = channel.enabled && channel.configured;
                                     return (
                                         <article key={channel.key} className={`notification-channel-tile ${ready ? 'is-ready' : ''}`}>
-                                            <Icon size={18} />
+                                            <span className="mon-ico">
+                                                <Icon size={15} />
+                                            </span>
                                             <div>
                                                 <strong>{channel.label}</strong>
                                                 <span>{ready ? 'Enabled' : channel.configured ? 'Configured' : 'Not configured'}</span>
                                             </div>
-                                            <Badge variant={ready ? 'success' : 'secondary'}>
-                                                {ready ? 'Ready' : 'Off'}
-                                            </Badge>
+                                            <Pill kind={ready ? 'green' : 'gray'}>{ready ? 'ready' : 'off'}</Pill>
                                         </article>
                                     );
                                 })}
@@ -531,19 +589,17 @@ const Monitoring = () => {
                                 description="Alerts will appear here once a threshold is crossed."
                             />
                         ) : (
-                            <div className="monitoring-history-list">
+                            <div className="mon-alert-list">
                                 {alertHistory.map((alert, index) => (
-                                    <article key={`${alert.timestamp}-${index}`} className="monitoring-history-row">
-                                        <Badge variant={getAlertSeverityVariant(alert.severity)}>
-                                            {alert.severity}
-                                        </Badge>
-                                        <div>
-                                            <strong>{alert.type}</strong>
-                                            <span>{alert.message}</span>
+                                    <article key={`${alert.timestamp}-${index}`} className="mon-alert-row">
+                                        <span className={`mon-sev mon-sev--${alert.severity}`} />
+                                        <div className="mon-alert-row__body">
+                                            <div className="mon-alert-row__title">{alert.message}</div>
+                                            <div className="mon-alert-row__sub">{alert.type} · {formatNumber(alert.value)} / {alert.threshold}</div>
                                         </div>
-                                        <div className="monitoring-history-row__meta">
-                                            <span>{formatNumber(alert.value)} / {alert.threshold}</span>
-                                            <span>{formatTimestamp(alert.timestamp)}</span>
+                                        <div className="mon-alert-row__end">
+                                            <span className={`mon-state mon-state--${getSeverityTone(alert.severity)}`}>{alert.severity}</span>
+                                            <span className="mon-alert-row__time">{formatTimestamp(alert.timestamp)}</span>
                                         </div>
                                     </article>
                                 ))}

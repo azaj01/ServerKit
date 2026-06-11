@@ -1,35 +1,74 @@
-// Monitoring Page
+// ============================================
+// MONITORING PAGE (redesign — infra console look)
+// ============================================
 
 .monitoring-page {
+
+    // ── shared bits ─────────────────────────────────────────
+    // Mono-uppercase eyebrow section headers
+    .mon-section-head h3,
+    .monitoring-panel__header h3 {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+    }
+
+    // Neutral icon tile (rule editors, channel tiles, host cards)
+    .mon-ico {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        background: var(--surface-3);
+        color: var(--text-dim);
+
+        &--sm {
+            width: 26px;
+            height: 26px;
+            border-radius: 7px;
+        }
+    }
+
     .monitoring-overview,
     .monitoring-delivery-layout {
         display: grid;
         gap: $space-5;
     }
 
+    // ── hero strip ──────────────────────────────────────────
     .monitoring-hero {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
         gap: $space-5;
-        padding: $space-6;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-        background: $bg-card;
+        padding: $space-5 $space-6;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface);
 
         &.is-active {
-            border-color: fade($success, 35%);
+            border-color: rgba(61, 220, 151, 0.25);
         }
 
         h2 {
-            margin: $space-3 0 $space-2;
-            font-size: $font-size-2xl;
-            line-height: 1.1;
+            margin: $space-3 0 $space-1;
+            font-size: 19px;
+            font-weight: $font-weight-semibold;
+            letter-spacing: -0.01em;
+            line-height: 1.15;
         }
 
         p {
             margin: 0;
-            color: $text-secondary;
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: var(--text-faint);
         }
 
         &__actions {
@@ -43,15 +82,34 @@
         }
     }
 
+    // ── KPI strip ───────────────────────────────────────────
+    .mon-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: $space-4;
+
+        @media (max-width: $breakpoint-lg) { grid-template-columns: repeat(2, 1fr); }
+        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
+    }
+
+    // ── section heads + panels ──────────────────────────────
+    .mon-section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: $space-3;
+        margin-bottom: $space-3;
+    }
+
     .monitoring-panel {
         min-width: 0;
         padding: $space-5;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-        background: $bg-card;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface);
 
         &--warning {
-            border-color: fade($warning, 35%);
+            border-color: rgba(251, 111, 111, 0.28);
         }
     }
 
@@ -61,11 +119,6 @@
         align-items: center;
         gap: $space-3;
         margin-bottom: $space-4;
-
-        h3 {
-            margin: 0;
-            font-size: $font-size-lg;
-        }
 
         > div {
             display: flex;
@@ -79,94 +132,196 @@
         }
     }
 
+    .mon-firing-count {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--red);
+    }
+
+    // ── current-metrics host cards (prototype .host-card) ───
+    .mon-host-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 14px;
+    }
+
+    .mon-host-card {
+        min-width: 0;
+        padding: 15px 16px;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface);
+        transition: border-color $transition-fast;
+
+        &:hover {
+            border-color: var(--border-strong);
+        }
+
+        &.is-alerting {
+            border-color: rgba(245, 185, 69, 0.35);
+        }
+
+        &__head {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-bottom: 12px;
+
+            .sk-pill { margin-left: auto; }
+        }
+
+        &__name {
+            flex: 1;
+            min-width: 0;
+            font-size: 13px;
+            font-weight: $font-weight-semibold;
+            @include truncate();
+        }
+
+        &__value {
+            margin-bottom: 10px;
+            font-family: var(--mono);
+            font-size: 23px;
+            font-weight: $font-weight-semibold;
+            letter-spacing: -0.02em;
+            line-height: 1;
+        }
+
+        // mono footer stats (prototype .host-mini)
+        &__mini {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 10px;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-faint);
+
+            span { white-space: nowrap; }
+
+            b {
+                color: var(--text-dim);
+                font-weight: 600;
+            }
+        }
+    }
+
+    // ── alert rows (active alerts + history; prototype .alert-row)
+    .mon-alert-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mon-alert-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 0;
+        border-top: 1px solid var(--border-soft);
+
+        &:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        &:last-child { padding-bottom: 0; }
+
+        &__body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        &__title {
+            font-size: 13.5px;
+            font-weight: 550;
+            color: var(--text);
+        }
+
+        &__sub {
+            margin-top: 2px;
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: var(--text-faint);
+        }
+
+        &__end {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        &__time {
+            font-family: var(--mono);
+            font-size: 10.5px;
+            color: var(--text-faint);
+            white-space: nowrap;
+        }
+
+        @media (max-width: 640px) {
+            align-items: flex-start;
+
+            &__end { align-items: flex-start; }
+        }
+    }
+
+    // Severity dot (prototype .sev)
+    .mon-sev {
+        width: 9px;
+        height: 9px;
+        border-radius: 3px;
+        flex-shrink: 0;
+        background: var(--text-ghost);
+
+        &--critical { background: var(--red); }
+        &--warning { background: var(--amber); }
+        &--info { background: var(--cyan); }
+    }
+
+    // State chip (prototype .alert-state: st-firing / st-resolved)
+    .mon-state {
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+        flex-shrink: 0;
+
+        &--red { color: var(--red); background: var(--red-bg); }
+        &--amber { color: var(--amber); background: var(--amber-bg); }
+        &--cyan { color: var(--cyan); background: var(--cyan-bg); }
+        &--green { color: var(--green); background: var(--green-bg); }
+        &--gray { color: var(--text-faint); background: var(--surface-3); }
+    }
+
+    // ── alert-rule editors (thresholds tab) ─────────────────
     .metric-rule-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: $space-3;
 
-        &--compact {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+        @media (max-width: 1024px) {
+            grid-template-columns: 1fr;
         }
-
-        @media (max-width: 1180px) {
-            &,
-            &--compact {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-
-        @media (max-width: 720px) {
-            &,
-            &--compact {
-                grid-template-columns: 1fr;
-            }
-        }
-    }
-
-    .metric-rule-card,
-    .metric-rule-editor {
-        min-width: 0;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-        background: $bg-elevated;
-    }
-
-    .metric-rule-card {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
-        gap: $space-3;
-        align-items: center;
-        padding: $space-4;
-
-        > div:nth-child(2) {
-            min-width: 0;
-            display: grid;
-            gap: 4px;
-        }
-
-        span {
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-            font-weight: $font-weight-semibold;
-            text-transform: uppercase;
-        }
-
-        strong {
-            font-size: $font-size-xl;
-            line-height: 1;
-        }
-
-        [data-slot="badge"] {
-            grid-column: 1 / -1;
-            justify-self: start;
-        }
-
-        &.is-triggered {
-            border-color: fade($warning, 40%);
-        }
-    }
-
-    .metric-rule-card__icon {
-        width: 36px;
-        height: 36px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: $radius-md;
-        background: $accent-glow;
-        color: $accent-primary;
     }
 
     .metric-rule-editor {
+        min-width: 0;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 160px auto;
+        grid-template-columns: minmax(0, 1fr) 150px auto;
         gap: $space-4;
         align-items: center;
-        padding: $space-4;
+        padding: 15px 16px;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface-2);
 
-        &.is-triggered {
-            border-color: fade($warning, 40%);
-            background: $bg-elevated;
+        &.is-alerting {
+            border-color: rgba(245, 185, 69, 0.35);
         }
 
         &__main {
@@ -177,12 +332,14 @@
 
             h4 {
                 margin: 0 0 3px;
-                font-size: $font-size-base;
+                font-size: 13.5px;
+                font-weight: $font-weight-semibold;
             }
 
             span {
-                color: $text-secondary;
-                font-size: $font-size-sm;
+                font-family: var(--mono);
+                font-size: 11.5px;
+                color: var(--text-faint);
             }
         }
 
@@ -191,12 +348,28 @@
             gap: $space-2;
         }
 
+        > .sk-pill { justify-self: end; }
+
         @media (max-width: 820px) {
             grid-template-columns: 1fr;
             align-items: start;
+
+            > .sk-pill { justify-self: start; }
         }
     }
 
+    // Eyebrow-style field labels inside the editor + delivery forms
+    .metric-rule-editor__threshold label,
+    .monitoring-delivery-layout .form-group label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+    }
+
+    // ── delivery tab ────────────────────────────────────────
     .monitoring-delivery-layout {
         grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
 
@@ -212,25 +385,28 @@
         gap: $space-4;
         padding: $space-4;
         margin-bottom: $space-4;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-        background: $bg-elevated;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface-2);
 
-        strong,
-        span {
+        strong {
             display: block;
+            font-size: 13px;
+            font-weight: $font-weight-semibold;
         }
 
         span {
+            display: block;
             margin-top: 3px;
-            color: $text-tertiary;
-            font-size: $font-size-sm;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-faint);
         }
     }
 
     .notification-channel-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
         gap: $space-3;
     }
 
@@ -239,121 +415,43 @@
         grid-template-columns: auto minmax(0, 1fr) auto;
         gap: $space-3;
         align-items: center;
-        padding: $space-4;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-        background: $bg-elevated;
+        padding: 13px 14px;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface-2);
 
         &.is-ready {
-            border-color: fade($success, 35%);
-        }
+            border-color: rgba(61, 220, 151, 0.3);
 
-        > svg {
-            color: $accent-primary;
-        }
-
-        strong,
-        span {
-            display: block;
-        }
-
-        span {
-            margin-top: 3px;
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-        }
-    }
-
-    .alert-list {
-        display: flex;
-        flex-direction: column;
-        gap: $space-2;
-    }
-
-    .alert-item {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-        padding: $space-3 $space-4;
-        background: $bg-elevated;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-
-        .alert-message {
-            flex: 1;
-            min-width: 0;
-            color: $text-primary;
-            font-size: $font-size-sm;
-        }
-
-        .alert-time {
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-            white-space: nowrap;
-        }
-
-        @media (max-width: 640px) {
-            align-items: flex-start;
-            flex-direction: column;
-
-            .alert-time {
-                white-space: normal;
+            .mon-ico {
+                background: var(--green-bg);
+                color: var(--green);
             }
         }
-    }
 
-    .monitoring-history-list {
-        display: grid;
-        gap: $space-2;
-    }
-
-    .monitoring-history-row {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        gap: $space-4;
-        align-items: center;
-        padding: $space-4;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-        background: $bg-elevated;
-
-        > div {
-            min-width: 0;
-            display: grid;
-            gap: 4px;
-        }
+        > div { min-width: 0; }
 
         strong {
-            text-transform: capitalize;
+            display: block;
+            font-size: 13px;
+            font-weight: $font-weight-semibold;
+            @include truncate();
         }
 
         span {
-            color: $text-secondary;
-            font-size: $font-size-sm;
-        }
-
-        &__meta {
-            justify-items: end;
-
-            span {
-                color: $text-tertiary;
-                font-size: $font-size-xs;
-            }
-        }
-
-        @media (max-width: 760px) {
-            grid-template-columns: 1fr;
-
-            &__meta {
-                justify-items: start;
-            }
+            display: block;
+            margin-top: 2px;
+            font-family: var(--mono);
+            font-size: 10.5px;
+            color: var(--text-faint);
         }
     }
 
     .form-help {
         display: block;
         margin-top: $space-1;
-        color: $text-tertiary;
-        font-size: $font-size-xs;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-faint);
     }
 }
