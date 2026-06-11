@@ -1,14 +1,27 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Container, Globe, Package, FileText, RefreshCw, Square, Play, Settings, Trash2, AlertTriangle, Boxes } from 'lucide-react';
+import {
+    Plus, X, Container, Globe, RefreshCw, Boxes, Activity, Square,
+    FileText, RotateCw, Play, Trash2, Settings,
+} from 'lucide-react';
 import api from '../services/api';
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { getServiceType, getStatusConfig } from '../utils/serviceTypes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { PageTopbar, MetricCard, Pill, SegControl, Gauge } from '@/components/ds';
+
+// statusInfo.dotClass → ds Pill kind
+const STATUS_PILL = {
+    live: 'green',
+    stopped: 'gray',
+    deploying: 'amber',
+    building: 'amber',
+    failed: 'red',
+};
 
 const Applications = () => {
     const navigate = useNavigate();
@@ -19,7 +32,7 @@ const Applications = () => {
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [showStopped, setShowStopped] = useState(true);
+    const [statusFilter, setStatusFilter] = useState('all');
     const [selectedApp, setSelectedApp] = useState(null);
     const [stats, setStats] = useState({
         total: 0,
@@ -117,20 +130,9 @@ const Applications = () => {
         }
     }
 
-    function getStackColor(type) {
-        const colors = {
-            'php': '#a78bfa',
-            'wordpress': '#21759b',
-            'flask': '#fcd34d',
-            'django': '#34d399',
-            'docker': '#2496ed',
-            'static': '#60a5fa',
-        };
-        return colors[type] || '#a1a1aa';
-    }
-
     const filteredApps = apps.filter(app => {
-        if (!showStopped && app.status !== 'running') return false;
+        if (statusFilter === 'running' && app.status !== 'running') return false;
+        if (statusFilter === 'stopped' && app.status === 'running') return false;
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
         return app.name?.toLowerCase().includes(search) ||
@@ -142,186 +144,185 @@ const Applications = () => {
     }
 
     return (
-        <div className="page-container docker-page-new">
-            <div className="docker-page-header">
-                <div className="docker-page-title">
-                    <h2>Applications</h2>
-                    <div className="docker-page-subtitle">Manage your web applications and services</div>
-                </div>
-                <div className="docker-page-actions">
-                    <Button onClick={() => setShowCreateModal(true)}>
-                        <Plus size={16} /> New Application
-                    </Button>
-                </div>
-            </div>
-
-            <div className="docker-stats-row">
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Applications</div>
-                    <div className="docker-stat-value">{stats.total}</div>
-                    <div className="docker-stat-meta">
-                        <span className="docker-stat-running">{stats.running} Running</span>
-                        <span className="docker-stat-stopped">{stats.stopped} Stopped</span>
-                    </div>
-                </div>
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Docker Apps</div>
-                    <div className="docker-stat-value">{stats.docker}</div>
-                    <div className="docker-stat-meta">Container-based</div>
-                </div>
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Running</div>
-                    <div className="docker-stat-value">{stats.running}</div>
-                    <div className="docker-stat-meta">Active services</div>
-                </div>
-                <div className="docker-stat-card">
-                    <div className="docker-stat-label">Stopped</div>
-                    <div className="docker-stat-value">{stats.stopped}</div>
-                    <div className="docker-stat-meta">Inactive</div>
-                </div>
-            </div>
-
-            <div className="docker-panel">
-                <div className="docker-panel-header">
-                    <div className="docker-panel-tabs">
-                        <div className="docker-panel-tab active">All Applications</div>
-                    </div>
-                    <div className="docker-panel-actions">
+        <div className="page-container applications-page">
+            <PageTopbar
+                icon={<Boxes size={18} />}
+                title="Applications"
+                meta={`${stats.total} apps · ${stats.running} running`}
+                actions={(
+                    <>
                         <Button variant="outline" size="sm" onClick={loadApps}>
                             <RefreshCw size={14} /> Refresh
                         </Button>
-                    </div>
-                </div>
+                        <Button size="sm" onClick={() => setShowCreateModal(true)}>
+                            <Plus size={16} /> New Application
+                        </Button>
+                    </>
+                )}
+            />
 
-                <div className="docker-panel-content">
-                    <div className="docker-table-header">
-                        <label className="docker-filter-toggle">
-                            <input
-                                type="checkbox"
-                                checked={showStopped}
-                                onChange={(e) => setShowStopped(e.target.checked)}
-                            />
-                            Show stopped
-                        </label>
+            {apps.length > 0 && (
+                <div className="apps-kpis">
+                    <MetricCard tone="green" icon={<Activity size={16} />} value={stats.running} label="Running" />
+                    <MetricCard tone="amber" icon={<Square size={16} />} value={stats.stopped} label="Stopped" />
+                    <MetricCard tone="cyan" icon={<Container size={16} />} value={stats.docker} label="Docker Apps">
+                        <div className="sk-kpi__sub"><span>Container-based</span></div>
+                    </MetricCard>
+                    <MetricCard tone="accent" icon={<Boxes size={16} />} value={stats.total} label="Total Applications" />
+                </div>
+            )}
+
+            <div className="apps-list-card">
+                <div className="apps-list-head">
+                    <SegControl
+                        value={statusFilter}
+                        onChange={setStatusFilter}
+                        options={[
+                            { value: 'all', label: 'All', count: stats.total },
+                            { value: 'running', label: 'Running', count: stats.running },
+                            { value: 'stopped', label: 'Stopped', count: stats.stopped },
+                        ]}
+                    />
+                    <div className="apps-search">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
                         <Input
                             type="text"
-                            className="docker-search"
                             placeholder="Search apps..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
+                </div>
 
-                    {filteredApps.length === 0 ? (
-                        <EmptyState
-                            icon={Boxes}
-                            title="No applications"
-                            description="Create your first application to get started."
-                            action={<Button onClick={() => setShowCreateModal(true)}><Plus size={16} /> New Application</Button>}
-                        />
-                    ) : (
-                        <table className="docker-table">
-                            <thead>
-                                <tr>
-                                    <th>Application</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Domain</th>
-                                    <th>Resources</th>
-                                    <th className="text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredApps.map(app => {
-                                    const stats = appStats[app.id];
-                                    const isRunning = app.status === 'running';
-                                    const cpuPercent = stats?.cpu_percent || 0;
-                                    const memPercent = stats?.memory_percent || 0;
+                {filteredApps.length === 0 ? (
+                    <EmptyState
+                        icon={Boxes}
+                        title="No applications"
+                        description={searchTerm || statusFilter !== 'all'
+                            ? 'Try adjusting your filters.'
+                            : 'Create your first application to get started.'}
+                        action={!searchTerm && statusFilter === 'all' && (
+                            <Button onClick={() => setShowCreateModal(true)}><Plus size={16} /> New Application</Button>
+                        )}
+                    />
+                ) : (
+                    <table className="sk-dtable apps-table">
+                        <thead>
+                            <tr>
+                                <th>Application</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Domain</th>
+                                <th>Resources</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredApps.map(app => {
+                                const res = appStats[app.id];
+                                const typeInfo = getServiceType(app.app_type);
+                                const statusInfo = getStatusConfig(app.status);
+                                const isRunning = app.status === 'running';
+                                const cpuPercent = res?.cpu_percent || 0;
+                                const memPercent = res?.memory_percent || 0;
 
-                                    return (
-                                        <tr key={app.id}>
-                                            <td>
-                                                <span className="docker-container-name">{app.name}</span>
-                                                <span className="docker-container-id">ID: {app.id}</span>
-                                            </td>
-                                            <td>
-                                                <span className="docker-image-tag" style={{ borderLeft: `3px solid ${getStackColor(app.app_type)}` }}>
-                                                    {app.app_type === 'docker' && <Container size={12} className="mr-1" />}
-                                                    {app.app_type.toUpperCase()}
+                                return (
+                                    <tr key={app.id} className="is-clickable" onClick={() => navigate(`/apps/${app.id}`)}>
+                                        <td>
+                                            <div className="sk-cell-name">
+                                                <span
+                                                    className="apps-type-ico"
+                                                    style={{ background: typeInfo.bgColor, color: typeInfo.color }}
+                                                >
+                                                    {app.app_type === 'docker'
+                                                        ? <Container size={16} />
+                                                        : (app.app_type || '?').charAt(0).toUpperCase()}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                <span className={`docker-status-pill ${isRunning ? 'running' : 'exited'}`}>
-                                                    <span className="docker-status-dot" />
-                                                    {isRunning ? 'Running' : 'Stopped'}
-                                                </span>
-                                                {app.port && (
-                                                    <div className="docker-status-detail">Port: {app.port}</div>
-                                                )}
-                                            </td>
-                                            <td>
-                                                <span className={`docker-ports ${!isRunning ? 'faded' : ''}`}>
-                                                    {app.domains && app.domains.length > 0 ? (
-                                                        app.domains.map((d, i) => (
-                                                            <span key={i}>
-                                                                <Globe size={12} className="mr-1 align-middle" />
-                                                                {d.name}
-                                                                {i < app.domains.length - 1 && <br />}
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-gray-400">-</span>
-                                                    )}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className={!isRunning ? 'faded' : ''}>
-                                                    <ResourceBar
-                                                        label="CPU"
-                                                        value={cpuPercent}
-                                                        color={cpuPercent > 50 ? '#F59E0B' : '#6366F1'}
-                                                    />
-                                                    <ResourceBar
-                                                        label="RAM"
-                                                        value={memPercent}
-                                                        color="#10B981"
-                                                    />
+                                                <div>
+                                                    <div>{app.name}</div>
+                                                    <div className="sk-cell-sub">id {app.id}</div>
                                                 </div>
-                                            </td>
-                                            <td className="docker-actions-cell">
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span
+                                                className="apps-type-chip"
+                                                style={{ color: typeInfo.color, background: typeInfo.bgColor, borderColor: typeInfo.borderColor }}
+                                            >
+                                                {typeInfo.label}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <Pill kind={STATUS_PILL[statusInfo.dotClass] || 'gray'}>{statusInfo.label}</Pill>
+                                            {app.port && (
+                                                <div className="sk-cell-sub">port {app.port}</div>
+                                            )}
+                                        </td>
+                                        <td>
+                                            {app.domains && app.domains.length > 0 ? (
+                                                <div className={`apps-domain ${!isRunning ? 'is-faded' : ''}`}>
+                                                    {app.domains.map((d, i) => (
+                                                        <span key={i}>
+                                                            <Globe size={11} /> {d.name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="apps-none">—</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <div className={!isRunning ? 'is-faded' : ''}>
+                                                <div className="apps-res">
+                                                    <span className="apps-res__label">CPU</span>
+                                                    <Gauge value={cpuPercent} color="var(--accent-bright)" />
+                                                    <span className="apps-res__val">{cpuPercent.toFixed(0)}%</span>
+                                                </div>
+                                                <div className="apps-res">
+                                                    <span className="apps-res__label">RAM</span>
+                                                    <Gauge value={memPercent} color="var(--cyan)" />
+                                                    <span className="apps-res__val">{memPercent.toFixed(0)}%</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td onClick={(e) => e.stopPropagation()}>
+                                            <div className="apps-actions-cell">
                                                 <IconAction title="Logs" onClick={() => setSelectedApp(app)}>
-                                                    <LogsIcon />
+                                                    <FileText size={14} />
                                                 </IconAction>
                                                 {isRunning ? (
                                                     <>
                                                         <IconAction title="Restart" onClick={() => handleAction(app.id, 'restart')}>
-                                                            <RestartIcon />
+                                                            <RotateCw size={14} />
                                                         </IconAction>
-                                                        <IconAction title="Stop" onClick={() => handleAction(app.id, 'stop')} color="#EF4444">
-                                                            <StopIcon />
+                                                        <IconAction title="Stop" tone="red" onClick={() => handleAction(app.id, 'stop')}>
+                                                            <Square size={13} />
                                                         </IconAction>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <IconAction title="Start" onClick={() => handleAction(app.id, 'start')} color="#10B981">
-                                                            <PlayIcon />
+                                                        <IconAction title="Start" tone="green" onClick={() => handleAction(app.id, 'start')}>
+                                                            <Play size={14} />
                                                         </IconAction>
-                                                        <IconAction title="Delete" onClick={() => handleAction(app.id, 'delete')} color="#EF4444">
-                                                            <TrashIcon />
+                                                        <IconAction title="Delete" tone="red" onClick={() => handleAction(app.id, 'delete')}>
+                                                            <Trash2 size={14} />
                                                         </IconAction>
                                                     </>
                                                 )}
                                                 <IconAction title="Manage" onClick={() => navigate(`/apps/${app.id}`)}>
-                                                    <SettingsIcon />
+                                                    <Settings size={14} />
                                                 </IconAction>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                )}
             </div>
 
             {showCreateModal && (
@@ -348,78 +349,17 @@ const Applications = () => {
     );
 };
 
-// Resource Bar Component
-const ResourceBar = ({ label, value, color }) => {
-    const numValue = parseFloat(value) || 0;
-    return (
-        <div className="docker-res-container">
-            <span className="docker-res-label">{label}</span>
-            <div className="docker-res-track">
-                <div
-                    className="docker-res-fill"
-                    style={{ width: `${Math.min(numValue, 100)}%`, backgroundColor: color }}
-                />
-            </div>
-            <span className="docker-res-value">{numValue.toFixed(0)}%</span>
-        </div>
-    );
-};
-
-// Icon Actions
-const IconAction = ({ title, onClick, color, children, disabled }) => (
+// Per-row icon action (tones via modifier classes — no inline colors)
+const IconAction = ({ title, onClick, tone, children, disabled }) => (
     <button
-        className="docker-icon-action"
+        type="button"
+        className={`apps-icon-action${tone ? ` apps-icon-action--${tone}` : ''}`}
         title={title}
         onClick={onClick}
         disabled={disabled}
-        style={color ? { color } : {}}
     >
         {children}
     </button>
-);
-
-// Icons
-const LogsIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-    </svg>
-);
-
-const RestartIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="23 4 23 10 17 10"/>
-        <polyline points="1 20 1 14 7 14"/>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-    </svg>
-);
-
-const StopIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="6" width="12" height="12"/>
-    </svg>
-);
-
-const PlayIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <polygon points="5 3 19 12 5 21 5 3"/>
-    </svg>
-);
-
-const TrashIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-    </svg>
-);
-
-const SettingsIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-    </svg>
 );
 
 // App Logs Modal
@@ -453,18 +393,18 @@ const AppLogsModal = ({ app, onClose }) => {
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal modal-lg app-logs-modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2>Logs: {app.name}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
                     {app.app_type !== 'docker' && (
-                        <div className="mb-4">
+                        <div className="app-logs-controls">
                             <select
                                 value={logType}
                                 onChange={(e) => setLogType(e.target.value)}
-                                className="docker-search w-auto"
+                                className="app-logs-select"
                             >
                                 <option value="access">Access Logs</option>
                                 <option value="error">Error Logs</option>
@@ -486,6 +426,7 @@ const AppLogsModal = ({ app, onClose }) => {
 const CreateAppModal = ({ onClose }) => {
     const navigate = useNavigate();
 
+    // Brand categorical colors (literal on purpose)
     const templates = [
         { id: 'wordpress', name: 'WordPress', icon: 'W', color: '#21759b', description: 'Full WordPress installation with database' },
         { id: 'nextcloud', name: 'Nextcloud', icon: 'N', color: '#0082c9', description: 'Self-hosted cloud storage platform' },

@@ -1,5 +1,16 @@
 // ============================================
-// APPLICATIONS PAGES
+// APPLICATIONS PAGES (redesign — infra console look)
+// ============================================
+// 1. Applications list (pages/Applications.jsx): KPI strip + dense table.
+// 2. Shared `app-*` detail chrome — BASE styles consumed by THREE pages:
+//      - pages/ApplicationDetail.jsx (this feature)
+//      - pages/WordPressDetail.jsx   (already restyled; `.wp-detail-page`
+//        overrides in _wordpress.scss layer the SAME spec on top — keep the
+//        base values aligned with that spec so the overrides stay harmless)
+//      - pages/WordPressProject.jsx  (no overrides; inherits this base)
+//    Selector names and structural layout roles are preserved on purpose.
+// 3. ApplicationDetail tab internals — re-tints of shared classes scoped
+//    under `.app-detail-page` so they cannot leak into other pages.
 // ============================================
 
 // Applications page wrapper
@@ -10,966 +21,286 @@
 }
 
 // ============================================
-// TOOLBAR
+// LIST — KPI STRIP
 // ============================================
 
-.apps-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.apps-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: $space-4;
-    flex-wrap: wrap;
-}
 
-.apps-toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: $space-4;
-    flex: 1;
-    min-width: 0;
-}
-
-.apps-toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: $space-3;
-}
-
-// Search wrapper
-.apps-search-wrapper {
-    position: relative;
-    max-width: 300px;
-    flex: 1;
-}
-
-.apps-search-icon {
-    position: absolute;
-    left: $space-3;
-    top: 50%;
-    transform: translateY(-50%);
-    color: $text-tertiary;
-    pointer-events: none;
-}
-
-.apps-search-input {
-    width: 100%;
-    padding: $space-2 $space-3;
-    padding-left: $space-8 + 4;
-    padding-right: $space-8;
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-md;
-    color: $text-primary;
-    font-size: $font-size-sm;
-    @include transition(border-color);
-
-    &::placeholder {
-        color: $text-tertiary;
+    @media (max-width: $breakpoint-lg) {
+        grid-template-columns: repeat(2, 1fr);
     }
 
-    &:focus {
-        outline: none;
-        border-color: $accent-primary;
+    @media (max-width: $breakpoint-sm) {
+        grid-template-columns: 1fr;
     }
 }
 
-.apps-search-clear {
-    position: absolute;
-    right: $space-2;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    padding: $space-1;
-    cursor: pointer;
-    color: $text-tertiary;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: $radius-sm;
-    @include transition(color);
+// ============================================
+// LIST — CARD + FILTER BAR + DENSE TABLE
+// ============================================
 
-    &:hover {
-        color: $text-primary;
-    }
-}
-
-// Results count
-.apps-count {
-    font-size: $font-size-sm;
-    color: $text-tertiary;
-    white-space: nowrap;
-}
-
-// Sort dropdown
-.apps-sort-wrapper {
-    position: relative;
-}
-
-.apps-sort-select {
-    appearance: none;
-    padding: $space-2 $space-8 $space-2 $space-3;
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-md;
-    color: $text-primary;
-    font-size: $font-size-sm;
-    cursor: pointer;
-    @include transition(border-color);
-
-    &:focus {
-        outline: none;
-        border-color: $accent-primary;
-    }
-}
-
-.apps-sort-icon {
-    position: absolute;
-    right: $space-2;
-    top: 50%;
-    transform: translateY(-50%);
-    color: $text-tertiary;
-    pointer-events: none;
-}
-
-// View toggle
-.apps-view-toggle {
-    display: flex;
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-md;
+.apps-list-card {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
     overflow: hidden;
 }
 
-.apps-view-btn {
-    padding: $space-2;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: $text-tertiary;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    @include transition(all);
-
-    &:hover {
-        color: $text-primary;
-        background: $bg-hover;
-    }
-
-    &.active {
-        color: $accent-primary;
-        background: $accent-glow;
-    }
-
-    &:first-child {
-        border-right: 1px solid $border-default;
-    }
-}
-
-// ============================================
-// BULK ACTION BAR
-// ============================================
-
-.apps-bulk-bar {
+.apps-list-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: $space-3 $space-4;
-    background: $accent-glow;
-    border: 1px solid fade($accent-primary-raw, 30%);
-    border-radius: $radius-lg;
-    gap: $space-4;
+    gap: $space-3;
     flex-wrap: wrap;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-soft);
 }
 
-.apps-bulk-info {
+.apps-search {
     display: flex;
     align-items: center;
     gap: $space-2;
-    color: $accent-primary;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-}
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 $space-3;
+    min-width: 230px;
+    transition: border-color $transition-fast;
 
-.apps-bulk-clear {
-    background: none;
-    border: none;
-    color: $text-secondary;
-    font-size: $font-size-sm;
-    cursor: pointer;
-    padding: $space-1 $space-2;
-    margin-left: $space-2;
-    border-radius: $radius-sm;
-    @include transition(color);
-
-    &:hover {
-        color: $text-primary;
+    &:focus-within {
+        border-color: var(--accent-primary);
     }
-}
-
-.apps-bulk-actions {
-    display: flex;
-    gap: $space-2;
-}
-
-// ============================================
-// CHECKBOX STYLES
-// ============================================
-
-.apps-checkbox-label {
-    display: inline-flex;
-    align-items: center;
-    cursor: pointer;
-    position: relative;
-
-    input[type="checkbox"] {
-        position: absolute;
-        opacity: 0;
-        width: 0;
-        height: 0;
-
-        &:checked + .apps-checkbox-custom {
-            background: $accent-primary;
-            border-color: $accent-primary;
-
-            &::after {
-                opacity: 1;
-            }
-        }
-
-        &:focus + .apps-checkbox-custom {
-            box-shadow: 0 0 0 2px $accent-glow;
-        }
-    }
-}
-
-.apps-checkbox-custom {
-    width: 18px;
-    height: 18px;
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-sm;
-    position: relative;
-    @include transition(all);
-
-    &::after {
-        content: '';
-        position: absolute;
-        left: 5px;
-        top: 2px;
-        width: 5px;
-        height: 9px;
-        border: solid $text-primary;
-        border-width: 0 2px 2px 0;
-        transform: rotate(45deg);
-        opacity: 0;
-        @include transition(opacity);
-    }
-
-    &:hover {
-        border-color: $accent-primary;
-    }
-}
-
-// ============================================
-// APPLICATIONS LIST VIEW
-// ============================================
-
-.apps-list {
-    @include flex-column-gap($space-2);
-}
-
-.apps-list-header {
-    display: flex;
-    align-items: center;
-    gap: $space-4;
-    padding: $space-2 $space-4;
-    color: $text-tertiary;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-}
-
-.apps-list-header-text {
-    margin-left: $space-1;
-}
-
-.app-row {
-    @include list-item-base();
-    display: flex;
-    align-items: center;
-    gap: $space-4;
-    @include transition(all);
-
-    &.selected {
-        background: $accent-glow;
-        border-color: fade($accent-primary-raw, 30%);
-    }
-
-    &:hover {
-        border-color: $border-active;
-    }
-}
-
-.app-info {
-    @include flex-start();
-    gap: $space-4;
-    flex: 1;
-    min-width: 0;
-}
-
-.app-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: $radius-md;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: $font-weight-bold;
-    font-size: $font-size-md;
-    flex-shrink: 0;
 
     svg {
-        color: white;
+        color: var(--text-faint);
+        flex-shrink: 0;
     }
-}
 
-.app-details {
-    min-width: 0;
-    flex: 1;
+    input {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 7px 0;
+        color: var(--text);
+        font-size: 13px;
+        outline: none;
+        box-shadow: none;
+        min-width: 0;
 
-    h3 {
-        font-size: $font-size-base + 1;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
-        margin-bottom: $space-1;
-        @include truncate();
-    }
-}
-
-.app-meta {
-    @include flex-start();
-    gap: $space-3;
-    font-size: $font-size-sm;
-    color: $text-tertiary;
-    flex-wrap: wrap;
-
-    a {
-        color: $text-secondary;
-        @include transition(color);
-
-        &:hover {
-            color: $accent-primary;
+        &::placeholder {
+            color: var(--text-faint);
         }
     }
 }
 
-.app-type-badge {
-    font-size: $font-size-xs;
-    font-weight: $font-weight-medium;
-    color: $accent-primary;
-    background: $accent-glow;
-    padding: 2px $space-2;
-    border-radius: $radius-sm;
-}
+.apps-table {
+    th:last-child,
+    td:last-child {
+        text-align: right;
+    }
 
-.app-port {
-    font-family: $font-mono;
-    font-size: $font-size-xs;
-    color: $text-secondary;
-}
-
-.app-domains-info {
-    display: inline-flex;
-    align-items: center;
-    gap: $space-1;
-    color: $text-secondary;
-
-    a {
-        color: $text-secondary;
-
-        &:hover {
-            color: $accent-primary;
-        }
+    .sk-cell-name > div {
+        min-width: 0;
     }
 }
 
-.private-url-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: $space-1;
-    color: $success;
-    font-size: $font-size-xs;
-}
-
-.app-status {
-    flex-shrink: 0;
-}
-
-// Enhanced status badge with animation
-.status-badge-enhanced {
-    display: inline-flex;
-    align-items: center;
-    gap: $space-2;
-    padding: $space-1 + 2 $space-3;
-    border-radius: $radius-full;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-    text-transform: capitalize;
-
-    &.status-active {
-        background: $success-bg;
-        color: $success;
-
-        .status-dot-animated {
-            background: $success;
-            animation: pulse-green 2s ease-in-out infinite;
-        }
-    }
-
-    &.status-stopped {
-        background: $bg-tertiary;
-        color: $text-secondary;
-
-        .status-dot-animated {
-            background: $text-tertiary;
-        }
-    }
-
-    &.status-error {
-        background: $danger-bg;
-        color: $danger;
-
-        .status-dot-animated {
-            background: $danger;
-        }
-    }
-
-    &.status-warning {
-        background: $warning-bg;
-        color: $warning;
-
-        .status-dot-animated {
-            background: $warning;
-            animation: pulse-yellow 2s ease-in-out infinite;
-        }
-    }
-
-    &.transitioning {
-        .status-dot-animated {
-            animation: pulse-fast 0.5s ease-in-out infinite;
-        }
-    }
-}
-
-.status-dot-animated {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-@keyframes pulse-green {
-    0%, 100% {
-        box-shadow: 0 0 0 0 fade($success, 40%);
-    }
-    50% {
-        box-shadow: 0 0 0 4px fade($success, 0%);
-    }
-}
-
-@keyframes pulse-yellow {
-    0%, 100% {
-        box-shadow: 0 0 0 0 fade($warning, 40%);
-    }
-    50% {
-        box-shadow: 0 0 0 4px fade($warning, 0%);
-    }
-}
-
-@keyframes pulse-fast {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.4;
-    }
-}
-
-.app-actions {
-    display: flex;
-    gap: $space-2;
-    flex-shrink: 0;
-
-    .btn-text {
-        @media (max-width: $breakpoint-md) {
-            display: none;
-        }
-    }
-}
-
-// ============================================
-// APPLICATIONS GRID VIEW
-// ============================================
-
-.apps-grid {
+// Tinted type glyph tile (brand colors arrive via inline style props,
+// same convention as the Services list type icon)
+.apps-type-ico {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: $space-4;
+    place-items: center;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: $font-weight-bold;
 }
 
-.app-card {
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-lg;
-    padding: $space-4;
-    cursor: pointer;
-    position: relative;
-    @include transition(all);
-
-    &:hover {
-        border-color: $border-active;
-        transform: translateY(-2px);
-        box-shadow: $shadow-md;
-    }
-
-    &.selected {
-        background: $accent-glow;
-        border-color: fade($accent-primary-raw, 30%);
-    }
-}
-
-.app-card-checkbox {
-    position: absolute;
-    top: $space-3;
-    left: $space-3;
-    z-index: 1;
-}
-
-.app-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: $space-3;
-    padding-left: $space-6 + $space-2;
-}
-
-.app-card-body {
-    h3 {
-        font-size: $font-size-md;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
-        margin-bottom: $space-2;
-        @include truncate();
-    }
-}
-
-.app-card-meta {
-    display: flex;
+// Mono type chip (brand colors via inline style props)
+.apps-type-chip {
+    display: inline-flex;
     align-items: center;
-    gap: $space-2;
-    margin-bottom: $space-3;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 5px;
+    border: 1px solid;
+    white-space: nowrap;
 }
 
-.app-card-info {
+.apps-domain {
     display: flex;
     flex-direction: column;
-    gap: $space-1;
-    min-height: 48px;
-}
+    gap: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
 
-.app-card-info-row {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    font-size: $font-size-sm;
-    color: $text-secondary;
-
-    svg {
-        color: $text-tertiary;
-        flex-shrink: 0;
-    }
-}
-
-.app-card-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: $space-2;
-    margin-top: $space-3;
-    padding-top: $space-3;
-    border-top: 1px solid $border-subtle;
-}
-
-// Icon-only button
-.btn-icon {
-    padding: $space-2 !important;
-
-    svg {
-        margin: 0 !important;
-    }
-}
-
-// ============================================
-// CONFIRMATION MODAL
-// ============================================
-
-.confirm-modal {
-    max-width: 420px;
-}
-
-.confirm-modal-header {
-    display: flex;
-    align-items: center;
-    gap: $space-3;
-    margin-bottom: $space-3;
-
-    h2 {
-        margin: 0;
-        font-size: $font-size-lg;
-    }
-}
-
-.confirm-icon-danger {
-    color: $danger;
-    flex-shrink: 0;
-}
-
-.confirm-modal-message {
-    color: $text-secondary;
-    font-size: $font-size-base;
-    line-height: $line-height-relaxed;
-    margin-bottom: $space-5;
-}
-
-// ============================================
-// APPLICATION DETAIL PAGE
-// ============================================
-
-.app-header-info {
-    @include flex-start();
-    gap: $space-5;
-
-    @media (max-width: $breakpoint-md) {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-}
-
-.app-header-title {
-    @include flex-start();
-    gap: $space-4;
-
-    h1 {
-        font-size: $font-size-2xl;
-    }
-}
-
-// ============================================
-// DEPLOY TAB
-// ============================================
-
-.deploy-tab {
-    @include flex-column-gap($space-5);
-
-    .deploy-setup {
-        padding: $space-8 0;
-    }
-
-    .deploy-header {
-        margin-bottom: $space-5;
-    }
-
-    .deploy-status-card {
-        display: flex;
+    a {
+        display: inline-flex;
         align-items: center;
-        justify-content: space-between;
-        gap: $space-4;
-        padding: $space-4 $space-5;
-        background: $bg-card;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-
-        @media (max-width: $breakpoint-md) {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-    }
-
-    .deploy-repo-info {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
+        gap: 5px;
+        color: var(--text-dim);
+        text-decoration: none;
 
         svg {
+            color: var(--text-faint);
             flex-shrink: 0;
-            color: $text-secondary;
         }
 
-        > div {
-            display: flex;
-            flex-direction: column;
-            gap: $space-1;
-        }
-
-        .repo-url {
-            font-family: $font-mono;
-            font-size: $font-size-sm;
-            color: $text-primary;
-            word-break: break-all;
-        }
-
-        .repo-branch {
-            font-size: $font-size-xs;
-            color: $text-tertiary;
+        &:hover {
+            color: var(--accent-bright);
         }
     }
+}
 
-    .deploy-actions {
-        display: flex;
-        gap: $space-2;
+.apps-none {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-ghost);
+}
+
+// CPU / RAM mini gauges (token colors: CPU accent-bright, RAM cyan)
+.apps-res {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+
+    & + & {
+        margin-top: 6px;
+    }
+
+    .sk-gauge {
+        width: 88px;
         flex-shrink: 0;
     }
 
-    .deploy-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: $space-5;
+    &__label {
+        width: 28px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        flex-shrink: 0;
     }
 
-    .webhook-url {
+    &__val {
+        width: 36px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-dim);
+        text-align: right;
+        flex-shrink: 0;
+    }
+}
+
+.is-faded {
+    opacity: 0.45;
+}
+
+// Per-row icon actions (tones via modifier classes, no inline hex)
+.apps-actions-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+.apps-icon-action {
+    width: 27px;
+    height: 27px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+
+    &:hover {
+        background: var(--surface-3);
+        color: var(--text);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    &--green:hover {
+        background: var(--green-bg);
+        color: var(--green);
+    }
+
+    &--red:hover {
+        background: var(--red-bg);
+        color: var(--red);
+    }
+}
+
+// Logs modal (list page) — console well on the code surface
+.app-logs-modal {
+    .app-logs-controls {
         display: flex;
-        align-items: center;
-        gap: $space-3;
-        margin-top: $space-3;
-        padding: $space-3;
-        background: $bg-hover;
-        border-radius: $radius-md;
-
-        code {
-            flex: 1;
-            font-size: $font-size-xs;
-            color: $text-secondary;
-            word-break: break-all;
-        }
-
-        .btn {
-            flex-shrink: 0;
-        }
+        justify-content: flex-end;
+        margin-bottom: $space-3;
     }
 
-    .scripts-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: $space-4;
-    }
-
-    .script-section {
-        h4 {
-            font-size: $font-size-sm;
-            font-weight: $font-weight-medium;
-            color: $text-secondary;
-            margin-bottom: $space-2;
-        }
-    }
-
-    .script-code {
-        padding: $space-3;
-        background: $bg-hover;
-        border-radius: $radius-md;
-        font-family: $font-mono;
-        font-size: $font-size-xs;
-        color: $text-secondary;
-        overflow-x: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-        margin: 0;
-    }
-
-    .card-actions {
-        display: flex;
-        gap: $space-2;
-        margin-top: $space-4;
-        padding-top: $space-4;
-        border-top: 1px solid $border-subtle;
-    }
-
-    .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
+    .app-logs-select {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 10px;
+        color: var(--text);
+        font-size: 13px;
         cursor: pointer;
 
-        input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        span {
-            font-size: $font-size-sm;
-            color: $text-primary;
+        &:focus {
+            outline: none;
+            border-color: var(--accent-primary);
         }
     }
 
-    .form-help {
-        display: block;
-        margin-top: $space-1;
-        font-size: $font-size-xs;
-        color: $text-tertiary;
-    }
-
-    textarea {
-        font-family: $font-mono;
-        font-size: $font-size-sm;
-        resize: vertical;
-        min-height: 80px;
-    }
-
-    .text-danger {
-        color: $danger;
-        font-size: $font-size-sm;
-    }
-
-    .text-muted {
-        color: $text-tertiary;
-        font-size: $font-size-sm;
+    .log-viewer {
+        background: var(--bg-code);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        color: var(--text-code);
+        font-family: var(--mono);
+        font-size: 12.5px;
     }
 }
 
 // ============================================
-// ROUTING DIAGNOSTICS
+// SHARED CHIPS (other consumers live outside these pages)
 // ============================================
 
-.diagnostics-card {
-    .card-header-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: $space-4;
-
-        h3 {
-            margin: 0;
-        }
-    }
-
-    .diagnostics-hint {
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-        margin: 0;
-    }
-
-    .diagnostics-results {
-        @include flex-column-gap($space-4);
-    }
-
-    .health-summary {
-        padding: $space-3 $space-4;
-        border-radius: $radius-md;
-        font-weight: $font-weight-medium;
-
-        &.healthy {
-            background: rgba(34, 197, 94, 0.1);
-            color: $success;
-        }
-
-        &.unhealthy {
-            background: rgba(239, 68, 68, 0.1);
-            color: $danger;
-        }
-    }
-
-    .diagnostics-section {
-        h4 {
-            font-size: $font-size-sm;
-            font-weight: $font-weight-semibold;
-            color: $text-secondary;
-            margin-bottom: $space-2;
-            display: flex;
-            align-items: center;
-            gap: $space-2;
-        }
-
-        &.issues, &.recommendations {
-            padding: $space-3;
-            border-radius: $radius-md;
-        }
-
-        &.issues {
-            background: rgba(239, 68, 68, 0.05);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        &.recommendations {
-            background: rgba(234, 179, 8, 0.05);
-            border: 1px solid rgba(234, 179, 8, 0.2);
-        }
-    }
-
-    .check-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: $space-2 $space-4;
-    }
-
-    .check-item {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-        font-size: $font-size-sm;
-        color: $text-secondary;
-    }
-
-    .health-icon {
-        font-weight: bold;
-        font-size: $font-size-base;
-
-        &.healthy {
-            color: $success;
-        }
-
-        &.unhealthy {
-            color: $danger;
-        }
-    }
-
-    .issues-list, .recommendations-list {
-        margin: 0;
-        padding-left: $space-5;
-        font-size: $font-size-sm;
-
-        li {
-            margin-bottom: $space-1;
-
-            &:last-child {
-                margin-bottom: 0;
-            }
-        }
-    }
-
-    .issues-list {
-        color: $danger;
-    }
-
-    .recommendations-list {
-        color: $warning;
-    }
-
-    .config-preview {
-        margin: $space-2 0 0;
-        padding: $space-3;
-        background: $bg-hover;
-        border-radius: $radius-md;
-        font-family: $font-mono;
-        font-size: $font-size-xs;
-        color: $text-secondary;
-        overflow-x: auto;
-        white-space: pre;
-        max-height: 300px;
-        overflow-y: auto;
-    }
+// Used by components/LinkAppModal.jsx
+.app-type-badge {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-bright);
+    background: var(--accent-bg);
+    padding: 2px 7px;
+    border-radius: 5px;
 }
 
+// Used by pages/Firewall.jsx
 .port-status {
     font-size: $font-size-xs;
     margin-left: $space-2;
@@ -983,8 +314,26 @@
     }
 }
 
+// Used by components/wordpress/HealthStatusPanel.jsx
+.panel-empty {
+    text-align: center;
+    padding: $space-6;
+    color: var(--text-faint);
+    font-size: 13px;
+}
+
+// Icon-only button (legacy global utility; LinkedAppsSection consumes it)
+.btn-icon {
+    padding: $space-2 !important;
+
+    svg {
+        margin: 0 !important;
+    }
+}
+
 // ============================================
-// APP DETAIL PAGE - NEW DESIGN
+// APP DETAIL — SHARED BASE CHROME
+// (visual spec matches the `.wp-detail-page` overrides in _wordpress.scss)
 // ============================================
 
 .app-detail-page {
@@ -1002,29 +351,31 @@
     flex-wrap: wrap;
 }
 
+// Breadcrumbs — mono trail
 .app-detail-breadcrumbs {
     display: flex;
     align-items: center;
     gap: $space-2;
+    font-family: var(--mono);
     font-size: $font-size-sm;
-    color: $text-tertiary;
+    color: var(--text-faint);
 
     a {
-        color: $text-secondary;
+        color: var(--text-faint);
         text-decoration: none;
         @include transition(color);
 
         &:hover {
-            color: $accent-primary;
+            color: var(--accent-bright);
         }
     }
 
-    .breadcrumb-separator {
-        color: $text-tertiary;
+    > span {
+        color: var(--text-ghost);
     }
 
-    .breadcrumb-current {
-        color: $text-primary;
+    .current {
+        color: var(--text-dim);
         font-weight: $font-weight-medium;
     }
 }
@@ -1034,38 +385,53 @@
     gap: $space-2;
 }
 
-// App header with icon, title, status
+// Header — gradient surface card + radial accent wash
 .app-detail-header {
+    position: relative;
     display: flex;
     align-items: center;
     gap: $space-4;
-    padding: $space-5;
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-lg;
+    padding: 20px 22px;
+    background: linear-gradient(120deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+
+    // No overflow:hidden (header menus must escape), so the wash carries
+    // its own radius instead.
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: var(--radius-lg);
+        background: radial-gradient(420px 200px at 0% 0%, var(--accent-bg-soft), transparent 70%);
+        pointer-events: none;
+    }
 }
 
 .app-detail-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: $radius-lg;
+    position: relative;
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    border: 1px solid fade(#fff, 8%);
+    box-shadow: var(--shadow-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     font-size: $font-size-xl;
     font-weight: $font-weight-bold;
-    color: white;
+    color: #fff;
 
     img {
         width: 100%;
         height: 100%;
         object-fit: contain;
-        border-radius: $radius-lg;
+        border-radius: 13px;
     }
 
     svg {
-        color: white;
+        color: currentColor;
     }
 }
 
@@ -1074,107 +440,157 @@
     min-width: 0;
 
     h1 {
-        font-size: $font-size-xl;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        flex-wrap: wrap;
+        margin: 0;
+        font-size: 21px;
         font-weight: $font-weight-semibold;
-        color: $text-primary;
-        margin: 0 0 $space-1 0;
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-    }
-}
+        letter-spacing: -0.02em;
+        color: var(--text);
 
-.app-detail-meta {
-    display: flex;
-    align-items: center;
-    gap: $space-4;
-    font-size: $font-size-sm;
-    color: $text-tertiary;
-
-    span {
-        display: flex;
-        align-items: center;
-        gap: $space-1;
-    }
-
-    a {
-        color: $text-secondary;
-        @include transition(color);
-
-        &:hover {
-            color: $accent-primary;
+        // linked-app glyph inside the EnvTag
+        .sk-tag svg {
+            margin-left: 4px;
         }
     }
 }
 
-// Status badge for app detail
+// Mono dot-separated meta line under the title
+.app-detail-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+
+    a {
+        color: var(--accent-bright);
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    .separator {
+        color: var(--text-ghost);
+    }
+}
+
+// Status badge (WordPressProject still renders this class; ApplicationDetail
+// uses the ds Pill) — sk-pill visual spec.
 .app-status-badge {
     display: inline-flex;
     align-items: center;
-    gap: $space-2;
-    padding: $space-1 $space-3;
-    border-radius: $radius-full;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
 
     &.running {
-        background: $success-bg;
-        color: $success;
+        background: var(--green-bg);
+        color: var(--green);
     }
 
     &.stopped {
-        background: $bg-tertiary;
-        color: $text-secondary;
+        background: var(--surface-3);
+        color: var(--text-faint);
     }
 
     &.error {
-        background: $danger-bg;
-        color: $danger;
+        background: var(--red-bg);
+        color: var(--red);
     }
 }
 
 .pulse-dot {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: currentColor;
+    flex-shrink: 0;
 
     .running & {
+        box-shadow: 0 0 6px currentColor;
         animation: pulse-green 2s ease-in-out infinite;
     }
 }
 
-// Tabs navigation
+@keyframes pulse-green {
+    0%, 100% {
+        box-shadow: 0 0 0 0 fade($success, 40%);
+    }
+    50% {
+        box-shadow: 0 0 0 4px fade($success, 0%);
+    }
+}
+
+// Tabs navigation (WordPress pages render these classes; ApplicationDetail
+// uses shadcn Tabs — see the scoped `.tabs` block below)
 .app-detail-tabs {
     display: flex;
-    gap: $space-1;
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-lg;
-    padding: $space-1;
+    gap: 2px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-soft);
+    border-radius: 0;
+    padding: 0;
     overflow-x: auto;
+
+    &::-webkit-scrollbar {
+        height: 0;
+    }
 }
 
 .app-detail-tab {
-    padding: $space-2 $space-4;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 14px;
     background: transparent;
     border: none;
-    border-radius: $radius-md;
-    color: $text-secondary;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--text-faint);
+    font-size: 13px;
+    font-weight: $font-weight-normal;
     cursor: pointer;
     white-space: nowrap;
-    @include transition(all);
+    transition: color 0.14s;
+
+    svg {
+        color: var(--text-ghost);
+        transition: color 0.14s;
+        flex-shrink: 0;
+    }
 
     &:hover {
-        color: $text-primary;
-        background: $bg-hover;
+        background: none;
+        color: var(--text-dim);
+
+        svg {
+            color: var(--text-faint);
+        }
     }
 
     &.active {
-        color: $accent-primary;
-        background: $accent-glow;
+        background: none;
+        color: var(--text);
+        border-bottom-color: var(--accent);
+        font-weight: $font-weight-medium;
+
+        svg {
+            color: var(--accent-bright);
+        }
     }
 }
 
@@ -1201,284 +617,808 @@
     gap: $space-4;
 }
 
-// Panels
+// Panels — quiet surface + mono eyebrow header
 .app-panel {
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-lg;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
     overflow: hidden;
 }
 
 .app-panel-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: $space-4;
-    border-bottom: 1px solid $border-subtle;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 12px 17px;
+    border-bottom: 1px solid var(--border-soft);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
 
-    h3 {
-        margin: 0;
-        font-size: $font-size-base;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
+    svg {
+        width: 13px;
+        height: 13px;
+        color: var(--accent-bright);
     }
+}
+
+// Right-aligned action slot inside an eyebrow header (resets the eyebrow
+// typography so buttons keep their normal type)
+.app-panel-header-actions {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: $space-2;
+    font-family: $font-main;
+    font-weight: $font-weight-normal;
+    text-transform: none;
+    letter-spacing: normal;
 }
 
 .app-panel-body {
-    padding: $space-4;
+    padding: $space-4 17px;
+
+    .hint:last-child {
+        margin-bottom: 0;
+    }
+
+    .app-detail-actions {
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: $space-3;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    .app-info-grid + .app-detail-actions,
+    .app-info-grid + .hint {
+        margin-top: $space-3;
+    }
 }
 
-// Info grid for key-value pairs
-.app-info-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: $space-4;
+.app-panel-hint {
+    margin: 0 0 $space-3;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-dim);
 
-    @media (max-width: $breakpoint-sm) {
-        grid-template-columns: 1fr;
+    &:last-child {
+        margin-bottom: 0;
     }
+}
+
+// Info grids → k/v spec rows (.sk-info-row look)
+.app-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
 .app-info-item {
     display: flex;
-    flex-direction: column;
-    gap: $space-1;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: $space-4;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-soft);
+
+    &:first-child {
+        border-top: none;
+        padding-top: 0;
+    }
+
+    &:last-child {
+        padding-bottom: 0;
+    }
+}
+
+.app-info-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.app-info-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: $space-2;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text);
+    text-align: right;
+    min-width: 0;
+    overflow-wrap: anywhere;
+
+    a {
+        color: var(--accent-bright);
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+}
+
+// Mono path chip (Root Path row)
+.app-path-value {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+    padding: 3px 8px;
+    border-radius: 5px;
+    overflow-wrap: anywhere;
+}
+
+// Port reachability hint inside the info value
+.port-indicator {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--red);
+
+    &.accessible {
+        color: var(--green);
+    }
+}
+
+// ============================================
+// APPLICATION DETAIL — SCOPED TAB INTERNALS
+// (shared class re-tints that must not leak to other pages)
+// ============================================
+
+.app-detail-page {
+
+    // ---- shadcn tab strip (.tabs/.tab) → accent-wash chips ----
+    .tabs {
+        gap: 2px;
+        border-bottom: 1px solid var(--border-soft);
+        padding-bottom: $space-2;
+        margin-bottom: $space-5;
+    }
+
+    .tab {
+        padding: 7px 12px;
+        border-bottom: none;
+        margin-bottom: 0;
+        border-radius: 8px;
+        color: var(--text-dim);
+        font-size: 13px;
+        font-weight: $font-weight-normal;
+
+        &:hover {
+            background: var(--surface-hover);
+            color: var(--text);
+        }
+
+        &.active,
+        &[data-state="active"] {
+            background: var(--accent-bg);
+            color: var(--accent-bright);
+            font-weight: $font-weight-medium;
+        }
+    }
+
+    // ---- Mono eyebrow heading (JSX opt-in for bare h3 headers) ----
+    .app-eyebrow,
+    h3.app-eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 $space-3;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+    }
+
+    // ---- Section headers → mono eyebrows ----
+    .section-header {
+        margin-bottom: $space-4;
+
+        h3 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: $font-weight-semibold;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-faint);
+        }
+    }
+
+    // ---- Generic cards (Build / Deploy / Settings tabs) ----
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        box-shadow: none;
+
+        > h3,
+        .card-header-row h3 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0 0 $space-3;
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: $font-weight-semibold;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-faint);
+        }
+
+        h4 {
+            font-size: $font-size-sm;
+            font-weight: $font-weight-semibold;
+            color: var(--text);
+        }
+    }
+
+    .card-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: $space-4;
+
+        h3 {
+            margin: 0;
+        }
+    }
+
+    .card-actions {
+        display: flex;
+        gap: $space-2;
+        margin-top: $space-4;
+        padding-top: $space-4;
+        border-top: 1px solid var(--border-soft);
+    }
+
+    // ---- InfoList rows → k/v spec rows ----
+    .info-item {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border-soft);
+
+        &:last-child {
+            border-bottom: none;
+        }
+    }
 
     .info-label {
-        font-size: $font-size-xs;
-        color: $text-tertiary;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text-faint);
     }
 
     .info-value {
-        font-size: $font-size-sm;
-        color: $text-primary;
-        font-weight: $font-weight-medium;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--text);
+        overflow-wrap: anywhere;
+        text-align: right;
+    }
 
-        &.mono {
-            font-family: $font-mono;
+    // ---- Build auto-detection grid ----
+    .detection-label {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.06em;
+        color: var(--text-faint);
+    }
+
+    .detection-value {
+        font-size: 13px;
+        font-weight: $font-weight-medium;
+        color: var(--text);
+    }
+
+    // ---- Deployment history rows (Build + Deploy tabs) ----
+    .deployments-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .deployment-item {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: 10px 0;
+        border-top: 1px solid var(--border-soft);
+
+        &:first-child {
+            border-top: none;
+        }
+
+        &.current {
+            background: fade($success, 5%);
+            margin: 0 (-$space-2);
+            padding-left: $space-2;
+            padding-right: $space-2;
+            border-radius: $radius-sm;
+        }
+
+        > .btn,
+        > button {
+            margin-left: auto;
+        }
+    }
+
+    .deployment-info {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+    }
+
+    .deployment-version {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--accent-bright);
+        background: var(--accent-bg);
+        padding: 2px 7px;
+        border-radius: 5px;
+    }
+
+    .deployment-meta {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-faint);
+    }
+
+    .deployment-date {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-faint);
+    }
+
+    // ---- Domains panel rows ----
+    .domains-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .domain-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-3;
+        padding: 10px 0;
+        border-top: 1px solid var(--border-soft);
+
+        &:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        &:last-child {
+            padding-bottom: 0;
         }
 
         a {
-            color: $accent-primary;
-            @include transition(color);
+            font-family: var(--mono);
+            font-size: 12.5px;
+            color: var(--accent-bright);
+            text-decoration: none;
+            overflow-wrap: anywhere;
 
             &:hover {
                 text-decoration: underline;
             }
         }
     }
-}
 
-// Private URL box
-.private-url-box {
-    display: flex;
-    align-items: center;
-    gap: $space-3;
-    padding: $space-3;
-    background: $bg-hover;
-    border-radius: $radius-md;
+    .ssl-badge {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--green-bg);
+        color: var(--green);
+        padding: 2px 7px;
+        border-radius: 5px;
+        flex-shrink: 0;
+    }
 
-    code {
-        flex: 1;
+    // ---- Live resources (CPU accent-bright / RAM cyan, sk-gauge spec) ----
+    .resource-bar-container {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+
+        & + .resource-bar-container {
+            margin-top: $space-4;
+        }
+    }
+
+    .resource-bar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .resource-bar-label {
+        font-size: 13px;
+        color: var(--text-dim);
+    }
+
+    .resource-bar-value {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        font-weight: $font-weight-semibold;
+        color: var(--text);
+    }
+
+    .resource-bar-track {
+        height: 5px;
+        background: var(--surface-3);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .resource-bar-fill {
+        display: block;
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+
+        &.cpu {
+            background: var(--accent-bright);
+        }
+
+        &.ram {
+            background: var(--cyan);
+        }
+    }
+
+    .resource-hint {
+        margin: $space-3 0 0;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--text-faint);
+    }
+
+    // ---- Routing diagnostics ----
+    .diag-status {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: $space-3;
+        border-radius: var(--radius-sm);
+
+        &.healthy {
+            background: var(--green-bg);
+        }
+
+        &.unhealthy {
+            background: var(--red-bg);
+        }
+    }
+
+    .diag-icon {
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        font-family: var(--mono);
+        font-size: 14px;
+        font-weight: $font-weight-bold;
+        flex-shrink: 0;
+
+        &.healthy {
+            color: var(--green);
+        }
+
+        &.unhealthy {
+            color: var(--red);
+        }
+    }
+
+    .diag-text {
+        min-width: 0;
+
+        h4 {
+            margin: 0;
+            font-size: 13px;
+            font-weight: $font-weight-semibold;
+            color: var(--text);
+        }
+
+        p {
+            margin: 2px 0 0;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+    }
+
+    .diag-issues {
+        margin: $space-3 0 0;
+        padding-left: $space-5;
+        font-size: 12.5px;
+        color: var(--red);
+
+        li {
+            margin-bottom: $space-1;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+    }
+
+    // ---- Packages tab — dense list rows ----
+    .packages-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .package-item {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 11px 16px;
+
+        & + .package-item {
+            border-top: 1px solid var(--border-soft);
+        }
+    }
+
+    .package-name {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--accent-bright);
+    }
+
+    .package-version {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text-faint);
+    }
+
+    .install-form {
+        margin-bottom: $space-4;
+    }
+
+    // ---- Consoles / editors → code surface ----
+    .code-editor {
+        background: var(--bg-code);
+        border-color: var(--border-soft);
+        color: var(--text-code);
+        font-family: var(--mono);
         font-size: $font-size-sm;
-        color: $text-secondary;
-        word-break: break-all;
-    }
-}
-
-// Resource bars for live stats
-.resource-bar-container {
-    display: flex;
-    flex-direction: column;
-    gap: $space-3;
-}
-
-.resource-bar-item {
-    display: flex;
-    align-items: center;
-    gap: $space-3;
-}
-
-.resource-bar-label {
-    width: 40px;
-    font-size: $font-size-sm;
-    color: $text-secondary;
-    flex-shrink: 0;
-}
-
-.resource-bar-track {
-    flex: 1;
-    height: 8px;
-    background: $bg-hover;
-    border-radius: $radius-sm;
-    overflow: hidden;
-}
-
-.resource-bar-fill {
-    height: 100%;
-    border-radius: $radius-sm;
-    @include transition(width);
-
-    &.cpu {
-        background: $accent-primary;
     }
 
-    &.ram {
-        background: $warning;
+    .command-output {
+        background: var(--bg-code);
+        border-color: var(--border-soft);
+        border-radius: var(--radius);
+
+        pre {
+            color: var(--text-code);
+            font-size: $font-size-sm;
+        }
+
+        &.error {
+            border-color: rgba(251, 111, 111, 0.4);
+        }
+
+        .stderr {
+            color: var(--red);
+        }
     }
-}
 
-.resource-bar-value {
-    width: 48px;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-    color: $text-primary;
-    text-align: right;
-    flex-shrink: 0;
-}
+    .log-viewer {
+        background: var(--bg-code);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        color: var(--text-code);
+        font-family: var(--mono);
+        font-size: 12.5px;
+    }
 
-// Environment linking panel
-.env-link-section {
-    @include flex-column-gap($space-3);
-}
+    // ---- Logs tab chrome ----
+    .logs-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: $space-3;
+        flex-wrap: wrap;
+        margin-bottom: $space-3;
 
-.env-link-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $space-3;
-    background: $bg-hover;
-    border-radius: $radius-md;
+        h3 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: $font-weight-semibold;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-faint);
+        }
+    }
 
-    .env-link-info {
+    .logs-controls {
         display: flex;
         align-items: center;
         gap: $space-3;
 
-        .env-badge {
-            padding: $space-1 $space-2;
-            border-radius: $radius-sm;
-            font-size: $font-size-xs;
-            font-weight: $font-weight-semibold;
-            text-transform: uppercase;
+        .hint {
+            margin: 0;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-faint);
+        }
+    }
 
-            &.prod {
-                background: rgba(239, 68, 68, 0.15);
-                color: $danger;
-            }
+    .checkbox-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-1;
+        font-size: 13px;
+        color: var(--text-dim);
+        cursor: pointer;
+        white-space: nowrap;
 
-            &.dev {
-                background: rgba(34, 197, 94, 0.15);
-                color: $success;
-            }
+        input {
+            accent-color: var(--accent-primary);
+        }
+    }
 
-            &.staging {
-                background: rgba(234, 179, 8, 0.15);
-                color: $warning;
-            }
+    // ---- Config modals (Build / Deploy) — mono eyebrow field labels ----
+    .modal .form-group > label:not(.checkbox-label) {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+    }
+}
+
+// ============================================
+// DEPLOY TAB
+// ============================================
+
+.deploy-tab {
+    @include flex-column-gap($space-5);
+
+    .deploy-setup {
+        padding: $space-8 0;
+    }
+
+    .deploy-header {
+        margin-bottom: 0;
+    }
+
+    .deploy-status-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-4;
+        padding: $space-4 $space-5;
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+
+        @media (max-width: $breakpoint-md) {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+
+    .deploy-repo-info {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+
+        svg {
+            flex-shrink: 0;
+            color: var(--text-faint);
         }
 
-        .env-name {
+        > div {
+            display: flex;
+            flex-direction: column;
+            gap: $space-1;
+        }
+
+        .repo-url {
+            font-family: var(--mono);
             font-size: $font-size-sm;
-            color: $text-primary;
+            color: var(--text);
+            word-break: break-all;
+        }
+
+        .repo-branch {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--accent-bright);
         }
     }
-}
 
-// Process status list
-.process-list {
-    @include flex-column-gap($space-2);
-}
-
-.process-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $space-2 $space-3;
-    background: $bg-hover;
-    border-radius: $radius-md;
-
-    .process-name {
-        font-size: $font-size-sm;
-        color: $text-primary;
-        font-family: $font-mono;
+    .deploy-actions {
+        display: flex;
+        gap: $space-2;
+        flex-shrink: 0;
     }
 
-    .process-status {
+    .deploy-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: $space-5;
+    }
+
+    .checkbox-label {
         display: flex;
         align-items: center;
         gap: $space-2;
-        font-size: $font-size-xs;
+        cursor: pointer;
 
-        &.running {
-            color: $success;
+        input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--accent-primary);
         }
 
-        &.stopped {
-            color: $text-tertiary;
+        span {
+            font-size: $font-size-sm;
+            color: var(--text);
         }
     }
-}
 
-// Domains list
-.domains-list {
-    @include flex-column-gap($space-2);
-}
+    .form-help {
+        display: block;
+        margin-top: $space-1;
+        font-size: $font-size-xs;
+        color: var(--text-faint);
+    }
 
-.domain-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $space-2 $space-3;
-    background: $bg-hover;
-    border-radius: $radius-md;
-
-    .domain-url {
+    textarea {
+        font-family: var(--mono);
         font-size: $font-size-sm;
-        color: $text-primary;
-
-        a {
-            color: $accent-primary;
-            @include transition(color);
-
-            &:hover {
-                text-decoration: underline;
-            }
-        }
+        resize: vertical;
+        min-height: 80px;
     }
 
-    .domain-ssl {
-        display: flex;
-        align-items: center;
-        gap: $space-1;
-        font-size: $font-size-xs;
-        color: $success;
-
-        &.no-ssl {
-            color: $text-tertiary;
-        }
+    .text-danger {
+        color: $danger;
+        font-size: $font-size-sm;
     }
-}
 
-// Empty state for panels
-.panel-empty {
-    text-align: center;
-    padding: $space-6;
-    color: $text-tertiary;
-    font-size: $font-size-sm;
-}
-
-// Loading state for resources
-.resources-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: $space-2;
-    padding: $space-4;
-    color: $text-tertiary;
-    font-size: $font-size-sm;
+    .text-muted {
+        color: var(--text-faint);
+        font-size: $font-size-sm;
+    }
 }
 
 // ============================================
@@ -1486,42 +1426,16 @@
 // ============================================
 
 @media (max-width: $breakpoint-md) {
-    .apps-toolbar {
+    .apps-list-head {
         flex-direction: column;
         align-items: stretch;
+
+        .apps-search {
+            min-width: 0;
+        }
     }
 
-    .apps-toolbar-left {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .apps-search-wrapper {
-        max-width: none;
-    }
-
-    .apps-toolbar-right {
-        justify-content: space-between;
-    }
-
-    .apps-bulk-bar {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .apps-bulk-actions {
-        justify-content: flex-end;
-    }
-
-    .app-row {
+    .app-detail-header {
         flex-wrap: wrap;
-    }
-
-    .app-actions {
-        width: 100%;
-        justify-content: flex-end;
-        margin-top: $space-2;
-        padding-top: $space-2;
-        border-top: 1px solid $border-subtle;
     }
 }

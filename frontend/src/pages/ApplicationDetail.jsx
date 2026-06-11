@@ -13,13 +13,23 @@ import EnvironmentVariables from '../components/EnvironmentVariables';
 import PrivateURLSection from '../components/PrivateURLSection';
 import LinkedAppsSection from '../components/LinkedAppsSection';
 import LinkAppModal from '../components/LinkAppModal';
+import { getServiceType, getStatusConfig } from '../utils/serviceTypes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Pill, EnvTag } from '@/components/ds';
 
 const VALID_TABS = ['overview', 'environment', 'packages', 'gunicorn', 'commands', 'build', 'deploy', 'logs', 'settings'];
+
+// statusInfo.dotClass → ds Pill kind
+const STATUS_PILL = {
+    live: 'green',
+    stopped: 'gray',
+    deploying: 'amber',
+    building: 'amber',
+    failed: 'red',
+};
 
 const ApplicationDetail = () => {
     const { id } = useParams();
@@ -65,18 +75,6 @@ const ApplicationDetail = () => {
         }
     }
 
-    function getStackColor(type) {
-        const colors = {
-            'php': '#777bb4',
-            'wordpress': '#21759b',
-            'flask': '#fcd34d',
-            'django': '#34d399',
-            'docker': '#2496ed',
-            'static': '#60a5fa',
-        };
-        return colors[type] || '#a1a1aa';
-    }
-
     function getAppIcon(type) {
         switch (type) {
             case 'wordpress':
@@ -93,7 +91,7 @@ const ApplicationDetail = () => {
                     </svg>
                 );
             default:
-                return <span className="text-xl font-bold">{type.charAt(0).toUpperCase()}</span>;
+                return <span>{type.charAt(0).toUpperCase()}</span>;
         }
     }
 
@@ -115,6 +113,8 @@ const ApplicationDetail = () => {
     const isPythonApp = ['flask', 'django'].includes(app.app_type);
     const isDockerApp = app.app_type === 'docker';
     const isRunning = app.status === 'running';
+    const typeInfo = getServiceType(app.app_type);
+    const statusInfo = getStatusConfig(app.status);
 
     return (
         <div className="page-container app-detail-page">
@@ -173,28 +173,25 @@ const ApplicationDetail = () => {
 
             {/* App Header */}
             <div className="app-detail-header">
-                <div className="app-detail-icon" style={{ background: getStackColor(app.app_type) }}>
+                <div className="app-detail-icon" style={{ background: typeInfo.bgColor, color: typeInfo.color }}>
                     {getAppIcon(app.app_type)}
                 </div>
                 <div className="app-detail-title-block">
                     <h1>
                         {app.name}
-                        <span className={`app-status-badge ${isRunning ? 'running' : 'stopped'}`}>
-                            <span className="pulse-dot" />
-                            {isRunning ? 'Running' : 'Stopped'}
-                        </span>
+                        <Pill kind={STATUS_PILL[statusInfo.dotClass] || 'gray'}>{statusInfo.label}</Pill>
                         {app.environment_type && app.environment_type !== 'standalone' && (
-                            <span className={`env-badge env-${app.environment_type}`}>
+                            <EnvTag env={app.environment_type}>
                                 {app.environment_type === 'production' ? 'PROD' :
                                  app.environment_type === 'development' ? 'DEV' : 'STAGING'}
                                 {app.has_linked_app && <GitBranch size={10} />}
-                            </span>
+                            </EnvTag>
                         )}
                     </h1>
                     <div className="app-detail-subtitle">
                         <span>{app.app_type.toUpperCase()}</span>
-                        <span className="separator">•</span>
-                        {app.port && <><span className="mono">Port {app.port}</span><span className="separator">•</span></>}
+                        <span className="separator">&middot;</span>
+                        {app.port && <><span className="mono">Port {app.port}</span><span className="separator">&middot;</span></>}
                         <span>Created {new Date(app.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
@@ -569,14 +566,16 @@ const RoutingDiagnosticsPanel = ({ appId }) => {
         <div className="app-panel">
             <div className="app-panel-header">
                 <span>Routing Diagnostics</span>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={runDiagnostics}
-                    disabled={loading}
-                >
-                    {loading ? 'Checking...' : 'Run Diagnostics'}
-                </Button>
+                <span className="app-panel-header-actions">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={runDiagnostics}
+                        disabled={loading}
+                    >
+                        {loading ? 'Checking...' : 'Run Diagnostics'}
+                    </Button>
+                </span>
             </div>
             <div className="app-panel-body">
                 {diagnostics ? (
@@ -603,7 +602,7 @@ const RoutingDiagnosticsPanel = ({ appId }) => {
                     </>
                 ) : (
                     <p className="app-panel-hint">
-                        Click "Run Diagnostics" to check routing configuration and identify issues.
+                        Click &quot;Run Diagnostics&quot; to check routing configuration and identify issues.
                     </p>
                 )}
             </div>
@@ -802,8 +801,8 @@ const CommandsTab = ({ appId, appType }) => {
 
     return (
         <div>
-            <h3>Run Commands</h3>
-            <p className="hint">Commands run in the app's virtual environment context.</p>
+            <h3 className="app-eyebrow">Run Commands</h3>
+            <p className="hint">Commands run in the app&apos;s virtual environment context.</p>
 
             <div className="quick-commands">
                 {quickCommands.map(({ label, cmd }) => (
@@ -992,15 +991,15 @@ const BuildTab = ({ appId, appPath }) => {
         }
     }
 
-    function getStatusBadgeVariant(status) {
+    function getStatusPillKind(status) {
         switch (status) {
-            case 'live': return 'success';
+            case 'live': return 'green';
             case 'building':
             case 'deploying':
-            case 'pending': return 'warning';
-            case 'failed': return 'destructive';
-            case 'rolled_back': return 'secondary';
-            default: return 'default';
+            case 'pending': return 'amber';
+            case 'failed': return 'red';
+            case 'rolled_back': return 'gray';
+            default: return 'gray';
         }
     }
 
@@ -1087,7 +1086,7 @@ const BuildTab = ({ appId, appPath }) => {
                             <div key={dep.version} className={`deployment-item ${dep.status === 'live' ? 'current' : ''}`}>
                                 <div className="deployment-info">
                                     <span className="deployment-version">v{dep.version}</span>
-                                    <Badge variant={getStatusBadgeVariant(dep.status)}>{dep.status}</Badge>
+                                    <Pill kind={getStatusPillKind(dep.status)}>{dep.status}</Pill>
                                 </div>
                                 <div className="deployment-meta">
                                     <span>{new Date(dep.created_at).toLocaleString()}</span>
@@ -1325,7 +1324,7 @@ const SettingsTab = ({ app, onUpdate }) => {
 
     return (
         <div>
-            <h3>Application Settings</h3>
+            <h3 className="app-eyebrow">Application Settings</h3>
 
             <div className="card settings-section">
                 <h4>Environment Configuration</h4>
@@ -1340,9 +1339,9 @@ const SettingsTab = ({ app, onUpdate }) => {
                     </div>
                     <div className="settings-control">
                         {app.has_linked_app ? (
-                            <span className={`env-badge env-${app.environment_type}`}>
+                            <EnvTag env={app.environment_type}>
                                 {envLabels[app.environment_type] || app.environment_type}
-                            </span>
+                            </EnvTag>
                         ) : (
                             <select
                                 value={environmentType}
@@ -1449,7 +1448,7 @@ const DeployTab = ({ appId, appPath }) => {
                 try {
                     const statusRes = await api.getAppGitStatus(appId);
                     setGitStatus(statusRes);
-                } catch (e) {}
+                } catch { /* git status is optional context for the deploy tab */ }
             } else {
                 setConfig(null);
             }
@@ -1529,12 +1528,12 @@ const DeployTab = ({ appId, appPath }) => {
         }
     }
 
-    function getStatusBadgeVariant(status) {
+    function getStatusPillKind(status) {
         switch (status) {
-            case 'success': return 'success';
-            case 'failed': return 'destructive';
-            case 'in_progress': return 'warning';
-            default: return 'secondary';
+            case 'success': return 'green';
+            case 'failed': return 'red';
+            case 'in_progress': return 'amber';
+            default: return 'gray';
         }
     }
 
@@ -1616,7 +1615,7 @@ const DeployTab = ({ appId, appPath }) => {
                                 <div className="deployments-list">
                                     {history.slice(0, 5).map((dep, idx) => (
                                         <div key={idx} className="deployment-item">
-                                            <Badge variant={getStatusBadgeVariant(dep.status)}>{dep.status}</Badge>
+                                            <Pill kind={getStatusPillKind(dep.status)}>{dep.status}</Pill>
                                             <span className="deployment-date">{new Date(dep.timestamp).toLocaleString()}</span>
                                         </div>
                                     ))}
