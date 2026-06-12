@@ -51,6 +51,127 @@ $lk-default:  #646b7a;
 .lv-page .spinning { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 
+// ─── Interactive terminal tab (demo console: target rail + shell pane) ───
+.term-shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    height: calc(100vh - 220px);
+    min-height: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+
+    &__rail {
+        border-right: 1px solid var(--border-soft);
+        overflow-y: auto;
+        padding: $space-2 0;
+    }
+
+    &__grp {
+        padding: 8px 14px 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-ghost);
+    }
+
+    &__hint {
+        padding: 8px 14px;
+        font-size: 12.5px;
+        color: var(--text-faint);
+    }
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        padding: 8px 14px;
+        background: transparent;
+        border: none;
+        text-align: left;
+        font-size: 13px;
+        color: var(--text-dim);
+        cursor: pointer;
+        transition: background 0.12s, color 0.12s;
+
+        &:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+        &.is-active { background: var(--accent-bg); color: var(--accent-bright); }
+        &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+
+    &__dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-ghost);
+        flex-shrink: 0;
+
+        &.is-on { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    }
+
+    &__name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__sub {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--text-ghost);
+    }
+
+    &__main {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        padding: $space-3;
+
+        // RemoteTerminal brings drawer chrome — flatten it inside the frame
+        .remote-terminal-container {
+            flex: 1;
+            min-width: 0;
+            box-shadow: none;
+        }
+    }
+
+    &__empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: $space-3;
+        padding: $space-6;
+        color: var(--text-faint);
+        text-align: center;
+
+        p {
+            max-width: 400px;
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+    }
+
+    @media (max-width: $breakpoint-md) {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+
+        &__rail {
+            border-right: none;
+            border-bottom: 1px solid var(--border-soft);
+            max-height: 180px;
+        }
+    }
+}
+
 // ─── Console frame (panes joined by 1px borders) ──────
 .lv-page {
     display: flex;

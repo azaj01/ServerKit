@@ -117,6 +117,46 @@ def broadcast_metrics():
         time.sleep(2)  # Update every 2 seconds
 
 
+@socketio.on('subscribe_terminal')
+def handle_subscribe_terminal(data):
+    """Join the stream room for a remote terminal session (agent PTY output).
+
+    The agent streams base64 PTY output on channel `terminal:<session_id>`;
+    the agent gateway rebroadcasts it as `server_stream` events into the room
+    `server_<server_id>_terminal:<session_id>`. This handler is what lets a
+    browser join that room — without it the output never reaches the UI.
+    Session ids are unguessable uuids minted by TerminalService for the
+    authenticated creator.
+    """
+    from app.services.terminal_service import TerminalService
+
+    session_id = (data or {}).get('session_id')
+    if not session_id:
+        emit('error', {'message': 'session_id required'})
+        return
+
+    session = TerminalService.get_session(session_id)
+    if not session:
+        emit('error', {'message': 'Unknown terminal session'})
+        return
+
+    join_room(f"server_{session['server_id']}_terminal:{session_id}")
+    emit('subscribed', {'channel': f'terminal:{session_id}'})
+
+
+@socketio.on('unsubscribe_terminal')
+def handle_unsubscribe_terminal(data):
+    """Leave a terminal session's stream room."""
+    from app.services.terminal_service import TerminalService
+
+    session_id = (data or {}).get('session_id')
+    if not session_id:
+        return
+    session = TerminalService.get_session(session_id)
+    if session:
+        leave_room(f"server_{session['server_id']}_terminal:{session_id}")
+
+
 @socketio.on('subscribe_logs')
 def handle_subscribe_logs(data):
     """Subscribe to real-time log streaming."""

@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import api from '../services/api';
-import { useSocket } from '../contexts/SocketContext';
+import socketService from '../services/socket';
 
 /**
  * RemoteTerminal - Interactive terminal component for remote server access
@@ -21,7 +21,6 @@ export default function RemoteTerminal({ serverId, onClose }) {
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState(null);
     const [shellName, setShellName] = useState('');
-    const { socket, connected: socketConnected } = useSocket();
 
     // Initialize terminal
     useEffect(() => {
@@ -158,36 +157,45 @@ export default function RemoteTerminal({ serverId, onClose }) {
         };
     }, [sessionId, connected]);
 
-    // Listen for terminal output via WebSocket
+    // Listen for terminal output: the agent streams base64 PTY data on the
+    // channel `terminal:<session_id>`, which the agent gateway rebroadcasts as
+    // `server_stream` events into a room we join via subscribe_terminal.
     useEffect(() => {
-        if (!socket || !sessionId || !socketConnected) return;
+        if (!sessionId) return;
+
+        socketService.connect();
+        const sock = socketService.socket;
+        if (!sock) return;
 
         const channel = `terminal:${sessionId}`;
 
-        const handleTerminalData = (data) => {
-            if (!terminalInstance.current) return;
-
-            if (data.type === 'output' && data.data) {
-                // Decode base64 output
+        const handleStream = (msg) => {
+            if (msg?.channel !== channel || !terminalInstance.current) return;
+            const payload = msg.data || {};
+            if (payload.type === 'output' && payload.data) {
                 try {
-                    const decoded = atob(data.data);
-                    terminalInstance.current.write(decoded);
+                    terminalInstance.current.write(atob(payload.data));
                 } catch (err) {
                     console.error('Failed to decode terminal output:', err);
                 }
-            } else if (data.type === 'closed') {
+            } else if (payload.type === 'closed') {
                 terminalInstance.current.writeln('');
                 terminalInstance.current.writeln('\x1b[1;33mSession closed\x1b[0m');
                 setConnected(false);
             }
         };
+        const subscribe = () => sock.emit('subscribe_terminal', { session_id: sessionId });
 
-        socket.on(channel, handleTerminalData);
+        sock.on('server_stream', handleStream);
+        sock.on('connect', subscribe); // re-join the room after reconnects
+        if (sock.connected) subscribe();
 
         return () => {
-            socket.off(channel, handleTerminalData);
+            sock.off('server_stream', handleStream);
+            sock.off('connect', subscribe);
+            if (sock.connected) sock.emit('unsubscribe_terminal', { session_id: sessionId });
         };
-    }, [socket, sessionId, socketConnected]);
+    }, [sessionId]);
 
     // Cleanup session on unmount
     useEffect(() => {

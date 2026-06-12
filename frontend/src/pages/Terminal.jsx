@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import TargetPicker from '../components/TargetPicker';
+import RemoteTerminal from '../components/RemoteTerminal';
 import LogFileList from '../components/log-viewer/LogFileList';
 import LogToolbar from '../components/log-viewer/LogToolbar';
 import LogContent from '../components/log-viewer/LogContent';
@@ -13,9 +14,14 @@ import { Pill } from '../components/ds';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { FileText, Clock, AlertCircle, Search, X, RefreshCw, AlertTriangle, Activity, Play, Square, RotateCw } from 'lucide-react';
+import {
+    FileText, Clock, AlertCircle, Search, X, RefreshCw, AlertTriangle, Activity,
+    Play, Square, RotateCw, Terminal as TerminalIcon,
+} from 'lucide-react';
 
-const VALID_TABS = ['logs', 'journal', 'processes', 'services'];
+// 'logs' stays first so the default landing keeps working on installs with no
+// paired agents (the interactive shell needs a connected agent).
+const VALID_TABS = ['logs', 'journal', 'processes', 'services', 'terminal'];
 
 const Terminal = () => {
     const [activeTab, setActiveTab] = useTabParam('/terminal', VALID_TABS);
@@ -31,6 +37,10 @@ const Terminal = () => {
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList>
+                    <TabsTrigger value="terminal">
+                        <TerminalIcon size={16} />
+                        Terminal
+                    </TabsTrigger>
                     <TabsTrigger value="logs">
                         <svg viewBox="0 0 24 24" width="16" height="16">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -67,6 +77,9 @@ const Terminal = () => {
                 </TabsList>
 
                 <div className="tab-content">
+                    <TabsContent value="terminal">
+                        <TerminalShellTab />
+                    </TabsContent>
                     <TabsContent value="logs">
                         <LogFilesTab />
                     </TabsContent>
@@ -81,6 +94,77 @@ const Terminal = () => {
                     </TabsContent>
                 </div>
             </Tabs>
+        </div>
+    );
+};
+
+// ─── Interactive shell tab (demo console: target rail + terminal pane) ───
+// Sessions run over the ServerKit agent (terminal:create); the panel host has
+// no PTY endpoint (§5 gap), so the rail lists paired agent servers only.
+const TerminalShellTab = () => {
+    const [servers, setServers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedId, setSelectedId] = useState(null);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const data = await api.getServers();
+                const list = Array.isArray(data) ? data : (data.servers || []);
+                setServers(list);
+                const firstOnline = list.find(s => s.status === 'online');
+                if (firstOnline) setSelectedId(firstOnline.id);
+            } catch (err) {
+                console.error('Failed to load servers:', err);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, []);
+
+    const selected = servers.find(s => s.id === selectedId) || null;
+    const anyOnline = servers.some(s => s.status === 'online');
+
+    return (
+        <div className="term-shell">
+            <aside className="term-shell__rail" aria-label="Terminal targets">
+                <div className="term-shell__grp">Agent servers</div>
+                {loading && <div className="term-shell__hint">Loading servers…</div>}
+                {!loading && servers.length === 0 && (
+                    <div className="term-shell__hint">No servers paired yet.</div>
+                )}
+                {servers.map(s => {
+                    const online = s.status === 'online';
+                    return (
+                        <button
+                            key={s.id}
+                            type="button"
+                            className={`term-shell__row ${s.id === selectedId ? 'is-active' : ''}`}
+                            onClick={() => setSelectedId(s.id)}
+                            disabled={!online}
+                            title={online ? `Open a shell on ${s.name}` : `${s.name || s.id} is ${s.status || 'offline'}`}
+                        >
+                            <span className={`term-shell__dot ${online ? 'is-on' : ''}`} />
+                            <span className="term-shell__name">{s.name || s.hostname || s.id}</span>
+                            {s.ip_address && <span className="term-shell__sub">{s.ip_address}</span>}
+                        </button>
+                    );
+                })}
+            </aside>
+            <div className="term-shell__main">
+                {selected ? (
+                    <RemoteTerminal key={selected.id} serverId={selected.id} onClose={() => setSelectedId(null)} />
+                ) : (
+                    <div className="term-shell__empty">
+                        <TerminalIcon size={26} />
+                        <p>
+                            {anyOnline
+                                ? 'Pick a server on the left to open a shell.'
+                                : 'Interactive shells run over the ServerKit agent. Pair a server (Servers → Add Server) and it will show up here.'}
+                        </p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

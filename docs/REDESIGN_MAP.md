@@ -275,12 +275,16 @@ payload — §5). Remaining in this group:
   layout is a deliberate improvement — keep.
 - Backend (§5): metrics-history AreaCharts, real template catalog (live has 1 hardcoded template).
 
-### 8.3 Terminal / Console — biggest IA gap
-Demo is a **unified console**: persistent left target rail (server/WP/DBs/containers/services groups, glowing
-status dots) + Terminal⇄Logs mode toggle + **interactive terminal pane**. Live is 4 separate tabs with a
-modal TargetPicker and **no terminal shell at all** on this page. Pass-1 restyled the log wells, but the
-shape of the page is not the demo's. Needs the §5 unified-targets endpoint to be fully real; an interim
-win: host the existing SSH/xterm console (RemoteTerminal is built but unmounted) as a Terminal tab.
+### 8.3 Terminal / Console — ✅ **Terminal tab shipped 2026-06-11** (rail IA still §5)
+The Terminal page now has an actual terminal: a **Terminal tab** (`.term-shell`: demo-style target rail with
+glowing status dots + xterm pane) hosting `RemoteTerminal` against paired agent servers. This required fixing
+the whole output path — `RemoteTerminal` referenced a **nonexistent `SocketContext`** and listened for a
+`terminal:<sid>` event nothing emits; rewired to `services/socket.js` + new `subscribe_terminal` /
+`unsubscribe_terminal` handlers in `sockets.py` that join the browser into the gateway's
+`server_<id>_terminal:<session>` stream room (agent PTY → gateway `server_stream` → xterm), with
+reconnect re-subscribe. 'logs' stays the default landing (shell needs a connected agent; panel-host PTY =
+§5 gap, local is rejected by TerminalService). Still §5: the unified all-targets rail (WP/DBs/containers
+groups) + live non-file log streaming.
 
 ### 8.4 WordPress — ✅ **JSX-only parts done 2026-06-11**
 - List: **bulk-select shipped** — header + per-row checkboxes, accent `is-selected` rows, bulkbar with
