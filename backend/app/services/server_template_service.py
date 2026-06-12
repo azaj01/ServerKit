@@ -316,21 +316,16 @@ class ServerTemplateService:
         if not assignment:
             return None
 
-        assignment.status = ServerTemplateAssignment.STATUS_CHECKING
+        # Agent-side config drift checking is NOT implemented (the agent has no
+        # config_drift_check handler, and the old code dispatched to a
+        # non-existent get_agent_gateway()). Report honestly instead of leaving
+        # the assignment stuck in 'checking' forever.
+        assignment.status = ServerTemplateAssignment.STATUS_UNKNOWN
+        assignment.drift_report = {
+            'error': 'Agent-side configuration drift checking is not implemented yet',
+        }
+        assignment.last_check_at = datetime.utcnow()
         db.session.commit()
-
-        # Send drift check command to agent
-        try:
-            from app.agent_gateway import get_agent_gateway
-            gw = get_agent_gateway()
-            if gw and assignment.server:
-                spec = assignment.template.get_merged_spec()
-                gw.send_command(assignment.server.agent_id, 'config_drift_check', {
-                    'assignment_id': assignment.id,
-                    'spec': spec,
-                })
-        except Exception as e:
-            logger.warning(f'Could not send drift check command: {e}')
 
         return assignment
 
@@ -359,20 +354,15 @@ class ServerTemplateService:
         if not assignment:
             return None
 
-        assignment.status = ServerTemplateAssignment.STATUS_REMEDIATING
+        # Agent-side remediation is NOT implemented (no config_remediate handler;
+        # old code dispatched to a non-existent get_agent_gateway()). Report
+        # honestly instead of leaving the assignment stuck in 'remediating'.
+        assignment.status = ServerTemplateAssignment.STATUS_UNKNOWN
+        assignment.drift_report = {
+            'error': 'Agent-side template remediation is not implemented yet',
+        }
+        assignment.last_remediation_at = datetime.utcnow()
         db.session.commit()
-
-        try:
-            from app.agent_gateway import get_agent_gateway
-            gw = get_agent_gateway()
-            if gw and assignment.server:
-                spec = assignment.template.get_merged_spec()
-                gw.send_command(assignment.server.agent_id, 'config_remediate', {
-                    'assignment_id': assignment.id,
-                    'spec': spec,
-                })
-        except Exception as e:
-            logger.warning(f'Could not send remediate command: {e}')
 
         return assignment
 

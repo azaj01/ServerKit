@@ -152,26 +152,14 @@ class AgentPluginService:
                 install.config = config
             db.session.add(install)
 
+        # Agent-side plugin execution is NOT implemented: the Go agent has no
+        # plugin_install handler and there is no panel gateway to route one to.
+        # The previous code called a non-existent get_agent_gateway() and
+        # swallowed the resulting ImportError, leaving the row stuck in
+        # 'installing' forever. Fail honestly so the UI reflects reality.
+        install.status = AgentPluginInstall.STATUS_ERROR
+        install.error_message = 'Agent-side plugin support is not implemented yet'
         db.session.commit()
-
-        # Send install command to agent
-        try:
-            from app.agent_gateway import get_agent_gateway
-            gw = get_agent_gateway()
-            if gw:
-                gw.send_command(server.agent_id, 'plugin_install', {
-                    'plugin_name': plugin.name,
-                    'version': plugin.version,
-                    'manifest': plugin.manifest,
-                    'config': install.config,
-                    'permissions': plugin.permissions,
-                    'resource_limits': {
-                        'max_memory_mb': plugin.max_memory_mb,
-                        'max_cpu_percent': plugin.max_cpu_percent,
-                    }
-                })
-        except Exception as e:
-            logger.warning(f'Could not send plugin install command: {e}')
 
         return install
 
@@ -181,19 +169,10 @@ class AgentPluginService:
         if not install:
             return False
 
+        # No agent-side plugin runtime exists to notify; uninstall is local-only
+        # bookkeeping. (Previously dispatched to a non-existent get_agent_gateway.)
         install.status = AgentPluginInstall.STATUS_UNINSTALLING
         db.session.commit()
-
-        # Send uninstall command to agent
-        try:
-            from app.agent_gateway import get_agent_gateway
-            gw = get_agent_gateway()
-            if gw and install.server:
-                gw.send_command(install.server.agent_id, 'plugin_uninstall', {
-                    'plugin_name': install.plugin.name,
-                })
-        except Exception as e:
-            logger.warning(f'Could not send plugin uninstall command: {e}')
 
         return True
 
@@ -211,18 +190,9 @@ class AgentPluginService:
         install = AgentPluginInstall.query.get(install_id)
         if not install:
             return None
+        # Local-only state change; no agent-side plugin runtime to notify.
         install.status = AgentPluginInstall.STATUS_DISABLED
         db.session.commit()
-
-        try:
-            from app.agent_gateway import get_agent_gateway
-            gw = get_agent_gateway()
-            if gw and install.server:
-                gw.send_command(install.server.agent_id, 'plugin_disable', {
-                    'plugin_name': install.plugin.name,
-                })
-        except Exception as e:
-            logger.warning(f'Could not send plugin disable command: {e}')
 
         return install
 
@@ -247,19 +217,9 @@ class AgentPluginService:
         install = AgentPluginInstall.query.get(install_id)
         if not install:
             return None
+        # Local-only config persistence; no agent-side plugin runtime to notify.
         install.config = config
         db.session.commit()
-
-        try:
-            from app.agent_gateway import get_agent_gateway
-            gw = get_agent_gateway()
-            if gw and install.server:
-                gw.send_command(install.server.agent_id, 'plugin_configure', {
-                    'plugin_name': install.plugin.name,
-                    'config': config,
-                })
-        except Exception as e:
-            logger.warning(f'Could not send plugin config update: {e}')
 
         return install
 
