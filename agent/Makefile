@@ -55,10 +55,10 @@ build-all:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(WINDOWS_LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-windows-amd64.exe ./cmd/agent
 	@echo "Building for Windows arm64..."
 	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "$(WINDOWS_LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-windows-arm64.exe ./cmd/agent
-	@echo "Building for macOS amd64..."
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(AGENT_LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-darwin-amd64 ./cmd/agent
-	@echo "Building for macOS arm64..."
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$(AGENT_LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-darwin-arm64 ./cmd/agent
+	@echo "Building for macOS amd64... (non-fatal: systray needs CGO on darwin, so this only works on a Mac)"
+	-CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags "$(AGENT_LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-darwin-amd64 ./cmd/agent
+	@echo "Building for macOS arm64... (non-fatal)"
+	-CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags "$(AGENT_LDFLAGS)" -o $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-darwin-arm64 ./cmd/agent
 	@echo "Done! Binaries in $(DIST_DIR)/"
 
 # Build Linux only
