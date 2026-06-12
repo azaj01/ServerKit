@@ -27,6 +27,35 @@ container_log_streams = {}  # sid -> {'process': Popen, 'app_id': int, 'thread':
 # Store active pipeline subscriptions
 pipeline_subscribers = {}  # sid -> set of project_ids
 
+# Authenticated identity per connected client. Populated at connect time
+# (after the JWT is verified AND the user is confirmed active) and read by
+# the room/subscription handlers to make authorization decisions. Without
+# this, every handler only knew "the token decoded" — not who the user is or
+# what role they hold — so a viewer could join a developer's live terminal
+# room. Keyed by request.sid; cleaned up on disconnect. Guarded by a lock
+# because async_mode='threading' runs handlers across worker threads.
+connected_clients = {}  # sid -> {'user_id': ..., 'role': ...}
+_connected_clients_lock = threading.Lock()
+
+# Roles permitted to drive/observe privileged server surfaces (remote
+# terminals). Mirrors the REST side, where terminal create/input/kill are
+# @developer_required — viewing the live PTY stream must require the same.
+_PRIVILEGED_ROLES = ('admin', 'developer')
+
+
+def _client_role(sid):
+    """Return the authenticated role for a connected socket, or None if the
+    socket isn't in our authenticated set (shouldn't happen post-connect)."""
+    with _connected_clients_lock:
+        info = connected_clients.get(sid)
+        return info['role'] if info else None
+
+
+def _client_is_privileged(sid):
+    """True when the connected socket belongs to an admin/developer — the
+    roles allowed to attach to remote terminal streams."""
+    return _client_role(sid) in _PRIVILEGED_ROLES
+
 
 def init_socketio(app):
     """Initialize SocketIO with the Flask app."""
@@ -40,22 +69,43 @@ def init_socketio(app):
 
 @socketio.on('connect')
 def handle_connect(auth):
-    """Handle client connection."""
+    """Handle client connection.
+
+    Authenticates the socket and records the caller's identity + role so the
+    per-room handlers can authorize. A token that merely decodes is NOT enough:
+    we also confirm the user still exists and is active, then stash the role.
+    A deactivated/deleted account whose JWT hasn't expired yet is rejected here
+    rather than being allowed to keep streaming.
+    """
     # Verify JWT token from auth payload (not query string, to avoid token leakage in logs)
     token = None
     if auth and isinstance(auth, dict):
         token = auth.get('token')
 
-    if token:
-        try:
-            decode_token(token)
-            emit('connected', {'status': 'connected'})
-        except Exception as e:
-            emit('error', {'message': 'Invalid token'})
-            return False
-    else:
+    if not token:
         emit('error', {'message': 'Token required'})
         return False
+
+    try:
+        decoded = decode_token(token)
+    except Exception:
+        emit('error', {'message': 'Invalid token'})
+        return False
+
+    # Resolve the identity to a live, active user. decode_token only proves the
+    # token is well-formed and unexpired — it says nothing about whether the
+    # account is still allowed in.
+    from app.models import User
+    user_id = decoded.get('sub')
+    user = User.query.get(user_id) if user_id is not None else None
+    if not user or not user.is_active:
+        emit('error', {'message': 'Account not found or deactivated'})
+        return False
+
+    with _connected_clients_lock:
+        connected_clients[request.sid] = {'user_id': user.id, 'role': user.role}
+
+    emit('connected', {'status': 'connected'})
 
 
 @socketio.on('disconnect')
@@ -75,6 +125,10 @@ def handle_disconnect():
 
     # Remove from pipeline subscribers
     pipeline_subscribers.pop(sid, None)
+
+    # Drop the authenticated-identity record for this socket.
+    with _connected_clients_lock:
+        connected_clients.pop(sid, None)
 
 
 @socketio.on('subscribe_metrics')
@@ -129,6 +183,15 @@ def handle_subscribe_terminal(data):
     authenticated creator.
     """
     from app.services.terminal_service import TerminalService
+
+    # Attaching to a live PTY stream exposes everything typed and printed in
+    # that shell (often running as root on the agent host). Creating a terminal
+    # is @developer_required on the REST side, so observing one must demand the
+    # same role — otherwise a read-only viewer could join the stream room and
+    # watch a privileged session.
+    if not _client_is_privileged(request.sid):
+        emit('error', {'message': 'Developer role required for terminal access'})
+        return
 
     session_id = (data or {}).get('session_id')
     if not session_id:
@@ -198,11 +261,27 @@ def handle_unsubscribe_logs():
 
 @socketio.on('join_room')
 def handle_join_room(data):
-    """Join a specific room for targeted broadcasts."""
+    """Join a specific room for targeted broadcasts.
+
+    This is the generic join used by job-progress and cloudflared-login
+    streaming (rooms shaped `server_<id>_<channel>`). It is deliberately
+    permissive for those — the data mirrors what any authenticated user can
+    already pull over REST — but it must NOT become a side door into the
+    privileged terminal stream rooms (`server_<id>_terminal:<session>`), which
+    `subscribe_terminal` gates by role. Enforce that gate here too so the
+    generic primitive can't be used to bypass it.
+    """
     room = data.get('room')
-    if room:
-        join_room(room)
-        emit('joined', {'room': room})
+    if not room or not isinstance(room, str):
+        emit('error', {'message': 'room required'})
+        return
+
+    if '_terminal:' in room and not _client_is_privileged(request.sid):
+        emit('error', {'message': 'Developer role required for terminal access'})
+        return
+
+    join_room(room)
+    emit('joined', {'room': room})
 
 
 @socketio.on('leave_room')
