@@ -140,6 +140,9 @@ func (u *Updater) DownloadUpdate(ctx context.Context, info *VersionInfo) (string
 	if info.DownloadURL == "" {
 		return "", fmt.Errorf("no download URL available")
 	}
+	if err := requireSecureURL(info.DownloadURL); err != nil {
+		return "", err
+	}
 
 	u.log.Info("Downloading update", "version", info.LatestVersion, "url", info.DownloadURL)
 
@@ -163,14 +166,20 @@ func (u *Updater) DownloadUpdate(ctx context.Context, info *VersionInfo) (string
 		return "", fmt.Errorf("failed to download update: %w", err)
 	}
 
-	// Verify checksum if available
-	if info.ChecksumsURL != "" {
-		if err := u.verifyChecksum(ctx, archivePath, info.ChecksumsURL); err != nil {
-			os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("checksum verification failed: %w", err)
-		}
-		u.log.Info("Checksum verified successfully")
+	// Verify checksum — MANDATORY and fail-closed. Refuse to install an update
+	// that arrives without a checksums URL, or whose checksum we can't match,
+	// rather than running an unverified binary as the agent (often root).
+	// Cryptographic signing of releases is the recommended next layer; until
+	// then this at least prevents silent integrity bypass.
+	if info.ChecksumsURL == "" {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("refusing to install update: no checksums URL provided")
 	}
+	if err := u.verifyChecksum(ctx, archivePath, info.ChecksumsURL); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("checksum verification failed: %w", err)
+	}
+	u.log.Info("Checksum verified successfully")
 
 	// Extract binary
 	binaryPath, err := u.extractBinary(archivePath, tmpDir)
@@ -307,6 +316,10 @@ func (u *Updater) downloadFile(ctx context.Context, url, destPath string) error 
 }
 
 func (u *Updater) verifyChecksum(ctx context.Context, filePath, checksumsURL string) error {
+	if err := requireSecureURL(checksumsURL); err != nil {
+		return err
+	}
+
 	// Download checksums file
 	req, err := http.NewRequestWithContext(ctx, "GET", checksumsURL, nil)
 	if err != nil {
@@ -319,21 +332,18 @@ func (u *Updater) verifyChecksum(ctx context.Context, filePath, checksumsURL str
 	}
 	defer resp.Body.Close()
 
+	// A non-200 (e.g. a 404 HTML page) must not be treated as "no checksum
+	// available" — that previously degraded into skipping verification.
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to fetch checksums: status %d", resp.StatusCode)
+	}
+
 	checksumsData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
 
-	// Parse checksums
-	checksums := make(map[string]string)
-	for _, line := range strings.Split(string(checksumsData), "\n") {
-		parts := strings.Fields(line)
-		if len(parts) >= 2 {
-			checksums[parts[1]] = parts[0]
-		}
-	}
-
-	// Calculate file hash
+	// Stream the archive through SHA-256 so we don't buffer the whole file.
 	f, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -346,34 +356,55 @@ func (u *Updater) verifyChecksum(ctx context.Context, filePath, checksumsURL str
 	}
 	actualHash := hex.EncodeToString(hasher.Sum(nil))
 
-	// Find expected hash
-	fileName := filepath.Base(filePath)
-	// Try to match by looking for platform-specific name
-	expectedHash := ""
+	return matchChecksum(actualHash, string(checksumsData))
+}
+
+// matchChecksum verifies actualHash against the entry for this platform in a
+// checksums.txt body. It FAILS CLOSED: an empty/unparseable body, no entry
+// matching this GOOS/GOARCH, or a hash mismatch all return an error. The old
+// implementation returned nil ("skip verification") when no entry matched,
+// which let a crafted or truncated checksums file disable integrity entirely.
+func matchChecksum(actualHash, checksumsBody string) error {
+	checksums := make(map[string]string)
+	for _, line := range strings.Split(checksumsBody, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			checksums[parts[1]] = parts[0]
+		}
+	}
+	if len(checksums) == 0 {
+		return fmt.Errorf("checksums file contained no usable entries")
+	}
+
+	expected := ""
 	for name, hash := range checksums {
 		if strings.Contains(name, runtime.GOOS) && strings.Contains(name, runtime.GOARCH) {
-			expectedHash = hash
+			expected = hash
 			break
 		}
 	}
-
-	if expectedHash == "" {
-		// Try exact match
-		if hash, ok := checksums[fileName]; ok {
-			expectedHash = hash
-		}
+	if expected == "" {
+		return fmt.Errorf("no checksum entry for %s/%s in checksums file", runtime.GOOS, runtime.GOARCH)
 	}
 
-	if expectedHash == "" {
-		u.log.Warn("Could not find checksum for downloaded file, skipping verification")
+	if !strings.EqualFold(actualHash, expected) {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actualHash)
+	}
+	return nil
+}
+
+// requireSecureURL rejects non-HTTPS update/checksum URLs so an on-path
+// attacker can't serve a downgraded plaintext binary. The same
+// SERVERKIT_INSECURE_TLS escape hatch the rest of the agent honours allows
+// http:// for local development.
+func requireSecureURL(raw string) error {
+	if strings.HasPrefix(strings.ToLower(raw), "https://") {
 		return nil
 	}
-
-	if actualHash != expectedHash {
-		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedHash, actualHash)
+	if os.Getenv("SERVERKIT_INSECURE_TLS") == "true" {
+		return nil
 	}
-
-	return nil
+	return fmt.Errorf("refusing non-HTTPS update URL: %s", raw)
 }
 
 func (u *Updater) extractBinary(archivePath, destDir string) (string, error) {
