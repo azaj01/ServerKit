@@ -300,9 +300,12 @@ rail group** (Sites `/var/www`, Stack `/opt/serverkit`, Web config `/etc/nginx`,
 `meta` shows the browse target (remote agent name / "panel host"); breadcrumb `›` icons → demo mono `/`;
 ext-badge on image thumbs now always visible.
 
-### 8.6 Docker — close; 4 small items
-KPI icon tone-wash not applying (verify `.sk-kpi__icon--*` rules actually color the lucide SVG), per-container
-accent dot in name cell, Projects KPI (compose-label count), logs modal→drawer (blocked on §6.3).
+### 8.6 Docker — ✅ **done 2026-06-11** (2 of 4 items were non-issues)
+KPI icon tone-wash: **false alarm** — verified `.sk-kpi__icon--*` rules + `tone` props are correct end-to-end.
+**Per-container accent dot shipped**: hue-hashed identity dot in the name cell (demo `.dot-ico`), dimmed when
+stopped (status lives in the Status pill). Projects KPI: **skipped** — compose-project labels only exist on
+per-container inspect, a count needs an extra fetch per target, and the 4th KPI slot already carries real
+Networks data. Logs modal→drawer stays blocked on §6.3.
 
 ### 8.7 Workspaces — ✅ **done 2026-06-11 (commit 2312cf4)**
 Built `/workspaces/:id` **WorkspaceDetail** on real data: site-header hero (brand tile, active/status Pill, mono

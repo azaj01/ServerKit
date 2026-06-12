@@ -101,6 +101,13 @@ const getContainerStatusLabel = (container) => {
     return state || 'Unknown';
 };
 
+// Deterministic hue from a container name (demo's per-container accent color).
+const containerHue = (name = '') => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+    return h;
+};
+
 const getContainerProjectName = (container, details) => {
     const labels = details?.Config?.Labels || container?.Labels || {};
     return labels['com.docker.compose.project'] || labels['com.docker.compose.service'] || '-';
@@ -926,7 +933,18 @@ const ContainersTab = ({ onStatsChange }) => {
                                                 <td>
                                                     <div className="dx-name-stack">
                                                         <span className="dx-name-line">
-                                                            <span className={`dx-status-dot ${isRunning ? 'running' : 'stopped'}`} />
+                                                            {/* hue-hashed per-container identity dot (demo .dot-ico);
+                                                                dims when stopped — status itself lives in the Status pill */}
+                                                            <span
+                                                                className={`dx-status-dot ${isRunning ? 'running' : 'stopped'}`}
+                                                                style={{
+                                                                    background: `hsl(${containerHue(getContainerName(container))} 60% 60%)`,
+                                                                    boxShadow: isRunning
+                                                                        ? `0 0 6px hsl(${containerHue(getContainerName(container))} 60% 60% / 0.55)`
+                                                                        : 'none',
+                                                                    opacity: isRunning ? 1 : 0.4,
+                                                                }}
+                                                            />
                                                             <span title={getContainerName(container)}>{getContainerName(container)}</span>
                                                         </span>
                                                         <span className="dx-muted-line mono">{shortId(containerId)}</span>
