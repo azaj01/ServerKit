@@ -106,6 +106,41 @@
         height: 40px;
     }
 
+    .cat-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+        margin-bottom: $space-5;
+    }
+
+    .cat-chip {
+        padding: $space-1 $space-3;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        background: $bg-elevated;
+        color: $text-tertiary;
+        font-family: inherit;
+        font-size: $font-size-sm + 0.5;
+        font-weight: $font-weight-medium;
+        text-transform: capitalize;
+        cursor: pointer;
+        transition:
+            color $transition-base,
+            background $transition-base,
+            border-color $transition-base;
+
+        &:hover {
+            border-color: $border-active;
+            color: $text-primary;
+        }
+
+        &--active {
+            border-color: var(--accent-dim);
+            background: var(--accent-bg);
+            color: var(--accent-bright);
+        }
+    }
+
     .marketplace-browse-grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 292px;

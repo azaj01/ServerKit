@@ -354,6 +354,28 @@ const Marketplace = () => {
                         )}
                     </div>
 
+                    <div className="cat-chips" role="group" aria-label="Filter by category">
+                        <button
+                            type="button"
+                            className={`cat-chip ${category === '' ? 'cat-chip--active' : ''}`}
+                            aria-pressed={category === ''}
+                            onClick={() => setCategory('')}
+                        >
+                            All
+                        </button>
+                        {CATEGORIES.map((item) => (
+                            <button
+                                key={item}
+                                type="button"
+                                className={`cat-chip ${category === item ? 'cat-chip--active' : ''}`}
+                                aria-pressed={category === item}
+                                onClick={() => setCategory(item)}
+                            >
+                                {titleCase(item)}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="marketplace-browse-grid">
                         <div className="marketplace-main-stack">
                             <section className="marketplace-section">
