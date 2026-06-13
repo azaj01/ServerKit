@@ -36,8 +36,8 @@ function statusPill(data) {
 // DKIM/SPF/DMARC presence (record configured vs missing)
 function dnsPill(value) {
     return value
-        ? <Pill kind="green" dot={false}>set</Pill>
-        : <Pill kind="amber" dot={false}>missing</Pill>;
+        ? <Pill kind="green">set</Pill>
+        : <Pill kind="amber">missing</Pill>;
 }
 
 function Email() {
