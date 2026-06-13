@@ -76,74 +76,54 @@ const IntegrityTab = () => {
                 </div>
             </div>
 
-            {results && results.total_changes > 0 && (
-                <div className="card">
-                    <div className="card-header">
-                        <h3>Changes Detected</h3>
-                        <span className="sec-state sec-state--amber">{results.total_changes} changes</span>
+            {results && results.total_changes > 0 && (() => {
+                const changes = results.changes || {};
+                const NEW_LIMIT = 50;
+                const newFiles = changes.new || [];
+                const extraNew = Math.max(0, newFiles.length - NEW_LIMIT);
+                // Flatten every change kind into dense-table rows (kind chip + mono path).
+                const rows = [
+                    ...(changes.modified || []).map((f) => ({ kind: 'modified', tone: 'amber', path: f.path })),
+                    ...(changes.deleted || []).map((f) => ({ kind: 'deleted', tone: 'red', path: f })),
+                    ...newFiles.slice(0, NEW_LIMIT).map((f) => ({ kind: 'new', tone: 'green', path: f })),
+                    ...(changes.permission_changed || []).map((f) => ({
+                        kind: 'permission',
+                        tone: 'cyan',
+                        path: `${f.path} (${f.old_mode} → ${f.new_mode})`,
+                    })),
+                ];
+
+                return (
+                    <div className="card sec-flush">
+                        <div className="card-header">
+                            <h3>Changes Detected</h3>
+                            <span className="sec-state sec-state--amber">{results.total_changes} changes</span>
+                        </div>
+                        <table className="sk-dtable">
+                            <thead>
+                                <tr>
+                                    <th>Change</th>
+                                    <th>Path</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((row, i) => (
+                                    <tr key={i}>
+                                        <td><span className={`sec-state sec-state--${row.tone}`}>{row.kind}</span></td>
+                                        <td className="sk-cell-mono sec-path">{row.path}</td>
+                                    </tr>
+                                ))}
+                                {extraNew > 0 && (
+                                    <tr>
+                                        <td><span className="sec-state sec-state--green">new</span></td>
+                                        <td className="sk-cell-mono sec-faint">… and {extraNew} more added</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                    <div className="card-body">
-                        {results.changes.modified?.length > 0 && (
-                            <div className="change-section">
-                                <div className="sec-change-head">
-                                    <span className="sec-state sec-state--amber">modified</span>
-                                    <span className="sec-change-count">{results.changes.modified.length} files</span>
-                                </div>
-                                <ul className="file-list">
-                                    {results.changes.modified.map((file, i) => (
-                                        <li key={i}>{file.path}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {results.changes.deleted?.length > 0 && (
-                            <div className="change-section">
-                                <div className="sec-change-head">
-                                    <span className="sec-state sec-state--red">deleted</span>
-                                    <span className="sec-change-count">{results.changes.deleted.length} files</span>
-                                </div>
-                                <ul className="file-list">
-                                    {results.changes.deleted.map((file, i) => (
-                                        <li key={i}>{file}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {results.changes.new?.length > 0 && (
-                            <div className="change-section">
-                                <div className="sec-change-head">
-                                    <span className="sec-state sec-state--cyan">added</span>
-                                    <span className="sec-change-count">{results.changes.new.length} files</span>
-                                </div>
-                                <ul className="file-list">
-                                    {results.changes.new.slice(0, 50).map((file, i) => (
-                                        <li key={i}>{file}</li>
-                                    ))}
-                                    {results.changes.new.length > 50 && (
-                                        <li className="text-muted">... and {results.changes.new.length - 50} more</li>
-                                    )}
-                                </ul>
-                            </div>
-                        )}
-
-                        {results.changes.permission_changed?.length > 0 && (
-                            <div className="change-section">
-                                <div className="sec-change-head">
-                                    <span className="sec-state sec-state--violet">permissions</span>
-                                    <span className="sec-change-count">{results.changes.permission_changed.length} files</span>
-                                </div>
-                                <ul className="file-list">
-                                    {results.changes.permission_changed.map((file, i) => (
-                                        <li key={i}>{file.path} ({file.old_mode} → {file.new_mode})</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 };

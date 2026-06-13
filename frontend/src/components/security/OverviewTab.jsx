@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import api from '../../services/api';
 import { Button } from '@/components/ui/button';
-import { Pill } from '@/components/ds';
+import { Pill, ScoreGauge } from '@/components/ds';
 
 const InstallClamAVButton = ({ onInstalled }) => {
     const [installing, setInstalling] = useState(false);
@@ -34,9 +34,74 @@ const OverviewTab = ({ status, clamavStatus, clamavLoading, onRefreshClamav }) =
     const alerts = status?.recent_alerts || {};
     const loading = clamavLoading;
     const integrityChanges = alerts.integrity_changes || 0;
+    const integrity = status?.file_integrity || {};
+
+    // Posture checks — real boolean signals already on this tab's props/state.
+    // Checks that can't be evaluated yet (ClamAV still loading) stay 'unknown'
+    // and are excluded from the score (client-side, mirrors WordPressDetail).
+    const checks = [
+        {
+            label: 'ClamAV antivirus installed',
+            state: clamavLoading ? 'unknown' : (clamavStatus?.installed ? 'pass' : 'warn'),
+            detail: clamavLoading ? 'checking…' : (clamavStatus?.installed ? 'installed' : 'not installed'),
+        },
+        {
+            label: 'ClamAV service running',
+            state: clamavLoading || !clamavStatus?.installed ? 'unknown' : (clamavStatus?.service_running ? 'pass' : 'warn'),
+            detail: clamavLoading ? 'checking…' : (!clamavStatus?.installed ? 'n/a' : (clamavStatus?.service_running ? 'running' : 'stopped')),
+        },
+        {
+            label: 'File integrity monitoring enabled',
+            state: integrity.enabled ? 'pass' : 'warn',
+            detail: integrity.enabled ? 'enabled' : 'disabled',
+        },
+        {
+            label: 'Integrity baseline initialized',
+            state: integrity.database_exists ? 'pass' : 'warn',
+            detail: integrity.database_exists ? 'initialized' : 'not initialized',
+        },
+        {
+            label: 'No integrity changes (24h)',
+            state: integrityChanges > 0 ? 'warn' : 'pass',
+            detail: integrityChanges > 0 ? `${integrityChanges} detected` : 'clean',
+        },
+        {
+            label: 'Security alerts configured',
+            state: status?.notifications_enabled ? 'pass' : 'warn',
+            detail: status?.notifications_enabled ? 'enabled' : 'disabled',
+        },
+    ];
+    const scored = checks.filter((c) => c.state !== 'unknown');
+    const score = scored.length
+        ? Math.round((scored.filter((c) => c.state === 'pass').length / scored.length) * 100)
+        : null;
+    const scoreColor = score >= 80 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)';
+    const CHECK_PILL = { pass: 'green', warn: 'amber', unknown: 'gray' };
 
     return (
         <div className="security-overview">
+            <div className="card">
+                <div className="card-header">
+                    <h3>Security Posture</h3>
+                </div>
+                <div className="card-body sec-posture">
+                    {score !== null ? (
+                        <ScoreGauge value={score} size={110} stroke={9} color={scoreColor} label="posture" />
+                    ) : (
+                        <p className="sec-hint sec-hint--lead">Refresh the checks below to compute a posture score.</p>
+                    )}
+                    <div className="sec-posture__checks">
+                        {checks.map((c) => (
+                            <div key={c.label} className="sec-posture__check">
+                                <span className="sec-posture__label">{c.label}</span>
+                                <span className="sec-posture__detail">{c.detail}</span>
+                                <Pill kind={CHECK_PILL[c.state]}>{c.state === 'unknown' ? 'pending' : c.state}</Pill>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
             <div className="security-grid">
                 <div className="card">
                     <div className="card-header">

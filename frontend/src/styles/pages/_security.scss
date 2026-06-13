@@ -282,10 +282,57 @@
 
 // ── Overview tab ─────────────────────────────────────────────
 .security-overview {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+
     .security-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
         gap: $space-4;
+    }
+
+    // Posture ring + hardening checklist (ScoreGauge beside check rows)
+    .sec-posture {
+        display: flex;
+        align-items: center;
+        gap: $space-6;
+
+        &__checks {
+            flex: 1;
+            min-width: 0;
+        }
+
+        &__check {
+            display: flex;
+            align-items: center;
+            gap: $space-3;
+            padding: 10px 0;
+            border-top: 1px solid var(--border-soft);
+            font-size: 13px;
+
+            &:first-child { border-top: none; }
+        }
+
+        &__label {
+            flex: 1;
+            min-width: 0;
+            color: var(--text);
+        }
+
+        &__detail {
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: var(--text-faint);
+            white-space: nowrap;
+        }
+
+        @media (max-width: $breakpoint-md) {
+            flex-direction: column;
+            align-items: flex-start;
+
+            &__checks { width: 100%; }
+        }
     }
 }
 
@@ -418,47 +465,8 @@
         gap: $space-3;
     }
 
-    .change-section {
-        margin-bottom: $space-5;
-
-        &:last-child { margin-bottom: 0; }
-    }
-
-    .sec-change-head {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: $space-2;
-    }
-
-    .sec-change-count {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--text-faint);
-    }
-
-    .file-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        max-height: 300px;
-        overflow-y: auto;
-        background: var(--bg-code);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--radius-sm);
-
-        li {
-            padding: 7px 12px;
-            font-family: var(--mono);
-            font-size: 11.5px;
-            color: var(--text-dim);
-            border-bottom: 1px solid var(--border-soft);
-
-            &:last-child {
-                border-bottom: none;
-            }
-        }
-    }
+    // Change-kind chip column reads as a tag, not a full state wash
+    .sk-dtable .sec-state { text-transform: lowercase; }
 }
 
 // ── Events tab ───────────────────────────────────────────────
