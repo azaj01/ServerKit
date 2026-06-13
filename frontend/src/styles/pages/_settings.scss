@@ -21,7 +21,7 @@
 
 .settings-layout {
     display: grid;
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 206px 1fr;
     gap: $space-6;
     min-height: calc(100vh - 200px);
 
@@ -99,11 +99,11 @@
     }
 
     &.active {
-        background: $accent-primary;
-        color: white;
+        background: var(--accent-bg);
+        color: var(--accent-bright);
 
         svg {
-            stroke: white;
+            stroke: var(--accent-bright);
         }
     }
 
