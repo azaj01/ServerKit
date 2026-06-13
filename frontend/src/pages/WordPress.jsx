@@ -6,8 +6,8 @@ import { useResourceTier } from '../contexts/ResourceTierContext';
 import ResourceGate from '../components/ResourceGate';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
-import { Globe, ChevronRight } from 'lucide-react';
-import { PageTopbar, Pill, SegControl } from '@/components/ds';
+import { Globe, ChevronRight, Search } from 'lucide-react';
+import { PageTopbar, Pill, SegControl, ServiceTile } from '@/components/ds';
 import { WORDPRESS_TABS } from '../components/wordpress/wordpressTabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ function WordPress() {
     const [loading, setLoading] = useState(true);
     const [activeTag, setActiveTag] = useState(null); // null = show all
     const [statusFilter, setStatusFilter] = useState('all'); // all | running | stopped
+    const [siteSearch, setSiteSearch] = useState(''); // client-side name/title/domain filter
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [createLoading, setCreateLoading] = useState(false);
     const [createForm, setCreateForm] = useState({
@@ -182,6 +183,15 @@ function WordPress() {
             <PageTopbar
                 icon={<Globe size={18} />}
                 title="WordPress"
+                meta={sites.length > 0 && (
+                    <>
+                        {sites.length} site{sites.length === 1 ? '' : 's'}
+                        {' · '}
+                        <span className="wp-list__meta-running">
+                            {sites.filter(s => s.status === 'running').length} running
+                        </span>
+                    </>
+                )}
                 tabs={WORDPRESS_TABS}
                 actions={(
                     <>
@@ -222,10 +232,15 @@ function WordPress() {
                 />
             ) : (() => {
                 const allTags = Array.from(new Set(sites.flatMap(s => s.tags || []))).sort();
+                const runningCount = sites.filter(s => s.status === 'running').length;
+                const q = siteSearch.trim().toLowerCase();
+                const siteLabel = site => site.name || site.application?.name || `Site ${site.id}`;
                 const shownSites = sites.filter(site => (
                     (statusFilter === 'all'
                         || (statusFilter === 'running' ? site.status === 'running' : site.status !== 'running'))
                     && (activeTag === null || (site.tags || []).includes(activeTag))
+                    && (q === '' || [siteLabel(site), site.title, site.url, site.domain]
+                        .some(v => v && String(v).toLowerCase().includes(q)))
                 ));
                 return (
                     <div className="wp-list">
@@ -234,11 +249,21 @@ function WordPress() {
                                 value={statusFilter}
                                 onChange={setStatusFilter}
                                 options={[
-                                    { value: 'all', label: 'All' },
-                                    { value: 'running', label: 'Running' },
-                                    { value: 'stopped', label: 'Stopped' },
+                                    { value: 'all', label: 'All', count: sites.length },
+                                    { value: 'running', label: 'Running', count: runningCount },
+                                    { value: 'stopped', label: 'Stopped', count: sites.length - runningCount },
                                 ]}
                             />
+                            <div className="wp-list__search">
+                                <Search size={15} aria-hidden="true" />
+                                <input
+                                    type="text"
+                                    value={siteSearch}
+                                    onChange={e => setSiteSearch(e.target.value)}
+                                    placeholder="Search sites…"
+                                    aria-label="Search sites"
+                                />
+                            </div>
                             {allTags.length > 0 && (
                                 <div className="wp-tag-filter">
                                     <button
@@ -335,11 +360,14 @@ function WordPress() {
                                             </td>
                                             <td>
                                                 <div className="sk-cell-name">
-                                                    <span className="wp-list__tile" aria-hidden="true">
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
-                                                    </span>
+                                                    <ServiceTile
+                                                        name={siteLabel(site)}
+                                                        size={30}
+                                                        className="wp-list__tile"
+                                                        aria-hidden="true"
+                                                    />
                                                     <span>
-                                                        <div>{site.name || site.application?.name || `Site ${site.id}`}</div>
+                                                        <div>{siteLabel(site)}</div>
                                                         {site.port && <div className="sk-cell-sub">:{site.port}</div>}
                                                     </span>
                                                 </div>

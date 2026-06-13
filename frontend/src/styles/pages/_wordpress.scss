@@ -165,6 +165,43 @@
         .wp-tag-filter { margin: 0; }
     }
 
+    // Client-side site search (name / title / domain). Mirrors the demo's
+    // .input: leading icon + borderless field on a quiet surface.
+    &__search {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        margin-left: auto;
+        padding: 0 10px;
+        width: 240px;
+        max-width: 100%;
+        height: 32px;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: 8px;
+        color: var(--text-faint);
+        transition: border-color 0.14s;
+
+        &:focus-within { border-color: var(--accent-dim); }
+
+        svg { flex-shrink: 0; }
+
+        input {
+            flex: 1;
+            min-width: 0;
+            border: none;
+            background: none;
+            color: var(--text);
+            font-size: 13px;
+
+            &::placeholder { color: var(--text-faint); }
+            &:focus { outline: none; }
+        }
+    }
+
+    // Count subtitle accent ("M running") in the PageTopbar meta slot.
+    &__meta-running { color: var(--green); }
+
     // bulk-select bar (demo's bulkbar) — appears once any row is checked
     &__bulkbar {
         display: flex;
@@ -205,15 +242,11 @@
         overflow: hidden;
     }
 
+    // Per-site gradient initial avatar (ds ServiceTile / .sk-tile). The tile
+    // brings its own size + hue-hashed gradient inline; we only soften the
+    // corner to the demo's small rounded-square look.
     &__tile {
-        width: 30px;
-        height: 30px;
         border-radius: 8px;
-        display: grid;
-        place-items: center;
-        flex-shrink: 0;
-        background: var(--accent-bg);
-        color: var(--accent-bright);
     }
 
     &__links {
