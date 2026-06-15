@@ -29,6 +29,18 @@ const wordpressApi = {
 
     getSite: (id) => api.request(`${BASE_PATH}/${id}`),
 
+    // Preview a site URL change (dry-run: per-pair DB replacement counts, no mutation).
+    previewUrlChange: (id, newUrl) => api.request(`${BASE_PATH}/${id}/url/preview`, {
+        method: 'POST',
+        body: { new_url: newUrl }
+    }),
+
+    // Change a site's URL: backup + serialization-safe DB rewrite + re-point routing.
+    changeUrl: (id, newUrl, keepOldRedirect = true) => api.request(`${BASE_PATH}/${id}/url`, {
+        method: 'POST',
+        body: { new_url: newUrl, keep_old_redirect: keepOldRedirect }
+    }),
+
     // Replace the tag list for a site (agency organization labels)
     setTags: (id, tags) => api.request(`${BASE_PATH}/${id}/tags`, {
         method: 'PATCH',

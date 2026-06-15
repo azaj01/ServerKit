@@ -748,6 +748,188 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
         result = cls.wp_cli(path, cmd)
         return result
 
+    # ── URL swap tool ────────────────────────────────────────────────────────
+    # Changing a WordPress site's URL is not a single UPDATE: the URL is embedded
+    # across wp_options, post content, and PHP-serialized blobs whose byte-length
+    # prefixes break under a naive REPLACE. WP-CLI `search-replace` is
+    # serialization-safe, so it is the engine here (the pure-SQL path in
+    # db_sync_service is the fallback for offline dumps only). We dry-run first,
+    # back up before mutating, and roll back on failure.
+
+    @staticmethod
+    def _normalize_url(url: str) -> Optional[str]:
+        """Canonicalise a user-supplied URL to ``scheme://host[/path]`` with no
+        trailing slash. Returns None if it isn't a usable http(s) URL."""
+        import re
+        from urllib.parse import urlparse
+        if not url:
+            return None
+        url = url.strip().rstrip('/')
+        if '://' not in url:
+            url = 'http://' + url
+        p = urlparse(url)
+        if p.scheme not in ('http', 'https') or not p.netloc:
+            return None
+        # Reject obviously-invalid hosts (spaces, etc.); allow hostname[:port].
+        if not re.match(r'^[A-Za-z0-9.\-]+(:\d+)?$', p.netloc):
+            return None
+        return f'{p.scheme}://{p.netloc}{p.path.rstrip("/")}'
+
+    @staticmethod
+    def _host_of(url: str) -> str:
+        from urllib.parse import urlparse
+        return urlparse(url).netloc
+
+    @classmethod
+    def _url_swap_pairs(cls, old_url: str, new_url: str) -> List[tuple]:
+        """search→replace pairs for a URL change: the full URL (covers scheme
+        changes) plus a host-only pair (covers protocol-relative and bare-host
+        references) when the host actually changes."""
+        pairs = [(old_url, new_url)]
+        old_host, new_host = cls._host_of(old_url), cls._host_of(new_url)
+        if old_host and new_host and old_host != new_host:
+            pairs.append((old_host, new_host))
+        return pairs
+
+    @staticmethod
+    def _parse_sr_count(output: str) -> int:
+        """Pull the replacement total out of WP-CLI search-replace output
+        ('Success: 12 replacements to be made.' / 'Success: Made 12 replacements.')."""
+        import re
+        if not output:
+            return 0
+        for line in output.splitlines():
+            if 'Success' in line:
+                m = re.search(r'(\d[\d,]*)\s+replacement', line)
+                if m:
+                    return int(m.group(1).replace(',', ''))
+        return 0
+
+    @classmethod
+    def _site_current_url(cls, app) -> Optional[str]:
+        """The site's live URL: prefer WordPress's own stored siteurl (source of
+        truth for what must be search-replaced), else the canonical domain/port."""
+        if app and app.root_path:
+            res = cls.wp_cli(app.root_path, ['option', 'get', 'siteurl'])
+            if res.get('success') and (res.get('output') or '').strip():
+                return cls._normalize_url(res['output'].strip())
+        return cls._canonical_site_url(app) if app else None
+
+    @classmethod
+    def preview_url_change(cls, app, new_url: str) -> Dict:
+        """Dry-run a URL change: per-pair replacement counts, no mutation."""
+        if not app or not app.root_path:
+            return {'success': False, 'error': 'Site has no application/root path'}
+        new_url = cls._normalize_url(new_url)
+        if not new_url:
+            return {'success': False, 'error': 'A valid new URL (including http:// or https://) is required'}
+        old_url = cls._site_current_url(app)
+        if not old_url:
+            return {'success': False, 'error': 'Could not determine the current site URL'}
+        if new_url == old_url:
+            return {'success': False, 'error': 'The new URL is the same as the current one'}
+
+        rows, total = [], 0
+        for search, replace in cls._url_swap_pairs(old_url, new_url):
+            res = cls.wp_cli(app.root_path, ['search-replace', search, replace,
+                                             '--all-tables', '--skip-columns=guid',
+                                             '--dry-run', '--report-changed-only'])
+            if not res.get('success'):
+                return {'success': False, 'error': res.get('error') or 'Preview failed',
+                        'current_url': old_url, 'new_url': new_url}
+            count = cls._parse_sr_count(res.get('output'))
+            total += count
+            rows.append({'search': search, 'replace': replace, 'replacements': count})
+        return {'success': True, 'current_url': old_url, 'new_url': new_url,
+                'pairs': rows, 'total': total}
+
+    @classmethod
+    def change_site_url(cls, app, new_url: str, keep_old_redirect: bool = True) -> Dict:
+        """Change a site's URL end to end: back up, serialization-safe DB rewrite,
+        update home/siteurl, flush caches, then re-point the Domain row + nginx
+        vhost. Rolls the database back from the backup if the rewrite fails.
+
+        With ``keep_old_redirect`` the previous host keeps resolving (its vhost
+        entry stays) so WordPress 301s it to the new canonical URL.
+        """
+        if not app or not app.root_path:
+            return {'success': False, 'error': 'Site has no application/root path'}
+        new_url = cls._normalize_url(new_url)
+        if not new_url:
+            return {'success': False, 'error': 'A valid new URL (including http:// or https://) is required'}
+        old_url = cls._site_current_url(app)
+        if not old_url:
+            return {'success': False, 'error': 'Could not determine the current site URL'}
+        if new_url == old_url:
+            return {'success': False, 'error': 'The new URL is the same as the current one'}
+
+        # 1) Backup first — this is the rollback point.
+        backup = cls.backup_wordpress(app.root_path, include_db=True)
+        if not backup.get('success'):
+            return {'success': False, 'error': f"Backup failed, aborting URL change: {backup.get('error')}"}
+
+        # 2) Serialization-safe DB rewrite, then finalize options + caches.
+        total = 0
+        try:
+            for search, replace in cls._url_swap_pairs(old_url, new_url):
+                res = cls.wp_cli(app.root_path, ['search-replace', search, replace,
+                                                 '--all-tables', '--skip-columns=guid'])
+                if not res.get('success'):
+                    raise RuntimeError(res.get('error') or 'search-replace failed')
+                total += cls._parse_sr_count(res.get('output'))
+            cls.wp_cli(app.root_path, ['option', 'update', 'home', new_url])
+            cls.wp_cli(app.root_path, ['option', 'update', 'siteurl', new_url])
+            cls.wp_cli(app.root_path, ['cache', 'flush'])
+            cls.wp_cli(app.root_path, ['rewrite', 'flush'])
+        except Exception as e:
+            restore = cls.restore_backup(backup['backup_name'], app.root_path)
+            return {'success': False,
+                    'error': f'URL change failed and the database was rolled back: {e}',
+                    'rolled_back': restore.get('success', False),
+                    'backup': backup['backup_name']}
+
+        # 3) Re-point routing (best-effort; the DB change has already succeeded).
+        warnings = []
+        new_host = cls._host_of(new_url)
+        rp = cls._repoint_primary_domain(app, new_host, keep_old=keep_old_redirect)
+        if rp:
+            warnings.append(rp)
+        vhost = cls._write_app_vhost(app)
+        if vhost.get('warning'):
+            warnings.append(vhost['warning'])
+
+        return {'success': True, 'old_url': old_url, 'new_url': new_url,
+                'replacements': total, 'backup': backup['backup_name'],
+                'kept_old_host': keep_old_redirect,
+                'warning': '; '.join(warnings) if warnings else None}
+
+    @classmethod
+    def _repoint_primary_domain(cls, app, new_host: str, keep_old: bool = True) -> Optional[str]:
+        """Make ``new_host`` the app's primary Domain. With ``keep_old`` the other
+        host rows are demoted (kept, so they still resolve); otherwise removed.
+        Returns a warning string on failure, else None."""
+        from app import db
+        from app.models.domain import Domain
+        if not new_host:
+            return None
+        try:
+            found_new = False
+            for d in Domain.query.filter_by(application_id=app.id).all():
+                if d.name == new_host:
+                    d.is_primary = True
+                    found_new = True
+                elif keep_old:
+                    d.is_primary = False
+                else:
+                    db.session.delete(d)
+            if not found_new:
+                db.session.add(Domain(name=new_host, is_primary=True, application_id=app.id))
+            db.session.commit()
+            return None
+        except Exception as e:
+            db.session.rollback()
+            return f'could not update domain rows: {e}'
+
     @classmethod
     def optimize_database(cls, path: str) -> Dict:
         """Optimize WordPress database."""
@@ -1612,7 +1794,6 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
         """
         from app import db
         from app.models.domain import Domain
-        from app.services.nginx_service import NginxService
 
         if not site_host:
             return {'domain': None, 'nginx': None, 'warning': None}
@@ -1627,25 +1808,37 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             db.session.rollback()
             warning = f'could not record domain {site_host}: {e}'
 
-        nginx_result = None
-        if app.port:
-            try:
-                domains = [d.name for d in Domain.query.filter_by(application_id=app.id).all()] or [site_host]
-                nginx_result = NginxService.create_site(
-                    name=app.name, app_type='docker', domains=domains,
-                    root_path=app.root_path or '', port=app.port,
-                )
-                if nginx_result.get('success'):
-                    en = NginxService.enable_site(app.name)
-                    if not en.get('success'):
-                        nginx_result['warning'] = f"vhost written but not enabled: {en.get('error')}"
-                else:
-                    msg = f"nginx vhost not created: {nginx_result.get('error')}"
-                    warning = (warning + '; ' + msg) if warning else msg
-            except Exception as e:
-                msg = f'nginx vhost error: {e}'
-                warning = (warning + '; ' + msg) if warning else msg
-        return {'domain': site_host, 'nginx': nginx_result, 'warning': warning}
+        v = cls._write_app_vhost(app)
+        if v.get('warning'):
+            warning = (warning + '; ' + v['warning']) if warning else v['warning']
+        return {'domain': site_host, 'nginx': v.get('nginx'), 'warning': warning}
+
+    @classmethod
+    def _write_app_vhost(cls, app) -> Dict:
+        """Write + enable the nginx reverse-proxy vhost for a docker app from its
+        current Domain rows (server_name = every domain). Best-effort and never
+        raises; returns ``{'nginx', 'warning'}``."""
+        from app.models.domain import Domain
+        from app.services.nginx_service import NginxService
+
+        if not app.port:
+            return {'nginx': None, 'warning': None}
+        domains = [d.name for d in Domain.query.filter_by(application_id=app.id).all()]
+        if not domains:
+            return {'nginx': None, 'warning': None}
+        try:
+            res = NginxService.create_site(
+                name=app.name, app_type='docker', domains=domains,
+                root_path=app.root_path or '', port=app.port,
+            )
+            if res.get('success'):
+                en = NginxService.enable_site(app.name)
+                if not en.get('success'):
+                    res['warning'] = f"vhost written but not enabled: {en.get('error')}"
+                return {'nginx': res, 'warning': None}
+            return {'nginx': res, 'warning': f"nginx vhost not created: {res.get('error')}"}
+        except Exception as e:
+            return {'nginx': None, 'warning': f'nginx vhost error: {e}'}
 
     @classmethod
     def _canonical_site_url(cls, app) -> str:

@@ -1087,6 +1087,40 @@ def search_replace(app_id):
     return jsonify(result), 200 if result['success'] else 400
 
 
+@wordpress_bp.route('/sites/<int:app_id>/url/preview', methods=['POST'])
+@jwt_required()
+@admin_required
+def preview_site_url(app_id):
+    """Dry-run a site URL change: per-pair replacement counts, no mutation."""
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    data = request.get_json() or {}
+    new_url = data.get('new_url')
+    if not new_url:
+        return jsonify({'error': 'new_url is required'}), 400
+    result = WordPressService.preview_url_change(app, new_url)
+    return jsonify(result), 200 if result.get('success') else 400
+
+
+@wordpress_bp.route('/sites/<int:app_id>/url', methods=['POST'])
+@jwt_required()
+@admin_required
+def change_site_url(app_id):
+    """Change a site's URL end to end: backup, serialization-safe DB rewrite,
+    home/siteurl + cache flush, then re-point the Domain row + nginx vhost."""
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    data = request.get_json() or {}
+    new_url = data.get('new_url')
+    if not new_url:
+        return jsonify({'error': 'new_url is required'}), 400
+    keep_old = data.get('keep_old_redirect', True)
+    result = WordPressService.change_site_url(app, new_url, keep_old_redirect=keep_old)
+    return jsonify(result), 200 if result.get('success') else 400
+
+
 @wordpress_bp.route('/sites/<int:app_id>/optimize', methods=['POST'])
 @jwt_required()
 @admin_required

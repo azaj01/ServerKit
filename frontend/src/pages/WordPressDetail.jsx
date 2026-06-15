@@ -8,6 +8,7 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useLogsDrawer } from '../contexts/LogsDrawerContext';
 import { EnvironmentCard, SnapshotTable, GitConnectForm, CommitList, DiskUsageBar } from '../components/wordpress';
+import ChangeUrlModal from '../components/wordpress/ChangeUrlModal';
 import { HealthDot } from '../components/wordpress/HealthStatusPanel';
 import { Pill, EnvTag, MetricCard, SegControl, ScoreGauge, ServiceTile } from '../components/ds';
 import { ErrorBoundary, ErrorState } from '../components/ErrorBoundary';
@@ -154,6 +155,7 @@ const WordPressDetail = () => {
     const [activeTab, setActiveTab] = useTabParam(`/wordpress/${id}`, VALID_TABS);
     const [autoLoggingIn, setAutoLoggingIn] = useState(false);
     const [showCloneModal, setShowCloneModal] = useState(false);
+    const [showChangeUrl, setShowChangeUrl] = useState(false);
     const [cloning, setCloning] = useState(false);
     const [cloneName, setCloneName] = useState('');
     const [clonedCreds, setClonedCreds] = useState(null);
@@ -336,6 +338,14 @@ const WordPressDetail = () => {
                     )}
                     <Button
                         variant="ghost"
+                        onClick={() => setShowChangeUrl(true)}
+                        title="Change this site's URL (serialization-safe database rewrite + re-point routing)"
+                    >
+                        <Globe size={16} />
+                        Change URL
+                    </Button>
+                    <Button
+                        variant="ghost"
                         onClick={() => setShowCloneModal(true)}
                         title="Duplicate this site as a new independent site with fresh admin credentials"
                     >
@@ -486,6 +496,14 @@ const WordPressDetail = () => {
                     <FileBarChart size={14} /> Reports
                 </div>
             </div>
+
+            {showChangeUrl && (
+                <ChangeUrlModal
+                    site={site}
+                    onClose={() => setShowChangeUrl(false)}
+                    onChanged={loadSite}
+                />
+            )}
 
             {/* Clone Site Modal */}
             {showCloneModal && (
