@@ -543,7 +543,7 @@ const SMTP_PRESETS = [
     { id: 'custom', name: 'Custom', host: '', port: 587 },
 ];
 
-function EmailBody({ provider, isAdmin, relayConfig, onSave, onTest, onDisable }) {
+function EmailBody({ isAdmin, relayConfig, onSave, onTest, onDisable }) {
     const cfg = relayConfig || {};
     const [form, setForm] = useState({
         provider_hint: cfg.provider_hint || 'custom',
