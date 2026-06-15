@@ -1181,6 +1181,7 @@ function FileManager() {
                                         onOpen={handleOpen}
                                         onToggleSelect={handleToggleSelect}
                                         onContext={openContextMenu}
+                                        isS3={isS3}
                                     />
                                 ))}
                             </div>
@@ -1232,6 +1233,7 @@ function FileManager() {
 
                 <PreviewDrawer
                     inline
+                    isS3={isS3}
                     file={previewFile}
                     fileContent={fileContent}
                     setFileContent={setFileContent}

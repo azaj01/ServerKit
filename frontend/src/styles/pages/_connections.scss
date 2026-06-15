@@ -18,6 +18,29 @@
         font-size: $font-size-sm;
     }
 
+    &__warning {
+        display: flex;
+        align-items: flex-start;
+        gap: $space-2;
+        padding: $space-3 $space-4;
+        background: fade($warning, 10%);
+        border: 1px solid fade($warning, 30%);
+        border-radius: $radius-md;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+
+        svg {
+            color: $warning;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        code {
+            font-family: $font-mono;
+            color: $text-primary;
+        }
+    }
+
     &__category {
         display: flex;
         flex-direction: column;

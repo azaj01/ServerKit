@@ -10,6 +10,7 @@
 // Each connected provider shows its status, access scope, and a cross-link to the
 // in-app page it powers (Servers, Domains, Backups, New Service).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ShieldAlert } from 'lucide-react';
 import api from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -31,13 +32,14 @@ export default function ConnectionsHub() {
     const [relayConfig, setRelayConfig] = useState(null);
     const [registrarConnections, setRegistrarConnections] = useState([]);
     const [registrarDomains, setRegistrarDomains] = useState([]);
+    const [allConnections, setAllConnections] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modalProvider, setModalProvider] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
 
     const loadData = useCallback(async () => {
         try {
-            const [ghStatus, glStatus, dns, cloudP, storage, relay, regConns, regDomains] = await Promise.all([
+            const [ghStatus, glStatus, dns, cloudP, storage, relay, regConns, regDomains, allConns] = await Promise.all([
                 api.getGithubSourceStatus().catch(() => null),
                 api.getGitlabSourceStatus().catch(() => null),
                 api.getEmailDNSProviders().then((d) => d.providers || []).catch(() => []),
@@ -46,6 +48,7 @@ export default function ConnectionsHub() {
                 api.getEmailRelay().catch(() => null),
                 api.getRegistrarConnections().then((d) => d.connections || []).catch(() => []),
                 api.getRegistrarDomains().then((d) => d.domains || []).catch(() => []),
+                api.getAllConnections().then((d) => d.connections || []).catch(() => []),
             ]);
             setSourceStatus({ github: ghStatus, gitlab: glStatus });
             setDnsProviders(dns);
@@ -54,6 +57,7 @@ export default function ConnectionsHub() {
             setRelayConfig(relay);
             setRegistrarConnections(regConns);
             setRegistrarDomains(regDomains);
+            setAllConnections(allConns);
             if (isAdmin) {
                 const [ghCfg, glCfg] = await Promise.all([
                     api.getGithubSourceConfig().catch(() => null),
@@ -355,8 +359,19 @@ export default function ConnectionsHub() {
         setModalOpen(true);
     }
 
+    const unencryptedCount = allConnections.filter((c) => c && c.encrypted === false).length;
+
     return (
         <div className="connections-hub">
+            {!loading && unencryptedCount > 0 && (
+                <div className="connections-hub__warning">
+                    <ShieldAlert size={16} />
+                    <span>
+                        {unencryptedCount} connected account{unencryptedCount === 1 ? '' : 's'} {unencryptedCount === 1 ? 'has' : 'have'} credentials not encrypted at rest.
+                        Restart the panel to migrate them, or check that <code>SERVERKIT_ENCRYPTION_KEY</code> is set.
+                    </span>
+                </div>
+            )}
             {loading ? (
                 <div className="connections-hub__loading">Loading connections…</div>
             ) : (

@@ -41,6 +41,8 @@ New backend: `models/registrar_connection.py`, `services/registrar_service.py`, 
 
 **Nothing open** — every task #1–#18 is done. Each external account type (source, infrastructure, DNS, registrar, email relay, storage) connects through the hub, secrets are encrypted at rest across all five stores, and `GET /api/v1/connections` lists them all in one normalized view.
 
+**Post-roadmap polish:** (1) **domain-expiry notifications** — a daily scheduler fires through the notification channels when a registrar domain crosses 30/14/7/1 days or expires, de-duped via a small state file so each crossing alerts once; (2) **S3 image preview** — File Manager thumbnails and the preview drawer load bucket objects via short-lived presigned URLs (`ImageThumb` is S3-aware); (3) **encryption-health banner** — the hub now consumes `GET /api/v1/connections` and warns if any connection's credentials aren't encrypted at rest (invisible in the happy path).
+
 ---
 
 ## How to read this document

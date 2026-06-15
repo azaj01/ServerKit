@@ -33,6 +33,9 @@ class RegistrarService:
     NAMECHEAP_BASE = 'https://api.namecheap.com/xml.response'
     NAMECHEAP_NS = {'nc': 'http://api.namecheap.com/xml.response'}
 
+    # Days-before-expiry thresholds that trigger a (de-duped) notification.
+    EXPIRY_THRESHOLDS = [30, 14, 7, 1]
+
     # --- Connections (CRUD) ---
 
     @staticmethod
@@ -237,6 +240,88 @@ class RegistrarService:
             conn.account_label = f'{count} domain' + ('' if count == 1 else 's')
         db.session.commit()
         return domains
+
+    # --- Expiry notifications ---
+
+    @classmethod
+    def _bucket(cls, days):
+        """Most-urgent threshold a domain has crossed → (rank, label). Higher rank
+        is more urgent; rank 0 means "outside every threshold" (no alert)."""
+        if days is None:
+            return 0, None
+        if days <= 0:
+            return len(cls.EXPIRY_THRESHOLDS) + 1, 'expired'
+        for i, t in enumerate(sorted(cls.EXPIRY_THRESHOLDS)):  # ascending: [1,7,14,30]
+            if days <= t:
+                return len(cls.EXPIRY_THRESHOLDS) - i, str(t)
+        return 0, None
+
+    @classmethod
+    def _alert_state_path(cls):
+        import os
+        from app import paths
+        return os.path.join(paths.SERVERKIT_CONFIG_DIR, 'registrar_alerts.json')
+
+    @classmethod
+    def notify_expiring(cls):
+        """Send a notification when a domain crosses an expiry threshold
+        (30/14/7/1 days, or expired). De-duped via a small state file so each
+        crossing notifies once and only escalations re-fire. Returns the number
+        of alerts sent."""
+        import os
+        import json
+        from app import paths
+
+        domains = cls.list_all_domains()
+        if not domains:
+            return 0
+
+        state_path = cls._alert_state_path()
+        state = {}
+        if os.path.exists(state_path):
+            try:
+                with open(state_path) as f:
+                    state = json.load(f)
+            except Exception:
+                state = {}
+
+        alerts = []
+        new_state = {}
+        for d in domains:
+            name = d.get('domain')
+            if not name:
+                continue
+            rank, label = cls._bucket(d.get('days_until_expiry'))
+            if rank == 0:
+                continue  # outside every threshold — and dropped from state below
+            new_state[name] = rank
+            if rank > state.get(name, 0):  # escalated into a new, more-urgent bucket
+                days = d.get('days_until_expiry')
+                who = d.get('registrar_name') or d.get('registrar')
+                if label == 'expired':
+                    severity, message = 'critical', f'Domain {name} has EXPIRED ({who}).'
+                else:
+                    severity = 'critical' if label in ('1', '7') else 'warning'
+                    message = f"Domain {name} expires in {days} day{'' if days == 1 else 's'} ({who})."
+                alerts.append({'type': 'domain_expiry', 'severity': severity,
+                               'message': message, 'value': name, 'threshold': label})
+
+        # Persist only domains still within a threshold; a renewed domain drops out
+        # and will re-alert next time it approaches expiry.
+        try:
+            os.makedirs(paths.SERVERKIT_CONFIG_DIR, exist_ok=True)
+            with open(state_path, 'w') as f:
+                json.dump(new_state, f, indent=2)
+        except Exception:
+            pass
+
+        if alerts:
+            try:
+                from app.services.notification_service import NotificationService
+                NotificationService.send_all(alerts)
+            except Exception as e:
+                logger.warning(f'Registrar expiry notify failed: {e}')
+        return len(alerts)
 
     # --- Helpers ---
 

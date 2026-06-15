@@ -383,6 +383,9 @@ def create_app(config_name=None):
         # Start hourly pruner for expired pending agent pairings
         _start_pairing_pruner(app)
 
+        # Start daily registrar domain-expiry notifier
+        _start_registrar_expiry_scheduler(app)
+
     # Request body size limit
     app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB limit
 
@@ -544,6 +547,41 @@ def _start_pairing_pruner(app):
 
 
 _pairing_prune_thread = None
+
+
+_registrar_expiry_thread = None
+
+
+def _start_registrar_expiry_scheduler(app):
+    """Daily check that notifies when a registrar domain crosses an expiry
+    threshold (30/14/7/1 days, or expired). Single-worker only (module-global
+    guard), like the other in-process schedulers."""
+    global _registrar_expiry_thread
+    if _registrar_expiry_thread is not None:
+        return
+
+    import threading
+    import time
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    def loop():
+        time.sleep(300)  # let startup settle
+        while True:
+            try:
+                with app.app_context():
+                    from app.services.registrar_service import RegistrarService
+                    n = RegistrarService.notify_expiring()
+                    if n:
+                        logger.info(f'Registrar expiry: sent {n} notification(s)')
+            except Exception as e:
+                logger.error(f'Registrar expiry scheduler error: {e}')
+            time.sleep(86400)  # daily
+
+    _registrar_expiry_thread = threading.Thread(
+        target=loop, daemon=True, name='registrar-expiry')
+    _registrar_expiry_thread.start()
 
 
 _snapshot_retention_thread = None

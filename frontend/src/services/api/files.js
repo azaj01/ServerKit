@@ -148,8 +148,12 @@ export async function deleteS3(path) {
     return this.request(`/files/s3/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
 }
 
+export async function getS3DownloadUrl(path) {
+    return this.request(`/files/s3/download-url?path=${encodeURIComponent(path)}`);
+}
+
 export async function downloadS3File(path) {
-    const res = await this.request(`/files/s3/download-url?path=${encodeURIComponent(path)}`);
+    const res = await this.getS3DownloadUrl(path);
     if (res && res.url) window.open(res.url, '_blank');
     return res;
 }

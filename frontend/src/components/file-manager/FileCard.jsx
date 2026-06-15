@@ -11,6 +11,7 @@ function FileCard({
     onOpen,
     onToggleSelect,
     onContext,
+    isS3 = false,
 }) {
     const ext = getFileExt(entry);
     const type = getFileType(entry);
@@ -47,7 +48,7 @@ function FileCard({
 
             <div className="file-card-thumb">
                 {showThumb ? (
-                    <ImageThumb path={entry.path} fallback={<FileIcon entry={entry} size={36} />} />
+                    <ImageThumb path={entry.path} isS3={isS3} fallback={<FileIcon entry={entry} size={36} />} />
                 ) : (
                     <FileIcon entry={entry} size={36} />
                 )}
