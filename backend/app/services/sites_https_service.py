@@ -54,8 +54,9 @@ class SitesHttpsService:
         else:
             warnings.append(f'No server public IP set — add the *.{base} and {base} A records manually (or set the IP in Settings).')
 
-        creds = ({'api_token': config.api_key} if config.provider == 'cloudflare'
-                 else {'api_key': config.api_key, 'api_secret': config.api_secret})
+        creds_src = DNSProviderService.decrypted_credentials(config)
+        creds = ({'api_token': creds_src['api_key']} if config.provider == 'cloudflare'
+                 else {'api_key': creds_src['api_key'], 'api_secret': creds_src['api_secret']})
         cert = AdvancedSSLService.issue_wildcard_cert(base, config.provider, creds, email=email)
         if not cert.get('success'):
             return {'success': False, 'error': f"Wildcard certificate failed: {cert.get('error')}",

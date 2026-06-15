@@ -43,6 +43,8 @@ New backend: `models/registrar_connection.py`, `services/registrar_service.py`, 
 
 **Post-roadmap polish:** (1) **domain-expiry notifications** — a daily scheduler fires through the notification channels when a registrar domain crosses 30/14/7/1 days or expires, de-duped via a small state file so each crossing alerts once; (2) **S3 image preview** — File Manager thumbnails and the preview drawer load bucket objects via short-lived presigned URLs (`ImageThumb` is S3-aware); (3) **encryption-health banner** — the hub now consumes `GET /api/v1/connections` and warns if any connection's credentials aren't encrypted at rest (invisible in the happy path).
 
+**Encryption hardening + tests:** an audit of every secret read/write site caught one miss — `sites_https_service` handed *encrypted* DNS creds straight to the wildcard-cert issuer, so DNS-01 issuance would have received ciphertext and failed. Fixed via a public `DNSProviderService.decrypted_credentials()` (the canonical way to read DNS creds; nothing reads `.api_key` raw anymore), and locked down with `backend/tests/test_provider_secret_encryption.py` — 8 tests proving ciphertext-at-rest + plaintext-on-read across DNS/cloud/storage/registrar, the legacy-plaintext migration (idempotent), and the wildcard regression. 17/17 pass (with the existing `test_sites_https.py`).
+
 ---
 
 ## How to read this document

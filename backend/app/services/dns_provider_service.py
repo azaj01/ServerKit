@@ -77,6 +77,17 @@ class DNSProviderService:
         return decrypt_secret_safe(config.api_secret)
 
     @classmethod
+    def decrypted_credentials(cls, config: DNSProviderConfig) -> Dict:
+        """Decrypted credentials for a DNS provider — the safe way for any caller
+        OUTSIDE this service to get usable creds. Never read ``config.api_key``
+        directly; it's encrypted at rest."""
+        return {
+            'api_key': cls._api_key(config),
+            'api_secret': cls._api_secret(config),
+            'api_email': config.api_email,
+        }
+
+    @classmethod
     def encrypt_legacy_secrets(cls) -> int:
         """One-time, idempotent: encrypt any DNS-provider secrets still stored in
         plaintext (rows created before encryption-at-rest landed)."""
