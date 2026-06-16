@@ -33,19 +33,25 @@ if 'TEST_DATABASE_URL' not in os.environ:
 # overhead, so disable it and keep the journal in memory — this recovers
 # roughly in-memory speed while keeping the per-connection thread-safety the
 # file gives us. SQLite-only and scoped to the test process.
-import sqlite3  # noqa: E402
-from sqlalchemy import event  # noqa: E402
-from sqlalchemy.engine import Engine  # noqa: E402
+#
+# Guarded import: some CI jobs run only the stdlib-y system-utils tests with a
+# minimal dependency set (no SQLAlchemy). conftest still has to import there,
+# and those jobs run no DB-backed test, so the PRAGMA tuning is simply skipped.
+try:
+    import sqlite3  # noqa: E402
+    from sqlalchemy import event  # noqa: E402
+    from sqlalchemy.engine import Engine  # noqa: E402
 
-
-@event.listens_for(Engine, 'connect')
-def _fast_sqlite_for_tests(dbapi_connection, _record):
-    if isinstance(dbapi_connection, sqlite3.Connection):
-        cur = dbapi_connection.cursor()
-        cur.execute('PRAGMA synchronous=OFF')
-        cur.execute('PRAGMA journal_mode=MEMORY')
-        cur.execute('PRAGMA temp_store=MEMORY')
-        cur.close()
+    @event.listens_for(Engine, 'connect')
+    def _fast_sqlite_for_tests(dbapi_connection, _record):
+        if isinstance(dbapi_connection, sqlite3.Connection):
+            cur = dbapi_connection.cursor()
+            cur.execute('PRAGMA synchronous=OFF')
+            cur.execute('PRAGMA journal_mode=MEMORY')
+            cur.execute('PRAGMA temp_store=MEMORY')
+            cur.close()
+except ImportError:
+    pass
 
 
 @pytest.fixture(scope='function')
