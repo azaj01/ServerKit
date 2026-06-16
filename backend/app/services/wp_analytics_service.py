@@ -8,9 +8,11 @@ symlink to stdout — exec-cat'ing it yields nothing). Analytics is computed
 bounded by the container's retained log (it resets when the container is
 recreated, e.g. on a PHP-version switch — see #24).
 
-Intentionally NOT derived from the default access log (deferred):
-- PHP fatals — need ``wp-content/debug.log``, which only exists once WP_DEBUG_LOG
-  is enabled (the per-site WP_DEBUG toggle is #30).
+PHP fatals/warnings are sourced separately from the WP_DEBUG log
+(``/tmp/wp-debug.log``), populated only once the per-site WP_DEBUG toggle (#30)
+is on — see ``get_php_errors`` (they are not in the access log).
+
+Still NOT derived (deferred):
 - per-request response time / slow pages — need a ``%D`` LogFormat the official
   image does not emit.
 - cache hit ratio — a cache-plugin concern surfaced by #22/#23, not the access log.
@@ -150,6 +152,86 @@ class WpAnalyticsService:
             'note': None,
         })
         return result
+
+    # --- PHP errors (#25 fatals) -------------------------------------------
+    # Sourced from the WP_DEBUG log, NOT the access log. The log only exists once
+    # the per-site WP_DEBUG toggle (#30) is on; its path is owned by WpSecurityService.
+    DEBUG_LOG = '/tmp/wp-debug.log'
+    PHP_ERR_TAIL = 200000   # bytes; bound the debug-log read so a noisy site can't blow up memory
+    RECENT_CAP = 25         # most-recent entries returned
+
+    # WP debug.log line: "[15-Jun-2026 12:34:56 UTC] PHP Fatal error:  <message>"
+    _PHP_ERR_RE = re.compile(r'^\[(?P<time>[^\]]+)\]\s+PHP\s+(?P<level>[A-Za-z][A-Za-z ]*?):\s+(?P<msg>.*)$')
+
+    @staticmethod
+    def _classify_php(level):
+        l = level.lower()
+        if 'fatal' in l or 'parse error' in l:
+            return 'fatal'
+        if 'warning' in l:
+            return 'warning'
+        if 'deprecated' in l:
+            return 'deprecated'
+        if 'notice' in l:
+            return 'notice'
+        return 'other'
+
+    @classmethod
+    def get_php_errors(cls, container_name):
+        """Parse PHP fatals/warnings/notices from the container's WP_DEBUG log
+        (``/tmp/wp-debug.log``, written only once the #30 WP_DEBUG toggle is on).
+        On-demand like get_traffic, with a bounded read + hard timeout so the
+        single worker never blocks. Never raises."""
+        out = {'available': False, 'enabled': False, 'total': 0,
+               'counts': {'fatal': 0, 'warning': 0, 'notice': 0, 'deprecated': 0, 'other': 0},
+               'recent': [], 'note': None}
+        if not container_name:
+            out['note'] = 'No container is resolved for this site.'
+            return out
+
+        # One exec: print a marker IFF the log exists, then its (size-capped) tail.
+        # Empty output => no log => WP_DEBUG logging not enabled (or never errored).
+        marker = '__SK_WPDEBUG__'
+        script = (f'if [ -f {cls.DEBUG_LOG} ]; then echo {marker}; '
+                  f'tail -c {cls.PHP_ERR_TAIL} {cls.DEBUG_LOG}; fi')
+        try:
+            proc = subprocess.run(
+                ['docker', 'exec', container_name, 'sh', '-c', script],
+                capture_output=True, text=True, timeout=cls.LOG_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            out['note'] = 'Debug log read timed out.'
+            return out
+        except (FileNotFoundError, OSError):
+            out['note'] = 'Debug log is unavailable on this host (Docker is not reachable).'
+            return out
+        if proc.returncode != 0:
+            out['note'] = 'Debug log is unavailable — the container may be stopped or on another host.'
+            return out
+
+        body = proc.stdout or ''
+        if not body.startswith(marker):
+            out['note'] = ('PHP error logging is off — enable WP_DEBUG logging on the '
+                           'Security tab to collect PHP fatals and warnings.')
+            return out
+        out['available'] = True
+        out['enabled'] = True
+        content = body[len(marker):].lstrip('\n')
+
+        recent = []
+        for raw in content.splitlines():
+            m = cls._PHP_ERR_RE.match(raw.strip())
+            if not m:
+                continue  # stack-trace / continuation lines won't match
+            sev = cls._classify_php(m.group('level'))
+            out['counts'][sev] += 1
+            out['total'] += 1
+            recent.append({'time': m.group('time'), 'level': m.group('level').strip(),
+                           'severity': sev, 'message': m.group('msg').strip()[:300]})
+        out['recent'] = list(reversed(recent))[:cls.RECENT_CAP]  # most-recent first
+        if out['total'] == 0:
+            out['note'] = 'WP_DEBUG logging is on; no PHP errors recorded yet.'
+        return out
 
     @classmethod
     def _empty(cls, hours):

@@ -1336,7 +1336,9 @@ const AnalyticsTab = ({ siteId }) => {
             : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
     const clip = (p) => (p && p.length > 48 ? `${p.slice(0, 48)}…` : p);
+    const clipMsg = (m) => (m && m.length > 80 ? `${m.slice(0, 80)}…` : m);
     const s = data?.status || {};
+    const phpErr = data?.php_errors;
 
     return (
         <div className="app-overview-grid">
@@ -1409,7 +1411,39 @@ const AnalyticsTab = ({ siteId }) => {
                                     </div>
                                 ))}
                             </div>
-                            <p className="hint">Read live from the container access log; PHP fatals and response-time metrics are not captured by the default log.</p>
+                            <p className="hint">Read live from the container access log; response-time metrics are not captured by the default log.</p>
+                        </div>
+                    </div>
+                )}
+
+                {phpErr && (
+                    <div className="app-panel">
+                        <div className="app-panel-header">PHP errors</div>
+                        <div className="app-panel-body">
+                            {!phpErr.available ? (
+                                <p className="hint">{phpErr.note || 'PHP error logging is off.'}</p>
+                            ) : (
+                                <>
+                                    <div className="app-info-grid">
+                                        <div className="app-info-item"><span className="app-info-label">Fatal</span><span className="app-info-value">{(phpErr.counts?.fatal ?? 0).toLocaleString()}</span></div>
+                                        <div className="app-info-item"><span className="app-info-label">Warning</span><span className="app-info-value">{(phpErr.counts?.warning ?? 0).toLocaleString()}</span></div>
+                                        <div className="app-info-item"><span className="app-info-label">Notice</span><span className="app-info-value">{(phpErr.counts?.notice ?? 0).toLocaleString()}</span></div>
+                                        <div className="app-info-item"><span className="app-info-label">Deprecated</span><span className="app-info-value">{(phpErr.counts?.deprecated ?? 0).toLocaleString()}</span></div>
+                                    </div>
+                                    {phpErr.recent?.length > 0 ? (
+                                        <div className="app-info-grid">
+                                            {phpErr.recent.map((e, i) => (
+                                                <div className="app-info-item" key={i}>
+                                                    <span className="app-info-label" title={e.message}>{e.level}: {clipMsg(e.message)}</span>
+                                                    <span className="app-info-value">{e.time}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="hint">{phpErr.note || 'No PHP errors recorded.'}</p>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

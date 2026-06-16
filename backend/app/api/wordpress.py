@@ -566,6 +566,8 @@ def get_site_analytics(app_id):
     if user.role != 'admin' and app.user_id != current_user_id:
         return jsonify({'error': 'Access denied'}), 403
     result = WpAnalyticsService.get_traffic(app.name, request.args.get('hours', 24))
+    # PHP fatals/warnings from the WP_DEBUG log (#25 fatals; populated by #30's toggle).
+    result['php_errors'] = WpAnalyticsService.get_php_errors(app.name)
     return jsonify(result), 200
 
 
