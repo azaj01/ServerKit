@@ -33,7 +33,16 @@ def list_workspaces():
         workspaces = WorkspaceService.get_all_workspaces_admin()
         return jsonify({'workspaces': workspaces})
     workspaces = WorkspaceService.list_workspaces(user_id=user.id, include_archived=include_archived)
-    return jsonify({'workspaces': [ws.to_dict() for ws in workspaces]})
+    # Surface the caller's membership role and the reconciled effective role (#33)
+    # so the frontend can show read-only state when a workspace caps the user to
+    # viewer. effective_role is narrow-only: it never exceeds the user's global role.
+    out = []
+    for ws in workspaces:
+        d = ws.to_dict()
+        d['my_role'] = WorkspaceService.get_user_role(ws.id, user.id)
+        d['my_effective_role'] = WorkspaceService.effective_role(user, ws.id)
+        out.append(d)
+    return jsonify({'workspaces': out})
 
 
 @workspaces_bp.route('/<int:workspace_id>', methods=['GET'])

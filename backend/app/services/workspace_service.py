@@ -102,6 +102,42 @@ class WorkspaceService:
         return query
 
     @staticmethod
+    def effective_role(user, workspace_id):
+        """Reconcile a user's GLOBAL role (User.role) with their per-workspace
+        membership role (WorkspaceMember.role), returning the effective
+        global-role string ('admin'|'developer'|'viewer') that applies while the
+        user acts inside this workspace.
+
+        NARROW-ONLY, mirroring scope_query: a workspace membership can only
+        REDUCE capability, never grant more than the user's global role.
+
+        - System admin (User.is_admin): always 'admin'. A platform super-admin is
+          never capped by a workspace membership (consistent with scope_query's
+          admin bypass), so they can't be locked out of a workspace they manage.
+        - No workspace context (workspace_id is None): the global role, unchanged.
+        - A 'viewer' workspace membership: capped to 'viewer' (read-only) here,
+          even for a global developer.
+        - Any other membership (member/admin/owner) or non-member: the global
+          role, unchanged — the workspace role never elevates beyond it.
+        """
+        if user.is_admin:
+            return User.ROLE_ADMIN
+        if workspace_id is None:
+            return user.role
+        ws_role = WorkspaceService.get_user_role(workspace_id, user.id)
+        if ws_role == WorkspaceMember.ROLE_VIEWER:
+            return User.ROLE_VIEWER
+        return user.role
+
+    @staticmethod
+    def can_write_in_workspace(user, workspace_id):
+        """Whether the user may create/mutate resources while `workspace_id` is the
+        active context. False only when their effective role here is viewer — a
+        global developer who is merely a 'viewer' member of this workspace gets
+        read-only access to it (workspace role caps capability, narrow-only)."""
+        return WorkspaceService.effective_role(user, workspace_id) != User.ROLE_VIEWER
+
+    @staticmethod
     def list_workspaces(user_id=None, include_archived=False):
         query = Workspace.query
         if not include_archived:

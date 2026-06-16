@@ -349,3 +349,163 @@ def test_wordpress_sites_scoping_api(app, client):
     r = client.get('/api/v1/wordpress/sites', headers={**_token(admin.id), 'X-Workspace-Id': str(ws_a.id)})
     assert r.status_code == 200
     assert {s['name'] for s in r.get_json()['sites']} == {'site-a'}
+
+
+# ---- API: domains (app-children, scoped through parent Application) --------
+
+def test_domains_scoping_api(app, client):
+    from app import db
+    from app.services.workspace_service import WorkspaceService
+    from app.services.resource_grant_service import ResourceGrantService
+    from app.models import Application, Domain
+
+    admin = _mk_user(db, 'dom_admin', 'admin')
+    dev = _mk_user(db, 'dom_dev', 'developer')
+    other = _mk_user(db, 'dom_other', 'developer')
+    ws_a = WorkspaceService.create_workspace({'name': 'DomA'}, admin.id)
+    ws_b = WorkspaceService.create_workspace({'name': 'DomB'}, admin.id)
+    WorkspaceService.add_member(ws_a.id, dev.id, 'member')
+
+    def mk(name, owner_id, ws_id, domain):
+        a = Application(name=name, app_type='docker', user_id=owner_id, workspace_id=ws_id)
+        db.session.add(a)
+        db.session.commit()
+        db.session.add(Domain(name=domain, application_id=a.id))
+        db.session.commit()
+        return a
+
+    mk('dom-a', dev.id, ws_a.id, 'a.example.com')
+    mk('dom-b', dev.id, ws_b.id, 'b.example.com')
+    shared = mk('dom-shared', other.id, ws_a.id, 'shared.example.com')
+
+    # No context: dev sees its own apps' domains across workspaces, not other's.
+    r = client.get('/api/v1/domains', headers=_token(dev.id))
+    assert r.status_code == 200
+    assert {d['name'] for d in r.get_json()['domains']} == {'a.example.com', 'b.example.com'}
+
+    # Scoped to ws_a: only domains of dev's apps in ws_a.
+    r = client.get('/api/v1/domains', headers={**_token(dev.id), 'X-Workspace-Id': str(ws_a.id)})
+    assert {d['name'] for d in r.get_json()['domains']} == {'a.example.com'}
+
+    # A grant on another user's app surfaces that app's domain too (and it's in ws_a).
+    ResourceGrantService.grant(dev.id, 'application', shared.id, granted_by=admin.id, role='viewer')
+    r = client.get('/api/v1/domains', headers={**_token(dev.id), 'X-Workspace-Id': str(ws_a.id)})
+    assert {d['name'] for d in r.get_json()['domains']} == {'a.example.com', 'shared.example.com'}
+
+    # Admin with no context sees every domain.
+    r = client.get('/api/v1/domains', headers=_token(admin.id))
+    got = {d['name'] for d in r.get_json()['domains']}
+    assert {'a.example.com', 'b.example.com', 'shared.example.com'} <= got
+
+
+# ---- API: docker databases (app-children) ---------------------------------
+
+def test_docker_databases_scoping_api(app, client, monkeypatch):
+    from app import db
+    from app.services.workspace_service import WorkspaceService
+    from app.services.database_service import DatabaseService
+    from app.models import Application
+
+    admin = _mk_user(db, 'ddb_admin', 'admin')
+    dev = _mk_user(db, 'ddb_dev', 'developer')
+    ws_a = WorkspaceService.create_workspace({'name': 'DdbA'}, admin.id)
+    ws_b = WorkspaceService.create_workspace({'name': 'DdbB'}, admin.id)
+    WorkspaceService.add_member(ws_a.id, dev.id, 'member')
+
+    db.session.add_all([
+        Application(name='ddb-a', app_type='docker', user_id=dev.id, workspace_id=ws_a.id, root_path='/srv/a'),
+        Application(name='ddb-b', app_type='docker', user_id=dev.id, workspace_id=ws_b.id, root_path='/srv/b'),
+    ])
+    db.session.commit()
+
+    # Stub the compose/.env read so each app yields one database tagged by app name.
+    monkeypatch.setattr(DatabaseService, 'get_app_database_info',
+                        lambda name, root: [{'database': name}])
+
+    # No context: dev sees both its docker apps' databases.
+    r = client.get('/api/v1/databases/docker/databases', headers=_token(dev.id))
+    assert r.status_code == 200
+    assert {d['app_name'] for d in r.get_json()['databases']} == {'ddb-a', 'ddb-b'}
+
+    # Scoped to ws_a -> only ddb-a's database.
+    r = client.get('/api/v1/databases/docker/databases',
+                   headers={**_token(dev.id), 'X-Workspace-Id': str(ws_a.id)})
+    assert {d['app_name'] for d in r.get_json()['databases']} == {'ddb-a'}
+
+
+# ---- role reconciliation (#33) --------------------------------------------
+
+def test_effective_role_reconciliation(app):
+    from app import db
+    from app.services.workspace_service import WorkspaceService
+
+    sysadmin = _mk_user(db, 'er_admin', 'admin')
+    dev_viewer = _mk_user(db, 'er_devv', 'developer')
+    dev_member = _mk_user(db, 'er_devm', 'developer')
+    global_viewer = _mk_user(db, 'er_gv', 'viewer')
+    ws = WorkspaceService.create_workspace({'name': 'ER'}, sysadmin.id)
+    WorkspaceService.add_member(ws.id, dev_viewer.id, 'viewer')
+    WorkspaceService.add_member(ws.id, dev_member.id, 'member')
+    WorkspaceService.add_member(ws.id, global_viewer.id, 'owner')
+
+    # No context -> global role unchanged.
+    assert WorkspaceService.effective_role(dev_member, None) == 'developer'
+    assert WorkspaceService.can_write_in_workspace(dev_member, None) is True
+
+    # A 'viewer' membership caps a global developer to viewer (read-only).
+    assert WorkspaceService.effective_role(dev_viewer, ws.id) == 'viewer'
+    assert WorkspaceService.can_write_in_workspace(dev_viewer, ws.id) is False
+
+    # A 'member' membership does not cap (stays developer).
+    assert WorkspaceService.effective_role(dev_member, ws.id) == 'developer'
+    assert WorkspaceService.can_write_in_workspace(dev_member, ws.id) is True
+
+    # Narrow-only: a workspace role NEVER elevates. A global viewer who is even an
+    # 'owner' member is still effectively a viewer.
+    assert WorkspaceService.effective_role(global_viewer, ws.id) == 'viewer'
+    assert WorkspaceService.can_write_in_workspace(global_viewer, ws.id) is False
+
+    # A system admin is never capped by a workspace membership.
+    assert WorkspaceService.effective_role(sysadmin, ws.id) == 'admin'
+    assert WorkspaceService.can_write_in_workspace(sysadmin, ws.id) is True
+
+
+def test_create_app_viewer_blocked_in_workspace(app, client):
+    from app import db
+    from app.services.workspace_service import WorkspaceService
+
+    admin = _mk_user(db, 'vb_admin', 'admin')
+    dev = _mk_user(db, 'vb_dev', 'developer')
+    ws = WorkspaceService.create_workspace({'name': 'VB'}, admin.id)
+    WorkspaceService.add_member(ws.id, dev.id, 'viewer')
+
+    # A 'viewer' member can't create in that workspace.
+    r = client.post('/api/v1/apps', headers={**_token(dev.id), 'X-Workspace-Id': str(ws.id)},
+                    json={'name': 'vb-nope', 'app_type': 'php'})
+    assert r.status_code == 403
+
+    # With no workspace context the same user still creates (the cap is
+    # workspace-scoped and narrow-only — no-context behavior is unchanged).
+    r = client.post('/api/v1/apps', headers=_token(dev.id), json={'name': 'vb-yes', 'app_type': 'php'})
+    assert r.status_code == 201
+    app_id = r.get_json()['app']['id']
+
+    # And the app can't be moved INTO the workspace they're a viewer of.
+    r = client.put(f'/api/v1/apps/{app_id}/workspace', json={'workspace_id': ws.id}, headers=_token(dev.id))
+    assert r.status_code == 403
+
+
+def test_list_workspaces_surfaces_effective_role(app, client):
+    from app import db
+    from app.services.workspace_service import WorkspaceService
+
+    admin = _mk_user(db, 'lw_admin', 'admin')
+    dev = _mk_user(db, 'lw_dev', 'developer')
+    ws = WorkspaceService.create_workspace({'name': 'LW'}, admin.id)
+    WorkspaceService.add_member(ws.id, dev.id, 'viewer')
+
+    r = client.get('/api/v1/workspaces/', headers=_token(dev.id))
+    assert r.status_code == 200
+    rows = {w['name']: w for w in r.get_json()['workspaces']}
+    assert rows['LW']['my_role'] == 'viewer'
+    assert rows['LW']['my_effective_role'] == 'viewer'

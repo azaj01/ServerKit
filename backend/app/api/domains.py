@@ -89,12 +89,22 @@ def get_domains():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
 
-    if user.role == 'admin':
-        domains = Domain.query.all()
-    else:
-        # Get domains for user's applications
-        user_app_ids = [app.id for app in Application.query.filter_by(user_id=current_user_id).all()]
-        domains = Domain.query.filter(Domain.application_id.in_(user_app_ids)).all()
+    # Workspace-aware scoping (#33). Domains are app-children with no workspace_id
+    # of their own — they inherit their parent Application's. Scope the visible app
+    # set (own + granted, workspace-narrowed) and return those apps' domains.
+    # With no workspace context this matches prior behavior (admin -> all domains,
+    # else -> the user's own apps' domains) and additionally surfaces domains of
+    # apps shared via a grant — consistent with the per-domain routes, which
+    # already authorize through ResourceGrantService.can_access_app.
+    from app.services.workspace_service import WorkspaceService
+    ws_id = WorkspaceService.resolve_workspace_id(
+        user, request.headers.get('X-Workspace-Id') or request.args.get('workspace_id'))
+    app_q = WorkspaceService.scope_query(
+        Application.query, Application, user,
+        workspace_id=ws_id, owner_attr='user_id', grant_resource_type='application')
+    app_ids = [row[0] for row in app_q.with_entities(Application.id).all()]
+    domains = (Domain.query.filter(Domain.application_id.in_(app_ids)).all()
+               if app_ids else [])
 
     return jsonify({
         'domains': [domain.to_dict() for domain in domains]
