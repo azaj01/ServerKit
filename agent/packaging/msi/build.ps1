@@ -128,14 +128,22 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\par
     try {
         Write-Host "Running WiX build..."
         wix build -arch $Arch Product.wxs -ext WixToolset.Util.wixext -o "$absOutputDir\serverkit-agent-$Version-$Arch.msi" -define Version=$Version
+        if ($LASTEXITCODE -ne 0) {
+            throw "WiX build failed with exit code $LASTEXITCODE"
+        }
     }
     finally {
         Pop-Location
     }
 
+    $msiPath = "$absOutputDir\serverkit-agent-$Version-$Arch.msi"
+    if (-not (Test-Path $msiPath)) {
+        throw "MSI output not found at $msiPath"
+    }
+
     Write-Host ""
     Write-Host "MSI built successfully!"
-    Write-Host "Output: $absOutputDir\serverkit-agent-$Version-$Arch.msi"
+    Write-Host "Output: $msiPath"
 }
 finally {
     # Cleanup
