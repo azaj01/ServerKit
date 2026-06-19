@@ -7,7 +7,7 @@
     1. Install WiX Toolset v5
        dotnet tool install --global wix --version 5.0.2
     2. Install the matching Util extension:
-       wix extension add --global WixToolset.Util.wixext --version 5.0.2
+       wix extension add --global WixToolset.Util.wixext/5.0.2
     3. Run: wix build Product.wxs -ext WixToolset.Util.wixext -o serverkit-agent.msi -define Version=1.0.0
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"

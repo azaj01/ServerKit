@@ -250,7 +250,7 @@ jobs:
 
       - name: Install WiX Util extension
         run: |
-          wix extension add --global WixToolset.Util.wixext --version 5.0.2
+          wix extension add --global WixToolset.Util.wixext/5.0.2
 
       - name: Download binary
         uses: actions/download-artifact@v4

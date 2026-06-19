@@ -30,7 +30,7 @@ if (-not $wixPath) {
 $extensionList = wix extension list --global 2>&1
 if (-not ($extensionList -match "WixToolset\.Util\.wixext")) {
     Write-Host "WiX Util extension not found. Install it with:"
-    Write-Host "  wix extension add --global WixToolset.Util.wixext --version 5.0.2"
+    Write-Host "  wix extension add --global WixToolset.Util.wixext/5.0.2"
     exit 1
 }
 
