@@ -182,6 +182,10 @@ def create_app(config_name=None):
     from app.api.security import security_bp
     app.register_blueprint(security_bp, url_prefix='/api/v1/security')
 
+    # Register blueprints - Secrets manager + inbound webhook gateway
+    from app.api.secrets_webhooks import bp as secrets_webhooks_bp
+    app.register_blueprint(secrets_webhooks_bp, url_prefix='/api/v1')
+
     # Register blueprints - Cron Jobs
     from app.api.cron import cron_bp
     app.register_blueprint(cron_bp, url_prefix='/api/v1/cron')

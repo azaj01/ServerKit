@@ -51,6 +51,7 @@ import StatusPages from './pages/StatusPages';
 import PublicStatusPage from './pages/PublicStatusPage';
 import CloudProvision from './pages/CloudProvision';
 import Marketplace from './pages/Marketplace';
+import SecretsWebhooks from './pages/SecretsWebhooks';
 import StyleGuide from './pages/StyleGuide';
 import AppMap from './pages/AppMap';
 import Documentation from './pages/Documentation';
@@ -98,6 +99,8 @@ const PAGE_TITLES = {
     '/status-pages': 'Status Pages',
     '/cloud': 'Cloud Provisioning',
     '/marketplace': 'Marketplace',
+    '/secrets': 'Secrets & Webhooks',
+    '/secrets/:tab': 'Secrets & Webhooks',
     '/style-guide': 'Style Guide',
     '/app-map': 'App Map',
     '/documentation': 'Documentation',
@@ -301,6 +304,8 @@ function AppRoutes() {
                 <Route path="email/:tab" element={<Email />} />
                 <Route path="terminal" element={<Terminal />} />
                 <Route path="terminal/:tab" element={<Terminal />} />
+                <Route path="secrets" element={<SecretsWebhooks />} />
+                <Route path="secrets/:tab" element={<SecretsWebhooks />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />
                 {dashboardRoutes}

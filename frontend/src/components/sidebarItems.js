@@ -162,6 +162,13 @@ export const SIDEBAR_ITEMS = [
         icon: '<path d="M4 17l6-6-6-6M12 19h8"/>'
     },
     {
+        id: 'secrets',
+        label: 'Secrets & Webhooks',
+        route: '/secrets',
+        category: 'system',
+        icon: '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><circle cx="12" cy="12" r="2"/><path d="M12 12v-6"/><path d="M16 12h3"/><path d="M8 12H5"/>'
+    },
+    {
         // Redesign: Marketplace uses the top-bar layout (REDESIGN_MAP §6 dec. 3).
         // Downloads now lives in the page's top bar (PageTopbar MARKET_TABS), not
         // as a sidebar sub-item. Route /downloads is unchanged.

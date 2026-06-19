@@ -39,6 +39,8 @@ from app.models.plugin import InstalledPlugin
 from app.models.ai import AiConversation, AiMessage, AiPendingAction
 from app.models.image_scan import ImageVulnerabilityScan, SbomArtifact
 from app.models.passkey import PasskeyCredential
+from app.models.secret_vault import SecretVault, Secret
+from app.models.webhook_gateway import WebhookEndpoint, WebhookDelivery
 
 __all__ = [
     'User', 'Application', 'Domain', 'EnvironmentVariable', 'EnvironmentVariableHistory',
@@ -64,4 +66,6 @@ __all__ = [
     'AiConversation', 'AiMessage', 'AiPendingAction',
     'ImageVulnerabilityScan', 'SbomArtifact',
     'PasskeyCredential',
+    'SecretVault', 'Secret',
+    'WebhookEndpoint', 'WebhookDelivery',
 ]
