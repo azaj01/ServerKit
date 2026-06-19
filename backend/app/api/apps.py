@@ -14,6 +14,7 @@ from app.services.repository_manifest_service import RepositoryManifestService
 from app.services.source_connection_service import SourceConnectionService
 from app.services.remote_docker_service import RemoteDockerService
 from app.services.image_update_service import ImageUpdateService
+from app.services.container_sleep_service import ContainerSleepService
 from app.services.log_service import LogService
 from app.services.process_service import ProcessService
 from app.services.upload_service import (
@@ -1209,6 +1210,71 @@ def apply_image_update(app_id):
         'message': 'Image updated and containers recreated',
         'app': app.to_dict(),
     }), 200
+
+
+@apps_bp.route('/<int:app_id>/sleep-policy', methods=['GET'])
+@jwt_required()
+def get_sleep_policy(app_id):
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    return jsonify(ContainerSleepService.get_or_create_policy(app_id).to_dict())
+
+
+@apps_bp.route('/<int:app_id>/sleep-policy', methods=['PUT'])
+@jwt_required()
+def update_sleep_policy(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    policy = ContainerSleepService.set_policy(
+        app_id, enabled=data.get('enabled'), idle_timeout_minutes=data.get('idle_timeout_minutes'))
+    return jsonify(policy.to_dict())
+
+
+@apps_bp.route('/<int:app_id>/sleep', methods=['POST'])
+@jwt_required()
+def sleep_app(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    result = ContainerSleepService.sleep_app(app_id)
+    if not result.get('success'):
+        return jsonify({'error': result['error']}), 400
+    return jsonify({'message': 'Application asleep', 'policy': result['policy'], 'app': app.to_dict()})
+
+
+@apps_bp.route('/<int:app_id>/wake', methods=['POST'])
+@jwt_required()
+def wake_app(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    result = ContainerSleepService.wake_app(app_id)
+    if not result.get('success'):
+        return jsonify({'error': result['error']}), 400
+    return jsonify({'message': 'Application awake', 'policy': result['policy'], 'app': app.to_dict()})
+
+
+@apps_bp.route('/sweep-idle', methods=['POST'])
+@jwt_required()
+def sweep_idle_apps():
+    """Sleep all enabled apps that have been idle past their timeout. Intended
+    to be hit periodically (cron or a scheduler)."""
+    user = User.query.get(get_jwt_identity())
+    if not (user and user.is_admin):
+        return jsonify({'error': 'Admin access required'}), 403
+    return jsonify(ContainerSleepService.sweep_idle())
 
 
 @apps_bp.route('/<int:app_id>/stop', methods=['POST'])

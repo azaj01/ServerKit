@@ -117,6 +117,17 @@ class Application(db.Model):
             }
         else:
             result['image_update'] = None
+
+        # Lightweight auto-sleep badge
+        sleep_policy = self.sleep_policy
+        if sleep_policy:
+            result['sleep'] = {
+                'enabled': sleep_policy.enabled,
+                'asleep': sleep_policy.asleep,
+                'idle_timeout_minutes': sleep_policy.idle_timeout_minutes,
+            }
+        else:
+            result['sleep'] = None
         if include_linked and self.linked_app:
             result['linked_app'] = {
                 'id': self.linked_app.id,
