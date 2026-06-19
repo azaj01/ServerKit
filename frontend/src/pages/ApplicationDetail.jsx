@@ -14,6 +14,7 @@ import PrivateURLSection from '../components/PrivateURLSection';
 import LinkedAppsSection from '../components/LinkedAppsSection';
 import LinkAppModal from '../components/LinkAppModal';
 import ContainerOpsPanel from '../components/apps/ContainerOpsPanel';
+import WafPanel from '../components/apps/WafPanel';
 import { getServiceType, getStatusConfig } from '../utils/serviceTypes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Pill, EnvTag } from '@/components/ds';
 
-const VALID_TABS = ['overview', 'environment', 'packages', 'gunicorn', 'commands', 'ops', 'build', 'deploy', 'logs', 'settings'];
+const VALID_TABS = ['overview', 'environment', 'packages', 'gunicorn', 'commands', 'ops', 'waf', 'build', 'deploy', 'logs', 'settings'];
 
 // statusInfo.dotClass → ds Pill kind
 const STATUS_PILL = {
@@ -113,6 +114,9 @@ const ApplicationDetail = () => {
 
     const isPythonApp = ['flask', 'django'].includes(app.app_type);
     const isDockerApp = app.app_type === 'docker';
+    // WAF protects the nginx vhost in front of an app, so it applies to any
+    // nginx-served app type (Docker or Python) — broader than Container Ops.
+    const isNginxServedApp = isDockerApp || isPythonApp;
     const isRunning = app.status === 'running';
     const typeInfo = getServiceType(app.app_type);
     const statusInfo = getStatusConfig(app.status);
@@ -213,6 +217,9 @@ const ApplicationDetail = () => {
                     {isDockerApp && (
                         <TabsTrigger value="ops">Container Ops</TabsTrigger>
                     )}
+                    {isNginxServedApp && (
+                        <TabsTrigger value="waf">WAF</TabsTrigger>
+                    )}
                     <TabsTrigger value="build">Build</TabsTrigger>
                     <TabsTrigger value="deploy">Deploy</TabsTrigger>
                     <TabsTrigger value="logs">Logs</TabsTrigger>
@@ -243,6 +250,11 @@ const ApplicationDetail = () => {
                     {isDockerApp && (
                         <TabsContent value="ops">
                             <ContainerOpsPanel app={app} onChanged={loadApp} />
+                        </TabsContent>
+                    )}
+                    {isNginxServedApp && (
+                        <TabsContent value="waf">
+                            <WafPanel app={app} onChanged={loadApp} />
                         </TabsContent>
                     )}
                     <TabsContent value="build">

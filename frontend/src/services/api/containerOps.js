@@ -51,3 +51,28 @@ export async function evaluateScale(appId) {
 export async function getGpuInfo() {
     return this.request('/gpu/');
 }
+
+// --- WAF (per-app ModSecurity) ---
+export async function getWafPolicy(appId) {
+    return this.request(`/waf/applications/${appId}/policy`);
+}
+
+export async function updateWafPolicy(appId, data) {
+    return this.request(`/waf/applications/${appId}/policy`, { method: 'PUT', body: data });
+}
+
+export async function applyWaf(appId) {
+    return this.request(`/waf/applications/${appId}/apply`, { method: 'POST' });
+}
+
+export async function getWafEvents(appId, limit = 50) {
+    return this.request(`/waf/applications/${appId}/events?limit=${limit}`);
+}
+
+export async function getWafStatus() {
+    return this.request('/waf/status');
+}
+
+export async function installWaf() {
+    return this.request('/waf/install', { method: 'POST' });
+}

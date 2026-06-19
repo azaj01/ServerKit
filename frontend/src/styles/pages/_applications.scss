@@ -1537,3 +1537,164 @@
         }
     }
 }
+
+// ============================================
+// WAF PANEL (ModSecurity policy / events)
+// ============================================
+
+.waf-panel {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-lg;
+
+    &__section {
+        // reuses .app-panel shell; nothing extra needed by default
+    }
+
+    // install notice shown when ModSecurity is absent
+    &__banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $spacing-md;
+        padding: $spacing-md;
+        border: 1px solid var(--border-soft);
+        border-radius: $radius-md;
+        background: var(--surface-2, var(--bg-card));
+    }
+
+    &__banner-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+
+        span {
+            font-size: 12.5px;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+    }
+
+    &__mode {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: $space-3;
+
+        .sk-seg {
+            align-self: flex-start;
+        }
+    }
+
+    &__mode-hint {
+        font-size: 12.5px;
+        color: var(--text-dim);
+        line-height: 1.4;
+    }
+
+    &__rules {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: $spacing-md;
+        padding-top: $spacing-md;
+        border-top: 1px solid var(--border-soft);
+    }
+
+    &__rules-input {
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+        margin-top: 4px;
+
+        .input,
+        input {
+            max-width: 200px;
+        }
+    }
+
+    &__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $spacing-sm;
+        margin-top: 8px;
+    }
+
+    &__chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 6px 3px 10px;
+        border: 1px solid var(--border-soft);
+        border-radius: $radius-full;
+        background: var(--surface-2, var(--bg-card));
+        font-size: 12.5px;
+    }
+
+    &__chip-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        width: 18px;
+        height: 18px;
+        background: transparent;
+        color: var(--text-faint);
+        cursor: pointer;
+        transition: color 0.15s ease, background 0.15s ease;
+
+        &:hover {
+            color: var(--danger, #ef4444);
+            background: var(--border-soft);
+        }
+    }
+
+    &__table-wrap {
+        overflow-x: auto;
+    }
+
+    &__table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+
+        th,
+        td {
+            text-align: left;
+            padding: $space-3 $spacing-md;
+            border-bottom: 1px solid var(--border-soft);
+            vertical-align: top;
+        }
+
+        th {
+            font-size: 11.5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-faint);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+    }
+
+    &__msg {
+        max-width: 320px;
+    }
+
+    &__uri {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__time {
+        white-space: nowrap;
+        color: var(--text-dim);
+    }
+}
