@@ -37,6 +37,7 @@ from app.models.marketplace import Extension, ExtensionInstall
 from app.models.pending_agent import PendingAgent
 from app.models.plugin import InstalledPlugin
 from app.models.ai import AiConversation, AiMessage, AiPendingAction
+from app.models.image_scan import ImageVulnerabilityScan, SbomArtifact
 
 __all__ = [
     'User', 'Application', 'Domain', 'EnvironmentVariable', 'EnvironmentVariableHistory',
@@ -60,4 +61,5 @@ __all__ = [
     'PendingAgent',
     'InstalledPlugin',
     'AiConversation', 'AiMessage', 'AiPendingAction',
+    'ImageVulnerabilityScan', 'SbomArtifact',
 ]

@@ -484,3 +484,101 @@ def disable_auto_updates():
     """Disable automatic security updates."""
     result = SecurityService.disable_auto_updates()
     return jsonify(result), 200 if result['success'] else 400
+
+
+# ==========================================
+# IMAGE VULNERABILITY SCANNING
+# ==========================================
+@security_bp.route('/image-scans/install', methods=['POST'])
+@jwt_required()
+@admin_required
+def install_image_scanner():
+    """Install grype and syft scanner binaries."""
+    from app.services.image_scanner_service import ImageScannerService
+    grype = ImageScannerService.install_grype()
+    syft = ImageScannerService.install_syft()
+    return jsonify({'grype': grype, 'syft': syft}), 200
+
+
+@security_bp.route('/image-scans/applications/<int:application_id>', methods=['POST'])
+@jwt_required()
+@admin_required
+def scan_application_image(application_id):
+    """Trigger a CVE scan for an application image."""
+    from app.services.image_scanner_service import ImageScannerService
+    result = ImageScannerService.scan_application(application_id)
+    return jsonify(result), 200 if result['success'] else 400
+
+
+@security_bp.route('/image-scans/applications/<int:application_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_application_image_scans(application_id):
+    """Get scan history for an application."""
+    from app.services.image_scanner_service import ImageScannerService
+    limit = request.args.get('limit', 20, type=int)
+    scans = ImageScannerService.scan_history(application_id, limit=limit)
+    latest = ImageScannerService.latest_scan(application_id)
+    return jsonify({
+        'scans': scans,
+        'latest': latest.to_dict() if latest else None
+    }), 200
+
+
+@security_bp.route('/image-scans/<int:scan_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_image_scan(scan_id):
+    """Get a single scan with findings."""
+    from app.models import ImageVulnerabilityScan
+    scan = ImageVulnerabilityScan.query.get(scan_id)
+    if not scan:
+        return jsonify({'error': 'Scan not found'}), 404
+    return jsonify(scan.to_dict(include_findings=True)), 200
+
+
+@security_bp.route('/image-scans/applications/<int:application_id>/deploy-gate', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_image_deploy_gate(application_id):
+    """Check whether the latest scan passes the deploy gate."""
+    from app.services.image_scanner_service import ImageScannerService
+    allowed = request.args.getlist('allowed') or None
+    result = ImageScannerService.check_deploy_gate(application_id, allowed_severities=allowed)
+    return jsonify(result), 200
+
+
+# ==========================================
+# SBOM GENERATION
+# ==========================================
+@security_bp.route('/sboms/applications/<int:application_id>', methods=['POST'])
+@jwt_required()
+@admin_required
+def generate_application_sbom(application_id):
+    """Generate an SPDX SBOM for an application image."""
+    from app.services.image_scanner_service import ImageScannerService
+    result = ImageScannerService.generate_sbom(application_id)
+    return jsonify(result), 200 if result['success'] else 400
+
+
+@security_bp.route('/sboms/applications/<int:application_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_application_sboms(application_id):
+    """List generated SBOMs for an application."""
+    from app.models import SbomArtifact
+    sboms = SbomArtifact.query.filter_by(application_id=application_id).order_by(
+        SbomArtifact.created_at.desc()).limit(50).all()
+    return jsonify({'sboms': [s.to_dict() for s in sboms]}), 200
+
+
+@security_bp.route('/sboms/<int:sbom_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_sbom(sbom_id):
+    """Download an SPDX SBOM JSON."""
+    from app.models import SbomArtifact
+    sbom = SbomArtifact.query.get(sbom_id)
+    if not sbom:
+        return jsonify({'error': 'SBOM not found'}), 404
+    return jsonify(sbom.to_dict(include_sbom=True)), 200

@@ -94,6 +94,18 @@ class Application(db.Model):
             'server_name': self.server.name if self.server else 'Local server',
             'domains': [d.to_dict() for d in self.domains]
         }
+
+        # Lightweight image-scan badge (latest scan only)
+        latest_scan = self.image_scans.first()
+        if latest_scan:
+            result['image_scan'] = {
+                'status': latest_scan.status,
+                'highest_severity': latest_scan.highest_severity,
+                'severity_counts': latest_scan.get_counts(),
+                'scanned_at': latest_scan.completed_at.isoformat() if latest_scan.completed_at else None,
+            }
+        else:
+            result['image_scan'] = None
         if include_linked and self.linked_app:
             result['linked_app'] = {
                 'id': self.linked_app.id,
