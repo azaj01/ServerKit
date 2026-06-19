@@ -543,6 +543,11 @@ CORS_ORIGINS=$cors_origins
 # Public URL for agents and install commands (optional)
 ${public_url:+# SERVERKIT_PUBLIC_URL=$public_url}
 
+# SSL mode (secure|insecure) — gates the panel's HSTS header so HTTPS stays
+# optional. Mirrors /etc/serverkit/ssl-mode; set to 'secure' only when this
+# server terminates real end-to-end HTTPS.
+SERVERKIT_SSL_MODE=$SSL_MODE
+
 # Ports
 PORT=80
 SSL_PORT=443

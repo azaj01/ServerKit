@@ -53,9 +53,13 @@ def register_security_headers(app: Flask):
         # Permissions Policy (formerly Feature-Policy)
         response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
 
-        # HSTS - only in production and on HTTPS
-        # 63072000 seconds = 2 years, matching the nginx edge config and preload requirements
-        if not app.debug:
+        # HSTS - only when the deployment actually terminates HTTPS. The installer
+        # records that choice (SSL_MODE / HSTS_ENABLED in config); we never
+        # advertise HSTS or `preload` on a plain-HTTP or Cloudflare-Flexible
+        # install, since that's a hard-to-reverse commitment and HTTPS is
+        # intentionally optional. 63072000s = 2 years, matching the nginx edge
+        # config and the preload-list requirements.
+        if app.config.get('HSTS_ENABLED') and not app.debug:
             response.headers['Strict-Transport-Security'] = 'max-age=63072000; includeSubDomains; preload'
 
         return response

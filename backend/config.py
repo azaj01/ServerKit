@@ -12,6 +12,29 @@ INSECURE_SECRET_KEYS = [
 ]
 
 
+def _resolve_ssl_mode():
+    """Whether this deployment terminates real end-to-end HTTPS.
+
+    Set by the installer via the ``SERVERKIT_SSL_MODE`` env var or the
+    ``/etc/serverkit/ssl-mode`` file. Defaults to ``'insecure'`` so we never
+    advertise HSTS/preload on a plain-HTTP or Cloudflare-Flexible deployment —
+    that's a hard-to-reverse browser commitment, and HTTPS is intentionally
+    optional in ServerKit. Behind a proxy Flask can't tell real TLS from a
+    Flexible edge via X-Forwarded-Proto, so we trust the operator's choice.
+    """
+    mode = os.environ.get('SERVERKIT_SSL_MODE', '').strip().lower()
+    if mode in ('secure', 'insecure'):
+        return mode
+    try:
+        with open('/etc/serverkit/ssl-mode', 'r') as fh:
+            mode = fh.read().strip().lower()
+        if mode in ('secure', 'insecure'):
+            return mode
+    except OSError:
+        pass
+    return 'insecure'
+
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
@@ -57,6 +80,13 @@ class Config:
     # Public IP the wildcard/custom A-records should point at when auto-creating
     # DNS records via a connected provider.
     SERVER_PUBLIC_IP = os.environ.get('SERVER_PUBLIC_IP', '')
+
+    # Whether the deployment serves real end-to-end HTTPS. Gates the HSTS
+    # response header so the panel never forces/preloads SSL on an HTTP-only or
+    # Cloudflare-Flexible install (HTTPS is optional). The nginx edge config
+    # still emits HSTS in its own secure server block independently of this.
+    SSL_MODE = _resolve_ssl_mode()
+    HSTS_ENABLED = SSL_MODE == 'secure'
 
 
 class DevelopmentConfig(Config):
