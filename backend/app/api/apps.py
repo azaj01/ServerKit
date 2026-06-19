@@ -15,6 +15,7 @@ from app.services.source_connection_service import SourceConnectionService
 from app.services.remote_docker_service import RemoteDockerService
 from app.services.image_update_service import ImageUpdateService
 from app.services.container_sleep_service import ContainerSleepService
+from app.services.container_scale_service import ContainerScaleService
 from app.services.log_service import LogService
 from app.services.process_service import ProcessService
 from app.services.upload_service import (
@@ -1275,6 +1276,72 @@ def sweep_idle_apps():
     if not (user and user.is_admin):
         return jsonify({'error': 'Admin access required'}), 403
     return jsonify(ContainerSleepService.sweep_idle())
+
+
+@apps_bp.route('/<int:app_id>/scale-policy', methods=['GET'])
+@jwt_required()
+def get_scale_policy(app_id):
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    return jsonify(ContainerScaleService.get_or_create_policy(app_id).to_dict())
+
+
+@apps_bp.route('/<int:app_id>/scale-policy', methods=['PUT'])
+@jwt_required()
+def update_scale_policy(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    policy = ContainerScaleService.set_policy(app_id, **data)
+    return jsonify(policy.to_dict())
+
+
+@apps_bp.route('/<int:app_id>/scale', methods=['POST'])
+@jwt_required()
+def scale_app(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    if data.get('replicas') is None:
+        return jsonify({'error': 'replicas is required'}), 400
+    result = ContainerScaleService.scale_to(app_id, data['replicas'])
+    if not result.get('success'):
+        return jsonify({'error': result['error']}), 400
+    return jsonify(result)
+
+
+@apps_bp.route('/<int:app_id>/scale/evaluate', methods=['POST'])
+@jwt_required()
+def evaluate_scale(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    result = ContainerScaleService.evaluate(app_id)
+    if not result.get('success'):
+        return jsonify({'error': result.get('error', 'Evaluation failed')}), 400
+    return jsonify(result)
+
+
+@apps_bp.route('/scale-sweep', methods=['POST'])
+@jwt_required()
+def scale_sweep():
+    """Evaluate every enabled auto-scaling policy. Intended for cron/scheduler."""
+    user = User.query.get(get_jwt_identity())
+    if not (user and user.is_admin):
+        return jsonify({'error': 'Admin access required'}), 403
+    return jsonify(ContainerScaleService.sweep())
 
 
 @apps_bp.route('/<int:app_id>/stop', methods=['POST'])
