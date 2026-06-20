@@ -13,6 +13,9 @@ class SecretVault(db.Model):
     slug = db.Column(db.String(220), nullable=False, unique=True, index=True)
     description = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    # Workspace scoping (#33): a vault belongs to a workspace. Backfilled to the
+    # Default workspace by migration 021; new rows are stamped on create.
+    workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -24,6 +27,7 @@ class SecretVault(db.Model):
             'name': self.name,
             'slug': self.slug,
             'description': self.description,
+            'workspace_id': self.workspace_id,
             'secret_count': self.secrets.count(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,

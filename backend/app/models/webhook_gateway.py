@@ -19,6 +19,8 @@ class WebhookEndpoint(db.Model):
     forward_url = db.Column(db.String(500), nullable=True)
     retry_count = db.Column(db.Integer, default=3)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    # Workspace scoping (#33): backfilled to the Default workspace by migration 021.
+    workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -56,6 +58,7 @@ class WebhookEndpoint(db.Model):
             'filter_paths': self.get_filter_paths(),
             'forward_url': self.forward_url,
             'retry_count': self.retry_count,
+            'workspace_id': self.workspace_id,
             'delivery_count': self.deliveries.count(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,

@@ -16,6 +16,18 @@ def _current_user_id() -> int:
     return int(identity) if identity else None
 
 
+def _resolve_ws():
+    """Resolve the active workspace context (X-Workspace-Id header or
+    ?workspace_id) to a workspace id, or None for an unscoped view — mirrors the
+    servers/apps scoping (#33). Lenient: a stale/unknown context degrades to
+    None rather than erroring."""
+    from app.models import User
+    from app.services.workspace_service import WorkspaceService
+    user = User.query.get(get_jwt_identity())
+    return WorkspaceService.resolve_workspace_id(
+        user, request.headers.get('X-Workspace-Id') or request.args.get('workspace_id'))
+
+
 def _json_or_form() -> dict:
     """Return JSON body if available, otherwise an empty dict."""
     if request.is_json:
@@ -38,7 +50,7 @@ def admin_required(fn):
 @bp.route('/vaults', methods=['GET'])
 @jwt_required()
 def list_vaults():
-    return {'success': True, 'vaults': SecretVaultService.list_vaults()}
+    return {'success': True, 'vaults': SecretVaultService.list_vaults(workspace_id=_resolve_ws())}
 
 
 @bp.route('/vaults', methods=['POST'])
@@ -48,7 +60,8 @@ def create_vault():
     name = data.get('name')
     if not name:
         return {'error': 'name is required'}, 400
-    result = SecretVaultService.create_vault(name, description=data.get('description'), user_id=_current_user_id())
+    result = SecretVaultService.create_vault(name, description=data.get('description'),
+                                             user_id=_current_user_id(), workspace_id=_resolve_ws())
     if not result.get('success'):
         return {'error': result.get('error')}, 409
     return result, 201
@@ -175,7 +188,7 @@ def delete_secret(secret_id):
 @bp.route('/webhooks/endpoints', methods=['GET'])
 @jwt_required()
 def list_webhook_endpoints():
-    return {'success': True, 'endpoints': WebhookGatewayService.list_endpoints()}
+    return {'success': True, 'endpoints': WebhookGatewayService.list_endpoints(workspace_id=_resolve_ws())}
 
 
 @bp.route('/webhooks/endpoints', methods=['POST'])
@@ -192,6 +205,7 @@ def create_webhook_endpoint():
         filter_paths=data.get('filter_paths'),
         retry_count=data.get('retry_count', 3),
         user_id=_current_user_id(),
+        workspace_id=_resolve_ws(),
     )
     if not result.get('success'):
         return {'error': result.get('error')}, 409

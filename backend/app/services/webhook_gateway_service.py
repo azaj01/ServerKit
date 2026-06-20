@@ -21,8 +21,11 @@ class WebhookGatewayService:
     """Receive, inspect, route, and replay inbound webhooks."""
 
     @classmethod
-    def list_endpoints(cls) -> List[Dict]:
-        return [e.to_dict() for e in WebhookEndpoint.query.order_by(WebhookEndpoint.name).all()]
+    def list_endpoints(cls, workspace_id: int = None) -> List[Dict]:
+        query = WebhookEndpoint.query
+        if workspace_id is not None:
+            query = query.filter(WebhookEndpoint.workspace_id == workspace_id)
+        return [e.to_dict() for e in query.order_by(WebhookEndpoint.name).all()]
 
     @classmethod
     def get_endpoint(cls, endpoint_id: int) -> Optional[WebhookEndpoint]:
@@ -50,7 +53,7 @@ class WebhookGatewayService:
     @classmethod
     def create_endpoint(cls, name: str, secret: str = None, forward_url: str = None,
                         filter_paths: List[str] = None, retry_count: int = 3,
-                        user_id: int = None) -> Dict:
+                        user_id: int = None, workspace_id: int = None) -> Dict:
         if WebhookEndpoint.query.filter_by(name=name).first():
             return {'success': False, 'error': 'Endpoint name already exists'}
         endpoint = WebhookEndpoint(
@@ -60,6 +63,7 @@ class WebhookGatewayService:
             forward_url=forward_url,
             retry_count=retry_count,
             created_by=user_id,
+            workspace_id=workspace_id,
         )
         if filter_paths:
             endpoint.set_filter_paths(filter_paths)
