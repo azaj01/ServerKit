@@ -183,6 +183,9 @@ export const SIDEBAR_ITEMS = [
         id: 'gpu',
         label: 'GPU Monitor',
         route: '/gpu',
+        // Hidden unless the panel host reports a GPU (Sidebar sets gpuAvailable
+        // from api.getGpuInfo) — no point showing an empty monitor.
+        requiresCondition: 'gpuAvailable',
         category: 'system',
         icon: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6v12"/><circle cx="13" cy="12" r="2.5"/><path d="M17 6v12"/>'
     },

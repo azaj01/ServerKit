@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Network, Radio, Copy, Check, AlertTriangle } from 'lucide-react';
-import { PageTopbar } from '@/components/ds';
+import { Network, Copy, Check, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/Spinner';
@@ -149,16 +148,10 @@ const DynamicDns = () => {
         }
     }
 
-    if (loading) return <div className="page-container"><Spinner /></div>;
+    if (loading) return <div className="sk-tabgroup__inner"><Spinner /></div>;
 
     return (
-        <div className="page-container ddns-page">
-            <PageTopbar
-                icon={<Radio size={18} />}
-                title="Dynamic DNS"
-                meta={`${hosts.length} host${hosts.length !== 1 ? 's' : ''}`}
-            />
-
+        <div className="sk-tabgroup__inner ddns-page">
             {revealedToken && (
                 <TokenCallout host={revealedToken} onDismiss={() => setRevealedToken(null)} />
             )}
