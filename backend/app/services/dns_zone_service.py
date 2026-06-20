@@ -19,6 +19,9 @@ class DNSZoneService:
                 {'record_type': 'A', 'name': '@', 'content': '{{server_ip}}', 'ttl': 3600},
                 {'record_type': 'A', 'name': 'www', 'content': '{{server_ip}}', 'ttl': 3600},
                 {'record_type': 'CNAME', 'name': 'mail', 'content': '{{domain}}', 'ttl': 3600},
+                # Authorize only Let's Encrypt (what ServerKit issues with) to mint
+                # certs for this domain. Satisfies CAA scanners and blocks rogue CAs.
+                {'record_type': 'CAA', 'name': '@', 'content': '0 issue "letsencrypt.org"', 'ttl': 3600},
             ],
         },
         'email-hosting': {
@@ -266,6 +269,7 @@ class DNSZoneService:
     def _cloudflare_sync(zone, record, action, config):
         """Sync record to Cloudflare API."""
         import requests
+        from app.services.dns_provider_service import DNSProviderService
 
         api_token = config.get('api_token')
         if not api_token:
@@ -274,17 +278,21 @@ class DNSZoneService:
         headers = {'Authorization': f'Bearer {api_token}', 'Content-Type': 'application/json'}
         base_url = f'https://api.cloudflare.com/client/v4/zones/{zone.provider_zone_id}/dns_records'
 
-        if action == 'create':
-            payload = {
-                'type': record.record_type,
-                'name': record.name,
-                'content': record.content,
-                'ttl': record.ttl,
-                'proxied': record.proxied,
-            }
+        def _payload():
+            # CAA needs Cloudflare's structured `data` object, not a flat
+            # `content` string (and `proxied` is meaningless for it).
+            p = {'type': record.record_type, 'name': record.name, 'ttl': record.ttl}
+            if record.record_type == 'CAA':
+                p['data'] = DNSProviderService.parse_caa_value(record.content)
+            else:
+                p['content'] = record.content
+                p['proxied'] = record.proxied
             if record.priority is not None:
-                payload['priority'] = record.priority
-            resp = requests.post(base_url, json=payload, headers=headers, timeout=10)
+                p['priority'] = record.priority
+            return p
+
+        if action == 'create':
+            resp = requests.post(base_url, json=_payload(), headers=headers, timeout=10)
             if resp.ok:
                 data = resp.json()
                 record.provider_record_id = data.get('result', {}).get('id')
@@ -292,14 +300,7 @@ class DNSZoneService:
 
         elif action == 'update' and record.provider_record_id:
             url = f'{base_url}/{record.provider_record_id}'
-            payload = {
-                'type': record.record_type,
-                'name': record.name,
-                'content': record.content,
-                'ttl': record.ttl,
-                'proxied': record.proxied,
-            }
-            requests.put(url, json=payload, headers=headers, timeout=10)
+            requests.put(url, json=_payload(), headers=headers, timeout=10)
 
         elif action == 'delete' and record.provider_record_id:
             url = f'{base_url}/{record.provider_record_id}'

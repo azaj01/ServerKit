@@ -9,6 +9,7 @@ from app.middleware.rbac import admin_required, get_current_user
 from app.services.audit_service import AuditService
 from app.services.settings_service import SettingsService
 from app.services.permission_service import PermissionService
+from app.utils.domain import detect_request_domain, canonical_origin, is_valid_canonical_domain
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -356,6 +357,58 @@ def update_setting(key):
         'message': 'Setting updated successfully',
         'key': key,
         'value': data['value']
+    }), 200
+
+
+@admin_bp.route('/settings/domain-detection', methods=['GET'])
+@admin_required
+def get_domain_detection():
+    """Return the domain detected from the current request and current canonical setting."""
+    detected_domain, is_https = detect_request_domain(request)
+    current_domain = SettingsService.get('canonical_domain', '') or ''
+    current_https = bool(SettingsService.get('canonical_https_enabled', False))
+    return jsonify({
+        'detected_domain': detected_domain,
+        'is_https': is_https,
+        'current_canonical_domain': current_domain,
+        'current_canonical_https_enabled': current_https,
+        'current_canonical_origin': canonical_origin(current_domain, current_https) if current_domain else None,
+    }), 200
+
+
+@admin_bp.route('/settings/canonical-domain', methods=['PUT'])
+@admin_required
+def set_canonical_domain():
+    """Persist the canonical panel domain and HTTPS flag."""
+    data = request.get_json() or {}
+    domain = (data.get('domain') or '').strip().lower()
+    https_enabled = bool(data.get('https_enabled', False))
+    current_user_id = get_jwt_identity()
+
+    if not domain:
+        return jsonify({'error': 'domain is required'}), 400
+    if not is_valid_canonical_domain(domain):
+        return jsonify({'error': 'domain does not look like a valid canonical domain'}), 400
+
+    old_domain = SettingsService.get('canonical_domain', '') or ''
+    SettingsService.set('canonical_domain', domain, user_id=current_user_id)
+    SettingsService.set('canonical_https_enabled', https_enabled, user_id=current_user_id)
+    db.session.commit()
+
+    AuditService.log_settings_change(
+        user_id=current_user_id,
+        key='canonical_domain',
+        old_value=old_domain,
+        new_value=domain
+    )
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Canonical domain updated',
+        'domain': domain,
+        'https_enabled': https_enabled,
+        'origin': canonical_origin(domain, https_enabled),
+        'restart_required': True,
     }), 200
 
 

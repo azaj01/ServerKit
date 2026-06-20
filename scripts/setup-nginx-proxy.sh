@@ -62,19 +62,30 @@ if ! grep -q "sites-enabled" /etc/nginx/nginx.conf; then
     sed -i '/^http {/a \    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
 fi
 
-# Copy ServerKit site config
+# Copy ServerKit site configs
 SERVERKIT_DIR="/opt/serverkit"
-if [ -f "$SERVERKIT_DIR/nginx/sites-available/serverkit.conf" ]; then
-    print_info "Installing ServerKit nginx config..."
-    cp "$SERVERKIT_DIR/nginx/sites-available/serverkit.conf" /etc/nginx/sites-available/
-    ln -sf /etc/nginx/sites-available/serverkit.conf /etc/nginx/sites-enabled/
-    print_success "ServerKit config installed"
+SSL_MODE="insecure"
+if [ -f /etc/serverkit/ssl-mode ]; then
+    SSL_MODE=$(cat /etc/serverkit/ssl-mode)
+fi
+if [ "${SERVERKIT_SKIP_SSL:-0}" = "1" ]; then
+    SSL_MODE="insecure"
 fi
 
-# Copy template
-if [ -f "$SERVERKIT_DIR/nginx/sites-available/example.conf.template" ]; then
+if [ -f "$SERVERKIT_DIR/nginx/sites-available/serverkit.conf" ]; then
+    print_info "Installing ServerKit nginx configs..."
+    cp "$SERVERKIT_DIR/nginx/sites-available/serverkit.conf" /etc/nginx/sites-available/
+    cp "$SERVERKIT_DIR/nginx/sites-available/serverkit-insecure.conf" /etc/nginx/sites-available/
     cp "$SERVERKIT_DIR/nginx/sites-available/example.conf.template" /etc/nginx/sites-available/
-    print_success "Template copied to /etc/nginx/sites-available/"
+
+    if [ "$SSL_MODE" = "secure" ]; then
+        ln -sf /etc/nginx/sites-available/serverkit.conf /etc/nginx/sites-enabled/serverkit.conf
+        print_success "ServerKit HTTPS config installed"
+    else
+        ln -sf /etc/nginx/sites-available/serverkit-insecure.conf /etc/nginx/sites-enabled/serverkit.conf
+        print_warning "ServerKit HTTP (insecure) config installed"
+        print_warning "Set SERVERKIT_SKIP_SSL=0 and run certbot to enable HTTPS later"
+    fi
 fi
 
 # Update ServerKit docker-compose to use port 8080
@@ -104,7 +115,11 @@ echo -e "${GREEN}  Setup Complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "Architecture:"
-echo "  • Host nginx (ports 80/443) - routes domains to apps"
+if [ "$SSL_MODE" = "secure" ]; then
+    echo "  • Host nginx (ports 80/443) - routes domains to apps"
+else
+    echo "  • Host nginx (port 80) - routes domains to apps (HTTPS not enabled)"
+fi
 echo "  • ServerKit frontend (port 8080) - UI"
 echo "  • ServerKit backend (port 5000) - API"
 echo ""

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParam
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LayoutProvider } from './contexts/LayoutContext';
 import { ResourceTierProvider } from './contexts/ResourceTierContext';
 import { Toaster } from './components/ui/sonner';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -51,10 +52,13 @@ import StatusPages from './pages/StatusPages';
 import PublicStatusPage from './pages/PublicStatusPage';
 import CloudProvision from './pages/CloudProvision';
 import Marketplace from './pages/Marketplace';
+import SecretsWebhooks from './pages/SecretsWebhooks';
 import StyleGuide from './pages/StyleGuide';
 import AppMap from './pages/AppMap';
 import Documentation from './pages/Documentation';
 import Deployments from './pages/Deployments';
+import GpuMonitor from './pages/GpuMonitor';
+import DynamicDns from './pages/DynamicDns';
 import useExtensionRoutes from './plugins/ExtensionRoutes';
 import { useContributions } from './plugins/contributions';
 
@@ -98,9 +102,13 @@ const PAGE_TITLES = {
     '/status-pages': 'Status Pages',
     '/cloud': 'Cloud Provisioning',
     '/marketplace': 'Marketplace',
+    '/secrets': 'Secrets & Webhooks',
+    '/secrets/:tab': 'Secrets & Webhooks',
     '/style-guide': 'Style Guide',
     '/app-map': 'App Map',
     '/documentation': 'Documentation',
+    '/gpu': 'GPU Monitor',
+    '/dynamic-dns': 'Dynamic DNS',
 };
 
 function PageTitleUpdater() {
@@ -292,6 +300,8 @@ function AppRoutes() {
                 <Route path="ftp/:tab" element={<FTPServer />} />
                 <Route path="monitoring" element={<Monitoring />} />
                 <Route path="monitoring/:tab" element={<Monitoring />} />
+                <Route path="gpu" element={<GpuMonitor />} />
+                <Route path="dynamic-dns" element={<DynamicDns />} />
                 <Route path="backups" element={<Backups />} />
                 <Route path="backups/:tab" element={<Backups />} />
                 <Route path="cron" element={<CronJobs />} />
@@ -301,6 +311,8 @@ function AppRoutes() {
                 <Route path="email/:tab" element={<Email />} />
                 <Route path="terminal" element={<Terminal />} />
                 <Route path="terminal/:tab" element={<Terminal />} />
+                <Route path="secrets" element={<SecretsWebhooks />} />
+                <Route path="secrets/:tab" element={<SecretsWebhooks />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />
                 {dashboardRoutes}
@@ -314,14 +326,16 @@ function App() {
         <Router>
             <PageTitleUpdater />
             <ThemeProvider>
-                <AuthProvider>
-                    <ResourceTierProvider>
-                        <ToastProvider>
-                            <AppRoutes />
-                            <Toaster />
-                        </ToastProvider>
-                    </ResourceTierProvider>
-                </AuthProvider>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <ResourceTierProvider>
+                            <ToastProvider>
+                                <AppRoutes />
+                                <Toaster />
+                            </ToastProvider>
+                        </ResourceTierProvider>
+                    </AuthProvider>
+                </LayoutProvider>
             </ThemeProvider>
         </Router>
     );

@@ -335,3 +335,105 @@ def update_current_user():
     db.session.commit()
 
     return jsonify({'user': user.to_dict()}), 200
+
+
+# ==========================================
+# PASSKEY / WEBAUTHN
+# ==========================================
+@auth_bp.route('/passkeys/options/register', methods=['POST'])
+@jwt_required()
+def passkey_register_options():
+    """Begin WebAuthn registration for the current user."""
+    from app.services.passkey_service import PasskeyService
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    options = PasskeyService.begin_registration(user)
+    return jsonify(options), 200
+
+
+@auth_bp.route('/passkeys/register', methods=['POST'])
+@jwt_required()
+def passkey_register():
+    """Verify and save a new WebAuthn credential."""
+    from app.services.passkey_service import PasskeyService
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    data = request.get_json() or {}
+    credential = data.get('credential')
+    device_name = data.get('device_name', 'Passkey')
+    if not credential:
+        return jsonify({'error': 'No credential provided'}), 400
+    result = PasskeyService.verify_registration(user, credential, device_name)
+    return jsonify(result), 200 if result['success'] else 400
+
+
+@auth_bp.route('/passkeys', methods=['GET'])
+@jwt_required()
+def passkey_list():
+    """List the current user's passkeys."""
+    from app.services.passkey_service import PasskeyService
+    user_id = get_jwt_identity()
+    return jsonify({'passkeys': PasskeyService.get_user_passkeys(user_id)}), 200
+
+
+@auth_bp.route('/passkeys/<int:passkey_id>', methods=['DELETE'])
+@jwt_required()
+def passkey_delete(passkey_id):
+    """Remove a passkey."""
+    from app.services.passkey_service import PasskeyService
+    user_id = get_jwt_identity()
+    result = PasskeyService.remove_passkey(user_id, passkey_id)
+    return jsonify(result), 200 if result['success'] else 404
+
+
+@auth_bp.route('/passkeys/options/authenticate', methods=['POST'])
+def passkey_auth_options():
+    """Begin WebAuthn authentication (public, challenge only)."""
+    from app.services.passkey_service import PasskeyService
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    user = User.query.get(user_id) if user_id else None
+    options = PasskeyService.begin_authentication(user)
+    return jsonify(options), 200
+
+
+@auth_bp.route('/passkeys/authenticate', methods=['POST'])
+@limiter.limit("5 per minute")
+def passkey_authenticate():
+    """Verify a WebAuthn assertion and issue JWT tokens."""
+    from app.services.passkey_service import PasskeyService
+    from app.services import sso_service
+    data = request.get_json() or {}
+    credential = data.get('credential')
+    user_id = data.get('user_id')
+    if not credential:
+        return jsonify({'error': 'No credential provided'}), 400
+
+    user = User.query.get(user_id) if user_id else None
+    result = PasskeyService.verify_authentication(credential, user)
+    if not result['success']:
+        return jsonify(result), 401
+
+    user = result['user']
+    if not user.is_active:
+        return jsonify({'error': 'Account is deactivated'}), 403
+
+    user.reset_failed_login()
+    user.last_login_at = datetime.utcnow()
+    db.session.commit()
+
+    AuditService.log_login(user.id, success=True, details={'method': 'passkey'})
+    db.session.commit()
+
+    access_token = create_access_token(identity=user.id)
+    refresh_token = create_refresh_token(identity=user.id)
+
+    return jsonify({
+        'user': user.to_dict(),
+        'access_token': access_token,
+        'refresh_token': refresh_token
+    }), 200

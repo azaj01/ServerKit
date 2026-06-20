@@ -57,3 +57,20 @@ export async function importDNSZone(zoneId, zoneFile) {
         body: { zone_file: zoneFile },
     });
 }
+
+// Dynamic DNS
+export async function getDdnsHosts() {
+    return this.request('/ddns/hosts');
+}
+
+export async function createDdnsHost(data) {
+    return this.request('/ddns/hosts', { method: 'POST', body: data });
+}
+
+export async function deleteDdnsHost(hostId) {
+    return this.request(`/ddns/hosts/${hostId}`, { method: 'DELETE' });
+}
+
+export async function regenerateDdnsToken(hostId) {
+    return this.request(`/ddns/hosts/${hostId}/regenerate-token`, { method: 'POST' });
+}

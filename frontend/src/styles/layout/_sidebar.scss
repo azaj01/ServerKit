@@ -696,3 +696,170 @@
         box-shadow: 0 0 6px currentColor;
     }
 }
+
+// ============================================
+// COMPACT RAIL LAYOUT  —  [data-layout="rail"]
+// A 64px icon-only rail that expands to the full sidebar on hover/focus.
+// Desktop only: below $breakpoint-md the off-canvas drawer is unchanged.
+// ============================================
+@media (min-width: ($breakpoint-md + 1)) {
+    [data-layout="rail"] {
+        .main-content {
+            margin-left: $sidebar-rail-width;
+        }
+
+        .sidebar {
+            width: $sidebar-rail-width;
+            transition: width 0.18s $ease-out-quint;
+
+            @media (prefers-reduced-motion: reduce) {
+                transition: none;
+            }
+
+            // Expand to the full sidebar while hovered or keyboard-focused. The
+            // panel is position: fixed, so it overlays content instead of
+            // pushing it — the .main-content offset stays at the rail width.
+            &:hover,
+            &:focus-within {
+                width: $sidebar-width;
+                box-shadow: 8px 0 32px rgba(0, 0, 0, 0.28);
+            }
+
+            // Collapsed state: bare icon rail. font-size: 0 hides nav text while
+            // keeping it in the accessibility tree; fixed-size SVG icons stay.
+            &:not(:hover):not(:focus-within) {
+                .nav-item {
+                    justify-content: center;
+                    gap: 0;
+                    font-size: 0;
+                }
+
+                .nav-sub-item {
+                    padding-left: 0.625rem;
+                }
+
+                .brand-section,
+                .workspace-switcher,
+                .user-mini {
+                    justify-content: center;
+                    gap: 0;
+                }
+
+                .brand-text,
+                .brand-star,
+                .nav-category,
+                .nav-expand-btn,
+                .workspace-switcher__select,
+                .user-meta,
+                .user-menu-arrow {
+                    display: none;
+                }
+            }
+        }
+    }
+}
+
+// ============================================
+// TOP BAR LAYOUT  —  [data-layout="topbar"]
+// The sidebar becomes a horizontal bar pinned to the top. Top-level items lay
+// out in a horizontally-scrollable row; sub-items are reached from each page's
+// own in-page navigation. Desktop only: below $breakpoint-md the off-canvas
+// drawer is unchanged.
+// ============================================
+@media (min-width: ($breakpoint-md + 1)) {
+    [data-layout="topbar"] {
+        .main-content {
+            margin-left: 0;
+            margin-top: $header-height;
+        }
+
+        // Full-page tools size themselves to the viewport — subtract the bar.
+        .main-content--full-page,
+        .main-content:has(.workflow-page.fullscreen),
+        .main-content:has(.page-container--full-bleed) {
+            height: calc(100vh - #{$header-height});
+        }
+
+        .sidebar {
+            top: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            height: $header-height;
+            flex-direction: row;
+            align-items: center;
+            gap: $space-3;
+            padding: 0 $space-4;
+            border-right: none;
+            border-bottom: 1px solid $border-subtle;
+            background: var(--bg-sidebar);
+        }
+
+        .brand-section {
+            height: auto;
+            margin-bottom: 0;
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        .workspace-switcher {
+            margin: 0;
+            flex-shrink: 0;
+            max-width: 170px;
+        }
+
+        // Nav fills the middle of the bar and scrolls horizontally if it runs long.
+        .nav-scroll {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: $space-1;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .nav {
+            flex-direction: row;
+            align-items: center;
+            gap: $space-1;
+        }
+
+        // No category headers, expand chevrons, or inline sub-items in the bar.
+        .nav-category,
+        .nav-expand-btn,
+        .nav-sub-item {
+            display: none;
+        }
+
+        .nav-item {
+            white-space: nowrap;
+            margin-bottom: 0;
+
+            // Active state reads as an underline rather than a left accent bar.
+            &.active::before {
+                inset: auto 0 -2px 0;
+                width: auto;
+                height: 2px;
+                transform: none;
+                border-radius: 2px 2px 0 0;
+            }
+        }
+
+        // User menu sits at the far right; its popover opens downward.
+        .sidebar-footer {
+            margin: 0 0 0 auto;
+            padding: 0;
+            border-top: none;
+            flex-shrink: 0;
+        }
+
+        .user-context-menu {
+            top: calc(100% + 4px);
+            bottom: auto;
+            left: auto;
+            right: 0;
+            min-width: 240px;
+        }
+    }
+}

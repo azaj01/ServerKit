@@ -45,9 +45,28 @@ def create_app(config_name=None):
     migrate.init_app(app, db)
     jwt.init_app(app)
     limiter.init_app(app)
+
+    # Build CORS origins. Start with static config/env, then append the
+    # persisted canonical domain from system settings so pointing an A record
+    # at the panel works without restarting to edit .env.
+    cors_origins = list(app.config['CORS_ORIGINS'])
+    try:
+        with app.app_context():
+            from app.services.settings_service import SettingsService
+            from app.utils.domain import canonical_origin
+            canonical_domain = SettingsService.get('canonical_domain', '') or ''
+            if canonical_domain:
+                https_enabled = SettingsService.get('canonical_https_enabled', False) or False
+                origin = canonical_origin(canonical_domain, https_enabled)
+                if origin not in cors_origins:
+                    cors_origins.append(origin)
+    except Exception:
+        # Database may not exist yet during first install / migrations.
+        pass
+
     CORS(
         app,
-        origins=app.config['CORS_ORIGINS'],
+        origins=cors_origins,
         supports_credentials=True,
         allow_headers=['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
@@ -182,6 +201,10 @@ def create_app(config_name=None):
     from app.api.security import security_bp
     app.register_blueprint(security_bp, url_prefix='/api/v1/security')
 
+    # Register blueprints - Secrets manager + inbound webhook gateway
+    from app.api.secrets_webhooks import bp as secrets_webhooks_bp
+    app.register_blueprint(secrets_webhooks_bp, url_prefix='/api/v1')
+
     # Register blueprints - Cron Jobs
     from app.api.cron import cron_bp
     app.register_blueprint(cron_bp, url_prefix='/api/v1/cron')
@@ -280,6 +303,22 @@ def create_app(config_name=None):
     from app.api.dns_zones import dns_zones_bp
     app.register_blueprint(dns_zones_bp, url_prefix='/api/v1/dns')
 
+    # Register blueprints - Dynamic DNS
+    from app.api.ddns import ddns_bp
+    app.register_blueprint(ddns_bp, url_prefix='/api/v1/ddns')
+
+    # Register blueprints - Image update checks
+    from app.api.image_updates import image_updates_bp
+    app.register_blueprint(image_updates_bp, url_prefix='/api/v1/image-updates')
+
+    # Register blueprints - Per-application WAF (ModSecurity + OWASP CRS)
+    from app.api.waf import waf_bp
+    app.register_blueprint(waf_bp, url_prefix='/api/v1/waf')
+
+    # Register blueprints - GPU monitoring
+    from app.api.gpu import gpu_bp
+    app.register_blueprint(gpu_bp, url_prefix='/api/v1/gpu')
+
     # Register blueprints - Nginx Advanced
     from app.api.nginx_advanced import nginx_advanced_bp
     app.register_blueprint(nginx_advanced_bp, url_prefix='/api/v1/nginx/advanced')
@@ -339,11 +378,13 @@ def create_app(config_name=None):
             n_dns = DNSProviderService.encrypt_legacy_secrets()
             n_store = StorageProviderService.encrypt_legacy_secrets()
             n_cloud = CloudProvisioningService.encrypt_legacy_secrets()
-            if n_dns or n_store or n_cloud:
+            n_settings = SettingsService.migrate_legacy_secrets()
+            if n_dns or n_store or n_cloud or n_settings:
                 import logging as _logging
                 _logging.getLogger(__name__).info(
                     f'Encrypted legacy secrets at rest: {n_dns} DNS provider(s), '
-                    f'{n_store} storage field(s), {n_cloud} cloud provider(s)')
+                    f'{n_store} storage field(s), {n_cloud} cloud provider(s), '
+                    f'{n_settings} system setting(s)')
         except Exception as e:
             import logging as _logging
             _logging.getLogger(__name__).warning(f'Legacy secret encryption skipped: {e}')

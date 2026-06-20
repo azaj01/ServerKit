@@ -1,6 +1,7 @@
 """Service for system settings operations."""
 from app import db
 from app.models import SystemSettings, User
+from app.utils.crypto import encrypt_secret, decrypt_secret_safe, is_encrypted
 
 
 class SettingsService:
@@ -61,6 +62,18 @@ class SettingsService:
             'type': 'boolean',
             'description': 'Whether the wildcard certificate for the sites base domain is set up; managed subdomains serve HTTPS when true.'
         },
+        # Canonical panel domain. When set, the panel uses this domain for
+        # agent install commands, CORS origins, and optional IP redirects.
+        'canonical_domain': {
+            'value': '',
+            'type': 'string',
+            'description': 'Canonical domain for this ServerKit panel (e.g., serverkit.example.com). Used for agent URLs and CORS.'
+        },
+        'canonical_https_enabled': {
+            'value': False,
+            'type': 'boolean',
+            'description': 'Whether the canonical domain is served over HTTPS. Controls CORS origins and agent install instructions.'
+        },
         # SSO / OAuth settings
         'sso_google_enabled': {'value': False, 'type': 'boolean', 'description': 'Enable Google OAuth login'},
         'sso_google_client_id': {'value': '', 'type': 'string', 'description': 'Google OAuth client ID'},
@@ -115,18 +128,53 @@ class SettingsService:
     # Settings that must never be returned through the API (only "is it set?").
     SECRET_AI_KEYS = {'ai_api_key_encrypted'}
 
+    # Settings stored encrypted at rest (auto-encrypt on write, decrypt on read).
+    # The API only exposes a boolean "is_set" / masked placeholder for these.
+    SECRET_KEYS = {
+        'sso_google_client_secret',
+        'sso_github_client_secret',
+        'sso_oidc_client_secret',
+        'source_github_client_secret',
+        'ai_api_key_encrypted',
+    }
+
+    @staticmethod
+    def _is_secret_key(key: str) -> bool:
+        return key in SettingsService.SECRET_KEYS
+
+    @staticmethod
+    def _mask_secret(value) -> str:
+        """Return a masked placeholder for any non-empty secret."""
+        if value:
+            return '••••••••'
+        return ''
+
     @staticmethod
     def get(key, default=None):
-        """Get a setting value by key."""
-        return SystemSettings.get(key, default)
+        """Get a setting value by key. Secret values are decrypted."""
+        value = SystemSettings.get(key, default)
+        if SettingsService._is_secret_key(key) and value:
+            return decrypt_secret_safe(value)
+        return value
 
     @staticmethod
     def set(key, value, user_id=None):
-        """Set a setting value by key."""
+        """Set a setting value by key. Secret values are encrypted at rest."""
         # Get the expected type from defaults
         default_config = SettingsService.DEFAULT_SETTINGS.get(key, {})
         value_type = default_config.get('type', 'string')
         description = default_config.get('description')
+
+        # Encrypt secret values before storage. Treat an unchanged masked
+        # placeholder as a no-op so the UI doesn't overwrite the real secret.
+        if SettingsService._is_secret_key(key):
+            if value == SettingsService._mask_secret(value) or value == '••••••••':
+                existing = SystemSettings.get(key)
+                if existing is not None:
+                    return SystemSettings.query.filter_by(key=key).first()
+                value = ''
+            elif value:
+                value = encrypt_secret(value)
 
         setting = SystemSettings.set(
             key=key,
@@ -139,19 +187,44 @@ class SettingsService:
         return setting
 
     @staticmethod
-    def get_all():
-        """Get all settings as a dictionary."""
+    def get_all(mask_secrets=True):
+        """Get all settings as a dictionary. Secrets are masked unless requested."""
         settings = SystemSettings.query.all()
         result = {}
         for setting in settings:
-            result[setting.key] = setting.get_typed_value()
+            value = setting.get_typed_value()
+            if mask_secrets and SettingsService._is_secret_key(setting.key):
+                result[setting.key] = SettingsService._mask_secret(value)
+            else:
+                result[setting.key] = value
         return result
 
     @staticmethod
-    def get_all_with_metadata():
-        """Get all settings with full metadata."""
+    def get_all_with_metadata(mask_secrets=True):
+        """Get all settings with full metadata. Secrets are masked unless requested."""
         settings = SystemSettings.query.all()
-        return [setting.to_dict() for setting in settings]
+        result = []
+        for setting in settings:
+            data = setting.to_dict()
+            if mask_secrets and SettingsService._is_secret_key(setting.key):
+                data['value'] = SettingsService._mask_secret(data['value'])
+            result.append(data)
+        return result
+
+    @staticmethod
+    def migrate_legacy_secrets() -> int:
+        """One-time, idempotent: encrypt system-setting secrets still stored in plaintext."""
+        changed = 0
+        for key in SettingsService.SECRET_KEYS:
+            setting = SystemSettings.query.filter_by(key=key).first()
+            if not setting or not setting.value:
+                continue
+            if not is_encrypted(setting.value):
+                setting.value = encrypt_secret(setting.value)
+                changed += 1
+        if changed:
+            db.session.commit()
+        return changed
 
     @staticmethod
     def initialize_defaults():

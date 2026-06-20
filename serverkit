@@ -154,6 +154,7 @@ cmd_help() {
     echo "  logs [service]    View logs (backend, frontend, or all)"
     echo "  update [options]  Update ServerKit"
     echo "                      --branch <name>  Switch to specific branch (e.g., dev)"
+    echo "                      --release [vX.Y.Z]  Update from release tarball"
     echo "                      --force          Skip version check"
     echo "  branch            Show current branch"
     echo "  uninstall         Uninstall ServerKit"
@@ -357,6 +358,8 @@ cmd_branch() {
 cmd_update() {
     local force_update=false
     local target_branch=""
+    local use_release=false
+    local release_version=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -369,6 +372,15 @@ cmd_update() {
                 target_branch="$2"
                 shift 2
                 ;;
+            --release|-r)
+                use_release=true
+                if [[ -n "${2:-}" ]] && [[ ! "$2" =~ ^- ]]; then
+                    release_version="$2"
+                    shift 2
+                else
+                    shift
+                fi
+                ;;
             *)
                 shift
                 ;;
@@ -379,6 +391,41 @@ cmd_update() {
     check_installed
     print_header
     echo ""
+
+    # Dev mode: branch-based source update
+    if [ -n "$target_branch" ]; then
+        if [ ! -d "$INSTALL_DIR/.git" ]; then
+            print_error "Cannot switch branches: $INSTALL_DIR is not a git repository (release install)."
+            print_info "Use 'serverkit update --release' to update from a release tarball."
+            exit 1
+        fi
+        _update_source "$target_branch" "$force_update"
+        return
+    fi
+
+    # Release mode: download pre-built tarball
+    if [ "$use_release" = true ]; then
+        if [ -n "$release_version" ]; then
+            SERVERKIT_VERSION="$release_version" bash "$INSTALL_DIR/scripts/update.sh"
+        else
+            INSTALL_FROM_RELEASE=1 bash "$INSTALL_DIR/scripts/update.sh"
+        fi
+        return
+    fi
+
+    # Default mode: prefer robust update.sh if available
+    if [ -x "$INSTALL_DIR/scripts/update.sh" ]; then
+        bash "$INSTALL_DIR/scripts/update.sh"
+        return
+    fi
+
+    # Fallback to legacy inline source update
+    _update_source "main" "$force_update"
+}
+
+_update_source() {
+    local target_branch="$1"
+    local force_update="$2"
 
     cd "$INSTALL_DIR"
 
@@ -444,6 +491,16 @@ cmd_update() {
     # Restore executable permissions
     chmod +x "$INSTALL_DIR/serverkit"
     chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
+
+    # Ensure SERVERKIT_ENCRYPTION_KEY exists for installs that pre-date it
+    if ! grep -q '^SERVERKIT_ENCRYPTION_KEY=' "$INSTALL_DIR/.env" 2>/dev/null; then
+        print_info "Generating SERVERKIT_ENCRYPTION_KEY for existing install..."
+        key=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
+        echo "" >> "$INSTALL_DIR/.env"
+        echo "# Encryption key for agent pairing payloads and secrets at rest" >> "$INSTALL_DIR/.env"
+        echo "SERVERKIT_ENCRYPTION_KEY=$key" >> "$INSTALL_DIR/.env"
+        print_success "SERVERKIT_ENCRYPTION_KEY added to .env"
+    fi
 
     # Get new version from VERSION file
     NEW_VERSION=$(get_local_version)
@@ -722,8 +779,10 @@ cmd_generate_keys() {
     echo ""
     SECRET_KEY=$(openssl rand -hex 32)
     JWT_SECRET_KEY=$(openssl rand -hex 32)
+    SERVERKIT_ENCRYPTION_KEY=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
     echo "SECRET_KEY=$SECRET_KEY"
     echo "JWT_SECRET_KEY=$JWT_SECRET_KEY"
+    echo "SERVERKIT_ENCRYPTION_KEY=$SERVERKIT_ENCRYPTION_KEY"
     echo ""
 }
 

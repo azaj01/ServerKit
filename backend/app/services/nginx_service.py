@@ -196,8 +196,21 @@ class NginxService:
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
     ssl_prefer_server_ciphers off;
+    ssl_ecdh_curve X25519:secp384r1;
 
-    add_header Strict-Transport-Security "max-age=63072000" always;
+    # HSTS: 2 years, all subdomains, preload-eligible. Submit the domain at
+    # https://hstspreload.org to get onto the browser preload list (this is what
+    # protects first-time visitors from an initial-request MITM downgrade).
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+
+    # Baseline response-header hardening. These are safe for reverse-proxied apps;
+    # the CSP is deliberately permissive so it does not break managed apps while
+    # still satisfying "a CSP is present" and blocking cross-origin framing.
+    # Tighten the CSP per-app when the upstream can support a stricter policy.
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; frame-ancestors 'self'; upgrade-insecure-requests" always;
 '''
 
     SSL_REDIRECT_TEMPLATE = '''server {{

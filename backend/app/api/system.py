@@ -197,9 +197,20 @@ def get_network_metrics():
 @system_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint - no auth required"""
+    from app.utils.crypto import is_encryption_configured
+    from app.services.settings_service import SettingsService
+    from app.utils.domain import canonical_origin
+
+    canonical_domain = SettingsService.get('canonical_domain', '') or ''
+    https_enabled = bool(SettingsService.get('canonical_https_enabled', False))
+
     return jsonify({
         'status': 'healthy',
-        'service': 'serverkit-api'
+        'service': 'serverkit-api',
+        'encryption_configured': is_encryption_configured(),
+        'canonical_domain': canonical_domain,
+        'canonical_https_enabled': https_enabled,
+        'canonical_origin': canonical_origin(canonical_domain, https_enabled) if canonical_domain else None,
     }), 200
 
 

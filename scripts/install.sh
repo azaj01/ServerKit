@@ -15,12 +15,20 @@
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Palette (truecolor violet gradient)
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
+  NC=$'\033[0m'; BOLD=$'\033[1m'
+  fg() { printf '\033[38;2;%s;%s;%sm' "$1" "$2" "$3"; }
+else
+  NC=''; BOLD=''
+  fg() { :; }
+fi
+
+V1="$(fg 196 181 253)"; V2="$(fg 167 139 250)"; V3="$(fg 139 92 246)"
+V4="$(fg 124 58 237)"; V5="$(fg 109 40 217)"
+WHITE="$(fg 237 233 254)"; MUTED="$(fg 165 160 190)"; FAINT="$(fg 113 108 140)"
+GREEN="$(fg 52 211 153)"; RED="$(fg 248 113 113)"; YELLOW="$(fg 250 204 21)"
+CYAN="$(fg 103 232 249)"
 
 # Configuration
 INSTALL_DIR="/usr/local/bin"
@@ -37,27 +45,27 @@ SERVER_NAME=""
 VERSION="latest"
 
 print_banner() {
-    echo -e "${BLUE}"
-    echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║               ServerKit Agent Installer                    ║"
-    echo "╚═══════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
+    echo
+    printf "  ${V1}${BOLD}╔═╗┌─┐┌─┐┌┬┐┌─┐┬┌─┐${NC}\n"
+    printf "  ${V2}${BOLD}╚═╗│ ││   │ ├┤ │├┤ ${NC}  ${WHITE}${BOLD}ServerKit Agent${NC}\n"
+    printf "  ${V3}${BOLD}╚═╝└─┘└─┘ ┴ └─┘┴└──┘${NC}  ${FAINT}v%s${NC}\n" "$VERSION"
+    echo
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "  ${CYAN}›${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "  ${GREEN}●${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "  ${YELLOW}▲${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "  ${RED}■${NC} $1"
     exit 1
 }
 
@@ -283,6 +291,17 @@ ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=${CONFIG_DIR} ${LOG_DIR}
 PrivateTmp=true
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=512M
+LimitNOFILE=65535
 
 # Environment
 Environment=HOME=/nonexistent

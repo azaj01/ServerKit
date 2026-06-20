@@ -43,6 +43,42 @@ awaiting a stable release:
   `/git`).
 - **RHEL-family support** — the installer now covers Rocky, AlmaLinux, RHEL, and
   CentOS in addition to Ubuntu/Debian/Fedora.
+- **Per-app Web Application Firewall** — ModSecurity v3 + OWASP Core Rule Set
+  with detect/block modes, paranoia tuning, a disabled-rule editor, one-click
+  apply (nginx include injection), and parsed audit-log events.
+- **Container lifecycle controls** — image-update detection with one-click
+  apply, idle container auto-sleep, and CPU-driven horizontal auto-scaling, with
+  cron-drivable sweeps for the sleep/scale policies.
+- **GPU monitoring** — NVIDIA utilization, memory, temperature, power, and
+  per-process / per-container usage.
+- **Dynamic DNS** — token-authenticated A/AAAA updates synced through a
+  connected DNS provider (e.g. Cloudflare).
+- **Secrets manager & inbound webhook gateway** — encrypted secret storage and
+  inbound webhook endpoints for triggering automation.
+- **Passkeys / WebAuthn** — passwordless and second-factor authentication with
+  hardware keys, Touch ID, and Windows Hello.
+- **Remote service tunnels** — expose a private or NAT'd service through an edge
+  server over an agent-managed, NAT-traversing WireGuard tunnel, reusing nginx,
+  DNS, and certificates.
+- **Connections hub** — a single place to link external accounts (source code,
+  cloud, DNS, domain registrars with expiry tracking, SMTP relays, and S3/B2
+  storage), with credentials encrypted at rest.
+- **WordPress publishing** — publish managed sites at a real subdomain, swap a
+  site's URL safely with preview, and attach a custom domain with automatic DNS.
+- **Guided installer / updater** — health-checked install and update flow with
+  automatic rollback.
+
+### Security
+
+- **Container CVE scanning & SBOM** — per-image vulnerability scans with grype
+  and software bill-of-materials generation with syft.
+- **Optional, hardened TLS** — best-effort HTTPS that never blocks an install
+  (falls back to HTTP), a server-wide TLS 1.2+/AEAD-cipher floor applied at
+  install and update, Cloudflare-aware nginx configs, automatic CAA records on
+  certificate issuance, and HSTS gated on the operator's recorded SSL choice so
+  HTTPS stays optional.
+- **Encryption at rest** — system-setting secrets and DNS/cloud provider
+  credentials sealed with Fernet; optional client-side backup encryption.
 
 ### Changed
 

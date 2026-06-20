@@ -52,6 +52,15 @@ export const SIDEBAR_ITEMS = [
         icon: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>'
     },
     {
+        // Dynamic DNS lives under Infrastructure next to Domains/DNS — it keeps a
+        // DNS A-record pointed at a changing public IP via a token-authed update URL.
+        id: 'dynamic-dns',
+        label: 'Dynamic DNS',
+        route: '/dynamic-dns',
+        category: 'infrastructure',
+        icon: '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/>'
+    },
+    {
         // Redesign: Services uses the top-bar layout (REDESIGN_MAP §6 decision 3).
         // New Service / Templates / Deploy Activity now live in the page's top
         // bar (PageTopbar SERVICE_TABS), not as sidebar sub-items. Routes
@@ -160,6 +169,20 @@ export const SIDEBAR_ITEMS = [
         route: '/terminal',
         category: 'system',
         icon: '<path d="M4 17l6-6-6-6M12 19h8"/>'
+    },
+    {
+        id: 'gpu',
+        label: 'GPU Monitor',
+        route: '/gpu',
+        category: 'system',
+        icon: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6v12"/><circle cx="13" cy="12" r="2.5"/><path d="M17 6v12"/>'
+    },
+    {
+        id: 'secrets',
+        label: 'Secrets & Webhooks',
+        route: '/secrets',
+        category: 'system',
+        icon: '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><circle cx="12" cy="12" r="2"/><path d="M12 12v-6"/><path d="M16 12h3"/><path d="M8 12H5"/>'
     },
     {
         // Redesign: Marketplace uses the top-bar layout (REDESIGN_MAP §6 dec. 3).

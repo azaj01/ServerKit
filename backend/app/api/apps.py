@@ -13,6 +13,9 @@ from app.services.git_service import GitService
 from app.services.repository_manifest_service import RepositoryManifestService
 from app.services.source_connection_service import SourceConnectionService
 from app.services.remote_docker_service import RemoteDockerService
+from app.services.image_update_service import ImageUpdateService
+from app.services.container_sleep_service import ContainerSleepService
+from app.services.container_scale_service import ContainerScaleService
 from app.services.log_service import LogService
 from app.services.process_service import ProcessService
 from app.services.upload_service import (
@@ -1161,6 +1164,184 @@ def start_app(app_id):
         'message': 'Application started',
         'app': app.to_dict()
     }), 200
+
+
+@apps_bp.route('/<int:app_id>/image-update/apply', methods=['POST'])
+@jwt_required()
+def apply_image_update(app_id):
+    """Pull the newest image for a compose-managed app and recreate it."""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    app = Application.query.get(app_id)
+
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+
+    # Auto-apply is only safe for compose-managed apps; recreating a standalone
+    # container would need its full run spec, which we don't store.
+    if app.app_type != 'docker' or not app.root_path or not app.compose_file:
+        return jsonify({'error': 'Automatic update is only supported for docker-compose apps. '
+                                 'Pull and recreate this container manually.'}), 400
+
+    # Pull the newest images for the project, then recreate changed containers.
+    if app.server_id:
+        pull = RemoteDockerService.compose_pull(app.server_id, _compose_target(app), user_id=current_user_id)
+        if not pull.get('success') or _agent_result_failed(pull):
+            return jsonify({'error': _agent_result_error(pull, 'Failed to pull image')}), 400
+        up = RemoteDockerService.compose_up(app.server_id, _compose_target(app), detach=True, user_id=current_user_id)
+    else:
+        pull = DockerService.compose_pull(app.root_path, compose_file=_local_compose_file(app))
+        if not pull.get('success'):
+            return jsonify({'error': pull.get('error', 'Failed to pull image')}), 400
+        up = DockerService.compose_up(app.root_path, detach=True, compose_file=_local_compose_file(app))
+
+    if not up.get('success') or _agent_result_failed(up):
+        return jsonify({'error': _agent_result_error(up, 'Failed to recreate containers')}), 400
+
+    app.status = 'running'
+    app.last_deployed_at = datetime.utcnow()
+    db.session.commit()
+
+    # Refresh the update badge now that we're on the new image.
+    ImageUpdateService.check_application(app_id)
+
+    return jsonify({
+        'message': 'Image updated and containers recreated',
+        'app': app.to_dict(),
+    }), 200
+
+
+@apps_bp.route('/<int:app_id>/sleep-policy', methods=['GET'])
+@jwt_required()
+def get_sleep_policy(app_id):
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    return jsonify(ContainerSleepService.get_or_create_policy(app_id).to_dict())
+
+
+@apps_bp.route('/<int:app_id>/sleep-policy', methods=['PUT'])
+@jwt_required()
+def update_sleep_policy(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    policy = ContainerSleepService.set_policy(
+        app_id, enabled=data.get('enabled'), idle_timeout_minutes=data.get('idle_timeout_minutes'))
+    return jsonify(policy.to_dict())
+
+
+@apps_bp.route('/<int:app_id>/sleep', methods=['POST'])
+@jwt_required()
+def sleep_app(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    result = ContainerSleepService.sleep_app(app_id)
+    if not result.get('success'):
+        return jsonify({'error': result['error']}), 400
+    return jsonify({'message': 'Application asleep', 'policy': result['policy'], 'app': app.to_dict()})
+
+
+@apps_bp.route('/<int:app_id>/wake', methods=['POST'])
+@jwt_required()
+def wake_app(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    result = ContainerSleepService.wake_app(app_id)
+    if not result.get('success'):
+        return jsonify({'error': result['error']}), 400
+    return jsonify({'message': 'Application awake', 'policy': result['policy'], 'app': app.to_dict()})
+
+
+@apps_bp.route('/sweep-idle', methods=['POST'])
+@jwt_required()
+def sweep_idle_apps():
+    """Sleep all enabled apps that have been idle past their timeout. Intended
+    to be hit periodically (cron or a scheduler)."""
+    user = User.query.get(get_jwt_identity())
+    if not (user and user.is_admin):
+        return jsonify({'error': 'Admin access required'}), 403
+    return jsonify(ContainerSleepService.sweep_idle())
+
+
+@apps_bp.route('/<int:app_id>/scale-policy', methods=['GET'])
+@jwt_required()
+def get_scale_policy(app_id):
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    return jsonify(ContainerScaleService.get_or_create_policy(app_id).to_dict())
+
+
+@apps_bp.route('/<int:app_id>/scale-policy', methods=['PUT'])
+@jwt_required()
+def update_scale_policy(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    policy = ContainerScaleService.set_policy(app_id, **data)
+    return jsonify(policy.to_dict())
+
+
+@apps_bp.route('/<int:app_id>/scale', methods=['POST'])
+@jwt_required()
+def scale_app(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    if data.get('replicas') is None:
+        return jsonify({'error': 'replicas is required'}), 400
+    result = ContainerScaleService.scale_to(app_id, data['replicas'])
+    if not result.get('success'):
+        return jsonify({'error': result['error']}), 400
+    return jsonify(result)
+
+
+@apps_bp.route('/<int:app_id>/scale/evaluate', methods=['POST'])
+@jwt_required()
+def evaluate_scale(app_id):
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_edit_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+    result = ContainerScaleService.evaluate(app_id)
+    if not result.get('success'):
+        return jsonify({'error': result.get('error', 'Evaluation failed')}), 400
+    return jsonify(result)
+
+
+@apps_bp.route('/scale-sweep', methods=['POST'])
+@jwt_required()
+def scale_sweep():
+    """Evaluate every enabled auto-scaling policy. Intended for cron/scheduler."""
+    user = User.query.get(get_jwt_identity())
+    if not (user and user.is_admin):
+        return jsonify({'error': 'Admin access required'}), 403
+    return jsonify(ContainerScaleService.sweep())
 
 
 @apps_bp.route('/<int:app_id>/stop', methods=['POST'])

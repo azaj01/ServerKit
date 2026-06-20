@@ -4,6 +4,7 @@ import subprocess
 import shutil
 import tarfile
 import gzip
+import tempfile
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -13,6 +14,7 @@ import uuid
 import schedule
 
 from app import paths
+from app.utils import backup_crypto
 from app.utils.system import is_command_available
 
 
@@ -59,6 +61,7 @@ class BackupService:
         return {
             'enabled': False,
             'retention_days': 30,
+            'encrypt_backups': False,
             'schedules': [],
             'notifications': {
                 'on_success': False,
@@ -118,12 +121,18 @@ class BackupService:
                     backup_info['database_backup'] = db_backup['path']
                     backup_info['database_type'] = db_config.get('type')
 
+            # Encrypt the archive in place if configured (updates 'path'/'size').
+            # backup_info['path'] is the archive; the upload target is the dir.
+            backup_info['path'] = files_backup
+            cls._finalize_backup(files_backup, backup_info)
+            backup_info['files_backup'] = backup_info['path']
+
             # Save backup metadata
             meta_path = os.path.join(backup_dir, 'backup.json')
             with open(meta_path, 'w') as f:
                 json.dump(backup_info, f, indent=2)
 
-            # Auto-upload to remote if configured
+            # Auto-upload to remote if configured (whole directory)
             cls._auto_upload(backup_dir, backup_info)
 
             return {
@@ -226,6 +235,9 @@ class BackupService:
                 'remote_status': 'local'
             }
 
+            # Encrypt in place if configured (updates backup_info path/size)
+            backup_path = cls._finalize_backup(backup_path, backup_info)
+
             # Auto-upload to remote if configured
             cls._auto_upload(backup_path, backup_info)
 
@@ -273,7 +285,10 @@ class BackupService:
                 'remote_status': 'local'
             }
 
-            # Save metadata alongside the archive
+            # Encrypt in place if configured (updates backup_info path/size)
+            backup_file = cls._finalize_backup(backup_file, backup_info)
+
+            # Save metadata alongside the archive (sidecar keyed off backup_name)
             meta_path = os.path.join(cls.BACKUP_BASE_DIR, 'files', f'{backup_name}.json')
             with open(meta_path, 'w') as f:
                 json.dump(backup_info, f, indent=2)
@@ -300,6 +315,7 @@ class BackupService:
         if not os.path.exists(meta_path):
             return {'success': False, 'error': 'Invalid backup: metadata not found'}
 
+        tmp_decrypted = None
         try:
             with open(meta_path, 'r') as f:
                 backup_info = json.load(f)
@@ -307,6 +323,9 @@ class BackupService:
             files_backup = backup_info.get('files_backup')
             if not files_backup or not os.path.exists(files_backup):
                 return {'success': False, 'error': 'Backup files not found'}
+
+            # Decrypt to a temp file first if the archive is encrypted
+            files_backup, tmp_decrypted = cls._resolve_for_restore(files_backup)
 
             # Determine restore path
             if not restore_path:
@@ -330,6 +349,9 @@ class BackupService:
 
         except Exception as e:
             return {'success': False, 'error': str(e)}
+        finally:
+            if tmp_decrypted and os.path.exists(tmp_decrypted):
+                os.remove(tmp_decrypted)
 
     @classmethod
     def restore_database(cls, backup_path: str, db_type: str, db_name: str,
@@ -339,7 +361,11 @@ class BackupService:
         if not os.path.exists(backup_path):
             return {'success': False, 'error': 'Backup file not found'}
 
+        tmp_decrypted = None
         try:
+            # Decrypt to a temp file first if the dump is encrypted
+            backup_path, tmp_decrypted = cls._resolve_for_restore(backup_path)
+
             if db_type == 'mysql':
                 if not is_command_available('mysql'):
                     return {'success': False, 'error': 'mysql client not installed'}
@@ -383,6 +409,32 @@ class BackupService:
 
         except Exception as e:
             return {'success': False, 'error': str(e)}
+        finally:
+            if tmp_decrypted and os.path.exists(tmp_decrypted):
+                os.remove(tmp_decrypted)
+
+    @classmethod
+    def _resolve_for_restore(cls, backup_path: str):
+        """Return a (usable_path, tmp_to_cleanup) pair for restore.
+
+        If ``backup_path`` is an encrypted artifact (or a sibling ``.enc``
+        exists when the plaintext is gone), decrypt it to a temp file and return
+        that path plus the temp path to clean up. Otherwise the original path is
+        returned with ``None`` (nothing to clean up).
+        """
+        enc_path = None
+        if backup_crypto.is_encrypted_backup(backup_path):
+            enc_path = backup_path
+        elif not os.path.exists(backup_path) and os.path.exists(backup_path + backup_crypto.ENC_SUFFIX):
+            enc_path = backup_path + backup_crypto.ENC_SUFFIX
+
+        if not enc_path:
+            return backup_path, None
+
+        fd, tmp_path = tempfile.mkstemp(suffix='.restore')
+        os.close(fd)
+        backup_crypto.decrypt_file(enc_path, dest=tmp_path)
+        return tmp_path, tmp_path
 
     @classmethod
     def list_backups(cls, backup_type: str = None) -> List[Dict]:
@@ -613,6 +665,28 @@ class BackupService:
             'remote_size': remote_stats.get('remote_size', 0),
             'remote_size_human': remote_stats.get('remote_size_human', '0 B')
         }
+
+    @classmethod
+    def _finalize_backup(cls, path: str, backup_info: Dict) -> str:
+        """Encrypt the backup artifact in place when configured.
+
+        When ``encrypt_backups`` is enabled in config and an encryption key is
+        available, the artifact at ``path`` is Fernet-encrypted (the plaintext
+        is removed) and ``backup_info`` is updated to point at the encrypted
+        file. Returns the (possibly new) path so callers can hand it to
+        :meth:`_auto_upload`. A no-op (returns ``path`` unchanged) when
+        encryption is disabled or unavailable.
+        """
+        if cls.get_config().get('encrypt_backups') and backup_crypto.encryption_available():
+            enc_path = backup_crypto.encrypt_file(path)
+            backup_info['encrypted'] = True
+            backup_info['path'] = enc_path
+            if 'size' in backup_info:
+                backup_info['size'] = os.path.getsize(enc_path)
+            return enc_path
+
+        backup_info['encrypted'] = False
+        return path
 
     @classmethod
     def _auto_upload(cls, backup_path: str, backup_info: Dict) -> None:

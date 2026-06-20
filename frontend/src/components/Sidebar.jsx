@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Star, Settings, LogOut, Sun, Moon, Monitor, ChevronRight, ChevronDown, ChevronUp, Layers, Palette, PanelLeft, Check, X, Server } from 'lucide-react';
+import { useLayout } from '../contexts/LayoutContext';
+import { Star, Settings, LogOut, Sun, Moon, Monitor, ChevronRight, ChevronDown, ChevronUp, Layers, Palette, PanelLeft, PanelLeftClose, PanelTop, Check, X, Server } from 'lucide-react';
 import { api } from '../services/api';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems } from './sidebarItems';
@@ -11,6 +12,7 @@ import { useContributions } from '../plugins/contributions';
 const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {} }) => {
     const { user, logout, updateUser } = useAuth();
     const { theme, resolvedTheme, setTheme, whiteLabel } = useTheme();
+    const { layout, setLayout } = useLayout();
     const navigate = useNavigate();
     const [menuOpen, setMenuOpen] = useState(false);
     const [wpInstalled, setWpInstalled] = useState(false);
@@ -375,6 +377,41 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                                     title="System"
                                 >
                                     <Monitor size={14} aria-hidden="true" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="context-menu-section">
+                            <div className="context-menu-label" id="layout-switcher-label">Layout</div>
+                            <div className="theme-switcher" role="group" aria-labelledby="layout-switcher-label">
+                                <button
+                                    type="button"
+                                    className={`theme-btn ${layout === 'sidebar' ? 'active' : ''}`}
+                                    onClick={() => setLayout('sidebar')}
+                                    aria-label="Sidebar layout"
+                                    aria-pressed={layout === 'sidebar'}
+                                    title="Sidebar"
+                                >
+                                    <PanelLeft size={14} aria-hidden="true" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`theme-btn ${layout === 'rail' ? 'active' : ''}`}
+                                    onClick={() => setLayout('rail')}
+                                    aria-label="Compact rail layout"
+                                    aria-pressed={layout === 'rail'}
+                                    title="Compact"
+                                >
+                                    <PanelLeftClose size={14} aria-hidden="true" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`theme-btn ${layout === 'topbar' ? 'active' : ''}`}
+                                    onClick={() => setLayout('topbar')}
+                                    aria-label="Top bar layout"
+                                    aria-pressed={layout === 'topbar'}
+                                    title="Top bar"
+                                >
+                                    <PanelTop size={14} aria-hidden="true" />
                                 </button>
                             </div>
                         </div>

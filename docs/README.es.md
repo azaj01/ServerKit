@@ -49,7 +49,11 @@ ni el coste de las plataformas gestionadas.
 
 🟢 **Node.js** — Aplicaciones gestionadas con PM2 y transmisión de logs en tiempo real
 
+📦 **Despliegues Manuales y Zip** — Despliega desde una ruta local/manual o subiendo un zip, junto a los orígenes Git y Docker
+
 🐳 **Docker** — Gestión completa de contenedores y Docker Compose
+
+♻️ **Ciclo de Vida de Contenedores** — Detección de actualizaciones de imagen con aplicación en un clic, suspensión automática de contenedores inactivos y escalado horizontal automático según la CPU
 
 🔑 **Variables de Entorno** — Gestión segura y cifrada de variables por aplicación
 
@@ -57,7 +61,7 @@ ni el coste de las plataformas gestionadas.
 
 🌐 **Gestión de Dominios** — Hosts virtuales Nginx con configuración sencilla
 
-🔒 **Certificados SSL** — Let's Encrypt automático con renovación automática
+🔒 **SSL / TLS** — Let's Encrypt automático con renovación automática, HTTPS opcional (en la medida de lo posible) que nunca bloquea una instalación, cifrados reforzados TLS 1.2+/AEAD, configuraciones compatibles con Cloudflare y registros CAA automáticos
 
 🗄️ **Bases de Datos** — Soporte para MySQL/MariaDB y PostgreSQL
 
@@ -65,13 +69,17 @@ ni el coste de las plataformas gestionadas.
 
 ⏰ **Tareas Programadas (Cron)** — Programa tareas con un editor visual
 
-📁 **Gestor de Archivos** — Navega y edita archivos desde la interfaz web
+📁 **Gestor de Archivos** — Navega y edita archivos desde la interfaz web, incluyendo la navegación y vista previa de buckets de S3 / Backblaze B2
 
 📡 **Servidor FTP** — Gestión de usuarios y accesos de vsftpd
 
 ### Seguridad
 
 🔐 **Autenticación de Dos Factores** — Basada en TOTP con códigos de respaldo
+
+🔑 **Passkeys / WebAuthn** — Inicio de sesión sin contraseña y como segundo factor con llaves de hardware, Touch ID y Windows Hello
+
+🧱 **Firewall de Aplicaciones Web** — ModSecurity v3 + OWASP Core Rule Set por aplicación con modos de detección/bloqueo, paranoia ajustable y eventos en el registro de auditoría
 
 🦠 **Análisis de Malware** — Integración con ClamAV y cuarentena
 
@@ -84,6 +92,8 @@ ni el coste de las plataformas gestionadas.
 ### Monitorización y Alertas
 
 📊 **Métricas en Tiempo Real** — Monitorización de CPU, RAM, disco y red vía WebSocket
+
+🎮 **Monitorización de GPU** — Utilización, memoria, temperatura y consumo de GPU NVIDIA, con uso por proceso y por contenedor
 
 📈 **Seguimiento de Disponibilidad** — Datos históricos de tiempo de actividad del servidor
 
@@ -224,6 +234,17 @@ Consulta la [Guía de Instalación](INSTALLATION.md) para instrucciones paso a p
 - [ ] Equipos y permisos — RBAC, registro de auditoría
 - [ ] Aplicación móvil — React Native con notificaciones push
 - [ ] Marketplace de plugins — Extensiones, widgets personalizados, temas
+- [x] Firewall de Aplicaciones Web — ModSecurity v3 + OWASP CRS por aplicación
+- [x] Seguridad de contenedores — Análisis de CVE de imágenes (grype) + SBOM (syft)
+- [x] Autenticación sin contraseña — WebAuthn / passkeys
+- [x] DNS dinámico — Actualizaciones A/AAAA autenticadas por token
+- [x] Monitorización de GPU — Utilización, memoria y procesos de NVIDIA
+- [x] Ciclo de vida de contenedores — Aplicación de actualizaciones de imagen, suspensión automática, escalado horizontal automático
+- [x] Refuerzo de TLS — HTTPS opcional, configuraciones compatibles con Cloudflare, CAA automático
+- [x] Gestor de secretos y pasarela de webhooks entrantes
+- [x] Acceso remoto — Expón servicios privados/tras NAT mediante túneles WireGuard gestionados por el agente
+- [x] Centro de conexiones — Cuentas externas unificadas (origen, nube, DNS, registradores, SMTP, almacenamiento)
+- [x] Publicación de WordPress — Subdominios reales, intercambio de URL, dominios personalizados, HTTPS comodín
 
 Detalles completos: [ROADMAP.md](../ROADMAP.md)
 
@@ -237,6 +258,7 @@ Detalles completos: [ROADMAP.md](../ROADMAP.md)
 | [Guía de Instalación](INSTALLATION.md) | Instrucciones completas de configuración |
 | [Guía de Despliegue](DEPLOYMENT.md) | Comandos CLI y despliegue en producción |
 | [Referencia de la API](API.md) | Endpoints de la API REST |
+| [Nuevas Funcionalidades](NEW_FEATURES.md) | Referencia de endpoints y páginas de las últimas funcionalidades de `dev` |
 | [Hoja de Ruta](../ROADMAP.md) | Hoja de ruta de desarrollo y funcionalidades planificadas |
 | [Contribuir](../CONTRIBUTING.md) | Cómo contribuir |
 
@@ -251,7 +273,7 @@ Detalles completos: [ROADMAP.md](../ROADMAP.md)
 | Base de Datos | SQLite / PostgreSQL |
 | Servidor Web | Nginx, Gunicorn |
 | Contenedores | Docker, Docker Compose |
-| Seguridad | ClamAV, TOTP (pyotp), Cryptography |
+| Seguridad | ClamAV, ModSecurity v3 + OWASP CRS, grype, syft, TOTP (pyotp), Cryptography |
 
 ---
 

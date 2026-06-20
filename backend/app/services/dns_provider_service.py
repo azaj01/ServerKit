@@ -253,6 +253,51 @@ class DNSProviderService:
         return {'created': False, 'reason': 'api_error', 'error': res.get('error'),
                 'provider': config.name, 'record': record}
 
+    @staticmethod
+    def parse_caa_value(value: str) -> Dict:
+        """Parse a BIND-style CAA value (``0 issue "letsencrypt.org"``) into the
+        ``{flags, tag, value}`` object that Cloudflare/DigitalOcean expect. The
+        CA value is returned unquoted."""
+        parts = (value or '').strip().split(None, 2)
+        flags = int(parts[0]) if parts and parts[0].lstrip('-').isdigit() else 0
+        tag = parts[1] if len(parts) > 1 else 'issue'
+        ca = parts[2].strip().strip('"') if len(parts) > 2 else ''
+        return {'flags': flags, 'tag': tag, 'value': ca}
+
+    @classmethod
+    def ensure_caa_record(cls, domain: str, ca: str = 'letsencrypt.org') -> Dict:
+        """Ensure a CAA record authorizing ``ca`` (default Let's Encrypt) exists at
+        the apex of whichever connected provider zone covers ``domain``. CAA is
+        evaluated by walking up to the zone apex, so an apex ``0 issue "<ca>"``
+        record protects the domain and all subdomains.
+
+        Idempotent (re-applying the same authorization is a harmless upsert) and
+        degrades to manual instructions (``created: False`` + the record to add)
+        when no connected provider manages the domain — so the caller can always
+        tell the user what to do. Never raises.
+        """
+        domain = (domain or '').strip().lower().rstrip('.')
+        value = f'0 issue "{ca}"'
+        record = {'type': 'CAA', 'name': domain, 'value': value}
+        if not domain:
+            return {'created': False, 'reason': 'no_domain', 'record': record}
+        try:
+            config, zone = cls.find_zone_for_domain(domain)
+        except Exception as e:  # provider listing blew up — fall back to manual
+            return {'created': False, 'reason': 'api_error', 'error': str(e), 'record': record}
+        if not config:
+            return {'created': False, 'reason': 'no_provider', 'record': record,
+                    'message': f'No connected DNS provider manages {domain} — add '
+                               f'this CAA record manually: {domain} CAA {value}'}
+
+        apex = (zone.get('name') or domain).strip().lower().rstrip('.')
+        record = {'type': 'CAA', 'name': apex, 'value': value}
+        res = cls.set_record(config.id, zone['id'], 'CAA', apex, value)
+        if res.get('success'):
+            return {'created': True, 'provider': config.name, 'zone': apex, 'record': record}
+        return {'created': False, 'reason': 'api_error', 'error': res.get('error'),
+                'provider': config.name, 'record': record}
+
     # ── Cloudflare Implementation ──
 
     @classmethod
@@ -311,15 +356,31 @@ class DNSProviderService:
             headers = cls._cloudflare_headers(config)
             base = f'https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records'
 
-            # Check if record exists
+            # CAA records need Cloudflare's structured `data` object, not a flat
+            # `content` string — sending `content` for a CAA record is rejected.
+            caa = cls.parse_caa_value(value) if record_type == 'CAA' else None
+            payload = {'type': record_type, 'name': name, 'ttl': ttl}
+            if caa is not None:
+                payload['data'] = caa
+            else:
+                payload['content'] = value
+
+            # Check if a matching record exists. For CAA there can legitimately be
+            # several records at the same name (one per CA), so match on tag+value
+            # to avoid overwriting a *different* CA's authorization.
             resp = requests.get(
                 f'{base}?type={record_type}&name={name}',
                 headers=headers, timeout=15,
             )
             data = resp.json()
             existing = data.get('result', [])
-
-            payload = {'type': record_type, 'name': name, 'content': value, 'ttl': ttl}
+            if caa is not None:
+                existing = [
+                    r for r in existing
+                    if (r.get('data') or {}).get('tag') == caa['tag']
+                    and str((r.get('data') or {}).get('value', '')).strip('"').rstrip('.').lower()
+                        == caa['value'].rstrip('.').lower()
+                ]
 
             if existing:
                 # Update existing record
@@ -554,6 +615,12 @@ class DNSProviderService:
                 if len(parts) == 2 and parts[0].isdigit():
                     payload['priority'] = int(parts[0])
                     payload['data'] = parts[1]
+            elif record_type == 'CAA':
+                # DigitalOcean wants flags/tag as separate fields, data = CA value.
+                caa = cls.parse_caa_value(value)
+                payload['flags'] = caa['flags']
+                payload['tag'] = caa['tag']
+                payload['data'] = caa['value']
 
             # Find an existing record of the same type/host to update.
             resp = requests.get(

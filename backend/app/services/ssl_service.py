@@ -77,13 +77,25 @@ class SSLService:
                 cert_path = f'{cls.CERTS_DIR}/{primary_domain}/fullchain.pem'
                 key_path = f'{cls.CERTS_DIR}/{primary_domain}/privkey.pem'
 
-                return {
+                response = {
                     'success': True,
                     'message': 'Certificate obtained successfully',
                     'certificate_path': cert_path,
                     'private_key_path': key_path,
                     'domains': domains
                 }
+
+                # Best-effort: authorize Let's Encrypt via a CAA record on whichever
+                # connected DNS provider manages the domain. This satisfies CAA
+                # security scanners and pins issuance to our CA. Never let a CAA
+                # hiccup fail an otherwise-successful certificate.
+                try:
+                    from app.services.dns_provider_service import DNSProviderService
+                    response['caa'] = DNSProviderService.ensure_caa_record(primary_domain)
+                except Exception as e:
+                    response['caa'] = {'created': False, 'reason': 'error', 'error': str(e)}
+
+                return response
             else:
                 return {'success': False, 'error': result.stderr}
 

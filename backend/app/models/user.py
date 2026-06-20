@@ -193,6 +193,7 @@ class User(db.Model):
             'totp_enabled': self.totp_enabled,
             'auth_provider': self.auth_provider or 'local',
             'has_password': self.has_password,
+            'passkey_enabled': self.passkeys.filter_by(is_active=True).count() > 0,
             'sidebar_config': self.get_sidebar_config(),
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),

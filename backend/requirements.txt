@@ -51,6 +51,9 @@ cryptography==48.0.1
 pyotp==2.9.0
 qrcode[pil]==7.4.2
 
+# WebAuthn / Passkeys
+webauthn==2.5.0
+
 # HTTP Requests (for webhooks & notifications)
 requests==2.33.1
 

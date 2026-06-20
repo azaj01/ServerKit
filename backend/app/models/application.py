@@ -94,6 +94,40 @@ class Application(db.Model):
             'server_name': self.server.name if self.server else 'Local server',
             'domains': [d.to_dict() for d in self.domains]
         }
+
+        # Lightweight image-scan badge (latest scan only)
+        latest_scan = self.image_scans.first()
+        if latest_scan:
+            result['image_scan'] = {
+                'status': latest_scan.status,
+                'highest_severity': latest_scan.highest_severity,
+                'severity_counts': latest_scan.get_counts(),
+                'scanned_at': latest_scan.completed_at.isoformat() if latest_scan.completed_at else None,
+            }
+        else:
+            result['image_scan'] = None
+
+        # Lightweight image-update badge (latest digest check only)
+        latest_update = self.image_update_checks.first()
+        if latest_update:
+            result['image_update'] = {
+                'status': latest_update.status,
+                'update_available': latest_update.update_available,
+                'checked_at': latest_update.checked_at.isoformat() if latest_update.checked_at else None,
+            }
+        else:
+            result['image_update'] = None
+
+        # Lightweight auto-sleep badge
+        sleep_policy = self.sleep_policy
+        if sleep_policy:
+            result['sleep'] = {
+                'enabled': sleep_policy.enabled,
+                'asleep': sleep_policy.asleep,
+                'idle_timeout_minutes': sleep_policy.idle_timeout_minutes,
+            }
+        else:
+            result['sleep'] = None
         if include_linked and self.linked_app:
             result['linked_app'] = {
                 'id': self.linked_app.id,

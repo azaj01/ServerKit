@@ -49,7 +49,11 @@ Docker 容器和安全策略——无需 Kubernetes 的复杂性，
 
 🟢 **Node.js** — PM2 进程管理，支持日志实时推送
 
+📦 **Manual & Zip Deploys** — 除 Git 和 Docker 源外，还支持从本地/手动路径或上传的 zip 包部署
+
 🐳 **Docker** — 全面的容器和 Docker Compose 管理
+
+♻️ **Container Lifecycle** — 镜像更新检测与一键应用、空闲容器自动休眠，以及基于 CPU 的水平自动扩缩容
 
 🔑 **环境变量** — 安全加密的应用级变量管理
 
@@ -57,7 +61,7 @@ Docker 容器和安全策略——无需 Kubernetes 的复杂性，
 
 🌐 **域名管理** — Nginx 虚拟主机，配置简便
 
-🔒 **SSL 证书** — Let's Encrypt 自动签发与自动续期
+🔒 **SSL / TLS** — Let's Encrypt 自动签发与自动续期、可选的（尽力而为）HTTPS（绝不阻断安装）、强化的 TLS 1.2+/AEAD 加密套件、Cloudflare 感知配置，以及自动 CAA 记录
 
 🗄️ **数据库** — 支持 MySQL/MariaDB 和 PostgreSQL
 
@@ -65,13 +69,17 @@ Docker 容器和安全策略——无需 Kubernetes 的复杂性，
 
 ⏰ **定时任务** — 可视化编辑器调度 Cron 任务
 
-📁 **文件管理器** — 通过 Web 界面浏览和编辑文件
+📁 **文件管理器** — 通过 Web 界面浏览和编辑文件，包括浏览和预览 S3 / Backblaze B2 存储桶
 
 📡 **FTP 服务器** — 管理 vsftpd 用户和访问权限
 
 ### 安全
 
 🔐 **双因素认证** — 基于 TOTP 的验证，支持备用恢复码
+
+🔑 **Passkeys / WebAuthn** — 无密码登录与二次验证，支持硬件密钥、Touch ID 和 Windows Hello
+
+🛡️ **Web Application Firewall** — 应用级 ModSecurity v3 + OWASP Core Rule Set，支持检测/拦截模式、可调偏执级别，以及审计日志事件
 
 🦠 **恶意软件扫描** — 集成 ClamAV，支持隔离处理
 
@@ -84,6 +92,8 @@ Docker 容器和安全策略——无需 Kubernetes 的复杂性，
 ### 监控与告警
 
 📊 **实时指标** — 通过 WebSocket 监控 CPU、内存、磁盘、网络
+
+🎮 **GPU Monitoring** — NVIDIA GPU 利用率、显存、温度和功耗，支持按进程和按容器统计用量
 
 📈 **运行时间追踪** — 服务器历史在线率数据
 
@@ -224,6 +234,17 @@ docker compose up -d       # 访问 http://localhost
 - [ ] 团队与权限 — RBAC、审计日志
 - [ ] 移动应用 — React Native，支持推送通知
 - [ ] 插件市场 — 扩展、自定义组件、主题
+- [x] Web 应用防火墙 — 应用级 ModSecurity v3 + OWASP CRS
+- [x] 容器安全 — 镜像 CVE 扫描（grype）+ SBOM（syft）
+- [x] 无密码认证 — WebAuthn / passkeys
+- [x] 动态 DNS — 基于令牌认证的 A/AAAA 更新
+- [x] GPU 监控 — NVIDIA 利用率、显存与进程
+- [x] 容器生命周期 — 镜像更新应用、自动休眠、水平自动扩缩容
+- [x] TLS 强化 — 可选 HTTPS、Cloudflare 感知配置、自动 CAA
+- [x] 密钥管理器与入站 Webhook 网关
+- [x] 远程访问 — 通过 Agent 托管的 WireGuard 隧道暴露私有/NAT 后的服务
+- [x] 连接中心 — 统一管理外部账户（源码、云、DNS、注册商、SMTP、存储）
+- [x] WordPress 发布 — 真实子域名、URL 替换、自定义域名、通配符 HTTPS
 
 完整详情：[ROADMAP.md](../ROADMAP.md)
 
@@ -237,6 +258,7 @@ docker compose up -d       # 访问 http://localhost
 | [安装指南](INSTALLATION.md) | 完整的安装配置说明 |
 | [部署指南](DEPLOYMENT.md) | CLI 命令与生产环境部署 |
 | [API 参考](API.md) | REST API 接口文档 |
+| [新功能](NEW_FEATURES.md) | 最新 `dev` 功能的接口与页面参考 |
 | [路线图](../ROADMAP.md) | 开发路线图与规划功能 |
 | [参与贡献](../CONTRIBUTING.md) | 如何参与贡献 |
 
@@ -251,7 +273,7 @@ docker compose up -d       # 访问 http://localhost
 | 数据库 | SQLite / PostgreSQL |
 | Web 服务器 | Nginx, Gunicorn |
 | 容器 | Docker, Docker Compose |
-| 安全 | ClamAV, TOTP (pyotp), Cryptography |
+| 安全 | ClamAV, TOTP (pyotp), Cryptography, ModSecurity v3 + OWASP CRS, grype, syft |
 
 ---
 

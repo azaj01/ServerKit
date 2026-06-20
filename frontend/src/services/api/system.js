@@ -31,6 +31,17 @@ export async function updateSystemSetting(key, value) {
     });
 }
 
+export async function getDomainDetection() {
+    return this.request('/admin/settings/domain-detection');
+}
+
+export async function setCanonicalDomain(domain, httpsEnabled) {
+    return this.request('/admin/settings/canonical-domain', {
+        method: 'PUT',
+        body: { domain, https_enabled: httpsEnabled }
+    });
+}
+
 export async function getAdminStats() {
     return this.request('/admin/stats');
 }
