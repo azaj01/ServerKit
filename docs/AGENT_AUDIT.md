@@ -1,5 +1,10 @@
 # ServerKit Agent Subsystem — Security & Completeness Audit
 
+> **Migration note:** The Go agent source code has moved to its own repository at
+> [`github.com/jhd3197/serverkit-agent`](https://github.com/jhd3197/serverkit-agent).
+> This audit remains historically accurate but the file paths it references under
+> `agent/` no longer exist in the ServerKit monorepo.
+
 **Date:** 2026-06-12
 **Scope:** The multi-server agent fleet end-to-end — Go agent (`agent/`), panel
 gateway/registry/long-poll (`backend/app/agent_gateway.py`,

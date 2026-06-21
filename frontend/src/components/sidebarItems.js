@@ -209,8 +209,20 @@ export const SIDEBAR_ITEMS = [
     }
 ];
 
+// "Advanced" items are powerful but not part of the everyday core for a solo
+// dev / small team: the Marketplace, the internal job-queue console, and the
+// Secrets & Webhooks vault. They're hidden by the default ("Recommended") view
+// and every curated preset, but stay one click away via the "Full" view or
+// Customize Sidebar — and remain fully routable (deep links, command palette).
+export const ADVANCED_ITEM_IDS = ['marketplace', 'queue', 'secrets'];
+
 // Preset profiles define which items are hidden (top-level only)
 export const SIDEBAR_PRESETS = {
+    recommended: {
+        label: 'Recommended',
+        description: 'Everyday essentials — advanced tools hidden',
+        hiddenItems: [...ADVANCED_ITEM_IDS]
+    },
     full: {
         label: 'Full',
         description: 'All sidebar items visible',
@@ -219,27 +231,40 @@ export const SIDEBAR_PRESETS = {
     web: {
         label: 'Web Hosting',
         description: 'Domains, SSL, databases, and web essentials',
-        hiddenItems: ['docker', 'git', 'workflow', 'email', 'workspaces', 'marketplace']
+        hiddenItems: ['docker', 'git', 'workflow', 'email', 'workspaces', ...ADVANCED_ITEM_IDS]
     },
     email: {
         label: 'Email Admin',
         description: 'Email server, security, DNS, and monitoring',
-        hiddenItems: ['services', 'wordpress', 'workflow', 'databases', 'docker', 'git', 'cron', 'workspaces', 'marketplace']
+        hiddenItems: ['services', 'wordpress', 'workflow', 'databases', 'docker', 'git', 'cron', 'workspaces', ...ADVANCED_ITEM_IDS]
     },
     devops: {
         label: 'Docker / DevOps',
         description: 'Docker, Git, monitoring, and CI/CD tools',
-        hiddenItems: ['wordpress', 'email', 'marketplace']
+        hiddenItems: ['wordpress', 'email', ...ADVANCED_ITEM_IDS]
     },
     minimal: {
         label: 'Minimal',
         description: 'Just the essentials — dashboard, servers, terminal',
-        hiddenItems: ['wordpress', 'workflow', 'databases', 'docker', 'git', 'email', 'cron', 'workspaces', 'marketplace']
+        hiddenItems: ['wordpress', 'workflow', 'databases', 'docker', 'git', 'email', 'cron', 'workspaces', ...ADVANCED_ITEM_IDS]
     }
 };
 
+// Map the Setup wizard's "use case" selections to an initial sidebar preset, so
+// a fresh install opens tailored instead of showing every item. Only a single,
+// focused intent picks a specialized profile; mixed or general installs get the
+// lean "Recommended" baseline (which still surfaces the common pages).
+export function presetForUseCases(useCases = []) {
+    const set = new Set((useCases || []).filter(Boolean));
+    if (set.size === 1) {
+        if (set.has('wordpress')) return 'web';
+        if (set.has('devops')) return 'devops';
+    }
+    return 'recommended';
+}
+
 export function getHiddenItemIds(sidebarConfig) {
-    const { preset = 'full', hiddenItems = [] } = sidebarConfig || {};
+    const { preset = 'recommended', hiddenItems = [] } = sidebarConfig || {};
 
     const hidden = preset === 'custom'
         ? hiddenItems

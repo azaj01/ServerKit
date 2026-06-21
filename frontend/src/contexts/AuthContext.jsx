@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
+import { presetForUseCases } from '../components/sidebarItems';
 
 const AuthContext = createContext(null);
 
@@ -106,6 +107,16 @@ export function AuthProvider({ children }) {
 
     async function completeOnboarding(useCases) {
         await api.completeOnboarding(useCases);
+        // Tailor the initial sidebar to the use cases picked during setup, so a
+        // fresh install opens focused instead of showing every item. Best-effort:
+        // if it fails, the sidebar just falls back to the "Recommended" default.
+        try {
+            const sidebar_config = { preset: presetForUseCases(useCases), hiddenItems: [] };
+            const res = await api.updateCurrentUser({ sidebar_config });
+            if (res?.user) setUser(res.user);
+        } catch {
+            /* ignore — sidebar preset is a non-critical nicety */
+        }
         setSetupStatus(prev => ({
             ...prev,
             needsSetup: false,

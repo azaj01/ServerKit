@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Network, Plus, Trash2, Globe, Lock, ShieldCheck, ExternalLink,
     ArrowRight, HardDrive, Cloud, AlertTriangle,
@@ -44,7 +45,7 @@ const EMPTY_FORM = {
     ssl: true,
 };
 
-const RemoteAccess = () => {
+const RemoteAccess = ({ serverId }) => {
     const toast = useToast();
     const [tunnels, setTunnels] = useState([]);
     const [services, setServices] = useState({}); // tunnelId -> [service]
@@ -57,6 +58,19 @@ const RemoteAccess = () => {
     const [submitting, setSubmitting] = useState(false);
 
     const [teardown, setTeardown] = useState(null); // tunnel pending teardown
+
+    const currentServer = useMemo(
+        () => servers.find((s) => s.id === serverId),
+        [servers, serverId]
+    );
+
+    // When scoped to a server, only show tunnels that involve it.
+    const visibleTunnels = useMemo(() => {
+        if (!serverId) return tunnels;
+        return tunnels.filter(
+            (t) => t.edge_server_id === serverId || t.private_server_id === serverId
+        );
+    }, [tunnels, serverId]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -89,8 +103,8 @@ const RemoteAccess = () => {
         setWizardTunnel(tunnel);
         setForm({
             ...EMPTY_FORM,
-            edgeServerId: tunnel ? tunnel.edge_server_id : '',
-            privateServerId: tunnel ? tunnel.private_server_id : '',
+            edgeServerId: tunnel ? tunnel.edge_server_id : (serverId ? '' : ''),
+            privateServerId: tunnel ? tunnel.private_server_id : (serverId || ''),
         });
         setWizardOpen(true);
     };
@@ -173,43 +187,60 @@ const RemoteAccess = () => {
         }
     };
 
-    // Header action lives in the shared Servers top bar (this page is a tab in
-    // the Servers group), so the page renders no header of its own.
-    useTopbarActions(
-        () => (
-            <Button size="sm" onClick={() => openWizard(null)} disabled={loading}>
-                <Plus size={15} /> Expose a Local Service
-            </Button>
-        ),
-        [loading]
+    const exposeButton = (
+        <Button size="sm" onClick={() => openWizard(null)} disabled={loading}>
+            <Plus size={15} /> Expose a Local Service
+        </Button>
     );
+
+    // Header action lives in the shared Servers top bar when this page is used
+    // as a tab in the Servers group. When embedded inside a single server's
+    // detail page we render the action inline instead.
+    useTopbarActions(() => exposeButton, [loading]);
+
+    const otherServers = servers.filter((s) => s.id !== serverId);
 
     return (
         <div className="sk-tabgroup__inner ra-page">
-            <p className="ra-intro">
-                Expose a service running on a private machine (behind NAT, no port-forwarding) to a
-                public hostname over a WireGuard tunnel between two of your agents.
-            </p>
+            <div className="ra-intro">
+                {serverId && currentServer ? (
+                    <p>
+                        Expose services running on <strong>{currentServer.name}</strong> to a public
+                        hostname over a WireGuard tunnel. ServerKit pairs this host with an edge
+                        server that has a public IP.
+                    </p>
+                ) : (
+                    <p>
+                        Expose a service running on a private machine (behind NAT, no port-forwarding) to a
+                        public hostname over a WireGuard tunnel between two of your agents.
+                    </p>
+                )}
+                {serverId && (
+                    <div className="ra-intro__actions">
+                        {exposeButton}
+                    </div>
+                )}
+            </div>
 
             {loading ? (
                 <div className="ra-loading">
                     <Spinner />
                 </div>
-            ) : tunnels.length === 0 ? (
+            ) : visibleTunnels.length === 0 ? (
                 <EmptyState
                     icon={Network}
-                    title="No tunnels yet"
-                    description="Pick a public-IP edge server and a private host, and ServerKit will pair them over WireGuard and publish your service — no router changes needed."
-                    action={
-                        <Button onClick={() => openWizard(null)}>
-                            <Plus size={16} /> Expose a Local Service
-                        </Button>
-                    }
+                    title={serverId ? 'No tunnels for this server' : 'No tunnels yet'}
+                    description={serverId
+                        ? `Pick a public-IP edge server and ServerKit will pair it with ${currentServer?.name || 'this host'} over WireGuard.`
+                        : 'Pick a public-IP edge server and a private host, and ServerKit will pair them over WireGuard and publish your service — no router changes needed.'}
+                    action={exposeButton}
                 />
             ) : (
                 <div className="ra-list">
-                    {tunnels.map((t) => {
+                    {visibleTunnels.map((t) => {
                         const svcs = services[t.id] || [];
+                        const isCurrentPrivate = t.private_server_id === serverId;
+                        const isCurrentEdge = t.edge_server_id === serverId;
                         return (
                             <section key={t.id} className="ra-tunnel">
                                 <div className="ra-tunnel__head">
@@ -217,12 +248,26 @@ const RemoteAccess = () => {
                                         <div className="ra-tunnel__route">
                                             <span className="ra-node">
                                                 <span className="ra-node__ico"><HardDrive size={14} /></span>
-                                                {t.private_server_name || t.private_server_id}
+                                                {serverId ? (
+                                                    t.private_server_name || t.private_server_id
+                                                ) : (
+                                                    <Link to={`/servers/${t.private_server_id}/remote-access`}>
+                                                        {t.private_server_name || t.private_server_id}
+                                                    </Link>
+                                                )}
+                                                {isCurrentPrivate && <span className="ra-node__tag">this server</span>}
                                             </span>
                                             <ArrowRight className="ra-arrow" size={16} />
                                             <span className="ra-node">
                                                 <span className="ra-node__ico"><Cloud size={14} /></span>
-                                                {t.edge_server_name || t.edge_server_id}
+                                                {serverId ? (
+                                                    t.edge_server_name || t.edge_server_id
+                                                ) : (
+                                                    <Link to={`/servers/${t.edge_server_id}/remote-access`}>
+                                                        {t.edge_server_name || t.edge_server_id}
+                                                    </Link>
+                                                )}
+                                                {isCurrentEdge && <span className="ra-node__tag">this server</span>}
                                             </span>
                                             <Pill kind={pillKind(t.status)}>{t.status || 'unknown'}</Pill>
                                         </div>
@@ -346,18 +391,26 @@ const RemoteAccess = () => {
                         <>
                             <div className="space-y-1.5">
                                 <Label>Private host (where the service runs)</Label>
-                                <Select value={form.privateServerId} onValueChange={(v) => setField('privateServerId', v)}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a server" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {servers.map((s) => (
-                                            <SelectItem key={s.id} value={s.id}>
-                                                {s.name}{s.ip_address ? ` (${s.ip_address})` : ''}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                {serverId ? (
+                                    <Input
+                                        value={currentServer?.name || serverId}
+                                        disabled
+                                        className="bg-muted"
+                                    />
+                                ) : (
+                                    <Select value={form.privateServerId} onValueChange={(v) => setField('privateServerId', v)}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a server" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {servers.map((s) => (
+                                                <SelectItem key={s.id} value={s.id}>
+                                                    {s.name}{s.ip_address ? ` (${s.ip_address})` : ''}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Edge server (public IP — fronts the tunnel)</Label>
@@ -366,7 +419,7 @@ const RemoteAccess = () => {
                                         <SelectValue placeholder="Select a server" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {servers.map((s) => (
+                                        {otherServers.map((s) => (
                                             <SelectItem key={s.id} value={s.id}>
                                                 {s.name}{s.ip_address ? ` (${s.ip_address})` : ''}
                                             </SelectItem>

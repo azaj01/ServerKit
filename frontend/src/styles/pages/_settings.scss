@@ -49,6 +49,47 @@
     }
 }
 
+// Two-way section switch (My Account / Admin) at the top of the settings rail
+.settings-nav-groups {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $space-1;
+    padding: $space-1;
+    margin-bottom: $space-3;
+    background: $bg-card;
+    border: 1px solid $border-color;
+    border-radius: $radius-md;
+
+    @media (max-width: $breakpoint-lg) {
+        flex-basis: 100%;
+        width: 100%;
+    }
+}
+
+.settings-nav-group {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: $space-2 $space-3;
+    border-radius: $radius-sm;
+    color: $text-secondary;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    cursor: pointer;
+    transition: all $transition-fast;
+    white-space: nowrap;
+
+    &:hover {
+        color: $text-primary;
+        background: $bg-hover;
+    }
+
+    &.active {
+        background: var(--accent-bg);
+        color: var(--accent-bright);
+    }
+}
+
 .settings-nav-item,
 .settings-nav-item.settings-nav-item {
     display: flex;

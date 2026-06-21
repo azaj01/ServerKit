@@ -26,11 +26,21 @@ import { useNavigate } from 'react-router-dom';
 
 const VALID_TABS = ['profile', 'security', 'connections', 'appearance', 'sidebar', 'whitelabel', 'notifications', 'system', 'users', 'activity', 'site', 'sso', 'api', 'ai', 'migrations', 'developer', 'about'];
 
+// Tabs that belong to the server-wide "Administration" group (admin-only); the
+// rest are personal "My Account" settings. Drives the two-way section switch so
+// personal prefs aren't interleaved with destructive system controls.
+const ADMIN_TABS = ['users', 'activity', 'site', 'sso', 'api', 'ai', 'migrations', 'system', 'developer'];
+
 const Settings = () => {
     const [activeTab, setActiveTab] = useTabParam('/settings', VALID_TABS);
     const { isAdmin } = useAuth();
     const [devMode, setDevMode] = useState(false);
     const navigate = useNavigate();
+
+    // Which top-level settings group is showing. Derived from the active tab so
+    // deep links (e.g. /settings/users) open the right group; non-admins only
+    // ever see "My Account", so any admin tab collapses back to it for them.
+    const activeGroup = isAdmin && ADMIN_TABS.includes(activeTab) ? 'admin' : 'account';
 
     useEffect(() => {
         if (isAdmin) {
@@ -46,7 +56,30 @@ const Settings = () => {
 
             <div className="settings-layout">
                 <nav className="settings-nav">
-                    <div className="settings-nav-divider">Account</div>
+                    {isAdmin && (
+                        <div className="settings-nav-groups" role="tablist" aria-label="Settings section">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={activeGroup === 'account'}
+                                className={`settings-nav-group ${activeGroup === 'account' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('profile')}
+                            >
+                                My Account
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={activeGroup === 'admin'}
+                                className={`settings-nav-group ${activeGroup === 'admin' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('users')}
+                            >
+                                Admin
+                            </button>
+                        </div>
+                    )}
+                    {activeGroup === 'account' && (
+                        <>
                     <Button
                         variant="ghost"
                         className={`settings-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
@@ -126,9 +159,36 @@ const Settings = () => {
                         <Layers size={18} />
                         White Label
                     </Button>
-                    {isAdmin && (
+                            {import.meta.env.DEV && !devMode && !isAdmin && (
+                                <>
+                                    <div className="settings-nav-divider">Local Dev</div>
+                                    <Button
+                                        variant="ghost"
+                                        className="settings-nav-item"
+                                        onClick={() => navigate('/style-guide')}
+                                    >
+                                        <PaintBucket size={18} />
+                                        Style Guide
+                                    </Button>
+                                </>
+                            )}
+                            <div className="settings-nav-spacer" />
+                            <Button
+                                variant="ghost"
+                                className={`settings-nav-item ${activeTab === 'about' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('about')}
+                            >
+                                <svg viewBox="0 0 24 24" width="18" height="18">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="12" y1="16" x2="12" y2="12"/>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                </svg>
+                                About
+                            </Button>
+                        </>
+                    )}
+                    {activeGroup === 'admin' && isAdmin && (
                         <>
-                            <div className="settings-nav-divider">Admin</div>
                             <Button
                                 variant="ghost"
                                 className={`settings-nav-item ${activeTab === 'users' ? 'active' : ''}`}
@@ -209,54 +269,31 @@ const Settings = () => {
                                 </svg>
                                 System Info
                             </Button>
+                            {(devMode || import.meta.env.DEV) && (
+                                <>
+                                    <div className="settings-nav-divider">{devMode ? 'Developer' : 'Local Dev'}</div>
+                                    {devMode && (
+                                        <Button
+                                            variant="ghost"
+                                            className={`settings-nav-item ${activeTab === 'developer' ? 'active' : ''}`}
+                                            onClick={() => setActiveTab('developer')}
+                                        >
+                                            <Code size={18} />
+                                            Icon Reference
+                                        </Button>
+                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        className="settings-nav-item"
+                                        onClick={() => navigate('/style-guide')}
+                                    >
+                                        <PaintBucket size={18} />
+                                        Style Guide
+                                    </Button>
+                                </>
+                            )}
                         </>
                     )}
-                    {devMode && isAdmin && (
-                        <>
-                            <div className="settings-nav-divider">Developer</div>
-                            <Button
-                                variant="ghost"
-                                className={`settings-nav-item ${activeTab === 'developer' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('developer')}
-                            >
-                                <Code size={18} />
-                                Icon Reference
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="settings-nav-item"
-                                onClick={() => navigate('/style-guide')}
-                            >
-                                <PaintBucket size={18} />
-                                Style Guide
-                            </Button>
-                        </>
-                    )}
-                    {import.meta.env.DEV && !devMode && (
-                        <>
-                            <div className="settings-nav-divider">Local Dev</div>
-                            <Button
-                                variant="ghost"
-                                className="settings-nav-item"
-                                onClick={() => navigate('/style-guide')}
-                            >
-                                <PaintBucket size={18} />
-                                Style Guide
-                            </Button>
-                        </>
-                    )}
-                    <Button
-                        variant="ghost"
-                        className={`settings-nav-item ${activeTab === 'about' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('about')}
-                    >
-                        <svg viewBox="0 0 24 24" width="18" height="18">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="16" x2="12" y2="12"/>
-                            <line x1="12" y1="8" x2="12.01" y2="8"/>
-                        </svg>
-                        About
-                    </Button>
                 </nav>
 
                 <div className="settings-content">

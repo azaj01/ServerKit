@@ -14,7 +14,7 @@ Welcome to the ServerKit documentation. This guide will help you install, config
 | [Local Development](LOCAL_DEVELOPMENT.md) | Run the panel locally for development |
 | [API Reference](API.md) | REST API documentation with examples |
 | [Multi-Environment Guide](MULTI_ENVIRONMENT.md) | Set up prod/dev WordPress pairs with shared database |
-| [Multi-Server & Agent](../agent/README.md) | Install the agent and connect remote servers (see also [pairing](pairing.md)) |
+| [Multi-Server & Agent](https://github.com/jhd3197/serverkit-agent/blob/main/README.md) | Install the agent and connect remote servers (see also [pairing](pairing.md)) |
 
 ---
 

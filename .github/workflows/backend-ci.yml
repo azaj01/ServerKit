@@ -16,6 +16,7 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+  workflow_call:
 
 jobs:
   pytest:

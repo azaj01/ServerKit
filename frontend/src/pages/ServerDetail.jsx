@@ -30,6 +30,7 @@ import {
 import PackagesTab from '../components/serverdetail/PackagesTab';
 import ServicesTab from '../components/serverdetail/ServicesTab';
 import SystemStatusCard from '../components/serverdetail/SystemStatusCard';
+import RemoteAccess from '../pages/RemoteAccess';
 import EmptyState from '../components/EmptyState';
 import { BellRing, Boxes, Container, Clock3, Cloud } from 'lucide-react';
 
@@ -55,7 +56,7 @@ const ServerDetail = () => {
     const [securityAlerts, setSecurityAlerts] = useState([]);
     const toast = useToast();
 
-    const validTabs = ['overview', 'docker', 'cron', 'cloudflared', 'packages', 'services', 'metrics', 'alerts', 'settings'];
+    const validTabs = ['overview', 'docker', 'cron', 'cloudflared', 'packages', 'services', 'metrics', 'alerts', 'remote-access', 'settings'];
     const activeTab = validTabs.includes(tab) ? tab : 'overview';
 
     const loadServer = useCallback(async () => {
@@ -244,6 +245,7 @@ const ServerDetail = () => {
         ...(totalAlertCount > 0
             ? [{ id: 'alerts', label: 'Alerts', badge: totalAlertCount }]
             : [{ id: 'alerts', label: 'Alerts' }]),
+        ...(server.capabilities?.wireguard ? [{ id: 'remote-access', label: 'Remote Access' }] : []),
         { id: 'settings', label: 'Settings' }
     ];
 
@@ -373,6 +375,9 @@ const ServerDetail = () => {
                             onAcknowledge={handleAcknowledgeAlert}
                             onResolve={handleResolveAlert}
                         />
+                    </TabsContent>
+                    <TabsContent value="remote-access">
+                        <RemoteAccess serverId={id} />
                     </TabsContent>
                     <TabsContent value="settings">
                         <SettingsTab

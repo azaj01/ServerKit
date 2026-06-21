@@ -7,8 +7,9 @@ configures SELinux for the nginx reverse proxy. The manual steps below use
 Ubuntu/Debian (`apt`) as the primary example — on Fedora/RHEL substitute `dnf`
 and the docker-ce RHEL repo.
 
-To connect additional servers to this panel, install the agent — see
-[agent/README.md](../agent/README.md) and [pairing.md](pairing.md). ServerKit is a modern server management panel for managing web applications, databases, Docker containers, and more.
+To connect additional servers to this panel, install the agent — see the
+[serverkit-agent README](https://github.com/jhd3197/serverkit-agent/blob/main/README.md)
+and [pairing.md](pairing.md). ServerKit is a modern server management panel for managing web applications, databases, Docker containers, and more.
 
 ## Table of Contents
 

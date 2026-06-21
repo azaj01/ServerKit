@@ -110,7 +110,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
     }, []);
 
     const conditions = { wpInstalled, gpuAvailable };
-    const currentPreset = user?.sidebar_config?.preset || 'full';
+    const currentPreset = user?.sidebar_config?.preset || 'recommended';
     const [manualExpanded, setManualExpanded] = useState({});
     const [autoExpanded, setAutoExpanded] = useState(null);
     const location = useLocation();
