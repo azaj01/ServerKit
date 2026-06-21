@@ -23,6 +23,17 @@ def require_workspace_access(workspace_id, user):
     return None
 
 
+def require_workspace_role(workspace_id, user, roles):
+    """Return 403 response tuple if user is not an admin and their workspace
+    membership role is not one of the allowed roles."""
+    if user.is_admin:
+        return None
+    role = WorkspaceService.get_user_role(workspace_id, user.id)
+    if role not in roles:
+        return jsonify({'error': 'Insufficient permissions'}), 403
+    return None
+
+
 @workspaces_bp.route('/', methods=['GET'])
 @jwt_required()
 def list_workspaces():
@@ -165,6 +176,13 @@ def add_member(workspace_id):
 @workspaces_bp.route('/members/<int:member_id>/role', methods=['PUT'])
 @jwt_required()
 def update_member_role(member_id):
+    user = get_current_user()
+    member = WorkspaceService.get_member(member_id)
+    if not member:
+        return jsonify({'error': 'Member not found'}), 404
+    denied = require_workspace_role(member.workspace_id, user, ['owner', 'admin'])
+    if denied:
+        return denied
     data = request.get_json() or {}
     role = data.get('role')
     if not role:
@@ -178,6 +196,13 @@ def update_member_role(member_id):
 @workspaces_bp.route('/members/<int:member_id>', methods=['DELETE'])
 @jwt_required()
 def remove_member(member_id):
+    user = get_current_user()
+    member = WorkspaceService.get_member(member_id)
+    if not member:
+        return jsonify({'error': 'Member not found'}), 404
+    denied = require_workspace_role(member.workspace_id, user, ['owner', 'admin'])
+    if denied:
+        return denied
     try:
         result = WorkspaceService.remove_member(member_id)
         if not result:
@@ -204,7 +229,7 @@ def list_api_keys(workspace_id):
 @jwt_required()
 def create_api_key(workspace_id):
     user = get_current_user()
-    denied = require_workspace_access(workspace_id, user)
+    denied = require_workspace_role(workspace_id, user, ['owner', 'admin'])
     if denied:
         return denied
     data = request.get_json() or {}
@@ -215,6 +240,11 @@ def create_api_key(workspace_id):
     api_key, raw_key = WorkspaceService.create_api_key(
         workspace_id, name, scopes=data.get('scopes'), user_id=user.id
     )
+    AuditService.log(
+        action=AuditLog.ACTION_RESOURCE_CREATE, user_id=user.id,
+        target_type='workspace_api_key', target_id=api_key.id,
+        details={'workspace_id': workspace_id, 'name': name}
+    )
     result = api_key.to_dict()
     result['key'] = raw_key  # Only returned once
     return jsonify(result), 201
@@ -223,7 +253,19 @@ def create_api_key(workspace_id):
 @workspaces_bp.route('/api-keys/<int:key_id>/revoke', methods=['POST'])
 @jwt_required()
 def revoke_api_key(key_id):
+    user = get_current_user()
+    api_key = WorkspaceService.get_api_key(key_id)
+    if not api_key:
+        return jsonify({'error': 'API key not found'}), 404
+    denied = require_workspace_role(api_key.workspace_id, user, ['owner', 'admin'])
+    if denied:
+        return denied
     result = WorkspaceService.revoke_api_key(key_id)
     if not result:
         return jsonify({'error': 'API key not found'}), 404
+    AuditService.log(
+        action=AuditLog.ACTION_RESOURCE_DELETE, user_id=user.id,
+        target_type='workspace_api_key', target_id=key_id,
+        details={'workspace_id': api_key.workspace_id}
+    )
     return jsonify({'message': 'API key revoked'})

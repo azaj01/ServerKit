@@ -6,7 +6,7 @@ import { useLayout } from '../contexts/LayoutContext';
 import { Star, Settings, LogOut, Sun, Moon, Monitor, ChevronRight, ChevronDown, ChevronUp, Layers, Palette, PanelLeft, PanelLeftClose, PanelTop, Check, X, Server } from 'lucide-react';
 import { api } from '../services/api';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
-import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems } from './sidebarItems';
+import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems, applyWorkspaceNavPermissions } from './sidebarItems';
 import { useContributions } from '../plugins/contributions';
 
 const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {} }) => {
@@ -150,10 +150,16 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         // Top-level items can gate on a runtime condition (e.g. GPU Monitor
         // only when a GPU is present), mirroring sub-item requiresCondition.
         const conds = { wpInstalled, gpuAvailable };
-        return [...core, ...fromPlugins].filter(
+        const items = [...core, ...fromPlugins].filter(
             (item) => !item.requiresCondition || conds[item.requiresCondition]
         );
-    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable]);
+        // Apply workspace-level nav permissions if an active workspace is set
+        // and it defines a nav map. This lets a workspace restrict which sidebar
+        // items its members see based on their effective workspace role.
+        const activeWorkspaceRaw = localStorage.getItem('active_workspace');
+        const activeWorkspace = activeWorkspaceRaw ? JSON.parse(activeWorkspaceRaw) : null;
+        return applyWorkspaceNavPermissions(items, activeWorkspace, user);
+    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable, user]);
 
     // Group visible items by category
     const groupedItems = useMemo(() => {

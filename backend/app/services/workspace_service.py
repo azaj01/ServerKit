@@ -133,6 +133,19 @@ class WorkspaceService:
         return WorkspaceService.effective_role(user, workspace_id) != User.ROLE_VIEWER
 
     @staticmethod
+    def check_quota(workspace_id, current_count, quota_field):
+        """Return an error string if a workspace quota would be exceeded,
+        otherwise None. `quota_field` is the Workspace column name."""
+        ws = Workspace.query.get(workspace_id)
+        if not ws:
+            return 'Workspace not found'
+        quota = getattr(ws, quota_field, 0) or 0
+        if quota > 0 and current_count >= quota:
+            label = quota_field.replace('max_', '').replace('_', ' ')
+            return f'Workspace {label} limit reached (max {quota})'
+        return None
+
+    @staticmethod
     def list_workspaces(user_id=None, include_archived=False):
         query = Workspace.query
         if not include_archived:
@@ -235,6 +248,10 @@ class WorkspaceService:
     # --- Members ---
 
     @staticmethod
+    def get_member(member_id):
+        return WorkspaceMember.query.get(member_id)
+
+    @staticmethod
     def get_members(workspace_id):
         return WorkspaceMember.query.filter_by(workspace_id=workspace_id).all()
 
@@ -314,6 +331,10 @@ class WorkspaceService:
         db.session.add(api_key)
         db.session.commit()
         return api_key, raw_key
+
+    @staticmethod
+    def get_api_key(key_id):
+        return WorkspaceApiKey.query.get(key_id)
 
     @staticmethod
     def list_api_keys(workspace_id):

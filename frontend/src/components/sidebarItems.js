@@ -33,6 +33,13 @@ export const SIDEBAR_ITEMS = [
         icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>'
     },
     {
+        id: 'workspaces',
+        label: 'Workspaces',
+        route: '/workspaces',
+        category: 'infrastructure',
+        icon: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>'
+    },
+    {
         // Redesign: Servers uses the top-bar layout (REDESIGN_MAP §6 decision 3).
         // Its Agent Fleet / Fleet Monitor / Cloud Servers / Config Templates
         // sub-nav now lives in the page's top bar (PageTopbar SERVER_TABS), not
@@ -166,13 +173,6 @@ export const SIDEBAR_ITEMS = [
         icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>'
     },
     {
-        id: 'workspaces',
-        label: 'Workspaces',
-        route: '/workspaces',
-        category: 'system',
-        icon: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>'
-    },
-    {
         id: 'terminal',
         label: 'Terminal / Logs',
         route: '/terminal',
@@ -231,12 +231,12 @@ export const SIDEBAR_PRESETS = {
     web: {
         label: 'Web Hosting',
         description: 'Domains, SSL, databases, and web essentials',
-        hiddenItems: ['docker', 'git', 'workflow', 'email', 'workspaces', ...ADVANCED_ITEM_IDS]
+        hiddenItems: ['docker', 'git', 'workflow', 'email', ...ADVANCED_ITEM_IDS]
     },
     email: {
         label: 'Email Admin',
         description: 'Email server, security, DNS, and monitoring',
-        hiddenItems: ['services', 'wordpress', 'workflow', 'databases', 'docker', 'git', 'cron', 'workspaces', ...ADVANCED_ITEM_IDS]
+        hiddenItems: ['services', 'wordpress', 'workflow', 'databases', 'docker', 'git', 'cron', ...ADVANCED_ITEM_IDS]
     },
     devops: {
         label: 'Docker / DevOps',
@@ -246,7 +246,7 @@ export const SIDEBAR_PRESETS = {
     minimal: {
         label: 'Minimal',
         description: 'Just the essentials — dashboard, servers, terminal',
-        hiddenItems: ['wordpress', 'workflow', 'databases', 'docker', 'git', 'email', 'cron', 'workspaces', ...ADVANCED_ITEM_IDS]
+        hiddenItems: ['wordpress', 'workflow', 'databases', 'docker', 'git', 'email', 'cron', ...ADVANCED_ITEM_IDS]
     }
 };
 
@@ -280,4 +280,22 @@ export function getVisibleItems(sidebarConfig) {
     return SIDEBAR_ITEMS.filter(item =>
         item.alwaysVisible || !hidden.has(item.id)
     );
+}
+
+/**
+ * Apply workspace-level nav permissions. A workspace can define
+ * `settings.nav = { admin: ['servers', 'domains', ...], member: ['domains'], ... }`
+ * to restrict which sidebar items are visible per effective workspace role.
+ * Items marked `alwaysVisible` (e.g. Dashboard) are never hidden.
+ */
+export function applyWorkspaceNavPermissions(items, workspace, user) {
+    if (!workspace?.settings?.nav) return items;
+    // Super-admins bypass workspace nav restrictions so they can manage the
+    // workspace itself without getting locked out.
+    if (user?.is_admin) return items;
+    const role = workspace.my_effective_role || workspace.my_role || 'member';
+    const allowedIds = workspace.settings.nav[role];
+    if (!Array.isArray(allowedIds) || allowedIds.length === 0) return items;
+    const allowed = new Set(allowedIds);
+    return items.filter(item => item.alwaysVisible || allowed.has(item.id));
 }
