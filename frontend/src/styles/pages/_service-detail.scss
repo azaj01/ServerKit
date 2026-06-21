@@ -763,6 +763,8 @@ h3.svc-eyebrow {
 
     &__navitem {
         display: flex;
+        width: 100%; // fill the nav column — a flex <button> otherwise shrinks
+                     // to its label, so each item's box was a different width
         align-items: center;
         gap: 9px;
         padding: 9px 12px;
