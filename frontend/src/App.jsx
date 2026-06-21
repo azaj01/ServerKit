@@ -67,6 +67,7 @@ import Documentation from './pages/Documentation';
 import Deployments from './pages/Deployments';
 import GpuMonitor from './pages/GpuMonitor';
 import DynamicDns from './pages/DynamicDns';
+import QueueOperations from './pages/QueueOperations';
 import useExtensionRoutes from './plugins/ExtensionRoutes';
 import { useContributions } from './plugins/contributions';
 
@@ -117,6 +118,7 @@ const PAGE_TITLES = {
     '/documentation': 'Documentation',
     '/gpu': 'GPU Monitor',
     '/dynamic-dns': 'Dynamic DNS',
+    '/queue': 'Queue Bus',
 };
 
 function PageTitleUpdater() {
@@ -343,6 +345,7 @@ function AppRoutes() {
                 <Route path="terminal/:tab" element={<Terminal />} />
                 <Route path="secrets" element={<SecretsWebhooks />} />
                 <Route path="secrets/:tab" element={<SecretsWebhooks />} />
+                <Route path="queue" element={<QueueOperations />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />
                 {dashboardRoutes}

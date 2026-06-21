@@ -1,17 +1,11 @@
 """Service for event emission and webhook delivery."""
-import hashlib
-import hmac
 import json
 import logging
-import time
-import threading
-import uuid
 from datetime import datetime, timedelta
-
-import requests as http_requests
 
 from app import db
 from app.models.event_subscription import EventSubscription, EventDelivery
+from app.queue_bus.consumers.webhook_consumer import enqueue_webhook_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +103,7 @@ class EventService:
 
         db.session.commit()
 
-        # Dispatch deliveries in background
+        # Dispatch deliveries via the queue bus
         for sub in matching:
             pending = EventDelivery.query.filter_by(
                 subscription_id=sub.id,
@@ -118,12 +112,10 @@ class EventService:
             ).order_by(EventDelivery.created_at.desc()).first()
 
             if pending:
-                thread = threading.Thread(
-                    target=EventService._deliver_in_thread,
-                    args=(pending.id,),
-                    daemon=True,
-                )
-                thread.start()
+                try:
+                    enqueue_webhook_delivery(pending.id)
+                except Exception as e:
+                    logger.error(f'Failed to enqueue webhook delivery {pending.id}: {e}')
 
     @staticmethod
     def emit_for_audit(action, target_type, target_id, details, user_id):
@@ -147,89 +139,8 @@ class EventService:
             logger.error(f'Failed to emit event {event_type}: {e}')
 
     @staticmethod
-    def _deliver_in_thread(delivery_id):
-        """Deliver a webhook in a background thread."""
-        from flask import current_app
-        try:
-            app = current_app._get_current_object()
-        except RuntimeError:
-            # No app context - need to import create_app
-            return
-
-        with app.app_context():
-            EventService.deliver(delivery_id)
-
-    @staticmethod
-    def deliver(delivery_id):
-        """Deliver a webhook to the subscription URL."""
-        delivery = EventDelivery.query.get(delivery_id)
-        if not delivery:
-            return
-
-        subscription = delivery.subscription
-        if not subscription or not subscription.is_active:
-            delivery.status = EventDelivery.STATUS_FAILED
-            db.session.commit()
-            return
-
-        payload = delivery.get_payload()
-        payload_json = json.dumps(payload)
-        delivery_uuid = str(uuid.uuid4())
-
-        headers = {
-            'Content-Type': 'application/json',
-            'X-ServerKit-Event': delivery.event_type,
-            'X-ServerKit-Delivery': delivery_uuid,
-            'User-Agent': 'ServerKit-Webhooks/1.0',
-        }
-
-        # HMAC signature if secret is set
-        if subscription.secret:
-            signature = hmac.new(
-                subscription.secret.encode(),
-                payload_json.encode(),
-                hashlib.sha256,
-            ).hexdigest()
-            headers['X-ServerKit-Signature'] = f'sha256={signature}'
-
-        # Add custom headers
-        custom_headers = subscription.get_headers()
-        if custom_headers:
-            headers.update(custom_headers)
-
-        delivery.attempts = (delivery.attempts or 0) + 1
-        start_time = time.time()
-
-        try:
-            resp = http_requests.post(  # nosec B113
-                subscription.url,
-                data=payload_json,
-                headers=headers,
-                timeout=subscription.timeout_seconds or 10,
-            )
-            elapsed_ms = (time.time() - start_time) * 1000
-
-            delivery.http_status = resp.status_code
-            delivery.response_body = resp.text[:1000] if resp.text else None
-            delivery.duration_ms = round(elapsed_ms, 2)
-
-            if 200 <= resp.status_code < 300:
-                delivery.status = EventDelivery.STATUS_SUCCESS
-                delivery.delivered_at = datetime.utcnow()
-            else:
-                _schedule_retry(delivery, subscription)
-
-        except Exception as e:
-            elapsed_ms = (time.time() - start_time) * 1000
-            delivery.duration_ms = round(elapsed_ms, 2)
-            delivery.response_body = str(e)[:1000]
-            _schedule_retry(delivery, subscription)
-
-        db.session.commit()
-
-    @staticmethod
     def retry_failed():
-        """Retry failed deliveries that are due."""
+        """Retry failed deliveries that are due by re-enqueueing them."""
         now = datetime.utcnow()
         pending = EventDelivery.query.filter(
             EventDelivery.status == EventDelivery.STATUS_PENDING,
@@ -238,11 +149,14 @@ class EventService:
         ).all()
 
         for delivery in pending:
-            EventService.deliver(delivery.id)
+            try:
+                enqueue_webhook_delivery(delivery.id)
+            except Exception as e:
+                logger.error(f'Failed to enqueue retry for delivery {delivery.id}: {e}')
 
     @staticmethod
     def send_test(subscription_id):
-        """Send a test event to a subscription."""
+        """Send a test event to a subscription via the queue bus."""
         sub = EventSubscription.query.get(subscription_id)
         if not sub:
             return None
@@ -260,7 +174,10 @@ class EventService:
         db.session.add(delivery)
         db.session.commit()
 
-        EventService.deliver(delivery.id)
+        try:
+            enqueue_webhook_delivery(delivery.id)
+        except Exception as e:
+            logger.error(f'Failed to enqueue test delivery {delivery.id}: {e}')
         return delivery
 
     @staticmethod
@@ -281,13 +198,3 @@ class EventService:
         return deleted
 
 
-def _schedule_retry(delivery, subscription):
-    """Schedule a retry with exponential backoff."""
-    max_retries = subscription.retry_count or 3
-    if delivery.attempts >= max_retries:
-        delivery.status = EventDelivery.STATUS_FAILED
-    else:
-        # Exponential backoff: 10s, 30s, 90s
-        delay_seconds = 10 * (3 ** (delivery.attempts - 1))
-        delivery.next_retry_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
-        delivery.status = EventDelivery.STATUS_PENDING

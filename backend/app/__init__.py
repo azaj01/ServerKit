@@ -350,6 +350,10 @@ def create_app(config_name=None):
     from app.api.plugins import plugins_bp
     app.register_blueprint(plugins_bp, url_prefix='/api/v1/plugins')
 
+    # Register blueprints - Queue Bus
+    from app.api.queue_bus import queue_bus_bp
+    app.register_blueprint(queue_bus_bp, url_prefix='/api/v1/queue')
+
     # Register blueprints - Agent Pairing (RustDesk-style short-code flow)
     from app.api.pairing import pairing_bp
     app.register_blueprint(pairing_bp, url_prefix='/api/v1/pairing')
@@ -402,6 +406,10 @@ def create_app(config_name=None):
         from app.services.metrics_history_service import MetricsHistoryService
         if not MetricsHistoryService.is_running():
             MetricsHistoryService.start_collection(app)
+
+        # Start queue-bus webhook consumer
+        from app.queue_bus.consumers import start_webhook_consumer
+        start_webhook_consumer(app)
 
         # Start auto-sync scheduler for WordPress environments
         _start_auto_sync_scheduler(app)

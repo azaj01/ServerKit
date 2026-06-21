@@ -1,0 +1,223 @@
+.queue-operations-page {
+    .queue-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: $space-4;
+        margin-bottom: $space-5;
+
+        @media (max-width: $breakpoint-md) {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .queue-tabs {
+        margin-top: $space-4;
+    }
+
+    .queue-tab-content {
+        margin-top: $space-4;
+    }
+
+    .queue-listhead {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        margin-bottom: $space-4;
+
+        h2 {
+            flex: 1;
+            margin: 0;
+            font-family: var(--mono);
+            font-size: 10.5px;
+            font-weight: $font-weight-semibold;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-faint);
+        }
+    }
+
+    .queue-table {
+        width: 100%;
+
+        code {
+            font-size: $font-size-xs;
+            color: var(--text-secondary);
+        }
+    }
+
+    .queue-group-tree {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+    }
+
+    .queue-group-card {
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .queue-group-header {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: $space-4;
+        cursor: pointer;
+        transition: background 0.15s ease;
+
+        &:hover {
+            background: var(--bg-hover);
+        }
+
+        .queue-group-name {
+            font-weight: $font-weight-semibold;
+            color: var(--text-primary);
+        }
+
+        .queue-group-slug {
+            color: var(--text-tertiary);
+            font-size: $font-size-sm;
+            font-family: var(--mono);
+        }
+
+        .queue-group-meta {
+            margin-left: auto;
+            font-size: $font-size-sm;
+            color: var(--text-secondary);
+        }
+    }
+
+    .queue-group-queues {
+        border-top: 1px solid var(--border-soft);
+    }
+
+    .queue-group-queue {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: $space-3 $space-4 $space-3 $space-8;
+        cursor: pointer;
+        transition: background 0.15s ease;
+
+        &:hover {
+            background: var(--bg-hover);
+        }
+
+        &-stats {
+            font-size: $font-size-sm;
+            color: var(--text-tertiary);
+            font-family: var(--mono);
+        }
+
+        &-empty {
+            padding: $space-4 $space-4 $space-4 $space-8;
+            color: var(--text-tertiary);
+            font-size: $font-size-sm;
+        }
+    }
+
+    .queue-messages-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-3;
+        margin-bottom: $space-4;
+        flex-wrap: wrap;
+    }
+
+    .queue-messages-selects {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        flex-wrap: wrap;
+    }
+
+    .queue-messages-actions {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+    }
+
+    .queue-select {
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        padding: $space-2 $space-3;
+        color: var(--text-primary);
+        font-size: $font-size-sm;
+        min-width: 160px;
+
+        &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    }
+
+    .queue-payload-preview {
+        display: inline-block;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .queue-actions {
+        display: flex;
+        align-items: center;
+        gap: $space-1;
+    }
+
+    .queue-send-card {
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        padding: $space-5;
+    }
+
+    .queue-send-form {
+        display: flex;
+        flex-direction: column;
+        gap: $space-4;
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: $space-4;
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: $space-2;
+        }
+    }
+
+    .queue-message-detail {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+
+        pre {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius);
+            padding: $space-3;
+            overflow: auto;
+            font-size: $font-size-sm;
+            max-height: 300px;
+        }
+    }
+
+    .queue-message-error {
+        color: var(--danger);
+        background: var(--danger-bg);
+        border: 1px solid var(--danger-border);
+        border-radius: var(--radius);
+        padding: $space-3;
+    }
+
+    .queue-message-section {
+        margin-top: $space-2;
+    }
+}

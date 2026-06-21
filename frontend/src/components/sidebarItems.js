@@ -159,6 +159,13 @@ export const SIDEBAR_ITEMS = [
         icon: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>'
     },
     {
+        id: 'queue',
+        label: 'Queue Bus',
+        route: '/queue',
+        category: 'operations',
+        icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>'
+    },
+    {
         id: 'workspaces',
         label: 'Workspaces',
         route: '/workspaces',
