@@ -345,9 +345,18 @@
         font-weight: $font-weight-medium;
     }
 
-    // Tab strip + content now reuse the shared app-detail-tabs / app-detail-tab
-    // / app-detail-content chrome (defined in _applications.scss), matching the
-    // WordPress detail page — no bespoke tab styles here anymore.
+    // Tab strip + content reuse the shared app-detail-tabs / app-detail-tab /
+    // app-detail-content chrome (defined in _applications.scss), matching the
+    // WordPress detail page. Let the strip WRAP (instead of scroll) so the
+    // right-pinned Settings tab can never get pushed off-screen.
+    .app-detail-tabs {
+        flex-wrap: wrap;
+        overflow-x: visible;
+        row-gap: 2px;
+    }
+
+    // Settings pinned to the far right of the strip (matches the mockup's gear).
+    .app-detail-tab--end { margin-left: auto; }
 
     // Scoped console/editor polish for tabs that use shared classes
     // (Gunicorn editor, Commands output) — token re-tint only.

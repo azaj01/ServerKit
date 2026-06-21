@@ -18,7 +18,7 @@ import CommandsTab from '../components/service-detail/CommandsTab';
 import GitConnectModal from '../components/service-detail/GitConnectModal';
 import OverviewTab from '../components/service-detail/OverviewTab';
 import EmptyState from '../components/EmptyState';
-import { Layers, FileArchive, RotateCcw } from 'lucide-react';
+import { Layers, FileArchive, RotateCcw, LayoutDashboard, History, ScrollText, Variable, Terminal, Activity, Package, Server, SquareTerminal, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Pill, ServiceTile, PageTopbar } from '@/components/ds';
 
@@ -42,6 +42,20 @@ const TAB_LABELS = {
     gunicorn: 'Gunicorn',
     commands: 'Commands',
     settings: 'Settings',
+};
+
+// Per-tab glyph for the detail tab strip (matches the WordPress detail page).
+const TAB_ICONS = {
+    overview: LayoutDashboard,
+    events: History,
+    logs: ScrollText,
+    environment: Variable,
+    shell: Terminal,
+    metrics: Activity,
+    packages: Package,
+    gunicorn: Server,
+    commands: SquareTerminal,
+    settings: Settings,
 };
 
 const ServiceDetail = () => {
@@ -477,17 +491,23 @@ const ServiceDetail = () => {
                 </div>
             )}
 
-            {/* Tab Bar — shared underline-style strip (app-detail-tabs). */}
+            {/* Tab Bar — shared underline-style strip (app-detail-tabs) with a
+                glyph per tab; Settings is pinned to the far right (--end), exactly
+                like the WordPress detail page. */}
             <div className="app-detail-tabs">
-                {availableTabs.map(tab => (
-                    <button
-                        key={tab}
-                        className={`app-detail-tab ${activeTab === tab ? 'active' : ''}`}
-                        onClick={() => setActiveTab(tab)}
-                    >
-                        {TAB_LABELS[tab] || tab}
-                    </button>
-                ))}
+                {availableTabs.map(tab => {
+                    const Icon = TAB_ICONS[tab];
+                    return (
+                        <button
+                            key={tab}
+                            className={`app-detail-tab ${activeTab === tab ? 'active' : ''} ${tab === 'settings' ? 'app-detail-tab--end' : ''}`}
+                            onClick={() => setActiveTab(tab)}
+                        >
+                            {Icon && <Icon size={14} />}
+                            {TAB_LABELS[tab] || tab}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Tab Content */}
