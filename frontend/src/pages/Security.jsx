@@ -17,9 +17,8 @@ import {
     EventsTab,
     SecurityConfigTab,
 } from '../components/security';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import EmptyState from '../components/EmptyState';
-import { PageTopbar, MetricCard } from '@/components/ds';
+import { MetricCard } from '@/components/ds';
 import { Siren, Bug, ShieldCheck, Radar } from 'lucide-react';
 
 const VALID_TABS = ['overview', 'firewall', 'fail2ban', 'ssh-keys', 'ip-lists', 'scanner', 'quarantine', 'integrity', 'audit', 'vulnerability', 'updates', 'events', 'settings'];
@@ -28,7 +27,7 @@ const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 const Security = () => {
     const { isAdmin } = useAuth();
-    const [activeTab, setActiveTab] = useTabParam('/security', VALID_TABS);
+    const [activeTab] = useTabParam('/security', VALID_TABS);
     const [status, setStatus] = useState(null);
     const [clamav, setClamav] = useState(null);
     const [clamavLoading, setClamavLoading] = useState(true);
@@ -63,7 +62,7 @@ const Security = () => {
 
     if (loading) {
         return (
-            <div className="page-container security-page">
+            <div className="sk-tabgroup__inner security-page">
                 <EmptyState loading title="Loading security status..." />
             </div>
         );
@@ -73,9 +72,7 @@ const Security = () => {
     const scanRunning = status?.scan_status === 'running';
 
     return (
-        <div className="page-container security-page">
-            <PageTopbar icon={<ShieldCheck size={18} />} title="Security" />
-
+        <div className="sk-tabgroup__inner security-page">
             <div className="sec-kpis" role="group" aria-label="Security overview">
                 <MetricCard
                     tone={alerts.total > 0 ? 'amber' : 'green'}
@@ -105,39 +102,21 @@ const Security = () => {
                 />
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="firewall">Firewall</TabsTrigger>
-                    <TabsTrigger value="fail2ban">Fail2ban</TabsTrigger>
-                    <TabsTrigger value="ssh-keys">SSH Keys</TabsTrigger>
-                    <TabsTrigger value="ip-lists">IP Lists</TabsTrigger>
-                    <TabsTrigger value="scanner">Malware Scanner</TabsTrigger>
-                    <TabsTrigger value="quarantine">Quarantine</TabsTrigger>
-                    <TabsTrigger value="integrity">File Integrity</TabsTrigger>
-                    <TabsTrigger value="audit">Audit</TabsTrigger>
-                    <TabsTrigger value="vulnerability">Vulnerability Scan</TabsTrigger>
-                    <TabsTrigger value="updates">Auto Updates</TabsTrigger>
-                    <TabsTrigger value="events">Events</TabsTrigger>
-                    <TabsTrigger value="settings">Settings</TabsTrigger>
-                </TabsList>
-
-                <div className="tab-content">
-                    <TabsContent value="overview"><OverviewTab status={status} clamavStatus={clamav} clamavLoading={clamavLoading} onRefreshClamav={loadClamav} /></TabsContent>
-                    <TabsContent value="firewall"><FirewallTab /></TabsContent>
-                    <TabsContent value="fail2ban"><Fail2banTab /></TabsContent>
-                    <TabsContent value="ssh-keys"><SSHKeysTab /></TabsContent>
-                    <TabsContent value="ip-lists"><IPListsTab /></TabsContent>
-                    <TabsContent value="scanner"><ScannerTab /></TabsContent>
-                    <TabsContent value="quarantine"><QuarantineTab /></TabsContent>
-                    <TabsContent value="integrity"><IntegrityTab /></TabsContent>
-                    <TabsContent value="audit"><AuditTab /></TabsContent>
-                    <TabsContent value="vulnerability"><VulnerabilityTab /></TabsContent>
-                    <TabsContent value="updates"><AutoUpdatesTab /></TabsContent>
-                    <TabsContent value="events"><EventsTab /></TabsContent>
-                    <TabsContent value="settings"><SecurityConfigTab /></TabsContent>
-                </div>
-            </Tabs>
+            <div className="tab-content">
+                {activeTab === 'overview' && <OverviewTab status={status} clamavStatus={clamav} clamavLoading={clamavLoading} onRefreshClamav={loadClamav} />}
+                {activeTab === 'firewall' && <FirewallTab />}
+                {activeTab === 'fail2ban' && <Fail2banTab />}
+                {activeTab === 'ssh-keys' && <SSHKeysTab />}
+                {activeTab === 'ip-lists' && <IPListsTab />}
+                {activeTab === 'scanner' && <ScannerTab />}
+                {activeTab === 'quarantine' && <QuarantineTab />}
+                {activeTab === 'integrity' && <IntegrityTab />}
+                {activeTab === 'audit' && <AuditTab />}
+                {activeTab === 'vulnerability' && <VulnerabilityTab />}
+                {activeTab === 'updates' && <AutoUpdatesTab />}
+                {activeTab === 'events' && <EventsTab />}
+                {activeTab === 'settings' && <SecurityConfigTab />}
+            </div>
         </div>
     );
 };

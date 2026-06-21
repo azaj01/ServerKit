@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import useTabParam from '../hooks/useTabParam';
-import { Upload, Check, AlertTriangle, Clock, Database, Package, FolderArchive, HardDrive, Cloud, CloudOff, RefreshCw, Trash2, Plus, CheckCircle, XCircle, FileArchive, Archive } from 'lucide-react';
+import { Upload, Check, AlertTriangle, Clock, Database, Package, FolderArchive, HardDrive, Cloud, CloudOff, RefreshCw, Trash2, Plus, CheckCircle, XCircle, FileArchive } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
@@ -9,8 +9,8 @@ import EmptyState from '../components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { PageTopbar, MetricCard, Pill, SegControl } from '@/components/ds';
+import { MetricCard, Pill, SegControl } from '@/components/ds';
+import { useTopbarActions } from '@/hooks/useTopbarActions';
 
 const VALID_TABS = ['backups', 'schedules', 'storage', 'settings'];
 
@@ -27,7 +27,7 @@ const Backups = () => {
     const [apps, setApps] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [activeTab, setActiveTab] = useTabParam('/backups', VALID_TABS);
+    const [activeTab] = useTabParam('/backups', VALID_TABS);
     const [filterType, setFilterType] = useState('all');
 
     // Modal states
@@ -362,31 +362,29 @@ const Backups = () => {
         ? backups
         : backups.filter(b => b.type === filterType);
 
+    useTopbarActions(() => (
+        <>
+            <Button variant="outline" size="sm" onClick={() => setShowScheduleModal(true)}>
+                <Clock size={16} />
+                Add Schedule
+            </Button>
+            <Button size="sm" onClick={() => setShowBackupModal(true)}>
+                <Plus size={16} />
+                Create Backup
+            </Button>
+        </>
+    ), []);
+
     if (loading) {
         return (
-            <div className="page-container backups-page">
+            <div className="sk-tabgroup__inner backups-page">
                 <EmptyState loading size="lg" title="Loading backup data..." />
             </div>
         );
     }
 
     return (
-        <div className="page-container backups-page">
-            <PageTopbar
-                icon={<Archive size={18} />}
-                title="Backups"
-                actions={<>
-                    <Button variant="outline" onClick={() => setShowScheduleModal(true)}>
-                        <Clock size={16} />
-                        Add Schedule
-                    </Button>
-                    <Button onClick={() => setShowBackupModal(true)}>
-                        <Plus size={16} />
-                        Create Backup
-                    </Button>
-                </>}
-            />
-
+        <div className="sk-tabgroup__inner backups-page">
             {error && (
                 <div className="alert alert-danger">
                     {error}
@@ -411,16 +409,8 @@ const Backups = () => {
                 )}
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
-                    <TabsTrigger value="backups">Backups</TabsTrigger>
-                    <TabsTrigger value="schedules">Schedules</TabsTrigger>
-                    <TabsTrigger value="storage">Storage</TabsTrigger>
-                    <TabsTrigger value="settings">Settings</TabsTrigger>
-                </TabsList>
-
-                {/* Backups Tab */}
-                <TabsContent value="backups">
+            {activeTab === 'backups' && (
+                <>
                     <div className="bk-listhead">
                         <h2>Backup archive</h2>
                         <SegControl
@@ -523,10 +513,11 @@ const Backups = () => {
                             </table>
                         </div>
                     )}
-                </TabsContent>
+                </>
+            )}
 
-                {/* Schedules Tab */}
-                <TabsContent value="schedules">
+            {activeTab === 'schedules' && (
+                <>
                     <div className="bk-listhead">
                         <h2>Backup schedules</h2>
                         <Button size="sm" onClick={() => setShowScheduleModal(true)}>
@@ -623,10 +614,11 @@ const Backups = () => {
                             </table>
                         </div>
                     )}
-                </TabsContent>
+                </>
+            )}
 
-                {/* Storage Tab */}
-                <TabsContent value="storage">
+            {activeTab === 'storage' && (
+                <>
                     <div className="bk-specs">
                         <div className="sk-spec-card">
                             <div className="sk-spec-card__label">Provider</div>
@@ -842,10 +834,11 @@ const Backups = () => {
                             </form>
                         </div>
                     </div>
-                </TabsContent>
+                </>
+            )}
 
-                {/* Settings Tab */}
-                <TabsContent value="settings">
+            {activeTab === 'settings' && (
+                <>
                     <div className="card">
                         <div className="card-header">
                             <h3>Backup Settings</h3>
@@ -885,8 +878,8 @@ const Backups = () => {
                             </form>
                         </div>
                     </div>
-                </TabsContent>
-            </Tabs>
+                </>
+            )}
 
             {/* Create Backup Modal */}
             {showBackupModal && (

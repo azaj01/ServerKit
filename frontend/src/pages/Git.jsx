@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
@@ -10,7 +10,7 @@ import { Pill, MetricCard, PageTopbar, SegControl, Drawer } from '../components/
 import {
     AlertCircle, FolderGit2, Webhook, Rocket, Server, Globe, Terminal, Tag,
     X, GitBranch, RefreshCw, Plus, ExternalLink, Lock, Trash2, ChevronRight,
-    Clock, AlertTriangle,
+    Clock, AlertTriangle, Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,14 +18,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
 const VALID_TABS = ['overview', 'repositories', 'access', 'webhooks', 'deployments', 'settings'];
-const TAB_OPTIONS = [
-    { value: 'overview', label: 'Overview' },
-    { value: 'repositories', label: 'Repositories' },
-    { value: 'webhooks', label: 'Webhooks' },
-    { value: 'deployments', label: 'Deployments' },
-    { value: 'access', label: 'Access' },
-    { value: 'settings', label: 'Settings' },
-];
 
 const SOURCE_INITIALS = { github: 'GH', gitlab: 'GL', bitbucket: 'BB' };
 
@@ -962,15 +954,6 @@ function Git({ basePath = '/git' }) {
         }
     };
 
-    const tabTitle = {
-        overview: 'Overview',
-        repositories: 'Repositories',
-        access: 'Access Info',
-        webhooks: 'Webhooks',
-        deployments: 'Deployments',
-        settings: 'Settings',
-    }[activeTab];
-
     const topbarActions = () => {
         if (!status?.installed) {
             return <Button onClick={() => setShowInstallModal(true)}>Install Git Server</Button>;
@@ -1020,18 +1003,37 @@ function Git({ basePath = '/git' }) {
         }
     };
 
+    // Tabs live in the page top bar (like Domains/Services). The single Git page
+    // renders all sections, keyed off the /git/:tab route via useTabParam — the
+    // header title + icon mirror the active tab.
+    const GIT_TABS = useMemo(() => [
+        { slug: 'overview', to: basePath, label: 'Overview', end: true, icon: <Server size={15} /> },
+        { slug: 'repositories', to: `${basePath}/repositories`, label: 'Repositories', icon: <FolderGit2 size={15} /> },
+        { slug: 'webhooks', to: `${basePath}/webhooks`, label: 'Webhooks', icon: <Webhook size={15} /> },
+        { slug: 'deployments', to: `${basePath}/deployments`, label: 'Deployments', icon: <Rocket size={15} /> },
+        { slug: 'access', to: `${basePath}/access`, label: 'Access', icon: <Globe size={15} /> },
+        { slug: 'settings', to: `${basePath}/settings`, label: 'Settings', icon: <Settings size={15} /> },
+    ], [basePath]);
+    const activeGit = GIT_TABS.find((t) => t.slug === activeTab) || GIT_TABS[0];
+
     if (loading) {
         return (
-            <div className="git-page domains-page">
-                <div className="page-loading"><Spinner size="lg" /></div>
+            <div className="page-container--full-bleed sk-tabgroup git-page domains-page">
+                <div className="sk-tabgroup__content">
+                    <div className="sk-tabgroup__inner">
+                        <div className="page-loading"><Spinner size="lg" /></div>
+                    </div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="git-page domains-page">
-            <PageTopbar icon={<GitBranch size={18} />} title="Git Server" actions={topbarActions()} />
+        <div className="page-container--full-bleed sk-tabgroup git-page domains-page">
+            <PageTopbar icon={activeGit.icon} title={activeGit.label} tabs={GIT_TABS} actions={topbarActions()} />
 
+            <div className="sk-tabgroup__content">
+                <div className="sk-tabgroup__inner">
             {pageError && (
                 <div className="error-banner">
                     {pageError}
@@ -1064,13 +1066,11 @@ function Git({ basePath = '/git' }) {
             ) : (
                 <div className="domains-body">
                     {renderKpis()}
-                    <div className="dom-listhead">
-                        <h2 className="dom-listhead__title">{tabTitle}</h2>
-                        <SegControl value={activeTab} onChange={setActiveTab} options={TAB_OPTIONS} />
-                    </div>
                     {renderTabContent()}
                 </div>
             )}
+                </div>
+            </div>
 
             {/* Repository drawer */}
             <Drawer

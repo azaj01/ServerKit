@@ -28,33 +28,6 @@
         line-height: 1.25;
     }
 
-    // ── tab strip — accent wash + underline on active ───────
-    .tabs {
-        gap: 2px;
-        border-bottom: 1px solid var(--border-soft);
-    }
-
-    .tab {
-        padding: 8px 13px;
-        border-radius: 8px 8px 0 0;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -1px;
-        font-size: 13px;
-        color: var(--text-dim);
-
-        &:hover {
-            color: var(--text);
-            background: var(--surface-hover);
-        }
-
-        &.active,
-        &[data-state="active"] {
-            color: var(--accent-bright);
-            background: var(--accent-bg);
-            border-bottom-color: var(--accent-bright);
-        }
-    }
-
     // ── card chrome (all tabs) ──────────────────────────────
     .tab-content {
         .card {

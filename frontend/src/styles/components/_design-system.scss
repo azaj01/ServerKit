@@ -292,8 +292,18 @@ $sk-tones: ('accent', 'green', 'cyan', 'amber', 'red', 'violet');
     &__spacer { flex: 1; }
     &__actions { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-    // Routed sub-nav (the ex-sidebar sub-items)
-    &__tabs { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; }
+    // Routed sub-nav (the ex-sidebar sub-items). Grows to fill the bar so the
+    // overflow measurement in PageTopbar has a bounded width to fit against;
+    // overflow:hidden suppresses any flash before the first measurement.
+    &__tabs {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: 6px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+    }
     &__tab {
         display: inline-flex;
         align-items: center;
@@ -304,16 +314,26 @@ $sk-tones: ('accent', 'green', 'cyan', 'amber', 'red', 'violet');
         font-weight: 450;
         color: var(--text-dim);
         text-decoration: none;
+        white-space: nowrap;
         transition: background 0.14s, color 0.14s;
 
         svg { width: 15px; height: 15px; }
         &:hover { background: var(--surface-hover); color: var(--text); }
         &.is-active { background: var(--accent-bg); color: var(--accent-bright); font-weight: 500; }
     }
+    // Overflow ("More") trigger — a tab-styled button that never collapses.
+    &__more {
+        flex-shrink: 0;
+        border: none;
+        background: transparent;
+        font: inherit;
+        cursor: pointer;
+        &[data-state="open"] { background: var(--surface-hover); color: var(--text); }
+    }
 
     @media (max-width: 768px) {
         flex-wrap: wrap;
-        &__tabs { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
+        &__tabs { order: 3; width: 100%; margin-left: 0; }
     }
 }
 

@@ -41,6 +41,8 @@ import { FILE_TABS } from './components/files/fileTabs';
 import { MONITOR_TABS } from './components/monitoring/monitorTabs';
 import { MARKET_TABS } from './components/marketplace/marketTabs';
 import { WORDPRESS_TABS } from './components/wordpress/wordpressTabs';
+import { BACKUP_TABS } from './components/backups/backupTabs';
+import { SECURITY_TABS } from './components/security/securityTabs';
 import Downloads from './pages/Downloads';
 import WordPress from './pages/WordPress';
 import WordPressDetail from './pages/WordPressDetail';
@@ -334,11 +336,15 @@ function AppRoutes() {
                     <Route path="status-pages" element={<StatusPages />} />
                 </Route>
                 <Route path="gpu" element={<GpuMonitor />} />
-                <Route path="backups" element={<Backups />} />
-                <Route path="backups/:tab" element={<Backups />} />
+                <Route element={<TabGroupLayout tabs={BACKUP_TABS} />}>
+                    <Route path="backups" element={<Backups />} />
+                    <Route path="backups/:tab" element={<Backups />} />
+                </Route>
                 <Route path="cron" element={<CronJobs />} />
-                <Route path="security" element={<Security />} />
-                <Route path="security/:tab" element={<Security />} />
+                <Route element={<TabGroupLayout tabs={SECURITY_TABS} />}>
+                    <Route path="security" element={<Security />} />
+                    <Route path="security/:tab" element={<Security />} />
+                </Route>
                 <Route path="email" element={<Email />} />
                 <Route path="email/:tab" element={<Email />} />
                 <Route path="terminal" element={<Terminal />} />
