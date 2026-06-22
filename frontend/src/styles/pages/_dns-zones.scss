@@ -64,6 +64,48 @@
             display: flex;
             gap: $spacing-sm;
         }
+
+        &__seg {
+            margin-bottom: $spacing-md;
+        }
+    }
+
+    // "In your provider" mirror — live records as they exist in Cloudflare,
+    // tagged ServerKit-managed vs external (read-only).
+    .dns-mirror {
+        &__status {
+            padding: $spacing-md 0;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+
+            &--error { color: var(--red); }
+        }
+
+        &__summary {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 4px;
+            margin: 0 0 $spacing-md;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
+
+        &__count {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        &__hint {
+            color: var(--text-dim);
+        }
+
+        // External (provider-owned) rows read muted/read-only.
+        &__row--external {
+            opacity: 0.7;
+
+            .sk-cell-mono { color: var(--text-dim); }
+        }
     }
 
     .text-mono {

@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import {
     CheckCircle2, ExternalLink, KeyRound, Link2, Mail, PlugZap, Server, Globe,
-    HardDrive, ShieldCheck, ShieldAlert, Trash2,
+    HardDrive, ShieldCheck, ShieldAlert, Trash2, Activity, ChevronDown,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProviderBrandIcon } from '../../icons/ProviderBrands';
 import { deriveScope } from './providerCatalog';
+import DnsActivity from './DnsActivity';
 
 export default function ConnectProviderModal({
     provider, open, onOpenChange, isAdmin,
@@ -186,6 +187,7 @@ function DnsBody({ provider, isAdmin, connections, onAdd, onRemove, onTest }) {
     const [cfMode, setCfMode] = useState('scoped'); // 'scoped' | 'global'
     const [form, setForm] = useState({ ...EMPTY_DNS, name: provider.name });
     const [busy, setBusy] = useState(false);
+    const [activityId, setActivityId] = useState(null); // connection id whose change log is open
 
     const canAdd = (() => {
         if (!form.api_key.trim()) return false;
@@ -212,19 +214,35 @@ function DnsBody({ provider, isAdmin, connections, onAdd, onRemove, onTest }) {
                 <div className="conn-list">
                     {connections.map((c) => {
                         const scope = deriveScope(c);
+                        const showActivity = activityId === c.id;
                         return (
-                            <div key={c.id} className="conn-list__row">
-                                <div className="conn-list__info">
-                                    <strong>{c.name}</strong>
-                                    <span className="conn-list__key">{c.api_key}</span>
-                                </div>
-                                {scope && <span className={`conn-pill conn-pill--${scope.tone}`} title={scope.hint}>{scope.label}</span>}
-                                {isAdmin && (
-                                    <div className="conn-list__actions">
-                                        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => withBusy(() => onTest(c.id))}>Test</Button>
-                                        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => withBusy(() => onRemove(c))} aria-label={`Remove ${c.name}`}><Trash2 size={15} /></Button>
+                            <div key={c.id} className="conn-list__item">
+                                <div className="conn-list__row">
+                                    <div className="conn-list__info">
+                                        <strong>{c.name}</strong>
+                                        <span className="conn-list__key">{c.api_key}</span>
                                     </div>
-                                )}
+                                    {scope && <span className={`conn-pill conn-pill--${scope.tone}`} title={scope.hint}>{scope.label}</span>}
+                                    <div className="conn-list__actions">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={showActivity ? 'secondary' : 'ghost'}
+                                            onClick={() => setActivityId(showActivity ? null : c.id)}
+                                            aria-expanded={showActivity}
+                                        >
+                                            <Activity size={14} /> Recent changes
+                                            <ChevronDown size={14} className={`conn-list__chev${showActivity ? ' is-open' : ''}`} />
+                                        </Button>
+                                        {isAdmin && (
+                                            <>
+                                                <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => withBusy(() => onTest(c.id))}>Test</Button>
+                                                <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => withBusy(() => onRemove(c))} aria-label={`Remove ${c.name}`}><Trash2 size={15} /></Button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                {showActivity && <DnsActivity configId={c.id} />}
                             </div>
                         );
                     })}

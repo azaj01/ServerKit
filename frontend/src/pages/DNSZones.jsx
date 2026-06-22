@@ -10,7 +10,8 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { FormField, FormRow } from '../components/FormField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DataTable } from '@/components/ds';
+import { Badge } from '@/components/ui/badge';
+import { DataTable, SegControl } from '@/components/ds';
 import {
     Select,
     SelectTrigger,
@@ -31,6 +32,11 @@ const DNSZones = () => {
     const [showPropagation, setShowPropagation] = useState(null);
     const [propagationResults, setPropagationResults] = useState([]);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+    // Records panel view: 'managed' (ServerKit records) | 'provider' (live mirror)
+    const [recordsView, setRecordsView] = useState('managed');
+    const [mirror, setMirror] = useState(null); // { records, counts } | { error }
+    const [mirrorLoading, setMirrorLoading] = useState(false);
 
     const [zoneForm, setZoneForm] = useState({ domain: '', dns_provider_config_id: '' });
     const [providers, setProviders] = useState([]);
@@ -68,8 +74,36 @@ const DNSZones = () => {
             const data = await api.getDNSRecords(zoneId);
             setRecords(data.records || []);
             setSelectedZone(zones.find(z => z.id === zoneId));
+            // Reset the provider mirror when switching zones.
+            setRecordsView('managed');
+            setMirror(null);
         } catch (err) {
             toast.error('Failed to load records');
+        }
+    };
+
+    // Live records as they exist in the provider (Cloudflare only). Lazily
+    // loaded the first time the "In your provider" view is opened per zone.
+    const loadMirror = async (zoneId) => {
+        setMirrorLoading(true);
+        try {
+            const data = await api.getZoneMirror(zoneId);
+            if (data.success) {
+                setMirror({ records: data.records || [], counts: data.counts || { serverkit: 0, external: 0 } });
+            } else {
+                setMirror({ error: data.error || 'Mirror unavailable for this zone' });
+            }
+        } catch (err) {
+            setMirror({ error: err.message || 'Failed to load provider records' });
+        } finally {
+            setMirrorLoading(false);
+        }
+    };
+
+    const handleRecordsView = (view) => {
+        setRecordsView(view);
+        if (view === 'provider' && !mirror && selectedZone) {
+            loadMirror(selectedZone.id);
         }
     };
 
@@ -192,39 +226,95 @@ const DNSZones = () => {
                             <h2>{selectedZone.domain}</h2>
                             <div className="dns-records-panel__actions">
                                 <Button variant="outline" size="sm" onClick={() => handleExport(selectedZone.id)}>Export</Button>
-                                {user?.is_admin && (
+                                {user?.is_admin && recordsView === 'managed' && (
                                     <Button size="sm" onClick={() => setShowCreateRecord(true)}>Add Record</Button>
                                 )}
                             </div>
                         </div>
-                        <DataTable
-                            tableClassName="sk-dtable dns-records-table"
-                            sortable={false}
-                            data={records}
-                            keyField="id"
-                            emptyTitle="No records"
-                            emptyMessage="This zone has no DNS records yet."
-                            columns={[
-                                {
-                                    key: 'type',
-                                    header: 'Type',
-                                    render: (rec) => <span className={`dns-rtype dns-rtype--${(rec.record_type || '').toLowerCase()}`}>{rec.record_type}</span>,
-                                },
-                                { key: 'name', header: 'Name' },
-                                { key: 'content', header: 'Content', render: (rec) => <span className="sk-cell-mono">{rec.content}</span> },
-                                { key: 'ttl', header: 'TTL' },
-                                { key: 'priority', header: 'Priority', render: (rec) => rec.priority || '-' },
-                                {
-                                    key: 'actions',
-                                    header: '',
-                                    render: (rec) => (
-                                        user?.is_admin && (
-                                            <Button variant="destructive" size="sm" onClick={() => handleDeleteRecord(rec.id)}>Delete</Button>
-                                        )
-                                    ),
-                                },
+
+                        <SegControl
+                            className="dns-records-panel__seg"
+                            value={recordsView}
+                            onChange={handleRecordsView}
+                            options={[
+                                { value: 'managed', label: 'ServerKit records' },
+                                { value: 'provider', label: 'In your provider' },
                             ]}
                         />
+
+                        {recordsView === 'managed' ? (
+                            <DataTable
+                                tableClassName="sk-dtable dns-records-table"
+                                sortable={false}
+                                data={records}
+                                keyField="id"
+                                emptyTitle="No records"
+                                emptyMessage="This zone has no DNS records yet."
+                                columns={[
+                                    {
+                                        key: 'type',
+                                        header: 'Type',
+                                        render: (rec) => <span className={`dns-rtype dns-rtype--${(rec.record_type || '').toLowerCase()}`}>{rec.record_type}</span>,
+                                    },
+                                    { key: 'name', header: 'Name' },
+                                    { key: 'content', header: 'Content', render: (rec) => <span className="sk-cell-mono">{rec.content}</span> },
+                                    { key: 'ttl', header: 'TTL' },
+                                    { key: 'priority', header: 'Priority', render: (rec) => rec.priority || '-' },
+                                    {
+                                        key: 'actions',
+                                        header: '',
+                                        render: (rec) => (
+                                            user?.is_admin && (
+                                                <Button variant="destructive" size="sm" onClick={() => handleDeleteRecord(rec.id)}>Delete</Button>
+                                            )
+                                        ),
+                                    },
+                                ]}
+                            />
+                        ) : (
+                            <div className="dns-mirror">
+                                {mirrorLoading && <div className="dns-mirror__status">Loading provider records…</div>}
+                                {!mirrorLoading && mirror?.error && (
+                                    <div className="dns-mirror__status dns-mirror__status--error">{mirror.error}</div>
+                                )}
+                                {!mirrorLoading && mirror && !mirror.error && (
+                                    <>
+                                        <p className="dns-mirror__summary">
+                                            <span className="dns-mirror__count">{mirror.counts.serverkit} managed</span>
+                                            {' · '}
+                                            <span className="dns-mirror__count">{mirror.counts.external} external</span>
+                                            <span className="dns-mirror__hint"> — ServerKit never modifies external records.</span>
+                                        </p>
+                                        <DataTable
+                                            tableClassName="sk-dtable dns-records-table"
+                                            sortable={false}
+                                            data={mirror.records}
+                                            keyField="id"
+                                            emptyTitle="No records"
+                                            emptyMessage="No records exist in the provider for this zone."
+                                            rowClassName={(rec) => rec.managed_by === 'external' ? 'dns-mirror__row--external' : ''}
+                                            columns={[
+                                                {
+                                                    key: 'type',
+                                                    header: 'Type',
+                                                    render: (rec) => <span className={`dns-rtype dns-rtype--${(rec.type || '').toLowerCase()}`}>{rec.type}</span>,
+                                                },
+                                                { key: 'name', header: 'Name' },
+                                                { key: 'content', header: 'Content', render: (rec) => <span className="sk-cell-mono">{rec.content}</span> },
+                                                { key: 'ttl', header: 'TTL', render: (rec) => rec.ttl || '-' },
+                                                {
+                                                    key: 'managed_by',
+                                                    header: 'Source',
+                                                    render: (rec) => rec.managed_by === 'serverkit'
+                                                        ? <Badge variant="success">ServerKit</Badge>
+                                                        : <Badge variant="secondary" title="Created outside ServerKit — never modified">External</Badge>,
+                                                },
+                                            ]}
+                                        />
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

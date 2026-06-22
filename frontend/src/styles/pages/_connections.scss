@@ -230,6 +230,12 @@
         border-color: fade($warning, 28%);
     }
 
+    &--danger {
+        color: $danger;
+        background: $danger-bg;
+        border-color: $danger-border;
+    }
+
     &--neutral {
         color: $text-tertiary;
     }
@@ -365,6 +371,13 @@
     flex-direction: column;
     gap: $space-2;
 
+    &__item {
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        overflow: hidden;
+    }
+
     &__row {
         display: flex;
         align-items: center;
@@ -373,6 +386,19 @@
         background: $bg-elevated;
         border: 1px solid $border-subtle;
         border-radius: $radius-md;
+
+        // When nested inside an expandable item the border/radius come from the
+        // wrapper, so the row itself sits flush.
+        .conn-list__item & {
+            border: 0;
+            border-radius: 0;
+        }
+    }
+
+    &__chev {
+        transition: transform $transition-fast;
+
+        &.is-open { transform: rotate(180deg); }
     }
 
     &__info {
@@ -400,6 +426,92 @@
         align-items: center;
         gap: $space-1;
         flex-shrink: 0;
+    }
+}
+
+// DNS activity — provider change-log under a connection ("here's what ServerKit
+// changed in your Cloudflare"). Shared by the Connections modal.
+.dns-activity {
+    border-top: 1px solid $border-subtle;
+    background: $bg-card;
+    max-height: 320px;
+    overflow-y: auto;
+
+    &__status {
+        padding: $space-3 $space-4;
+        font-size: $font-size-xs;
+        color: $text-tertiary;
+
+        &--error { color: $danger; }
+    }
+
+    &__empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: $space-2;
+        padding: $space-4;
+        font-size: $font-size-sm;
+        color: $text-tertiary;
+    }
+
+    &__table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: $font-size-xs;
+
+        th {
+            position: sticky;
+            top: 0;
+            text-align: left;
+            padding: $space-2 $space-3;
+            background: $bg-elevated;
+            color: $text-tertiary;
+            font-weight: $font-weight-semibold;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: $space-2 $space-3;
+            border-top: 1px solid $border-subtle;
+            vertical-align: top;
+            color: $text-secondary;
+        }
+    }
+
+    &__time {
+        color: $text-tertiary;
+        white-space: nowrap;
+    }
+
+    &__action {
+        text-transform: capitalize;
+        font-weight: $font-weight-medium;
+        color: $text-secondary;
+
+        &--create { color: $success; }
+        &--update { color: $info; }
+        &--delete { color: $danger; }
+    }
+
+    &__record {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: $space-1;
+    }
+
+    &__name {
+        font-family: $font-mono;
+        color: $text-primary;
+        overflow-wrap: anywhere;
+    }
+
+    &__error {
+        flex-basis: 100%;
+        margin-top: 2px;
+        color: $danger;
+        line-height: 1.4;
     }
 }
 
