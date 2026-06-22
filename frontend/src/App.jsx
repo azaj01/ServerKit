@@ -73,6 +73,7 @@ import DynamicDns from './pages/DynamicDns';
 import QueueOperations from './pages/QueueOperations';
 import Notifications from './pages/Notifications';
 import DeliveryLog from './pages/DeliveryLog';
+import Telemetry from './pages/Telemetry';
 import useExtensionRoutes from './plugins/ExtensionRoutes';
 import { useContributions } from './plugins/contributions';
 
@@ -126,6 +127,7 @@ const PAGE_TITLES = {
     '/queue': 'Queue Bus',
     '/notifications': 'Notifications',
     '/admin/notifications': 'Notification Delivery Log',
+    '/telemetry': 'Telemetry',
 };
 
 function PageTitleUpdater() {
@@ -364,6 +366,7 @@ function AppRoutes() {
                 <Route path="queue" element={<QueueOperations />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="admin/notifications" element={<DeliveryLog />} />
+                <Route path="telemetry" element={<Telemetry />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />
                 {dashboardRoutes}

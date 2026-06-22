@@ -17,6 +17,7 @@ from app.models.notification_preferences import NotificationPreferences
 from app.notifications import catalog
 from app.notifications.models import Notification, NotificationDelivery
 from app.queue_bus.service import QueueBusService
+from app.services.telemetry_service import TelemetryService, generate_correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,28 @@ class NotificationBusService:
             title=meta['title'],
             body=data.get('summary') or data.get('message'),
             audience=cls._describe(to),
+            correlation_id=generate_correlation_id(),
         )
         notification.set_data(data)
         db.session.add(notification)
         db.session.flush()  # assign notification.id
+
+        # Emit telemetry event for the notification lifecycle start.
+        TelemetryService.emit(
+            source='notification',
+            event_type='notification.queued',
+            message=f'Notification queued: {meta["title"]}',
+            severity=severity if severity in ('warning', 'error', 'critical') else 'info',
+            actor_user_id=None,
+            correlation_id=notification.correlation_id,
+            payload={
+                'notification_id': notification.id,
+                'event_key': event,
+                'category': category,
+                'audience': notification.audience,
+            },
+            commit=False,
+        )
 
         seen = set()
         to_enqueue = []

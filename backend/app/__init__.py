@@ -354,6 +354,10 @@ def create_app(config_name=None):
     from app.api.queue_bus import queue_bus_bp
     app.register_blueprint(queue_bus_bp, url_prefix='/api/v1/queue')
 
+    # Register blueprints - Telemetry / System Event Stream
+    from app.api.telemetry import telemetry_bp
+    app.register_blueprint(telemetry_bp, url_prefix='/api/v1/telemetry')
+
     # Register blueprints - Agent Pairing (RustDesk-style short-code flow)
     from app.api.pairing import pairing_bp
     app.register_blueprint(pairing_bp, url_prefix='/api/v1/pairing')

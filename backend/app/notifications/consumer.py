@@ -17,6 +17,7 @@ from app.notifications.channels.base import DeliveryResult
 from app.notifications.models import NotificationDelivery
 from app.notifications.service import GROUP_SLUG, QUEUE_SLUG, QUEUE_CONFIG, NotificationBusService
 from app.queue_bus.service import QueueBusService
+from app.services.telemetry_service import TelemetryService
 
 logger = logging.getLogger(__name__)
 
@@ -108,30 +109,68 @@ def process_message(message):
         _fail(message, str(exc)[:500], delivery)
         return
 
+    correlation_id = delivery.notification.correlation_id if delivery.notification else None
+
     if result.status == DeliveryResult.SENT:
         delivery.status = NotificationDelivery.STATUS_SENT
         delivery.sent_at = datetime.utcnow()
         delivery.provider_message_id = result.message_id
         delivery.error = None
         db.session.commit()
+        _emit_delivery_telemetry(delivery, 'notification.delivered', correlation_id)
         QueueBusService.complete(GROUP_SLUG, QUEUE_SLUG, message['id'])
     elif result.status == DeliveryResult.SKIPPED:
         delivery.status = NotificationDelivery.STATUS_SKIPPED
         delivery.error = result.error
         db.session.commit()
+        _emit_delivery_telemetry(delivery, 'notification.skipped', correlation_id, error=result.error)
         QueueBusService.complete(GROUP_SLUG, QUEUE_SLUG, message['id'])
     else:  # FAILED — let the queue retry / dead-letter
         delivery.error = result.error
         db.session.commit()
-        _fail(message, result.error or 'delivery failed', delivery)
+        _fail(message, result.error or 'delivery failed', delivery, correlation_id)
 
 
-def _fail(message, error_message, delivery):
+def _emit_delivery_telemetry(delivery, event_type, correlation_id, error=None):
+    """Best-effort telemetry emission for a notification delivery outcome."""
+    try:
+        notification = delivery.notification
+        severity = 'info'
+        if event_type == 'notification.failed':
+            severity = 'error'
+        elif event_type == 'notification.skipped':
+            severity = 'warning'
+        elif notification and notification.severity in ('warning', 'error', 'critical'):
+            severity = notification.severity
+
+        TelemetryService.emit(
+            source='notification',
+            event_type=event_type,
+            message=f'Notification {event_type.split(".")[-1]} via {delivery.channel}',
+            severity=severity,
+            correlation_id=correlation_id,
+            payload={
+                'notification_id': notification.id if notification else None,
+                'delivery_id': delivery.id,
+                'channel': delivery.channel,
+                'target': delivery.target,
+                'error': error,
+            },
+            commit=True,
+        )
+    except Exception:
+        pass
+
+
+def _fail(message, error_message, delivery, correlation_id=None):
     """Fail the queue message; if the queue dead-letters it, mark the delivery
     failed so the row reflects the terminal state."""
     res = QueueBusService.fail(GROUP_SLUG, QUEUE_SLUG, message['id'], error_message=error_message)
     if res and res.get('status') == 'dead_letter':
         delivery.status = NotificationDelivery.STATUS_FAILED
+        db.session.commit()
+        _emit_delivery_telemetry(delivery, 'notification.failed', correlation_id, error=error_message)
+    else:
         db.session.commit()
 
 

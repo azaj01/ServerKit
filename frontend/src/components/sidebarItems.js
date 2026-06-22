@@ -180,6 +180,13 @@ export const SIDEBAR_ITEMS = [
         icon: '<path d="M4 17l6-6-6-6M12 19h8"/>'
     },
     {
+        id: 'telemetry',
+        label: 'Telemetry',
+        route: '/telemetry',
+        category: 'system',
+        icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
+    },
+    {
         id: 'gpu',
         label: 'GPU Monitor',
         route: '/gpu',
@@ -214,7 +221,7 @@ export const SIDEBAR_ITEMS = [
 // Secrets & Webhooks vault. They're hidden by the default ("Recommended") view
 // and every curated preset, but stay one click away via the "Full" view or
 // Customize Sidebar — and remain fully routable (deep links, command palette).
-export const ADVANCED_ITEM_IDS = ['marketplace', 'queue', 'secrets'];
+export const ADVANCED_ITEM_IDS = ['marketplace', 'queue', 'secrets', 'telemetry'];
 
 // Preset profiles define which items are hidden (top-level only)
 export const SIDEBAR_PRESETS = {

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from app import db
 from app.models.event_subscription import EventSubscription, EventDelivery
 from app.queue_bus.consumers.webhook_consumer import enqueue_webhook_delivery
+from app.services.telemetry_service import generate_correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ class EventService:
                 subscription_id=sub.id,
                 event_type=event_type,
                 status=EventDelivery.STATUS_PENDING,
+                correlation_id=generate_correlation_id(),
             )
             delivery.set_payload(payload)
             db.session.add(delivery)

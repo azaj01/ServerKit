@@ -107,6 +107,9 @@ class EventDelivery(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     duration_ms = db.Column(db.Float, nullable=True)
 
+    # Correlation ID for grouping this webhook delivery with related telemetry events.
+    correlation_id = db.Column(db.String(64), nullable=True, index=True)
+
     subscription = db.relationship('EventSubscription', back_populates='deliveries')
 
     STATUS_PENDING = 'pending'
@@ -138,6 +141,7 @@ class EventDelivery(db.Model):
             'delivered_at': self.delivered_at.isoformat() if self.delivered_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'duration_ms': self.duration_ms,
+            'correlation_id': self.correlation_id,
         }
 
     def __repr__(self):

@@ -46,6 +46,9 @@ class Notification(db.Model):
     # (e.g. 'admins', 'user:42', 'ops@example.com'). Not used for routing.
     audience = db.Column(db.String(255))
 
+    # Correlation ID for grouping this notification with related telemetry events.
+    correlation_id = db.Column(db.String(64), nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     deliveries = db.relationship(
@@ -73,6 +76,7 @@ class Notification(db.Model):
             'title': self.title,
             'body': self.body,
             'audience': self.audience,
+            'correlation_id': self.correlation_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
         if include_data:

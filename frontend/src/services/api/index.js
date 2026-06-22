@@ -20,6 +20,7 @@ import * as secretsWebhooksMethods from './secretsWebhooks.js';
 import * as containerOpsMethods from './containerOps.js';
 import * as queueBusMethods from './queueBus.js';
 import * as notificationMethods from './notifications.js';
+import * as telemetryMethods from './telemetry.js';
 
 class ApiService extends ApiClient {
     constructor() {
@@ -47,6 +48,7 @@ class ApiService extends ApiClient {
             containerOpsMethods,
             queueBusMethods,
             notificationMethods,
+            telemetryMethods,
         ];
         for (const mod of modules) {
             for (const [key, fn] of Object.entries(mod)) {

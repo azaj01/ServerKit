@@ -14,6 +14,7 @@ from app.models.deployment_job import DeploymentJob
 from app.services.deployment_runner import DeploymentPlanRunner
 from app.services.docker_service import DockerService
 from app.services.template_service import TemplateService
+from app.services.telemetry_service import generate_correlation_id
 
 
 class DeploymentJobService:
@@ -65,6 +66,7 @@ class DeploymentJobService:
             target_server_id=normalized_server_id,
             requested_by=user_id,
             trigger='manual',
+            correlation_id=generate_correlation_id(),
         )
         job.set_plan(plan_result['plan'])
         db.session.add(job)

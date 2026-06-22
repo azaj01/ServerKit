@@ -17,6 +17,7 @@ from app import paths
 from app.utils import backup_crypto
 from app.utils.formatting import format_bytes
 from app.utils.system import is_command_available
+from app.services.telemetry_service import TelemetryService, generate_correlation_id
 
 
 class BackupService:
@@ -84,13 +85,27 @@ class BackupService:
 
     @classmethod
     def backup_application(cls, app_name: str, app_path: str,
-                          include_db: bool = False, db_config: Dict = None) -> Dict:
+                          include_db: bool = False, db_config: Dict = None,
+                          correlation_id: str = None) -> Dict:
         """Backup an application (files and optionally database)."""
         cls.ensure_backup_dirs()
 
+        correlation_id = correlation_id or generate_correlation_id()
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_name = f"{app_name}_{timestamp}"
         backup_dir = os.path.join(cls.BACKUP_BASE_DIR, 'applications', backup_name)
+
+        TelemetryService.emit(
+            source='backup',
+            event_type='backup.started',
+            message=f'Application backup started: {app_name}',
+            severity='info',
+            resource_type='application',
+            resource_id=app_name,
+            correlation_id=correlation_id,
+            payload={'app_name': app_name, 'include_db': include_db},
+            commit=True,
+        )
 
         try:
             os.makedirs(backup_dir, exist_ok=True)
@@ -136,17 +151,46 @@ class BackupService:
             # Auto-upload to remote if configured (whole directory)
             cls._auto_upload(backup_dir, backup_info)
 
-            return {
+            result = {
                 'success': True,
                 'backup': backup_info,
-                'path': backup_dir
+                'path': backup_dir,
+                'correlation_id': correlation_id,
             }
+            TelemetryService.emit(
+                source='backup',
+                event_type='backup.completed',
+                message=f'Application backup completed: {app_name}',
+                severity='info',
+                resource_type='application',
+                resource_id=app_name,
+                correlation_id=correlation_id,
+                payload={
+                    'app_name': app_name,
+                    'backup_name': backup_name,
+                    'size': backup_info.get('size'),
+                    'include_db': include_db,
+                },
+                commit=True,
+            )
+            return result
 
         except Exception as e:
             # Cleanup on failure
             if os.path.exists(backup_dir):
                 shutil.rmtree(backup_dir, ignore_errors=True)
-            return {'success': False, 'error': str(e)}
+            TelemetryService.emit(
+                source='backup',
+                event_type='backup.failed',
+                message=f'Application backup failed: {app_name}',
+                severity='error',
+                resource_type='application',
+                resource_id=app_name,
+                correlation_id=correlation_id,
+                payload={'app_name': app_name, 'include_db': include_db, 'error': str(e)},
+                commit=True,
+            )
+            return {'success': False, 'error': str(e), 'correlation_id': correlation_id}
 
     @classmethod
     def _backup_database_internal(cls, db_type: str, db_name: str,
@@ -202,13 +246,27 @@ class BackupService:
     @classmethod
     def backup_database(cls, db_type: str, db_name: str,
                        user: str = None, password: str = None,
-                       host: str = 'localhost') -> Dict:
+                       host: str = 'localhost',
+                       correlation_id: str = None) -> Dict:
         """Backup a database."""
         cls.ensure_backup_dirs()
 
+        correlation_id = correlation_id or generate_correlation_id()
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_name = f"{db_type}_{db_name}_{timestamp}.sql.gz"
         backup_path = os.path.join(cls.BACKUP_BASE_DIR, 'databases', backup_name)
+
+        TelemetryService.emit(
+            source='backup',
+            event_type='backup.started',
+            message=f'Database backup started: {db_name}',
+            severity='info',
+            resource_type='database',
+            resource_id=db_name,
+            correlation_id=correlation_id,
+            payload={'db_type': db_type, 'db_name': db_name},
+            commit=True,
+        )
 
         config = {
             'type': db_type,
@@ -242,12 +300,41 @@ class BackupService:
             # Auto-upload to remote if configured
             cls._auto_upload(backup_path, backup_info)
 
+            TelemetryService.emit(
+                source='backup',
+                event_type='backup.completed',
+                message=f'Database backup completed: {db_name}',
+                severity='info',
+                resource_type='database',
+                resource_id=db_name,
+                correlation_id=correlation_id,
+                payload={
+                    'db_type': db_type,
+                    'db_name': db_name,
+                    'backup_name': backup_name,
+                    'size': backup_info.get('size'),
+                },
+                commit=True,
+            )
+
             return {
                 'success': True,
-                'backup': backup_info
+                'backup': backup_info,
+                'correlation_id': correlation_id,
             }
 
-        return result
+        TelemetryService.emit(
+            source='backup',
+            event_type='backup.failed',
+            message=f'Database backup failed: {db_name}',
+            severity='error',
+            resource_type='database',
+            resource_id=db_name,
+            correlation_id=correlation_id,
+            payload={'db_type': db_type, 'db_name': db_name, 'error': result.get('error')},
+            commit=True,
+        )
+        return {**result, 'correlation_id': correlation_id}
 
     @classmethod
     def backup_files(cls, file_paths: List[str], backup_name: str = None) -> Dict:
@@ -797,6 +884,19 @@ class BackupService:
         backup_type = sched.get('backup_type', 'database')
         target = sched.get('target', '')
         result = None
+        correlation_id = generate_correlation_id()
+
+        TelemetryService.emit(
+            source='backup',
+            event_type='backup.scheduled_started',
+            message=f'Scheduled backup started: {sched.get("name", "Backup")}',
+            severity='info',
+            resource_type='backup_schedule',
+            resource_id=sched.get('id'),
+            correlation_id=correlation_id,
+            payload={'schedule_name': sched.get('name'), 'backup_type': backup_type, 'target': target},
+            commit=True,
+        )
 
         try:
             if backup_type == 'database':
@@ -806,13 +906,13 @@ class BackupService:
                     db_type, db_name = parts
                 else:
                     db_type, db_name = 'mysql', target
-                result = cls.backup_database(db_type, db_name)
+                result = cls.backup_database(db_type, db_name, correlation_id=correlation_id)
 
             elif backup_type == 'application':
                 from app.models import Application
                 app = Application.query.filter_by(name=target).first()
                 if app:
-                    result = cls.backup_application(app.name, app.root_path)
+                    result = cls.backup_application(app.name, app.root_path, correlation_id=correlation_id)
                 else:
                     result = {'success': False, 'error': f'Application "{target}" not found'}
 
@@ -847,7 +947,8 @@ class BackupService:
                 cls._send_backup_notification(
                     sched.get('name', 'Backup'),
                     False,
-                    result.get('error', 'Unknown error')
+                    result.get('error', 'Unknown error'),
+                    correlation_id=correlation_id,
                 )
 
         except Exception as e:
@@ -859,11 +960,23 @@ class BackupService:
                     s['last_status'] = 'failed'
                     break
             cls.save_config(config)
-            cls._send_backup_notification(sched.get('name', 'Backup'), False, str(e))
+            cls._send_backup_notification(sched.get('name', 'Backup'), False, str(e), correlation_id=correlation_id)
 
     @classmethod
-    def _send_backup_notification(cls, backup_name: str, success: bool, message: str) -> None:
-        """Send a notification about backup status."""
+    def _send_backup_notification(cls, backup_name: str, success: bool, message: str,
+                                  correlation_id: str = None) -> None:
+        """Send a notification about backup status and emit telemetry."""
+        TelemetryService.emit(
+            source='backup',
+            event_type='backup.completed' if success else 'backup.failed',
+            message=f'Backup {backup_name} {"completed" if success else "failed"}',
+            severity='info' if success else 'critical',
+            resource_type='backup_schedule',
+            correlation_id=correlation_id,
+            payload={'backup_name': backup_name, 'success': success, 'message': message},
+            commit=True,
+        )
+
         try:
             from app.services.notification_service import NotificationService
             config = cls.get_config()
