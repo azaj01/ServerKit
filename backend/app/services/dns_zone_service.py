@@ -55,12 +55,81 @@ class DNSZoneService:
             provider=data.get('provider', 'manual'),
             provider_zone_id=data.get('provider_zone_id'),
         )
-        if data.get('provider_config'):
+
+        # Preferred path: link an existing connection (Settings -> Connections).
+        # The zone adopts its provider, and we look up the provider-side zone id
+        # for this domain so records sync without a second token.
+        config_id = data.get('dns_provider_config_id')
+        if config_id:
+            from app.models.email import DNSProviderConfig
+            from app.services.dns_provider_service import DNSProviderService
+            config = DNSProviderConfig.query.get(int(config_id))
+            if not config:
+                raise ValueError('Selected DNS connection not found')
+            zone.provider = config.provider
+            zone.dns_provider_config_id = config.id
+            if not zone.provider_zone_id:
+                zres = DNSProviderService.list_zones(config.id)
+                if not zres.get('success'):
+                    raise ValueError(
+                        f"Couldn't reach {config.name}: {zres.get('error', 'unknown error')}")
+                match = next((z for z in zres.get('zones', [])
+                              if (z.get('name') or '').lower().rstrip('.') == domain), None)
+                if not match:
+                    raise ValueError(f'{config.name} does not manage {domain}')
+                zone.provider_zone_id = match['id']
+        elif data.get('provider_config'):
+            # Legacy inline-token path, kept for backward compatibility.
             zone.provider_config = data['provider_config']
 
         db.session.add(zone)
         db.session.commit()
         return zone
+
+    @classmethod
+    def link_legacy_zones(cls):
+        """One-time, idempotent: migrate Cloudflare zones that still carry an inline
+        token in ``provider_config_json`` onto the canonical ``DNSProviderConfig``
+        store, so every zone resolves its credentials the same way.
+
+        For each such zone: reuse an existing connection whose decrypted key matches
+        the token, else mint one (encrypted at rest), link it, and strip the now
+        redundant plaintext token from the zone. API-free — uses the token already
+        on the zone. Returns the number of zones migrated."""
+        from app.models.email import DNSProviderConfig
+        from app.services.dns_provider_service import DNSProviderService
+        from app.utils.crypto import encrypt_secret
+
+        migrated = 0
+        zones = DNSZone.query.filter(
+            DNSZone.provider == 'cloudflare',
+            DNSZone.dns_provider_config_id.is_(None),
+        ).all()
+        for zone in zones:
+            token = (zone.provider_config or {}).get('api_token')
+            if not token:
+                continue
+            match = None
+            for cfg in DNSProviderConfig.query.filter_by(provider='cloudflare').all():
+                if DNSProviderService._api_key(cfg) == token:
+                    match = cfg
+                    break
+            if match is None:
+                match = DNSProviderConfig(
+                    name=f'Cloudflare ({zone.domain})',
+                    provider='cloudflare',
+                    api_key=encrypt_secret(token),
+                )
+                db.session.add(match)
+                db.session.flush()  # assign id
+            zone.dns_provider_config_id = match.id
+            cfg_json = dict(zone.provider_config or {})
+            cfg_json.pop('api_token', None)
+            zone.provider_config = cfg_json
+            migrated += 1
+        if migrated:
+            db.session.commit()
+        return migrated
 
     @staticmethod
     def delete_zone(zone_id):
@@ -255,53 +324,82 @@ class DNSZoneService:
 
     @staticmethod
     def _sync_record_to_provider(zone, record, action):
-        """Sync a DNS record change to the configured provider."""
-        provider = zone.provider
-        config = zone.provider_config
-
+        """Sync a DNS record change to Cloudflare (the only provider the zone layer
+        syncs — Route53/DigitalOcean/GoDaddy are managed via DNSProviderService)."""
+        if zone.provider != 'cloudflare':
+            return
+        credential = DNSZoneService._resolve_credential(zone)
+        if not credential:
+            return
         try:
-            if provider == 'cloudflare':
-                DNSZoneService._cloudflare_sync(zone, record, action, config)
+            DNSZoneService._cloudflare_sync(zone, record, action, credential)
         except Exception as e:
             logger.error(f'DNS provider sync failed: {e}')
 
     @staticmethod
-    def _cloudflare_sync(zone, record, action, config):
-        """Sync record to Cloudflare API."""
-        import requests
+    def _resolve_credential(zone):
+        """Resolve the Cloudflare credential for a zone, preferring the canonical
+        connection store and persisting the discovered link.
+
+        Order:
+          1. The linked DNSProviderConfig (``zone.dns_provider_config_id``).
+          2. Auto-discovery — the connected provider whose account contains this
+             domain; the link + ``provider_zone_id`` are backfilled so step 1 wins
+             next time (no repeat API call).
+          3. Legacy fallback — a token still stored inline on the zone.
+        Returns a :class:`DnsCredential`, or ``None`` when nothing manages the zone.
+        """
+        from app.models.email import DNSProviderConfig
         from app.services.dns_provider_service import DNSProviderService
+        from app.services.dns.base import DnsCredential
 
-        api_token = config.get('api_token')
-        if not api_token:
-            return
+        if zone.dns_provider_config_id:
+            config = DNSProviderConfig.query.get(zone.dns_provider_config_id)
+            if config:
+                return DnsCredential.from_provider_config(config)
 
-        headers = {'Authorization': f'Bearer {api_token}', 'Content-Type': 'application/json'}
-        base_url = f'https://api.cloudflare.com/client/v4/zones/{zone.provider_zone_id}/dns_records'
-
-        def _payload():
-            # CAA needs Cloudflare's structured `data` object, not a flat
-            # `content` string (and `proxied` is meaningless for it).
-            p = {'type': record.record_type, 'name': record.name, 'ttl': record.ttl}
-            if record.record_type == 'CAA':
-                p['data'] = DNSProviderService.parse_caa_value(record.content)
-            else:
-                p['content'] = record.content
-                p['proxied'] = record.proxied
-            if record.priority is not None:
-                p['priority'] = record.priority
-            return p
-
-        if action == 'create':
-            resp = requests.post(base_url, json=_payload(), headers=headers, timeout=10)
-            if resp.ok:
-                data = resp.json()
-                record.provider_record_id = data.get('result', {}).get('id')
+        try:
+            config, zinfo = DNSProviderService.find_zone_for_domain(zone.domain)
+        except Exception:
+            config, zinfo = None, None
+        if config:
+            zone.dns_provider_config_id = config.id
+            if zinfo and not zone.provider_zone_id:
+                zone.provider_zone_id = zinfo.get('id')
+            try:
                 db.session.commit()
+            except Exception:
+                db.session.rollback()
+            return DnsCredential.from_provider_config(config)
 
-        elif action == 'update' and record.provider_record_id:
-            url = f'{base_url}/{record.provider_record_id}'
-            requests.put(url, json=_payload(), headers=headers, timeout=10)
+        token = (zone.provider_config or {}).get('api_token')
+        if token:
+            return DnsCredential.cloudflare_token(token)
+        return None
 
+    @staticmethod
+    def _cloudflare_sync(zone, record, action, credential):
+        """Push a single record change to Cloudflare via the shared client.
+
+        ``upsert`` is idempotent: it updates by ``provider_record_id`` when known,
+        otherwise finds the record by name (so a re-create doesn't duplicate and an
+        update doesn't silently no-op when the id was never captured)."""
+        from app.services.dns import CloudflareClient
+        from app.services.dns.base import DnsRecordSpec
+
+        client = CloudflareClient(credential)
+        zone_id = zone.provider_zone_id
+
+        if action in ('create', 'update'):
+            res = client.upsert(zone_id, DnsRecordSpec.from_record(record),
+                                record_id=record.provider_record_id)
+            if res.get('success'):
+                rid = res.get('record_id')
+                if rid and rid != record.provider_record_id:
+                    record.provider_record_id = rid
+                    db.session.commit()
+            else:
+                logger.error('Cloudflare sync %s failed for %s: %s',
+                             action, record.name, res.get('error'))
         elif action == 'delete' and record.provider_record_id:
-            url = f'{base_url}/{record.provider_record_id}'
-            requests.delete(url, headers=headers, timeout=10)
+            client.delete(zone_id, record_id=record.provider_record_id)

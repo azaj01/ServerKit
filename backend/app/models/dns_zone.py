@@ -11,7 +11,13 @@ class DNSZone(db.Model):
     domain = db.Column(db.String(256), nullable=False, unique=True)
     provider = db.Column(db.String(64))  # cloudflare, route53, digitalocean, manual
     provider_zone_id = db.Column(db.String(128))
-    provider_config_json = db.Column(db.Text)  # encrypted credentials
+    provider_config_json = db.Column(db.Text)  # legacy inline credentials (pre-unification)
+
+    # Canonical credential link: the DNSProviderConfig (Settings -> Connections)
+    # whose API token manages this zone. Supersedes the inline token in
+    # provider_config_json; nullable so manual zones and not-yet-migrated rows work.
+    dns_provider_config_id = db.Column(
+        db.Integer, db.ForeignKey('dns_provider_configs.id'), nullable=True)
 
     status = db.Column(db.String(32), default='active')
     last_sync_at = db.Column(db.DateTime)
@@ -35,6 +41,7 @@ class DNSZone(db.Model):
             'domain': self.domain,
             'provider': self.provider,
             'provider_zone_id': self.provider_zone_id,
+            'dns_provider_config_id': self.dns_provider_config_id,
             'status': self.status,
             'record_count': self.records.count(),
             'last_sync_at': self.last_sync_at.isoformat() if self.last_sync_at else None,

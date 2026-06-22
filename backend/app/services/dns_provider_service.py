@@ -142,14 +142,17 @@ class DNSProviderService:
 
     @classmethod
     def set_record(cls, provider_id: int, zone_id: str, record_type: str,
-                   name: str, value: str, ttl: int = 3600) -> Dict:
-        """Create or update a DNS record."""
+                   name: str, value: str, ttl: int = 3600,
+                   proxied: bool = False, priority: int = None) -> Dict:
+        """Create or update a DNS record. ``proxied``/``priority`` are honored by
+        the Cloudflare path; other providers ignore them."""
         config = DNSProviderConfig.query.get(provider_id)
         if not config:
             return {'success': False, 'error': 'Provider not found'}
 
         if config.provider == 'cloudflare':
-            return cls._cloudflare_set_record(config, zone_id, record_type, name, value, ttl)
+            return cls._cloudflare_set_record(config, zone_id, record_type, name, value, ttl,
+                                              proxied=proxied, priority=priority)
         elif config.provider == 'route53':
             return cls._route53_set_record(config, zone_id, record_type, name, value, ttl)
         elif config.provider == 'digitalocean':
@@ -257,12 +260,10 @@ class DNSProviderService:
     def parse_caa_value(value: str) -> Dict:
         """Parse a BIND-style CAA value (``0 issue "letsencrypt.org"``) into the
         ``{flags, tag, value}`` object that Cloudflare/DigitalOcean expect. The
-        CA value is returned unquoted."""
-        parts = (value or '').strip().split(None, 2)
-        flags = int(parts[0]) if parts and parts[0].lstrip('-').isdigit() else 0
-        tag = parts[1] if len(parts) > 1 else 'issue'
-        ca = parts[2].strip().strip('"') if len(parts) > 2 else ''
-        return {'flags': flags, 'tag': tag, 'value': ca}
+        CA value is returned unquoted. Delegates to the shared Cloudflare client
+        so the CAA wire format is defined in exactly one place."""
+        from app.services.dns.cloudflare import parse_caa_value as _parse
+        return _parse(value)
 
     @classmethod
     def ensure_caa_record(cls, domain: str, ca: str = 'letsencrypt.org') -> Dict:
@@ -300,130 +301,48 @@ class DNSProviderService:
 
     # ── Cloudflare Implementation ──
 
+    # The Cloudflare API calls live in the shared CloudflareClient so the
+    # provider layer (here) and the zone layer (DNSZoneService) share one
+    # implementation — auth, the CAA `data` wire format, and idempotent upsert
+    # are defined once rather than maintained in two places.
+
     @classmethod
-    def _cloudflare_headers(cls, config: DNSProviderConfig) -> Dict:
-        """Build Cloudflare API headers."""
-        if config.api_email:
-            return {
-                'X-Auth-Email': config.api_email,
-                'X-Auth-Key': cls._api_key(config),
-                'Content-Type': 'application/json',
-            }
-        return {
-            'Authorization': f'Bearer {cls._api_key(config)}',
-            'Content-Type': 'application/json',
-        }
+    def _cloudflare_client(cls, config: DNSProviderConfig):
+        from app.services.dns import CloudflareClient
+        from app.services.dns.base import DnsCredential
+        return CloudflareClient(DnsCredential.from_provider_config(config))
 
     @classmethod
     def _test_cloudflare(cls, config: DNSProviderConfig) -> Dict:
         """Test Cloudflare API connection."""
-        try:
-            resp = requests.get(
-                'https://api.cloudflare.com/client/v4/user/tokens/verify',
-                headers=cls._cloudflare_headers(config),
-                timeout=15,
-            )
-            data = resp.json()
-            if data.get('success'):
-                return {'success': True, 'message': 'Cloudflare connection successful'}
-            return {'success': False, 'error': data.get('errors', [{}])[0].get('message', 'Unknown error')}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+        return cls._cloudflare_client(config).verify()
 
     @classmethod
     def _cloudflare_list_zones(cls, config: DNSProviderConfig) -> Dict:
         """List Cloudflare zones."""
-        try:
-            resp = requests.get(
-                'https://api.cloudflare.com/client/v4/zones?per_page=50',
-                headers=cls._cloudflare_headers(config),
-                timeout=15,
-            )
-            data = resp.json()
-            if not data.get('success'):
-                return {'success': False, 'error': 'Failed to list zones'}
-            zones = [{'id': z['id'], 'name': z['name'], 'status': z['status']}
-                     for z in data.get('result', [])]
-            return {'success': True, 'zones': zones}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+        return cls._cloudflare_client(config).list_zones()
 
     @classmethod
     def _cloudflare_set_record(cls, config: DNSProviderConfig, zone_id: str,
-                                record_type: str, name: str, value: str, ttl: int) -> Dict:
-        """Create or update a Cloudflare DNS record."""
-        try:
-            headers = cls._cloudflare_headers(config)
-            base = f'https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records'
-
-            # CAA records need Cloudflare's structured `data` object, not a flat
-            # `content` string — sending `content` for a CAA record is rejected.
-            caa = cls.parse_caa_value(value) if record_type == 'CAA' else None
-            payload = {'type': record_type, 'name': name, 'ttl': ttl}
-            if caa is not None:
-                payload['data'] = caa
-            else:
-                payload['content'] = value
-
-            # Check if a matching record exists. For CAA there can legitimately be
-            # several records at the same name (one per CA), so match on tag+value
-            # to avoid overwriting a *different* CA's authorization.
-            resp = requests.get(
-                f'{base}?type={record_type}&name={name}',
-                headers=headers, timeout=15,
-            )
-            data = resp.json()
-            existing = data.get('result', [])
-            if caa is not None:
-                existing = [
-                    r for r in existing
-                    if (r.get('data') or {}).get('tag') == caa['tag']
-                    and str((r.get('data') or {}).get('value', '')).strip('"').rstrip('.').lower()
-                        == caa['value'].rstrip('.').lower()
-                ]
-
-            if existing:
-                # Update existing record
-                record_id = existing[0]['id']
-                resp = requests.put(
-                    f'{base}/{record_id}',
-                    headers=headers, json=payload, timeout=15,
-                )
-            else:
-                # Create new record
-                resp = requests.post(base, headers=headers, json=payload, timeout=15)
-
-            data = resp.json()
-            if data.get('success'):
-                return {'success': True, 'message': f'{record_type} record set for {name}'}
-            return {'success': False, 'error': data.get('errors', [{}])[0].get('message', 'Unknown error')}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+                                record_type: str, name: str, value: str, ttl: int,
+                                proxied: bool = False, priority: int = None) -> Dict:
+        """Create or update a Cloudflare DNS record (idempotent upsert by name)."""
+        from app.services.dns.base import DnsRecordSpec
+        spec = DnsRecordSpec(record_type=record_type, name=name, content=value,
+                             ttl=ttl, priority=priority, proxied=proxied)
+        res = cls._cloudflare_client(config).upsert(zone_id, spec)
+        # Preserve the historical {success, message|error} contract callers expect.
+        if res.get('success'):
+            return {'success': True,
+                    'message': res.get('message', f'{record_type} record set for {name}')}
+        return {'success': False, 'error': res.get('error', 'Unknown error')}
 
     @classmethod
     def _cloudflare_delete_record(cls, config: DNSProviderConfig, zone_id: str,
                                    record_type: str, name: str) -> Dict:
-        """Delete a Cloudflare DNS record."""
-        try:
-            headers = cls._cloudflare_headers(config)
-            base = f'https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records'
-
-            resp = requests.get(
-                f'{base}?type={record_type}&name={name}',
-                headers=headers, timeout=15,
-            )
-            data = resp.json()
-            existing = data.get('result', [])
-
-            if not existing:
-                return {'success': True, 'message': 'Record not found (already deleted)'}
-
-            for record in existing:
-                requests.delete(f'{base}/{record["id"]}', headers=headers, timeout=15)
-
-            return {'success': True, 'message': f'{record_type} record deleted for {name}'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+        """Delete a Cloudflare DNS record (by type+name)."""
+        return cls._cloudflare_client(config).delete(
+            zone_id, record_type=record_type, name=name)
 
     @staticmethod
     def _host_relative_to_zone(name: str, zone: str) -> str:

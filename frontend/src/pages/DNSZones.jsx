@@ -32,40 +32,13 @@ const DNSZones = () => {
     const [propagationResults, setPropagationResults] = useState([]);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-    const [zoneForm, setZoneForm] = useState({ domain: '', provider: 'manual', provider_zone_id: '', api_token: '' });
+    const [zoneForm, setZoneForm] = useState({ domain: '', dns_provider_config_id: '' });
+    const [providers, setProviders] = useState([]);
     const [recordForm, setRecordForm] = useState({
         record_type: 'A', name: '@', content: '', ttl: 3600, priority: null
     });
 
     const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'CAA', 'NS'];
-
-    const PROVIDER_CONFIG = {
-        cloudflare: {
-            zoneLabel: 'Cloudflare Zone ID',
-            zonePlaceholder: 'e.g. 023e105f4ecef8ad9ca31a8372d0c353',
-            tokenLabel: 'API Token',
-            tokenPlaceholder: 'Cloudflare API token (Edit zone permissions)',
-            helpText: 'Find your Zone ID in the Cloudflare dashboard under Overview → API.',
-        },
-        route53: {
-            zoneLabel: 'Hosted Zone ID',
-            zonePlaceholder: 'e.g. Z3M3LMPEXAMPLE',
-            tokenLabel: 'AWS Access Key',
-            tokenPlaceholder: 'AKIA... (needs Route 53 permissions)',
-            helpText: 'Use an IAM user with AmazonRoute53FullAccess policy.',
-            extraFields: [
-                { key: 'aws_secret_key', label: 'AWS Secret Key', placeholder: 'Secret access key', type: 'password' },
-                { key: 'aws_region', label: 'AWS Region', placeholder: 'us-east-1', type: 'text' },
-            ],
-        },
-        digitalocean: {
-            zoneLabel: 'Domain Name',
-            zonePlaceholder: 'e.g. example.com (must exist in your DO account)',
-            tokenLabel: 'Personal Access Token',
-            tokenPlaceholder: 'DigitalOcean personal access token',
-            helpText: 'Generate a token at API → Tokens with read+write scope.',
-        },
-    };
 
     const loadZones = useCallback(async () => {
         try {
@@ -80,6 +53,16 @@ const DNSZones = () => {
 
     useEffect(() => { loadZones(); }, [loadZones]);
 
+    // Lazily load connected DNS providers (Settings -> Connections) for the
+    // zone picker the first time the modal opens.
+    useEffect(() => {
+        if (showCreateZone && providers.length === 0) {
+            api.getEmailDNSProviders()
+                .then(d => setProviders(d.providers || []))
+                .catch(() => {});
+        }
+    }, [showCreateZone, providers.length]);
+
     const loadRecords = async (zoneId) => {
         try {
             const data = await api.getDNSRecords(zoneId);
@@ -92,18 +75,16 @@ const DNSZones = () => {
 
     const handleCreateZone = async () => {
         try {
-            const payload = {
-                domain: zoneForm.domain,
-                provider: zoneForm.provider,
-            };
-            if (zoneForm.provider !== 'manual') {
-                payload.provider_zone_id = zoneForm.provider_zone_id;
-                payload.provider_config = { api_token: zoneForm.api_token };
+            const payload = { domain: zoneForm.domain };
+            if (zoneForm.dns_provider_config_id) {
+                payload.dns_provider_config_id = Number(zoneForm.dns_provider_config_id);
+            } else {
+                payload.provider = 'manual';
             }
             await api.createDNSZone(payload);
             toast.success('Zone created');
             setShowCreateZone(false);
-            setZoneForm({ domain: '', provider: 'manual', provider_zone_id: '', api_token: '' });
+            setZoneForm({ domain: '', dns_provider_config_id: '' });
             loadZones();
         } catch (err) {
             toast.error(err.message);
@@ -259,40 +240,36 @@ const DNSZones = () => {
                             <FormField label="Domain" htmlFor="zone-domain">
                                 <Input id="zone-domain" value={zoneForm.domain} onChange={e => setZoneForm({...zoneForm, domain: e.target.value})} placeholder="example.com" />
                             </FormField>
-                            <FormField label="Provider">
-                                <Select value={zoneForm.provider} onValueChange={v => setZoneForm({...zoneForm, provider: v})}>
+                            <FormField label="DNS Provider">
+                                <Select
+                                    value={zoneForm.dns_provider_config_id || 'manual'}
+                                    onValueChange={v => setZoneForm({ ...zoneForm, dns_provider_config_id: v === 'manual' ? '' : v })}
+                                >
                                     <SelectTrigger id="zone-provider">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="manual">Manual</SelectItem>
-                                        <SelectItem value="cloudflare">Cloudflare</SelectItem>
-                                        <SelectItem value="route53">Route 53 (AWS)</SelectItem>
-                                        <SelectItem value="digitalocean">DigitalOcean</SelectItem>
+                                        <SelectItem value="manual">Manual (no automatic sync)</SelectItem>
+                                        {providers.map(p => (
+                                            <SelectItem key={p.id} value={String(p.id)}>
+                                                {p.name} — {p.provider}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </FormField>
-                            {zoneForm.provider !== 'manual' && (() => {
-                                const cfg = PROVIDER_CONFIG[zoneForm.provider];
-                                return (
-                                    <>
-                                        {cfg.helpText && (
-                                            <p className="text-muted text-sm">{cfg.helpText}</p>
-                                        )}
-                                        <FormField label={cfg.zoneLabel} htmlFor="zone-provider-zone-id">
-                                            <Input id="zone-provider-zone-id" value={zoneForm.provider_zone_id} onChange={e => setZoneForm({...zoneForm, provider_zone_id: e.target.value})} placeholder={cfg.zonePlaceholder} />
-                                        </FormField>
-                                        <FormField label={cfg.tokenLabel} htmlFor="zone-api-token">
-                                            <Input id="zone-api-token" type="password" value={zoneForm.api_token} onChange={e => setZoneForm({...zoneForm, api_token: e.target.value})} placeholder={cfg.tokenPlaceholder} />
-                                        </FormField>
-                                        {cfg.extraFields?.map(field => (
-                                            <FormField key={field.key} label={field.label} htmlFor={`zone-${field.key}`}>
-                                                <Input id={`zone-${field.key}`} type={field.type} value={zoneForm[field.key] || ''} onChange={e => setZoneForm({...zoneForm, [field.key]: e.target.value})} placeholder={field.placeholder} />
-                                            </FormField>
-                                        ))}
-                                    </>
-                                );
-                            })()}
+                            {zoneForm.dns_provider_config_id ? (
+                                <p className="text-muted text-sm">
+                                    Records added here sync to this connection. We will match{' '}
+                                    <strong>{zoneForm.domain || 'your domain'}</strong> to a zone in that
+                                    account automatically — no zone ID or token to paste.
+                                </p>
+                            ) : (
+                                <p className="text-muted text-sm">
+                                    Manual zones are not pushed to a provider. To sync automatically,{' '}
+                                    <a href="/settings?tab=connections">connect a DNS provider</a> first.
+                                </p>
+                            )}
                         </div>
                         <div className="modal-footer">
                             <Button variant="outline" onClick={() => setShowCreateZone(false)}>Cancel</Button>

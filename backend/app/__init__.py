@@ -391,12 +391,17 @@ def create_app(config_name=None):
             n_store = StorageProviderService.encrypt_legacy_secrets()
             n_cloud = CloudProvisioningService.encrypt_legacy_secrets()
             n_settings = SettingsService.migrate_legacy_secrets()
-            if n_dns or n_store or n_cloud or n_settings:
+            # Migrate DNS zones with an inline Cloudflare token onto the canonical
+            # connection store (idempotent), so every zone resolves creds the same way.
+            from app.services.dns_zone_service import DNSZoneService
+            n_zones = DNSZoneService.link_legacy_zones()
+            if n_dns or n_store or n_cloud or n_settings or n_zones:
                 import logging as _logging
                 _logging.getLogger(__name__).info(
                     f'Encrypted legacy secrets at rest: {n_dns} DNS provider(s), '
                     f'{n_store} storage field(s), {n_cloud} cloud provider(s), '
-                    f'{n_settings} system setting(s)')
+                    f'{n_settings} system setting(s); linked {n_zones} DNS zone(s) '
+                    f'to a connection')
         except Exception as e:
             import logging as _logging
             _logging.getLogger(__name__).warning(f'Legacy secret encryption skipped: {e}')
