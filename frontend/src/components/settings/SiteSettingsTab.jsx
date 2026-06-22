@@ -15,11 +15,13 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
     const [saving, setSaving] = useState(false);
     const [savingPort, setSavingPort] = useState(false);
     const [message, setMessage] = useState(null);
-    const [https, setHttps] = useState({ base_domain: '', server_ip: '', https_enabled: false, providers: [] });
+    const [https, setHttps] = useState({ base_domain: '', server_ip: '', https_enabled: false, dns_mode: 'wildcard', providers: [] });
     const [baseDomain, setBaseDomain] = useState('');
     const [serverIp, setServerIp] = useState('');
+    const [dnsMode, setDnsMode] = useState('wildcard');
     const [providerId, setProviderId] = useState('');
     const [savingDomain, setSavingDomain] = useState(false);
+    const [savingDnsMode, setSavingDnsMode] = useState(false);
     const [settingUpHttps, setSettingUpHttps] = useState(false);
 
     useEffect(() => {
@@ -39,6 +41,7 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                 setHttps(h);
                 setBaseDomain(h.base_domain || '');
                 setServerIp(h.server_ip || '');
+                setDnsMode(h.dns_mode || 'wildcard');
                 if (h.providers?.length) setProviderId(String(h.providers[0].id));
             } catch { /* non-admin or endpoint unavailable */ }
         } catch (err) {
@@ -59,6 +62,26 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
             setMessage({ type: 'error', text: err.message || 'Failed to save domain settings' });
         } finally {
             setSavingDomain(false);
+        }
+    }
+
+    async function handleSaveDnsMode(mode) {
+        setSavingDnsMode(true);
+        setMessage(null);
+        try {
+            await api.updateSystemSetting('sites_dns_mode', mode);
+            setDnsMode(mode);
+            setHttps((h) => ({ ...h, dns_mode: mode }));
+            setMessage({
+                type: 'success',
+                text: mode === 'per-site'
+                    ? 'Per-site DNS — new sites get their own A record'
+                    : 'Wildcard DNS — new sites ride the *.base record',
+            });
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'Failed to update DNS mode' });
+        } finally {
+            setSavingDnsMode(false);
         }
     }
 
@@ -246,6 +269,31 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                         </div>
                     </div>
                     <span className="form-help">Used to auto-create DNS A records for managed domains.</span>
+                </div>
+
+                <div className="form-group">
+                    <div className="settings-row">
+                        <div className="settings-label">
+                            <Label htmlFor="sites-dns-mode">Subdomain DNS</Label>
+                        </div>
+                        <div className="settings-control">
+                            <select
+                                id="sites-dns-mode"
+                                className="settings-select"
+                                value={dnsMode}
+                                onChange={(e) => handleSaveDnsMode(e.target.value)}
+                                disabled={savingDnsMode}
+                            >
+                                <option value="wildcard">Wildcard — one record, every site instant</option>
+                                <option value="per-site">Per-site — one A record per site</option>
+                            </select>
+                        </div>
+                    </div>
+                    <span className="form-help">
+                        <strong>Wildcard</strong>: point <code>*.{baseDomain || 'base-domain'}</code> once and
+                        every site resolves instantly. <strong>Per-site</strong>: each new site gets its own A
+                        record, auto-created via a connected DNS provider (visible per record, ownership-tracked).
+                    </span>
                 </div>
 
                 <div className="form-group">
