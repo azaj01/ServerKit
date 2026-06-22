@@ -7,7 +7,8 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.services.secret_vault_service import SecretService, SecretVaultService
 from app.services.webhook_gateway_service import WebhookGatewayService
-from app.models import Workspace
+from app.services.workspace_service import WorkspaceService
+from app.models import User, Workspace
 
 bp = Blueprint('secrets_webhooks', __name__)
 

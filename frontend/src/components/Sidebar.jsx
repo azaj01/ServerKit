@@ -158,7 +158,14 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         // and it defines a nav map. This lets a workspace restrict which sidebar
         // items its members see based on their effective workspace role.
         const activeWorkspaceRaw = localStorage.getItem('active_workspace');
-        const activeWorkspace = activeWorkspaceRaw ? JSON.parse(activeWorkspaceRaw) : null;
+        let activeWorkspace = null;
+        if (activeWorkspaceRaw) {
+            try {
+                activeWorkspace = JSON.parse(activeWorkspaceRaw);
+            } catch {
+                activeWorkspace = null;
+            }
+        }
         return applyWorkspaceNavPermissions(items, activeWorkspace, user);
     }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable, user]);
 

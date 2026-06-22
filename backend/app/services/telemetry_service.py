@@ -111,6 +111,8 @@ class TelemetryService:
             severity = SystemEvent.SEVERITY_INFO
 
         sanitized_payload = _sanitize_payload(payload) if payload is not None else None
+        if sanitized_payload is not None and _payload_too_large(sanitized_payload):
+            sanitized_payload = {'_truncated': True}
 
         # Truncate very long messages
         if message is not None and len(message) > 4000:

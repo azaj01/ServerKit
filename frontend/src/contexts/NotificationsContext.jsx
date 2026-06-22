@@ -37,6 +37,7 @@ export function NotificationsProvider({ children }) {
 
     useEffect(() => {
         if (!isAuthenticated) {
+            socketService.disconnect();
             setItems([]);
             setUnreadCount(0);
             return undefined;

@@ -54,6 +54,19 @@ class TestTelemetryService:
         )
         assert event.severity == 'info'
 
+    def test_emit_truncates_oversized_payload(self, app):
+        # After sanitization each string is capped at MAX_STRING_LENGTH and each
+        # dict at MAX_DICT_ITEMS, so many large entries still exceed 32 KiB.
+        large_payload = {f'key_{i}': 'x' * 2000 for i in range(50)}
+        event = TelemetryService.emit(
+            source='test',
+            event_type='test.large',
+            payload=large_payload,
+            commit=True,
+        )
+        payload = event.get_payload()
+        assert payload == {'_truncated': True}
+
     def test_emit_does_not_raise_on_failure(self, app, monkeypatch):
         monkeypatch.setattr(db.session, 'commit', lambda: (_ for _ in ()).throw(Exception('boom')))
         event = TelemetryService.emit(
