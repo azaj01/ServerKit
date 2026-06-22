@@ -437,11 +437,14 @@ def create_app(config_name=None):
         from app.jobs import start_job_system
         from app.jobs.builtin_handlers import register_builtin_handlers, seed_builtin_schedules
         register_builtin_handlers()
-        # Register event-driven job handlers (deployment installs, workflow runs).
+        # Register event-driven job handlers (deployment installs, workflow runs,
+        # scheduled backups).
         from app.services.deployment_job_service import DeploymentJobService
         DeploymentJobService.register_jobs()
         from app.services.workflow_engine import WorkflowEngine
         WorkflowEngine.register_jobs()
+        from app.services.backup_service import BackupService
+        BackupService.register_jobs()
         start_job_system(app, seed=seed_builtin_schedules)
 
     # Request body size limit

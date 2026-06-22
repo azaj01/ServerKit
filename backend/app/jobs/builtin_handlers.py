@@ -256,6 +256,12 @@ def run_api_background():
     EventService.retry_failed()
 
 
+def run_backup_scheduler():
+    """Enqueue any scheduled backups that are due (gated by backup config)."""
+    from app.services.backup_service import BackupService
+    BackupService.check_backup_schedules()
+
+
 # ---------------------------------------------------------------------------
 # Handler registration + schedule seeding
 # ---------------------------------------------------------------------------
@@ -271,6 +277,7 @@ _BUILTINS = [
     ('builtin.api_background',      run_api_background,        'api-background',     3600,  3600),
     ('builtin.pairing_prune',       run_pairing_prune,         'pairing-prune',      3600,  60),
     ('builtin.registrar_expiry',    run_registrar_expiry,      'registrar-expiry',   86400, 300),
+    ('builtin.backup_scheduler',    run_backup_scheduler,      'backup-scheduler',   30,    30),
 ]
 
 

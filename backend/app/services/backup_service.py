@@ -19,6 +19,9 @@ from app.utils.formatting import format_bytes
 from app.utils.system import is_command_available
 from app.services.telemetry_service import TelemetryService, generate_correlation_id
 
+# Unified job kind for asynchronous scheduled backups (see register_jobs).
+BACKUP_JOB_KIND = 'backup.run'
+
 
 class BackupService:
     """Service for automated backups of applications and databases."""
@@ -32,9 +35,6 @@ class BackupService:
     TYPE_DATABASE = 'database'
     TYPE_FULL = 'full'
     TYPE_FILES = 'files'
-
-    _scheduler_thread = None
-    _stop_scheduler = False
 
     @classmethod
     def get_backup_dir(cls, backup_type: str = None) -> str:
@@ -804,79 +804,89 @@ class BackupService:
         except Exception:
             pass
 
-    # --- Scheduler ---
+    # --- Scheduler (unified job system) ---
 
     @classmethod
-    def start_scheduler(cls) -> None:
-        """Start the backup scheduler background thread."""
-        if cls._scheduler_thread and cls._scheduler_thread.is_alive():
+    def register_jobs(cls):
+        """Register the backup.run handler with the unified job registry. Called
+        once at app startup (see app/__init__.py)."""
+        from app.jobs import registry
+        registry.register(BACKUP_JOB_KIND, cls.run_backup_job, replace=True)
+
+    @classmethod
+    def check_backup_schedules(cls) -> None:
+        """Enqueue a backup.run job for each schedule that is due now.
+
+        Runs on the unified job scheduler (builtin.backup_scheduler) instead of a
+        dedicated daemon thread. Gated by the existing backup config, so it stays
+        inert unless backups are configured + enabled.
+        """
+        from app.jobs.service import JobService
+        config = cls.get_config()
+        if not config.get('enabled', False):
             return
 
-        cls._stop_scheduler = False
-        cls._scheduler_thread = threading.Thread(
-            target=cls._scheduler_loop,
-            daemon=True,
-            name='backup-scheduler'
+        now = datetime.now()
+        current_time = now.strftime('%H:%M')
+        current_day = now.strftime('%A').lower()
+        dirty = False
+
+        for sched in config.get('schedules', []):
+            if not sched.get('enabled', False):
+                continue
+            if sched.get('schedule_time') != current_time:
+                continue
+            days = sched.get('days', ['daily'])
+            if 'daily' not in days and current_day not in days:
+                continue
+            # Skip if a run was enqueued / ran within the last ~2 minutes.
+            last_run = sched.get('last_run')
+            if last_run:
+                try:
+                    if (now - datetime.fromisoformat(last_run)).total_seconds() < 120:
+                        continue
+                except Exception:
+                    pass
+
+            JobService.enqueue(
+                BACKUP_JOB_KIND,
+                payload={'schedule_id': sched.get('id')},
+                max_attempts=1,  # backups aren't idempotent — no auto-retry
+                owner_type='backup_schedule',
+                owner_id=sched.get('id'),
+            )
+            # Optimistic dedup so the next tick in the same minute doesn't
+            # double-enqueue; the run itself rewrites last_run/last_status.
+            sched['last_run'] = now.isoformat()
+            dirty = True
+
+        if dirty:
+            cls.save_config(config)
+
+        if current_time == '00:00':
+            cls.cleanup_old_backups()
+
+    @staticmethod
+    def run_backup_job(job):
+        """Unified-job handler for ``backup.run`` — execute one scheduled backup.
+        Raises if the backup failed so the unified job is marked failed too (the
+        schedule's last_status carries the detail)."""
+        schedule_id = (job.get_payload() or {}).get('schedule_id')
+        config = BackupService.get_config()
+        sched = next((s for s in config.get('schedules', []) if s.get('id') == schedule_id), None)
+        if not sched:
+            raise ValueError(f'backup schedule {schedule_id!r} not found')
+
+        BackupService._run_scheduled_backup(sched)
+
+        updated = next(
+            (s for s in BackupService.get_config().get('schedules', []) if s.get('id') == schedule_id),
+            None,
         )
-        cls._scheduler_thread.start()
-
-    @classmethod
-    def stop_scheduler(cls) -> None:
-        """Stop the backup scheduler."""
-        cls._stop_scheduler = True
-        if cls._scheduler_thread:
-            cls._scheduler_thread.join(timeout=5)
-            cls._scheduler_thread = None
-
-    @classmethod
-    def _scheduler_loop(cls) -> None:
-        """Background loop that checks and runs scheduled backups."""
-        while not cls._stop_scheduler:
-            try:
-                config = cls.get_config()
-                if config.get('enabled', False):
-                    now = datetime.now()
-                    current_time = now.strftime('%H:%M')
-                    current_day = now.strftime('%A').lower()
-
-                    for sched in config.get('schedules', []):
-                        if not sched.get('enabled', False):
-                            continue
-
-                        # Check if it's time to run
-                        if sched.get('schedule_time') != current_time:
-                            continue
-
-                        # Check day
-                        days = sched.get('days', ['daily'])
-                        if 'daily' not in days and current_day not in days:
-                            continue
-
-                        # Check if already ran this minute
-                        last_run = sched.get('last_run')
-                        if last_run:
-                            try:
-                                last_run_time = datetime.fromisoformat(last_run)
-                                if (now - last_run_time).total_seconds() < 120:
-                                    continue
-                            except Exception:
-                                pass
-
-                        # Run the backup
-                        cls._run_scheduled_backup(sched)
-
-                    # Run retention cleanup once daily at midnight
-                    if current_time == '00:00':
-                        cls.cleanup_old_backups()
-
-            except Exception:
-                pass
-
-            # Check every 30 seconds
-            for _ in range(30):
-                if cls._stop_scheduler:
-                    return
-                time.sleep(1)
+        if updated and updated.get('last_status') == 'failed':
+            raise RuntimeError(f"Backup '{sched.get('name', schedule_id)}' failed")
+        return {'schedule_id': schedule_id, 'name': sched.get('name'),
+                'status': updated.get('last_status') if updated else None}
 
     @classmethod
     def _run_scheduled_backup(cls, sched: Dict) -> None:
@@ -989,11 +999,13 @@ class BackupService:
 
             severity = 'success' if success else 'critical'
             status = 'completed successfully' if success else 'failed'
-            NotificationService.send_all(
-                title=f'Backup {status}: {backup_name}',
-                message=message,
-                severity=severity
-            )
+            # send_all takes a list of alert dicts (it fans out to the configured
+            # system channels through the queue-backed Notification Bus).
+            NotificationService.send_all([{
+                'type': 'backup',
+                'severity': 'critical' if not success else 'info',
+                'message': f'Backup {status}: {backup_name}' + (f' — {message}' if message else ''),
+            }])
         except Exception:
             pass
 

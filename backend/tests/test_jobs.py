@@ -173,13 +173,14 @@ class TestBuiltins:
         kinds = registry.registered_kinds()
         assert 'builtin.auto_sync' in kinds
         assert 'builtin.health_check' in kinds
-        assert len([k for k in kinds if k.startswith('builtin.')]) == 8
+        assert 'builtin.backup_scheduler' in kinds
+        assert len([k for k in kinds if k.startswith('builtin.')]) == 9
 
         builtin_handlers.seed_builtin_schedules()
-        assert ScheduledJob.query.count() == 8
+        assert ScheduledJob.query.count() == 9
         # Seeding twice doesn't duplicate.
         builtin_handlers.seed_builtin_schedules()
-        assert ScheduledJob.query.count() == 8
+        assert ScheduledJob.query.count() == 9
 
 
 class TestApi:
@@ -364,3 +365,68 @@ class TestWorkflowExecutionHandler:
         assert WorkflowExecution.query.get(execution_id).status == 'failed'
         unified = Job.query.filter_by(kind='workflow.execute').first()
         assert unified.status == Job.STATUS_FAILED
+
+
+class TestBackupScheduleHandler:
+    """Phase 7 — scheduled backups run as 'backup.run' unified jobs, enqueued by
+    the builtin.backup_scheduler tick (replacing the orphaned daemon loop).
+    BackupService internals are patched so these exercise the wiring."""
+
+    def test_register_jobs_adds_handler(self, app):
+        from app.services.backup_service import BackupService, BACKUP_JOB_KIND
+        BackupService.register_jobs()
+        assert BACKUP_JOB_KIND == 'backup.run'
+        assert registry.is_registered('backup.run')
+
+    def test_check_schedules_enqueues_only_due_enabled(self, app, monkeypatch):
+        from datetime import datetime
+        from app.services.backup_service import BackupService
+
+        now_hm = datetime.now().strftime('%H:%M')
+        cfg = {'enabled': True, 'schedules': [
+            {'id': 'b1', 'enabled': True, 'schedule_time': now_hm, 'days': ['daily'], 'name': 'nightly'},
+            {'id': 'b2', 'enabled': False, 'schedule_time': now_hm, 'days': ['daily'], 'name': 'off'},
+        ]}
+        monkeypatch.setattr(BackupService, 'get_config', staticmethod(lambda: cfg))
+        monkeypatch.setattr(BackupService, 'save_config', staticmethod(lambda c: None))
+        monkeypatch.setattr(BackupService, 'cleanup_old_backups', staticmethod(lambda *a, **k: None))
+
+        BackupService.check_backup_schedules()
+
+        due = Job.query.filter_by(kind='backup.run').all()
+        assert len(due) == 1
+        assert due[0].owner_id == 'b1'
+        assert due[0].get_payload() == {'schedule_id': 'b1'}
+        assert due[0].max_attempts == 1
+
+    def test_check_schedules_inert_when_disabled(self, app, monkeypatch):
+        from datetime import datetime
+        from app.services.backup_service import BackupService
+
+        now_hm = datetime.now().strftime('%H:%M')
+        cfg = {'enabled': False, 'schedules': [
+            {'id': 'b1', 'enabled': True, 'schedule_time': now_hm, 'days': ['daily'], 'name': 'nightly'},
+        ]}
+        monkeypatch.setattr(BackupService, 'get_config', staticmethod(lambda: cfg))
+        BackupService.check_backup_schedules()
+        assert Job.query.filter_by(kind='backup.run').count() == 0
+
+    def test_handler_success_and_failure(self, app, monkeypatch):
+        from app.services.backup_service import BackupService
+
+        monkeypatch.setattr(BackupService, '_run_scheduled_backup', staticmethod(lambda sched: None))
+        BackupService.register_jobs()
+
+        # Success: schedule ends up 'success'.
+        monkeypatch.setattr(BackupService, 'get_config',
+                            staticmethod(lambda: {'schedules': [{'id': 'b1', 'name': 'n', 'last_status': 'success'}]}))
+        ok = JobService.enqueue('backup.run', {'schedule_id': 'b1'}, max_attempts=1)
+        _drain_once()
+        assert Job.query.get(ok.id).status == Job.STATUS_SUCCEEDED
+
+        # Failure: schedule ends up 'failed' -> handler raises -> job failed.
+        monkeypatch.setattr(BackupService, 'get_config',
+                            staticmethod(lambda: {'schedules': [{'id': 'b2', 'name': 'n', 'last_status': 'failed'}]}))
+        bad = JobService.enqueue('backup.run', {'schedule_id': 'b2'}, max_attempts=1)
+        _drain_once()
+        assert Job.query.get(bad.id).status == Job.STATUS_FAILED
