@@ -9,15 +9,20 @@ export function useToast() {
   return context;
 }
 
+// Callers pass either a numeric duration (`toast.info(msg, 4000)`) or a full sonner
+// options object (`toast.info(msg, { duration: 4000 })`). Normalize both so an
+// options object is passed through instead of being double-wrapped — the latter
+// silently dropped custom durations across the app.
+function toastOptions(opts) {
+  if (opts == null) return undefined;
+  return typeof opts === 'number' ? { duration: opts } : opts;
+}
+
 export function ToastProvider({ children }) {
-  const success = useCallback((message, duration) =>
-    sonner.success(message, duration != null ? { duration } : undefined), []);
-  const error = useCallback((message, duration) =>
-    sonner.error(message, duration != null ? { duration } : undefined), []);
-  const warning = useCallback((message, duration) =>
-    sonner.warning(message, duration != null ? { duration } : undefined), []);
-  const info = useCallback((message, duration) =>
-    sonner.info(message, duration != null ? { duration } : undefined), []);
+  const success = useCallback((message, opts) => sonner.success(message, toastOptions(opts)), []);
+  const error = useCallback((message, opts) => sonner.error(message, toastOptions(opts)), []);
+  const warning = useCallback((message, opts) => sonner.warning(message, toastOptions(opts)), []);
+  const info = useCallback((message, opts) => sonner.info(message, toastOptions(opts)), []);
 
   return (
     <ToastContext.Provider value={{ success, error, warning, info, toasts: [], addToast: sonner, removeToast: () => {} }}>
