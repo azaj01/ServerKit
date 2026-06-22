@@ -34,6 +34,11 @@ MAX_RETRY_COUNT = 5
 DEFAULT_RETRY_DELAY = 5  # seconds
 MAX_OUTPUT_SIZE = 1024 * 512  # 512 KB
 
+# Unified job kinds for asynchronous workflow execution + event dispatch
+# (see WorkflowEngine.enqueue_execution / register_jobs).
+WORKFLOW_JOB_KIND = 'workflow.execute'
+WORKFLOW_DISPATCH_JOB_KIND = 'workflow.dispatch'
+
 
 def _parse_version(s: str) -> tuple:
     """Turn '3.11.4' / 'v20.10.0' / '8.2' into a comparable tuple of ints.
@@ -144,11 +149,37 @@ class WorkflowEngine:
     @staticmethod
     def execute_workflow(workflow_id: int, trigger_type: str = 'manual',
                          context: Dict[str, Any] = None) -> int:
-        """
-        Execute a workflow by ID.
+        """Create and SYNCHRONOUSLY run a workflow. Returns the execution id.
 
-        Returns the ID of the created WorkflowExecution.
+        Kept for callers that want to block on the result (and tests). Async
+        callers (API/webhook/cron/event) use enqueue_execution instead.
         """
+        execution = WorkflowEngine._create_execution(workflow_id, trigger_type, context)
+        WorkflowEngine.run_execution(execution.id)
+        return execution.id
+
+    @staticmethod
+    def enqueue_execution(workflow_id: int, trigger_type: str = 'manual',
+                          context: Dict[str, Any] = None) -> int:
+        """Create the execution row and run it asynchronously via the unified job
+        system (kind ``workflow.execute``). Returns the execution id immediately,
+        so triggers don't block on the DAG. Graph validation still happens here,
+        so an invalid workflow raises synchronously (callers can 400)."""
+        execution = WorkflowEngine._create_execution(workflow_id, trigger_type, context)
+        from app.jobs.service import JobService
+        JobService.enqueue(
+            WORKFLOW_JOB_KIND,
+            payload={'execution_id': execution.id},
+            max_attempts=1,  # workflows aren't idempotent (deploy/script/notify)
+            owner_type='workflow',
+            owner_id=workflow_id,
+        )
+        return execution.id
+
+    @staticmethod
+    def _create_execution(workflow_id: int, trigger_type: str = 'manual',
+                          context: Dict[str, Any] = None) -> WorkflowExecution:
+        """Validate the workflow graph and persist a new (running) execution row."""
         workflow = Workflow.query.get(workflow_id)
         if not workflow:
             raise ValueError(f"Workflow {workflow_id} not found")
@@ -156,7 +187,7 @@ class WorkflowEngine:
         nodes = json.loads(workflow.nodes) if workflow.nodes else []
         edges = json.loads(workflow.edges) if workflow.edges else []
 
-        # Validate graph before executing
+        # Validate graph before creating the execution
         cycle_err = WorkflowEngine.validate_graph(nodes, edges)
         if cycle_err:
             raise CycleDetectedError(cycle_err)
@@ -173,6 +204,18 @@ class WorkflowEngine:
 
         workflow.last_run_at = execution.started_at
         db.session.commit()
+        return execution
+
+    @staticmethod
+    def run_execution(execution_id: int) -> int:
+        """Run an already-created execution to completion. The synchronous core
+        shared by execute_workflow and the workflow.execute job handler."""
+        execution = WorkflowExecution.query.get(execution_id)
+        if not execution:
+            raise ValueError(f"WorkflowExecution {execution_id} not found")
+        workflow = execution.workflow
+        nodes = json.loads(workflow.nodes) if workflow.nodes else []
+        edges = json.loads(workflow.edges) if workflow.edges else []
 
         try:
             WorkflowEngine._run_execution(execution.id, nodes, edges)
@@ -184,6 +227,29 @@ class WorkflowEngine:
             db.session.commit()
 
         return execution.id
+
+    @staticmethod
+    def _run_workflow_job(job):
+        """Unified-job handler for ``workflow.execute``. Runs the queued execution;
+        a failed run is raised so the unified job is marked failed too (the
+        WorkflowExecution row carries the detailed per-node status/logs)."""
+        execution_id = (job.get_payload() or {}).get('execution_id')
+        if not execution_id:
+            raise ValueError('workflow.execute job missing execution_id')
+        WorkflowEngine.run_execution(execution_id)
+        execution = WorkflowExecution.query.get(execution_id)
+        if execution and execution.status == 'failed':
+            raise RuntimeError(f'Workflow execution {execution_id} failed')
+        return {'execution_id': execution_id,
+                'status': execution.status if execution else None}
+
+    @staticmethod
+    def register_jobs():
+        """Register the workflow job handlers with the unified job registry.
+        Called once at app startup (see app/__init__.py)."""
+        from app.jobs import registry
+        registry.register(WORKFLOW_JOB_KIND, WorkflowEngine._run_workflow_job, replace=True)
+        registry.register(WORKFLOW_DISPATCH_JOB_KIND, WorkflowEventBus.dispatch_event, replace=True)
 
     # ------------------------------------------------------------------
     # DAG Execution
@@ -873,65 +939,63 @@ class WorkflowEventBus:
 
     @staticmethod
     def emit(event_type: str, data: Dict[str, Any] = None):
-        """
-        Emit an event that may trigger workflows.
+        """Emit a system event that may trigger event-subscribed workflows.
+
+        Non-blocking: enqueues a single ``workflow.dispatch`` job that fans out to
+        the matching workflows on the unified job system (replacing the former
+        per-event daemon thread). Best-effort — never raises into the caller.
 
         Args:
             event_type: One of health_check_failed, high_cpu, high_memory,
                         git_push, app_stopped, or any custom string.
             data: Event payload passed as workflow context.
         """
-        from flask import current_app
         try:
-            app = current_app._get_current_object()
-        except RuntimeError:
-            logger.warning(f"WorkflowEventBus.emit called outside app context for {event_type}")
-            return
-
-        threading.Thread(
-            target=WorkflowEventBus._process_event,
-            args=(app, event_type, data or {}),
-            daemon=True,
-            name=f'wf-event-{event_type}'
-        ).start()
+            from app.jobs.service import JobService
+            JobService.enqueue(
+                WORKFLOW_DISPATCH_JOB_KIND,
+                payload={'event_type': event_type, 'data': data or {}},
+                max_attempts=1,
+                owner_type='workflow_event',
+                owner_id=event_type,
+            )
+        except Exception as e:
+            # No app context, or the queue is unavailable — never break the caller.
+            logger.warning(f"WorkflowEventBus.emit could not enqueue '{event_type}': {e}")
 
     @staticmethod
-    def _process_event(app, event_type: str, data: Dict):
-        """Find and execute workflows subscribed to this event type."""
-        with app.app_context():
+    def dispatch_event(job):
+        """Unified-job handler for ``workflow.dispatch`` — find workflows
+        subscribed to the event and enqueue a workflow.execute job for each
+        (honoring the per-workflow 60s cooldown)."""
+        payload = job.get_payload() or {}
+        event_type = payload.get('event_type')
+        data = payload.get('data') or {}
+        if not event_type:
+            return {'event_type': None, 'triggered': 0}
+
+        workflows = Workflow.query.filter_by(is_active=True, trigger_type='event').all()
+        triggered = 0
+        for workflow in workflows:
             try:
-                workflows = Workflow.query.filter_by(
-                    is_active=True,
-                    trigger_type='event'
-                ).all()
-
-                for workflow in workflows:
-                    try:
-                        config = json.loads(workflow.trigger_config) if workflow.trigger_config else {}
-                        subscribed_event = config.get('eventType', '')
-
-                        if subscribed_event != event_type:
-                            continue
-
-                        # Cooldown: don't re-trigger within 60 seconds
-                        if workflow.last_run_at:
-                            elapsed = (datetime.utcnow() - workflow.last_run_at).total_seconds()
-                            if elapsed < 60:
-                                continue
-
-                        logger.info(f"Event '{event_type}' triggering workflow: {workflow.name}")
-                        context = {
-                            'event_type': event_type,
-                            'event_data': data,
-                            'triggered_at': datetime.utcnow().isoformat()
-                        }
-                        WorkflowEngine.execute_workflow(
-                            workflow_id=workflow.id,
-                            trigger_type='event',
-                            context=context
-                        )
-                    except Exception as e:
-                        logger.error(f"Event trigger failed for workflow {workflow.id}: {e}")
-
+                config = json.loads(workflow.trigger_config) if workflow.trigger_config else {}
+                if config.get('eventType', '') != event_type:
+                    continue
+                # Cooldown: don't re-trigger within 60 seconds.
+                if workflow.last_run_at and \
+                        (datetime.utcnow() - workflow.last_run_at).total_seconds() < 60:
+                    continue
+                logger.info(f"Event '{event_type}' triggering workflow: {workflow.name}")
+                WorkflowEngine.enqueue_execution(
+                    workflow_id=workflow.id,
+                    trigger_type='event',
+                    context={
+                        'event_type': event_type,
+                        'event_data': data,
+                        'triggered_at': datetime.utcnow().isoformat(),
+                    },
+                )
+                triggered += 1
             except Exception as e:
-                logger.error(f"WorkflowEventBus._process_event error: {e}")
+                logger.error(f"Event trigger failed for workflow {workflow.id}: {e}")
+        return {'event_type': event_type, 'triggered': triggered}

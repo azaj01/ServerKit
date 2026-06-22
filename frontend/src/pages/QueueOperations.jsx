@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Layers,
     Inbox,
@@ -65,12 +66,8 @@ const QueueOperations = () => {
     const [sendTarget, setSendTarget] = useState(null);
     const [sendForm, setSendForm] = useState({ payload: '{}', priority: 0, delay_ms: 0 });
 
-    const [messageModalQueue, setMessageModalQueue] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [modalMessageFilter, setModalMessageFilter] = useState('all');
-    const [selectedMessage, setSelectedMessage] = useState(null);
-
     const pollRef = useRef(null);
+    const navigate = useNavigate();
 
     const loadData = useCallback(async () => {
         try {
@@ -104,19 +101,6 @@ const QueueOperations = () => {
         }
     }, [groups, toast]);
 
-    const loadMessages = useCallback(async (groupSlug, queueSlug, status) => {
-        if (!groupSlug || !queueSlug) return;
-        try {
-            const res = await api.getMessages(groupSlug, queueSlug, {
-                status: status === 'all' ? undefined : status,
-                limit: 100,
-            });
-            setMessages(res.messages || []);
-        } catch (err) {
-            toast.error(err.message);
-        }
-    }, [toast]);
-
     useEffect(() => {
         loadData();
     }, [loadData]);
@@ -126,14 +110,11 @@ const QueueOperations = () => {
         pollRef.current = setInterval(() => {
             loadData();
             loadQueues(selectedGroup);
-            if (messageModalQueue) {
-                loadMessages(messageModalQueue.group_slug, messageModalQueue.slug, modalMessageFilter);
-            }
         }, POLL_INTERVAL);
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
         };
-    }, [selectedGroup, loadData, loadQueues, messageModalQueue, modalMessageFilter, loadMessages]);
+    }, [selectedGroup, loadData, loadQueues]);
 
     const totalQueues = useMemo(
         () => groups.reduce((acc, g) => acc + (g.stats?.queues || 0), 0),
@@ -162,6 +143,13 @@ const QueueOperations = () => {
     const activeGroup = useMemo(
         () => groups.find(g => g.slug === selectedGroup),
         [groups, selectedGroup]
+    );
+
+    // System-owned groups are read-only: their queues can be viewed but not
+    // mutated (the backend enforces this too). Used to hide destructive actions.
+    const systemGroupSlugs = useMemo(
+        () => new Set(groups.filter(g => g.owner_type === 'system').map(g => g.slug)),
+        [groups]
     );
 
     const handleCreateGroup = async (e) => {
@@ -255,46 +243,13 @@ const QueueOperations = () => {
             setSendTarget(null);
             loadQueues(selectedGroup);
             loadData();
-            if (messageModalQueue?.slug === queue.slug && messageModalQueue?.group_slug === queue.group_slug) {
-                loadMessages(queue.group_slug, queue.slug, modalMessageFilter);
-            }
         } catch (err) {
             toast.error(err.message);
         }
     };
 
-    const openMessagesModal = (queue) => {
-        setMessageModalQueue(queue);
-        setModalMessageFilter(messageFilter === 'all' ? 'all' : messageFilter);
-        loadMessages(queue.group_slug, queue.slug, messageFilter === 'all' ? 'all' : messageFilter);
-    };
-
-    const handleRequeueMessage = async (msg) => {
-        try {
-            await api.requeueMessage(msg.group_slug, msg.queue_slug, msg.id);
-            toast.success('Message requeued');
-            loadMessages(msg.group_slug, msg.queue_slug, modalMessageFilter);
-            loadData();
-        } catch (err) {
-            toast.error(err.message);
-        }
-    };
-
-    const handleDeleteMessage = async (msg) => {
-        const confirmed = await confirm({
-            title: 'Delete Message',
-            message: 'Permanently delete this message?',
-            variant: 'danger',
-        });
-        if (!confirmed) return;
-        try {
-            await api.deleteMessage(msg.group_slug, msg.queue_slug, msg.id);
-            toast.success('Message deleted');
-            loadMessages(msg.group_slug, msg.queue_slug, modalMessageFilter);
-            loadData();
-        } catch (err) {
-            toast.error(err.message);
-        }
+    const openQueue = (queue) => {
+        navigate(`/queue/${encodeURIComponent(queue.group_slug)}/${encodeURIComponent(queue.slug)}`);
     };
 
     const hasActiveFilters = selectedGroup !== '' || messageFilter !== 'all' || Boolean(searchTerm);
@@ -494,7 +449,7 @@ const QueueOperations = () => {
                                         <tr
                                             key={queue.id}
                                             className="is-clickable"
-                                            onClick={() => openMessagesModal(queue)}
+                                            onClick={() => openQueue(queue)}
                                         >
                                             <td>
                                                 <div className="queue-row-name">
@@ -524,15 +479,19 @@ const QueueOperations = () => {
                                             <td>{new Date(queue.created_at).toLocaleString()}</td>
                                             <td className="col-actions" onClick={e => e.stopPropagation()}>
                                                 <div className="queue-actions">
-                                                    <Button variant="ghost" size="sm" onClick={() => openSendModal(queue)}>
-                                                        <Send size={14} />
-                                                    </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => openMessagesModal(queue)}>
+                                                    {!systemGroupSlugs.has(queue.group_slug) && (
+                                                        <Button variant="ghost" size="sm" onClick={() => openSendModal(queue)} title="Send message">
+                                                            <Send size={14} />
+                                                        </Button>
+                                                    )}
+                                                    <Button variant="ghost" size="sm" onClick={() => openQueue(queue)} title="View messages">
                                                         <Inbox size={14} />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteQueue(queue)}>
-                                                        <Trash2 size={14} />
-                                                    </Button>
+                                                    {!systemGroupSlugs.has(queue.group_slug) && (
+                                                        <Button variant="ghost" size="sm" onClick={() => handleDeleteQueue(queue)} title="Delete queue">
+                                                            <Trash2 size={14} />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -663,123 +622,6 @@ const QueueOperations = () => {
                                 <Button type="submit"><Send size={14} className="mr-2" /> Send Message</Button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Messages Modal */}
-            {messageModalQueue && (
-                <div className="modal-overlay" onClick={() => setMessageModalQueue(null)}>
-                    <div className="modal modal--wide" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <div>
-                                <h2>{messageModalQueue.name} Messages</h2>
-                                <span className="modal-header-sub">{messageModalQueue.group_slug} / {messageModalQueue.slug}</span>
-                            </div>
-                            <button className="modal-close" onClick={() => setMessageModalQueue(null)}>&times;</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="queue-messages-toolbar">
-                                <div className="queue-messages-selects">
-                                    <select
-                                        className="queue-select"
-                                        value={modalMessageFilter}
-                                        onChange={(e) => {
-                                            setModalMessageFilter(e.target.value);
-                                            loadMessages(messageModalQueue.group_slug, messageModalQueue.slug, e.target.value);
-                                        }}
-                                    >
-                                        <option value="all">All statuses</option>
-                                        {STATUS_ORDER.map(s => (
-                                            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="queue-messages-actions">
-                                    <Button variant="outline" size="sm" onClick={() => openSendModal(messageModalQueue)}>
-                                        <Send size={14} className="mr-2" /> Send Message
-                                    </Button>
-                                    <Button variant="outline" size="sm" onClick={() => loadMessages(messageModalQueue.group_slug, messageModalQueue.slug, modalMessageFilter)}>
-                                        <RefreshCw size={14} className="mr-2" /> Refresh
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {messages.length === 0 ? (
-                                <EmptyState icon={Inbox} title="No Messages" description="This queue is empty. Send a message to get started." />
-                            ) : (
-                                <table className="sk-dtable queue-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Status</th>
-                                            <th>Payload</th>
-                                            <th>Attempts</th>
-                                            <th>Created</th>
-                                            <th aria-label="Actions" />
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {messages.map(msg => (
-                                            <tr key={msg.id} className="is-clickable" onClick={() => setSelectedMessage(msg)}>
-                                                <td><Pill kind={STATUS_KINDS[msg.status] || 'gray'}>{msg.status}</Pill></td>
-                                                <td><code className="queue-payload-preview">{JSON.stringify(msg.payload).slice(0, 80)}</code></td>
-                                                <td>{msg.attempts} / {msg.max_attempts}</td>
-                                                <td>{new Date(msg.created_at).toLocaleString()}</td>
-                                                <td onClick={e => e.stopPropagation()}>
-                                                    <div className="queue-actions">
-                                                        {(msg.status === 'failed' || msg.status === 'dead_letter') && (
-                                                            <Button variant="ghost" size="sm" onClick={() => handleRequeueMessage(msg)}>
-                                                                <RefreshCw size={14} />
-                                                            </Button>
-                                                        )}
-                                                        <Button variant="ghost" size="sm" onClick={() => handleDeleteMessage(msg)}>
-                                                            <Trash2 size={14} />
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Message Detail Modal */}
-            {selectedMessage && (
-                <div className="modal-overlay" onClick={() => setSelectedMessage(null)}>
-                    <div className="modal modal--wide" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Message Detail</h2>
-                            <button className="modal-close" onClick={() => setSelectedMessage(null)}>&times;</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="queue-message-detail">
-                                <div><strong>ID:</strong> <code>{selectedMessage.id}</code></div>
-                                <div><strong>Status:</strong> <Pill kind={STATUS_KINDS[selectedMessage.status] || 'gray'}>{selectedMessage.status}</Pill></div>
-                                <div><strong>Attempts:</strong> {selectedMessage.attempts} / {selectedMessage.max_attempts}</div>
-                                <div><strong>Created:</strong> {new Date(selectedMessage.created_at).toLocaleString()}</div>
-                                {selectedMessage.error_message && (
-                                    <div className="queue-message-error"><strong>Error:</strong> {selectedMessage.error_message}</div>
-                                )}
-                                <div className="queue-message-section"><strong>Payload:</strong>
-                                    <pre>{JSON.stringify(selectedMessage.payload, null, 2)}</pre>
-                                </div>
-                                {selectedMessage.result && (
-                                    <div className="queue-message-section"><strong>Result:</strong>
-                                        <pre>{JSON.stringify(selectedMessage.result, null, 2)}</pre>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <Button type="button" variant="outline" onClick={() => setSelectedMessage(null)}>Close</Button>
-                            {(selectedMessage.status === 'failed' || selectedMessage.status === 'dead_letter') && (
-                                <Button onClick={() => { handleRequeueMessage(selectedMessage); setSelectedMessage(null); }}>Requeue</Button>
-                            )}
-                        </div>
                     </div>
                 </div>
             )}

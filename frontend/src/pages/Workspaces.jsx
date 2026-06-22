@@ -4,11 +4,12 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
-import { LayoutGrid, Plus, ChevronRight } from 'lucide-react';
-import { PageTopbar, Pill, ServiceTile } from '@/components/ds';
+import { LayoutGrid, Plus, ChevronRight, Search } from 'lucide-react';
+import { PageTopbar, Pill, SegControl, ServiceTile } from '@/components/ds';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Matches WorkspaceSwitcher: the active workspace id lives in localStorage.
 const ACTIVE_KEY = 'active_workspace_id';
@@ -27,6 +28,9 @@ const Workspaces = () => {
     const navigate = useNavigate();
     const [workspaces, setWorkspaces] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState('all'); // all | active | inactive
+    const [search, setSearch] = useState('');
+    const [selectedIds, setSelectedIds] = useState(new Set());
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [form, setForm] = useState({ name: '', description: '', max_servers: 0, max_users: 0, primary_color: '#6d7cff' });
 
@@ -59,6 +63,17 @@ const Workspaces = () => {
 
     if (loading) return <div className="page-container workspaces-page"><Spinner /></div>;
 
+    const q = search.trim().toLowerCase();
+    const shownWorkspaces = workspaces.filter(ws => {
+        const matchesStatus = statusFilter === 'all'
+            || (statusFilter === 'active' ? ws.status === 'active' : ws.status !== 'active');
+        const matchesSearch = q === '' || [ws.name, ws.slug, ws.description]
+            .some(v => v && String(v).toLowerCase().includes(q));
+        return matchesStatus && matchesSearch;
+    });
+
+    const activeCount = workspaces.filter(ws => ws.status === 'active').length;
+
     return (
         <div className="page-container workspaces-page">
             <PageTopbar
@@ -78,61 +93,136 @@ const Workspaces = () => {
                     icon={LayoutGrid}
                     title="No workspaces yet"
                     description="Create one to isolate servers by team or project."
+                    action={
+                        <Button onClick={() => setShowCreateModal(true)}>
+                            New Workspace
+                        </Button>
+                    }
                 />
             ) : (
-                <>
-                    <div className="ws-listhead">
-                        <h2>Your Workspaces</h2>
-                        <span className="ws-listhead__hint">open a workspace to manage its resources</span>
+                <div className="wp-list">
+                    <div className="wp-list__toolbar">
+                        <SegControl
+                            value={statusFilter}
+                            onChange={setStatusFilter}
+                            options={[
+                                { value: 'all', label: 'All', count: workspaces.length },
+                                { value: 'active', label: 'Active', count: activeCount },
+                                { value: 'inactive', label: 'Inactive', count: workspaces.length - activeCount },
+                            ]}
+                        />
+                        <div className="wp-list__search">
+                            <Search size={15} aria-hidden="true" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                placeholder="Search workspaces…"
+                                aria-label="Search workspaces"
+                            />
+                        </div>
                     </div>
-                    <div className="ws-grid">
-                        {workspaces.map(ws => {
-                            const since = formatSince(ws.created_at);
-                            const isCurrent = activeId === String(ws.id);
-                            return (
-                                <div
-                                    key={ws.id}
-                                    className={`ws-card is-clickable ${isCurrent ? 'active' : ''}`}
-                                    role="link"
-                                    tabIndex={0}
-                                    onClick={() => navigate(`/workspaces/${ws.id}`)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/workspaces/${ws.id}`); }}
-                                >
-                                    <div className="ws-card__top">
-                                        <ServiceTile name={ws.name} size={38} gradient={ws.primary_color || undefined} />
-                                        {isCurrent
-                                            ? <Pill kind="green">active</Pill>
-                                            : <Pill kind={ws.status === 'active' ? 'green' : 'amber'}>{ws.status}</Pill>}
-                                    </div>
-                                    <div className="ws-card__name">{ws.name}</div>
-                                    <div className="ws-card__meta">/{ws.slug}{since ? ` · since ${since}` : ''}</div>
-                                    {ws.description && <p className="ws-card__desc">{ws.description}</p>}
-                                    <div className="ws-card__stats">
-                                        <div>
-                                            <div className="v">{ws.member_count}</div>
-                                            <div className="l">Member{ws.member_count !== 1 ? 's' : ''}</div>
-                                        </div>
-                                        {ws.max_servers > 0 && (
-                                            <div>
-                                                <div className="v">{ws.max_servers}</div>
-                                                <div className="l">Max Servers</div>
-                                            </div>
-                                        )}
-                                        {ws.max_users > 0 && (
-                                            <div>
-                                                <div className="v">{ws.max_users}</div>
-                                                <div className="l">Max Users</div>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="ws-card__open">
-                                        Open <ChevronRight size={14} />
-                                    </div>
-                                </div>
-                            );
-                        })}
+
+                    {selectedIds.size > 0 && (
+                        <div className="wp-list__bulkbar">
+                            <span className="wp-list__bulkcount">{selectedIds.size} selected</span>
+                            <div className="wp-list__bulkactions">
+                                <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                                    Clear
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="wp-list__card">
+                        <table className="sk-dtable">
+                            <thead>
+                                <tr>
+                                    <th className="wp-list__ck">
+                                        <Checkbox
+                                            checked={shownWorkspaces.length > 0 && shownWorkspaces.every(ws => selectedIds.has(ws.id))}
+                                            onCheckedChange={(checked) => {
+                                                setSelectedIds(checked ? new Set(shownWorkspaces.map(ws => ws.id)) : new Set());
+                                            }}
+                                            aria-label="Select all workspaces"
+                                        />
+                                    </th>
+                                    <th>Workspace</th>
+                                    <th>Slug</th>
+                                    <th>Members</th>
+                                    <th>Servers</th>
+                                    <th>Users</th>
+                                    <th>Status</th>
+                                    <th className="wp-list__action" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {shownWorkspaces.map(ws => {
+                                    const since = formatSince(ws.created_at);
+                                    const isCurrent = activeId === String(ws.id);
+                                    return (
+                                        <tr
+                                            key={ws.id}
+                                            className={`is-clickable ${selectedIds.has(ws.id) ? 'is-selected' : ''}`}
+                                            onClick={() => navigate(`/workspaces/${ws.id}`)}
+                                        >
+                                            <td className="wp-list__ck" onClick={e => e.stopPropagation()}>
+                                                <Checkbox
+                                                    checked={selectedIds.has(ws.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        setSelectedIds(prev => {
+                                                            const next = new Set(prev);
+                                                            if (checked) next.add(ws.id);
+                                                            else next.delete(ws.id);
+                                                            return next;
+                                                        });
+                                                    }}
+                                                    aria-label={`Select ${ws.name || `workspace ${ws.id}`}`}
+                                                />
+                                            </td>
+                                            <td>
+                                                <div className="sk-cell-name">
+                                                    <ServiceTile
+                                                        name={ws.name}
+                                                        size={30}
+                                                        gradient={ws.primary_color || undefined}
+                                                        className="wp-list__tile"
+                                                        aria-hidden="true"
+                                                    />
+                                                    <span>
+                                                        <div>{ws.name}</div>
+                                                        {ws.description && (
+                                                            <div className="sk-cell-sub">{ws.description}</div>
+                                                        )}
+                                                        {since && !ws.description && (
+                                                            <div className="sk-cell-sub">since {since}</div>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="sk-cell-mono">/{ws.slug}</td>
+                                            <td className="sk-cell-mono">{ws.member_count ?? 0}</td>
+                                            <td className="sk-cell-mono">{ws.max_servers > 0 ? ws.max_servers : '—'}</td>
+                                            <td className="sk-cell-mono">{ws.max_users > 0 ? ws.max_users : '—'}</td>
+                                            <td>
+                                                {isCurrent ? (
+                                                    <Pill kind="green">active</Pill>
+                                                ) : (
+                                                    <Pill kind={ws.status === 'active' ? 'green' : 'amber'}>
+                                                        {ws.status || 'unknown'}
+                                                    </Pill>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <ChevronRight size={16} className="wp-list__chev" />
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
-                </>
+                </div>
             )}
 
             {showCreateModal && (

@@ -332,6 +332,12 @@ def create_server():
     if ws_id is None:
         ws_id = WorkspaceService.ensure_default_workspace().id
 
+    # Enforce workspace server quota.
+    server_count = Server.query.filter_by(workspace_id=ws_id).count()
+    quota_error = WorkspaceService.check_quota(ws_id, server_count, 'max_servers')
+    if quota_error:
+        return jsonify({'error': quota_error}), 403
+
     server = Server(
         # Temporary name — replaced with the agent's hostname when the
         # agent calls /register. _is_placeholder_name() in the register
@@ -400,6 +406,12 @@ def set_server_workspace(server_id):
         # Role reconciliation (#33): a 'viewer' member can't move resources into it.
         if not WorkspaceService.can_write_in_workspace(user, ws.id):
             return jsonify({'error': 'You have read-only access to the target workspace'}), 403
+        # Enforce workspace server quota when moving a server into a workspace.
+        if server.workspace_id != ws.id:
+            server_count = Server.query.filter_by(workspace_id=ws.id).count()
+            quota_error = WorkspaceService.check_quota(ws.id, server_count, 'max_servers')
+            if quota_error:
+                return jsonify({'error': quota_error}), 403
         ws_id = ws.id
 
     server.workspace_id = ws_id

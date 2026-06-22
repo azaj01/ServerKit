@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -28,10 +29,12 @@ export default function SecretsWebhooks() {
 
     const [vaults, setVaults] = useState([]);
     const [endpoints, setEndpoints] = useState([]);
+    const [workspaces, setWorkspaces] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Vault modals
-    const [vaultForm, setVaultForm] = useState({ open: false, name: '', description: '' });
+    const activeWorkspaceId = localStorage.getItem('active_workspace_id') || '';
+    const [vaultForm, setVaultForm] = useState({ open: false, name: '', description: '', workspace_id: activeWorkspaceId });
     const [selectedVault, setSelectedVault] = useState(null);
     const [secretForm, setSecretForm] = useState({ open: false, name: '', value: '', description: '' });
     const [revealSecretId, setRevealSecretId] = useState(null);
@@ -50,9 +53,14 @@ export default function SecretsWebhooks() {
     async function loadAll() {
         setLoading(true);
         try {
-            const [v, e] = await Promise.all([api.listVaults(), api.listWebhookEndpoints()]);
+            const [v, e, w] = await Promise.all([
+                api.listVaults(),
+                api.listWebhookEndpoints(),
+                api.getWorkspaces().catch(() => ({ workspaces: [] })),
+            ]);
             setVaults(v.vaults || []);
             setEndpoints(e.endpoints || []);
+            setWorkspaces(w.workspaces || []);
         } catch (err) {
             toast.error(`Load failed: ${err.message}`);
         } finally {
@@ -63,8 +71,13 @@ export default function SecretsWebhooks() {
     async function createVault(e) {
         e.preventDefault();
         try {
-            await api.createVault({ name: vaultForm.name, description: vaultForm.description });
-            setVaultForm({ open: false, name: '', description: '' });
+            const payload = {
+                name: vaultForm.name,
+                description: vaultForm.description,
+                workspace_id: vaultForm.workspace_id || undefined,
+            };
+            await api.createVault(payload);
+            setVaultForm({ open: false, name: '', description: '', workspace_id: activeWorkspaceId });
             loadAll();
             toast.success('Vault created');
         } catch (err) {
@@ -226,7 +239,7 @@ export default function SecretsWebhooks() {
                                         <CardTitle>Secret Vaults</CardTitle>
                                         <CardDescription>Encrypted key/value stores for credentials and tokens.</CardDescription>
                                     </div>
-                                    <Button onClick={() => setVaultForm({ open: true, name: '', description: '' })}>
+                                    <Button onClick={() => setVaultForm({ open: true, name: '', description: '', workspace_id: activeWorkspaceId })}>
                                         <Plus size={14} /> New Vault
                                     </Button>
                                 </div>
@@ -453,6 +466,25 @@ export default function SecretsWebhooks() {
                             <Label htmlFor="vaultDesc">Description</Label>
                             <Textarea id="vaultDesc" value={vaultForm.description} onChange={(e) => setVaultForm({ ...vaultForm, description: e.target.value })} />
                         </div>
+                        {workspaces.length > 0 && (
+                            <div>
+                                <Label htmlFor="vaultWorkspace">Workspace</Label>
+                                <Select
+                                    value={vaultForm.workspace_id || 'all'}
+                                    onValueChange={(value) => setVaultForm({ ...vaultForm, workspace_id: value === 'all' ? '' : value })}
+                                >
+                                    <SelectTrigger id="vaultWorkspace">
+                                        <SelectValue placeholder="Select workspace" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All workspaces</SelectItem>
+                                        {workspaces.map((w) => (
+                                            <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         <DialogFooter>
                             <Button type="submit">Create Vault</Button>
                         </DialogFooter>

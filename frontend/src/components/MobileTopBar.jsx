@@ -1,6 +1,7 @@
 import { Menu, X } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import ServerKitLogo from './ServerKitLogo';
+import NotificationBell from './NotificationBell';
 
 // Fixed header shown only on narrow viewports (< 768px). Houses the
 // hamburger toggle that opens the sidebar as an off-canvas drawer, since
@@ -35,6 +36,9 @@ const MobileTopBar = ({ navOpen, onToggle }) => {
                     </span>
                 )}
                 <span className="mobile-topbar__name">{brandName}</span>
+            </div>
+            <div className="mobile-topbar__actions">
+                <NotificationBell />
             </div>
         </header>
     );

@@ -4,6 +4,8 @@ from app.middleware.rbac import admin_required
 from app.models import User, NotificationPreferences
 from app import db
 from app.services.notification_service import NotificationService
+from app.notifications.service import NotificationBusService
+from app.notifications.providers import EmailProviderService, SUPPORTED as EMAIL_PROVIDERS
 
 notifications_bp = Blueprint('notifications', __name__)
 
@@ -280,3 +282,143 @@ def test_user_notification():
         'success': all_success,
         'results': results
     }), 200 if all_success else 207
+
+
+# ==========================================
+# IN-APP NOTIFICATION CENTER (the bell + history)
+# ==========================================
+
+@notifications_bp.route('/inbox', methods=['GET'])
+@jwt_required()
+def get_inbox():
+    """List the current user's in-app notifications, newest first."""
+    user_id = int(get_jwt_identity())
+    limit = min(request.args.get('limit', 20, type=int), 100)
+    offset = request.args.get('offset', 0, type=int)
+    unread_only = request.args.get('unread', '').lower() in ('1', 'true', 'yes')
+    items = NotificationBusService.inbox(user_id, limit=limit, offset=offset, unread_only=unread_only)
+    return jsonify({
+        'items': items,
+        'unread_count': NotificationBusService.unread_count(user_id),
+    }), 200
+
+
+@notifications_bp.route('/inbox/unread-count', methods=['GET'])
+@jwt_required()
+def get_unread_count():
+    """Lightweight unread count for the bell badge."""
+    user_id = int(get_jwt_identity())
+    return jsonify({'count': NotificationBusService.unread_count(user_id)}), 200
+
+
+@notifications_bp.route('/inbox/<int:delivery_id>/read', methods=['POST'])
+@jwt_required()
+def mark_inbox_read(delivery_id):
+    """Mark one in-app notification as read."""
+    user_id = int(get_jwt_identity())
+    if not NotificationBusService.mark_read(user_id, delivery_id):
+        return jsonify({'error': 'Notification not found'}), 404
+    return jsonify({'success': True, 'unread_count': NotificationBusService.unread_count(user_id)}), 200
+
+
+@notifications_bp.route('/inbox/read-all', methods=['POST'])
+@jwt_required()
+def mark_inbox_all_read():
+    """Mark all of the current user's in-app notifications as read."""
+    user_id = int(get_jwt_identity())
+    updated = NotificationBusService.mark_all_read(user_id)
+    return jsonify({'success': True, 'updated': updated, 'unread_count': 0}), 200
+
+
+# ==========================================
+# DELIVERY LOG / OPS (admin)
+# ==========================================
+
+@notifications_bp.route('/admin/deliveries', methods=['GET'])
+@jwt_required()
+@admin_required
+def admin_delivery_log():
+    """List recent deliveries across all users, with status/channel filters."""
+    status = request.args.get('status') or None
+    channel = request.args.get('channel') or None
+    limit = min(request.args.get('limit', 50, type=int), 200)
+    offset = request.args.get('offset', 0, type=int)
+    return jsonify({
+        'deliveries': NotificationBusService.delivery_log(
+            status=status, channel=channel, limit=limit, offset=offset),
+        'stats': NotificationBusService.delivery_stats(),
+    }), 200
+
+
+@notifications_bp.route('/admin/deliveries/<int:delivery_id>/retry', methods=['POST'])
+@jwt_required()
+@admin_required
+def admin_retry_delivery(delivery_id):
+    """Re-queue a failed delivery for another attempt."""
+    result = NotificationBusService.retry_delivery(delivery_id)
+    if result is None:
+        return jsonify({'error': 'Delivery not found'}), 404
+    return jsonify({'success': True, 'delivery': result}), 200
+
+
+# ==========================================
+# EMAIL PROVIDER INTEGRATIONS (admin)
+# ==========================================
+
+@notifications_bp.route('/admin/email-providers', methods=['GET'])
+@jwt_required()
+@admin_required
+def list_email_providers():
+    """List configured email providers + the catalog of supported types."""
+    catalog = {
+        key: {'name': spec['name'], 'fields': spec['fields'], 'secrets': spec['secrets']}
+        for key, spec in EMAIL_PROVIDERS.items()
+    }
+    return jsonify({
+        'providers': [p.to_dict() for p in EmailProviderService.list_providers()],
+        'supported': catalog,
+    }), 200
+
+
+@notifications_bp.route('/admin/email-providers', methods=['POST'])
+@jwt_required()
+@admin_required
+def add_email_provider():
+    """Add an email provider, then validate its credentials."""
+    data = request.get_json() or {}
+    try:
+        provider = EmailProviderService.add_provider(data, user_id=int(get_jwt_identity()))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    test = EmailProviderService.test_provider(provider.id)
+    return jsonify({'provider': provider.to_dict(), 'test': test}), 201
+
+
+@notifications_bp.route('/admin/email-providers/<int:provider_id>/test', methods=['POST'])
+@jwt_required()
+@admin_required
+def test_email_provider(provider_id):
+    """Validate a provider's credentials without sending."""
+    result = EmailProviderService.test_provider(provider_id)
+    return jsonify(result), 200 if result.get('success') else 400
+
+
+@notifications_bp.route('/admin/email-providers/<int:provider_id>/default', methods=['POST'])
+@jwt_required()
+@admin_required
+def set_default_email_provider(provider_id):
+    """Make a provider the default transport."""
+    row = EmailProviderService.set_default(provider_id)
+    if row is None:
+        return jsonify({'error': 'Provider not found'}), 404
+    return jsonify({'success': True, 'provider': row.to_dict()}), 200
+
+
+@notifications_bp.route('/admin/email-providers/<int:provider_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_email_provider(provider_id):
+    """Remove an email provider."""
+    if not EmailProviderService.delete_provider(provider_id):
+        return jsonify({'error': 'Provider not found'}), 404
+    return jsonify({'success': True}), 200

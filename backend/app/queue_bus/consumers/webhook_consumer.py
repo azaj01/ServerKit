@@ -13,6 +13,7 @@ import requests as http_requests
 from app import db
 from app.queue_bus.service import QueueBusService
 from app.models.event_subscription import EventSubscription, EventDelivery
+from app.services.telemetry_service import TelemetryService, generate_correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +95,12 @@ class WebhookConsumer:
             return
 
         subscription = delivery.subscription
+        correlation_id = delivery.correlation_id
         if not subscription or not subscription.is_active:
             delivery.status = EventDelivery.STATUS_FAILED
             db.session.commit()
+            _emit_webhook_telemetry(delivery, 'webhook.failed', correlation_id,
+                                    error='subscription inactive or missing')
             QueueBusService.complete(GROUP_SLUG, QUEUE_SLUG, message['id'])
             return
 
@@ -142,9 +146,12 @@ class WebhookConsumer:
                 delivery.status = EventDelivery.STATUS_SUCCESS
                 delivery.delivered_at = datetime.utcnow()
                 db.session.commit()
+                _emit_webhook_telemetry(delivery, 'webhook.delivered', correlation_id)
                 QueueBusService.complete(GROUP_SLUG, QUEUE_SLUG, message['id'])
             else:
                 db.session.commit()
+                _emit_webhook_telemetry(delivery, 'webhook.failed', correlation_id,
+                                        error=f'HTTP {resp.status_code}')
                 QueueBusService.fail(
                     GROUP_SLUG,
                     QUEUE_SLUG,
@@ -157,12 +164,37 @@ class WebhookConsumer:
             delivery.duration_ms = round(elapsed_ms, 2)
             delivery.response_body = str(e)[:1000]
             db.session.commit()
+            _emit_webhook_telemetry(delivery, 'webhook.failed', correlation_id,
+                                    error=str(e)[:500])
             QueueBusService.fail(
                 GROUP_SLUG,
                 QUEUE_SLUG,
                 message['id'],
                 error_message=str(e)[:500],
             )
+
+
+def _emit_webhook_telemetry(delivery, event_type, correlation_id, error=None):
+    """Best-effort telemetry emission for a webhook delivery outcome."""
+    try:
+        TelemetryService.emit(
+            source='webhook',
+            event_type=event_type,
+            message=f'Webhook {event_type.split(".")[-1]}: {delivery.event_type}',
+            severity='error' if event_type == 'webhook.failed' else 'info',
+            correlation_id=correlation_id,
+            payload={
+                'delivery_id': delivery.id,
+                'subscription_id': delivery.subscription_id,
+                'event_type': delivery.event_type,
+                'http_status': delivery.http_status,
+                'duration_ms': delivery.duration_ms,
+                'error': error,
+            },
+            commit=True,
+        )
+    except Exception:
+        pass
 
 
 def start_webhook_consumer(app):

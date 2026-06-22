@@ -6,7 +6,8 @@ import { useLayout } from '../contexts/LayoutContext';
 import { Star, Settings, LogOut, Sun, Moon, Monitor, ChevronRight, ChevronDown, ChevronUp, Layers, Palette, PanelLeft, PanelLeftClose, PanelTop, Check, X, Server } from 'lucide-react';
 import { api } from '../services/api';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
-import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems } from './sidebarItems';
+import NotificationBell from './NotificationBell';
+import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems, applyWorkspaceNavPermissions } from './sidebarItems';
 import { useContributions } from '../plugins/contributions';
 
 const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {} }) => {
@@ -150,10 +151,23 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         // Top-level items can gate on a runtime condition (e.g. GPU Monitor
         // only when a GPU is present), mirroring sub-item requiresCondition.
         const conds = { wpInstalled, gpuAvailable };
-        return [...core, ...fromPlugins].filter(
+        const items = [...core, ...fromPlugins].filter(
             (item) => !item.requiresCondition || conds[item.requiresCondition]
         );
-    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable]);
+        // Apply workspace-level nav permissions if an active workspace is set
+        // and it defines a nav map. This lets a workspace restrict which sidebar
+        // items its members see based on their effective workspace role.
+        const activeWorkspaceRaw = localStorage.getItem('active_workspace');
+        let activeWorkspace = null;
+        if (activeWorkspaceRaw) {
+            try {
+                activeWorkspace = JSON.parse(activeWorkspaceRaw);
+            } catch {
+                activeWorkspace = null;
+            }
+        }
+        return applyWorkspaceNavPermissions(items, activeWorkspace, user);
+    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable, user]);
 
     // Group visible items by category
     const groupedItems = useMemo(() => {
@@ -487,23 +501,26 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                         </button>
                     </div>
                 )}
-                <button
-                    type="button"
-                    className="user-mini"
-                    onClick={() => setMenuOpen(!menuOpen)}
-                    aria-haspopup="true"
-                    aria-expanded={menuOpen}
-                    aria-controls="user-context-menu"
-                >
-                    <span className="user-avatar" aria-hidden="true">
-                        {user?.username?.charAt(0).toUpperCase() || 'U'}
-                    </span>
-                    <span className="user-meta">
-                        <span className="user-handle">{user?.username || 'User'}</span>
-                        <span className="user-status">Online</span>
-                    </span>
-                    <ChevronUp size={14} className={`user-menu-arrow ${menuOpen ? 'open' : ''}`} aria-hidden="true" />
-                </button>
+                <div className="sidebar-footer__row">
+                    <button
+                        type="button"
+                        className="user-mini"
+                        onClick={() => setMenuOpen(!menuOpen)}
+                        aria-haspopup="true"
+                        aria-expanded={menuOpen}
+                        aria-controls="user-context-menu"
+                    >
+                        <span className="user-avatar" aria-hidden="true">
+                            {user?.username?.charAt(0).toUpperCase() || 'U'}
+                        </span>
+                        <span className="user-meta">
+                            <span className="user-handle">{user?.username || 'User'}</span>
+                            <span className="user-status">Online</span>
+                        </span>
+                        <ChevronUp size={14} className={`user-menu-arrow ${menuOpen ? 'open' : ''}`} aria-hidden="true" />
+                    </button>
+                    <NotificationBell />
+                </div>
             </div>
         </aside>
     );

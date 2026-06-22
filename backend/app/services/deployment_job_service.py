@@ -1,12 +1,9 @@
 """Deployment job orchestration service."""
 
 import os
-import threading
 import uuid
 from datetime import datetime
 from typing import Dict, Optional
-
-from flask import current_app, has_app_context
 
 from app import db
 from app.models import Application, Server
@@ -14,6 +11,10 @@ from app.models.deployment_job import DeploymentJob
 from app.services.deployment_runner import DeploymentPlanRunner
 from app.services.docker_service import DockerService
 from app.services.template_service import TemplateService
+from app.services.telemetry_service import generate_correlation_id
+
+# Unified job kind for asynchronous template installs (see register_jobs()).
+JOB_KIND = 'deploy.install'
 
 
 class DeploymentJobService:
@@ -65,6 +66,7 @@ class DeploymentJobService:
             target_server_id=normalized_server_id,
             requested_by=user_id,
             trigger='manual',
+            correlation_id=generate_correlation_id(),
         )
         job.set_plan(plan_result['plan'])
         db.session.add(job)
@@ -73,7 +75,7 @@ class DeploymentJobService:
         if wait:
             cls.run_job(job.id)
         else:
-            cls._start_background_job(job.id)
+            cls._enqueue_install(job)
 
         return {
             'success': True,
@@ -175,22 +177,51 @@ class DeploymentJobService:
 
         return {'success': True, 'job': job.to_dict(include_logs=True), **result}
 
+    # ------------------------------------------------------------------
+    # Unified job system integration (kind: deploy.install)
+    # ------------------------------------------------------------------
     @classmethod
-    def _start_background_job(cls, job_id: str):
-        flask_app = current_app._get_current_object() if has_app_context() else None
+    def _enqueue_install(cls, job: DeploymentJob):
+        """Hand the deployment to the unified job system for async execution.
 
-        def _target():
-            if flask_app:
-                with flask_app.app_context():
-                    cls.run_job(job_id)
-            else:
-                from app import create_app
-                app = create_app()
-                with app.app_context():
-                    cls.run_job(job_id)
+        Replaces the former one-off daemon thread: the work now persists on the
+        Queue Bus and is run by the single JobConsumer, so it survives a restart
+        and is observable via /api/v1/jobs. Installs create containers/files/an
+        app row and are NOT idempotent, so max_attempts=1 (no auto-retry).
+        """
+        from app.jobs.service import JobService
+        return JobService.enqueue(
+            JOB_KIND,
+            payload={'deployment_job_id': job.id},
+            max_attempts=1,
+            owner_type='deployment_job',
+            owner_id=job.id,
+            correlation_id=job.correlation_id,
+        )
 
-        thread = threading.Thread(target=_target, daemon=True)
-        thread.start()
+    @staticmethod
+    def _run_install_job(unified_job):
+        """Unified-job handler for ``deploy.install``. Drives run_job and surfaces
+        a failed deployment as a raised error so the unified job is marked failed
+        too (the DeploymentJob row already carries the detailed status/logs)."""
+        deployment_job_id = (unified_job.get_payload() or {}).get('deployment_job_id')
+        if not deployment_job_id:
+            raise ValueError('deploy.install job missing deployment_job_id')
+        result = DeploymentJobService.run_job(deployment_job_id)
+        if not result.get('success'):
+            raise RuntimeError(result.get('error') or 'Deployment failed')
+        return {
+            'deployment_job_id': deployment_job_id,
+            'app_id': result.get('app_id'),
+            'app_name': result.get('app_name'),
+        }
+
+    @classmethod
+    def register_jobs(cls):
+        """Register deployment handlers with the unified job registry. Called once
+        at app startup (see app/__init__.py)."""
+        from app.jobs import registry
+        registry.register(JOB_KIND, cls._run_install_job, replace=True)
 
     @staticmethod
     def _normalize_server_id(server_id: Optional[str]) -> Optional[str]:

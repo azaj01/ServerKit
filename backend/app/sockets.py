@@ -105,6 +105,10 @@ def handle_connect(auth):
     with _connected_clients_lock:
         connected_clients[request.sid] = {'user_id': user.id, 'role': user.role}
 
+    # Join a per-user room so the Notification Bus can push in-app notifications
+    # to every tab/device this user has open.
+    join_room(f'user_{user.id}')
+
     emit('connected', {'status': 'connected'})
 
 

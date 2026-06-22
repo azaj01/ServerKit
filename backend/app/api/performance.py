@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.services.cache_service import CacheService
-from app.services.background_job_service import BackgroundJobService
+from app.jobs.service import JobService
 
 performance_bp = Blueprint('performance', __name__)
 
@@ -37,16 +37,17 @@ def list_jobs():
     user = get_current_user()
     if not user or not user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
-    return jsonify({'jobs': BackgroundJobService.list_jobs()})
+    # Keyed by id to preserve the prior {job_id: info} response shape.
+    return jsonify({'jobs': {j.id: j.to_dict() for j in JobService.list(limit=200)}})
 
 
 @performance_bp.route('/jobs/<job_id>', methods=['GET'])
 @jwt_required()
 def get_job(job_id):
-    status = BackgroundJobService.get_job_status(job_id)
-    if not status:
+    job = JobService.get(job_id)
+    if not job:
         return jsonify({'error': 'Job not found'}), 404
-    return jsonify({'job_id': job_id, **status})
+    return jsonify({'job_id': job_id, **job.to_dict(include_payload=True)})
 
 
 @performance_bp.route('/jobs/stats', methods=['GET'])
@@ -55,7 +56,14 @@ def job_stats():
     user = get_current_user()
     if not user or not user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
-    return jsonify(BackgroundJobService.get_queue_stats())
+    stats = JobService.stats()
+    return jsonify({
+        'total_jobs': stats['total'],
+        'by_status': stats['by_status'],
+        'by_kind': stats['by_kind'],
+        'running': stats['by_status'].get('running', 0),
+        'queue_size': stats['by_status'].get('pending', 0),
+    })
 
 
 @performance_bp.route('/jobs/cleanup', methods=['POST'])
@@ -64,5 +72,5 @@ def cleanup_jobs():
     user = get_current_user()
     if not user or not user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
-    BackgroundJobService.cleanup_old()
-    return jsonify({'message': 'Old jobs cleaned up'})
+    deleted = JobService.cleanup_old()
+    return jsonify({'message': f'Cleaned up {deleted} old job(s)'})

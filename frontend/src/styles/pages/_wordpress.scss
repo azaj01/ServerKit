@@ -235,6 +235,8 @@
         padding-right: 0;
     }
 
+    &__action { width: 70px; }
+
     &__card {
         background: var(--surface);
         border: 1px solid var(--border-soft);
@@ -768,8 +770,9 @@
         font-size: 21px;
         font-weight: $font-weight-semibold;
         letter-spacing: -0.02em;
-        gap: 11px;
+        gap: 14px;
         flex-wrap: wrap;
+        align-items: center;
     }
 
     .app-detail-subtitle {
@@ -793,6 +796,83 @@
 
         .separator {
             color: var(--text-ghost);
+        }
+    }
+
+    // ---- Repo connection pill (mirrors service detail page) ----
+    .wp-detail__repo-bar {
+        display: flex;
+        margin-top: -#{$space-2}; // tuck it up under the identity header a bit
+    }
+
+    .wp-detail__repo-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        padding: 6px $space-3;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: $radius-full;
+        font-family: var(--mono);
+        font-size: $font-size-sm;
+        color: var(--text-dim);
+        cursor: pointer;
+        transition: border-color $transition-fast, background $transition-fast;
+
+        svg { color: var(--text-faint); }
+
+        &:hover {
+            border-color: var(--accent-dim);
+            background: var(--surface-2);
+        }
+    }
+
+    .wp-detail__repo-url {
+        font-size: $font-size-sm;
+        color: $text-primary;
+    }
+
+    .wp-detail__repo-arrow {
+        color: var(--text-ghost);
+    }
+
+    .wp-detail__repo-branch {
+        font-size: $font-size-sm;
+        color: var(--accent-bright);
+        font-weight: $font-weight-medium;
+    }
+
+    .wp-detail__auto-deploy-badge {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 1px 6px;
+        background: var(--green-bg);
+        color: var(--green);
+        border-radius: $radius-sm;
+    }
+
+    .wp-detail__connect-repo {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        padding: 6px $space-3;
+        background: none;
+        border: 1px dashed var(--border-strong);
+        border-radius: $radius-full;
+        font-size: $font-size-sm;
+        color: var(--text-faint);
+        cursor: pointer;
+        transition: all $transition-fast;
+
+        svg { color: var(--text-faint); }
+
+        &:hover {
+            border-color: var(--accent-dim);
+            color: var(--accent-bright);
+            background: var(--accent-bg-soft);
         }
     }
 
@@ -899,6 +979,144 @@
         .app-info-grid + .app-detail-actions,
         .app-info-grid + .hint {
             margin-top: $space-3;
+        }
+    }
+
+    // Danger Zone panel — stack the rows with a gap so Archive and Delete don't
+    // sit flush against each other.
+    .danger-zone-body {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+
+        .danger-zone {
+            margin-top: 0;
+        }
+    }
+
+    // SSL guided flow — checklist + primary action.
+    .ssl-guide {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+        margin-top: $space-3;
+    }
+
+    .ssl-checklist {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+        padding: $space-3;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+    }
+
+    .ssl-check-item {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        color: var(--text-dim);
+    }
+
+    .ssl-check-icon {
+        flex-shrink: 0;
+
+        &--ok { color: var(--green); }
+        &--missing { color: var(--amber); }
+    }
+
+    .ssl-check-label {
+        &--ok { color: var(--text); }
+    }
+
+    // Inline domain attach inside the SSL panel — no modal needed.
+    .ssl-inline-attach {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+        margin-top: $space-3;
+        padding-top: $space-3;
+        border-top: 1px solid var(--border-soft);
+    }
+
+    .ssl-context {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    .ssl-provider-status {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+
+        &--ok {
+            color: var(--green);
+
+            svg { color: var(--green); }
+        }
+
+        &--missing {
+            color: var(--amber);
+
+            svg { color: var(--amber); }
+        }
+    }
+
+    .ssl-context-links {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-xs;
+        color: var(--text-faint);
+
+        a {
+            color: var(--accent-bright);
+            text-decoration: none;
+
+            &:hover { text-decoration: underline; }
+        }
+    }
+
+    .ssl-attach-result {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+        margin-top: $space-3;
+        padding: $space-3;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+
+        &__success {
+            display: flex;
+            align-items: center;
+            gap: $space-2;
+            font-size: $font-size-sm;
+            color: var(--green);
+
+            svg { color: var(--green); }
+        }
+
+        &__manual {
+            display: flex;
+            flex-direction: column;
+            gap: $space-2;
+            font-size: $font-size-sm;
+        }
+
+        &__record {
+            display: block;
+            padding: $space-2 $space-3;
+            background: var(--surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius);
+            font-family: var(--mono);
+            font-size: $font-size-xs;
+            color: var(--text);
         }
     }
 

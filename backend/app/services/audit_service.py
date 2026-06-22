@@ -74,6 +74,23 @@ class AuditService:
         except Exception:
             pass  # Don't let event emission failures break audit logging
 
+        # Emit unified telemetry event (fire-and-forget, same transaction)
+        try:
+            from app.services.telemetry_service import TelemetryService
+            TelemetryService.emit(
+                source='audit',
+                event_type='audit.action_logged',
+                message=f'Audit action: {action}',
+                severity='info',
+                resource_type=target_type,
+                resource_id=target_id,
+                actor_user_id=user_id,
+                payload={'action': action, 'details': details or {}},
+                commit=False,
+            )
+        except Exception:
+            pass  # Telemetry failures must not break audit logging
+
         if commit:
             db.session.commit()
 

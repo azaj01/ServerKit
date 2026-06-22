@@ -34,6 +34,9 @@ class DeploymentJob(db.Model):
     result = db.Column(db.Text, default='{}')
     error_message = db.Column(db.Text, nullable=True)
 
+    # Correlation ID for grouping this deployment with related telemetry events.
+    correlation_id = db.Column(db.String(64), nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
@@ -99,6 +102,7 @@ class DeploymentJob(db.Model):
             'progress_percent': self.progress_percent,
             'result': self.get_result(),
             'error_message': self.error_message,
+            'correlation_id': self.correlation_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,

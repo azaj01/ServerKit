@@ -194,7 +194,7 @@ def execute_workflow(workflow_id):
     data = request.get_json() or {}
     context = data.get('context', {})
 
-    execution_id = WorkflowEngine.execute_workflow(
+    execution_id = WorkflowEngine.enqueue_execution(
         workflow_id=workflow_id,
         trigger_type='manual',
         context=context
@@ -337,7 +337,7 @@ def webhook_trigger(webhook_id):
         context['query'] = dict(request.args)
 
     try:
-        execution_id = WorkflowEngine.execute_workflow(
+        execution_id = WorkflowEngine.enqueue_execution(
             workflow_id=target_workflow.id,
             trigger_type='webhook',
             context=context

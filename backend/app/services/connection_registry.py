@@ -40,7 +40,7 @@ class ConnectionRegistry:
     @classmethod
     def list_all(cls, user_id=None):
         out = []
-        for fn in (cls._source, cls._dns, cls._infra, cls._registrar, cls._storage):
+        for fn in (cls._source, cls._dns, cls._infra, cls._registrar, cls._storage, cls._email):
             try:
                 out += fn(user_id) if fn is cls._source else fn()
             except Exception as e:  # one failing store never breaks the whole list
@@ -90,6 +90,18 @@ class ConnectionRegistry:
                    encrypted=bool(c.api_key_encrypted), created_at=c.created_at)
             for c in RegistrarConnection.query.all()
         ]
+
+    @staticmethod
+    def _email():
+        from app.models.email_provider import EmailProviderConnection
+        out = []
+        for c in EmailProviderConnection.query.all():
+            scope = 'SMTP' if c.provider == 'smtp' else 'API key'
+            if c.is_default:
+                scope += ' · default'
+            out.append(_entry('email', c.provider, c.name, id=c.id, scope=scope,
+                              encrypted=True, created_at=c.created_at))
+        return out
 
     @staticmethod
     def _storage():

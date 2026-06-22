@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 from .notification_service import NotificationService
 from app import paths
+from app.services.telemetry_service import TelemetryService
 
 
 class MonitoringService:
@@ -282,6 +283,25 @@ class MonitoringService:
 
         # Send to all configured notification channels (Discord, Slack, Telegram, etc.)
         NotificationService.send_all(alerts_to_send)
+
+        # Emit unified telemetry events for each alert
+        for alert in alerts_to_send:
+            alert_key = f"{alert['type']}_{alert['severity']}"
+            TelemetryService.emit(
+                source='monitoring',
+                event_type='monitoring.threshold_breached',
+                message=f"{alert['type'].upper()} alert: {alert.get('message', '')}",
+                severity=alert.get('severity', 'warning'),
+                resource_type='server',
+                correlation_id=alert_key,
+                payload={
+                    'alert_type': alert.get('type'),
+                    'value': alert.get('value'),
+                    'threshold': alert.get('threshold'),
+                    'severity': alert.get('severity'),
+                },
+                commit=True,
+            )
 
         # Emit events for workflow triggers
         try:

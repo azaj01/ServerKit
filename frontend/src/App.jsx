@@ -5,6 +5,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LayoutProvider } from './contexts/LayoutContext';
 import { ResourceTierProvider } from './contexts/ResourceTierContext';
+import { NotificationsProvider } from './contexts/NotificationsContext';
 import { Toaster } from './components/ui/sonner';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
@@ -70,6 +71,11 @@ import Deployments from './pages/Deployments';
 import GpuMonitor from './pages/GpuMonitor';
 import DynamicDns from './pages/DynamicDns';
 import QueueOperations from './pages/QueueOperations';
+import QueueDetail from './pages/QueueDetail';
+import Notifications from './pages/Notifications';
+import DeliveryLog from './pages/DeliveryLog';
+import Telemetry from './pages/Telemetry';
+import Jobs from './pages/Jobs';
 import useExtensionRoutes from './plugins/ExtensionRoutes';
 import { useContributions } from './plugins/contributions';
 
@@ -109,6 +115,15 @@ const PAGE_TITLES = {
     '/agent-plugins': 'Marketplace',
     '/server-templates': 'Server Templates',
     '/workspaces': 'Workspaces',
+    '/workspaces/:id': 'Workspace',
+    '/workspaces/:id/overview': 'Workspace Overview',
+    '/workspaces/:id/servers': 'Workspace Servers',
+    '/workspaces/:id/services': 'Workspace Services',
+    '/workspaces/:id/sites': 'Workspace Sites',
+    '/workspaces/:id/members': 'Workspace Members',
+    '/workspaces/:id/settings': 'Workspace Settings',
+    '/workspaces/:id/settings/general': 'Workspace Settings',
+    '/workspaces/:id/settings/navigation': 'Workspace Navigation Permissions',
     '/dns': 'DNS Zones',
     '/status-pages': 'Status Pages',
     '/cloud': 'Cloud Provisioning',
@@ -121,6 +136,10 @@ const PAGE_TITLES = {
     '/gpu': 'GPU Monitor',
     '/dynamic-dns': 'Dynamic DNS',
     '/queue': 'Queue Bus',
+    '/notifications': 'Notifications',
+    '/admin/notifications': 'Notification Delivery Log',
+    '/telemetry': 'Telemetry',
+    '/jobs': 'Jobs',
 };
 
 function PageTitleUpdater() {
@@ -133,18 +152,32 @@ function PageTitleUpdater() {
 
         // Handle dynamic routes and tab sub-routes
         if (!title) {
+            if (path.startsWith('/workspaces/')) {
+                const parts = path.split('/');
+                const tab = parts[3];
+                const section = parts[4];
+                if (tab === 'settings' && section) {
+                    title = PAGE_TITLES[`/workspaces/:id/settings/${section}`] || 'Workspace Settings';
+                } else if (tab) {
+                    title = PAGE_TITLES[`/workspaces/:id/${tab}`] || 'Workspace';
+                } else {
+                    title = 'Workspace';
+                }
+            }
             // Check if it's a base page with a tab suffix (e.g., /security/firewall)
-            const basePath = '/' + path.split('/')[1];
-            if (PAGE_TITLES[basePath]) {
-                title = PAGE_TITLES[basePath];
-            } else if (pluginTitles && pluginTitles[basePath]) {
-                title = pluginTitles[basePath];
-            } else if (path.startsWith('/services/')) title = 'Service Details';
-            else if (path.startsWith('/apps/')) title = 'Application Details';
-            else if (path.startsWith('/servers/')) title = 'Server Details';
-            else if (path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
-            else if (path.startsWith('/wordpress/')) title = 'WordPress Site';
-            else title = 'ServerKit';
+            else {
+                const basePath = '/' + path.split('/')[1];
+                if (PAGE_TITLES[basePath]) {
+                    title = PAGE_TITLES[basePath];
+                } else if (pluginTitles && pluginTitles[basePath]) {
+                    title = pluginTitles[basePath];
+                } else if (path.startsWith('/services/')) title = 'Service Details';
+                else if (path.startsWith('/apps/')) title = 'Application Details';
+                else if (path.startsWith('/servers/')) title = 'Server Details';
+                else if (path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
+                else if (path.startsWith('/wordpress/')) title = 'WordPress Site';
+                else title = 'ServerKit';
+            }
         }
 
         document.title = title ? `${title} | ServerKit` : 'ServerKit';
@@ -276,7 +309,7 @@ function AppRoutes() {
                 </Route>
                 <Route path="services/:id" element={<ServiceDetail />} />
                 <Route path="services/:id/:tab" element={<ServiceDetail />} />
-                {/* Settings sub-section in the URL (e.g. .../settings/repository)
+                {/* Settings sub-section in the URL (e.g. .../settings/git)
                     so the Settings left-nav is shareable and survives a refresh. */}
                 <Route path="services/:id/:tab/:section" element={<ServiceDetail />} />
                 <Route path="apps" element={<Navigate to="/services" replace />} />
@@ -317,6 +350,8 @@ function AppRoutes() {
                 <Route path="agent-plugins" element={<Navigate to="/marketplace" replace />} />
                 <Route path="workspaces" element={<Workspaces />} />
                 <Route path="workspaces/:id" element={<WorkspaceDetail />} />
+                <Route path="workspaces/:id/:tab" element={<WorkspaceDetail />} />
+                <Route path="workspaces/:id/:tab/:section" element={<WorkspaceDetail />} />
                 <Route element={<TabGroupLayout tabs={MARKET_TABS} />}>
                     <Route path="marketplace" element={<Marketplace />} />
                     <Route path="downloads" element={<Downloads />} />
@@ -357,6 +392,11 @@ function AppRoutes() {
                 <Route path="secrets" element={<SecretsWebhooks />} />
                 <Route path="secrets/:tab" element={<SecretsWebhooks />} />
                 <Route path="queue" element={<QueueOperations />} />
+                <Route path="queue/:groupSlug/:queueSlug" element={<QueueDetail />} />
+                <Route path="notifications" element={<Notifications />} />
+                <Route path="admin/notifications" element={<DeliveryLog />} />
+                <Route path="telemetry" element={<Telemetry />} />
+                <Route path="jobs" element={<Jobs />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />
                 {dashboardRoutes}
@@ -374,7 +414,9 @@ function App() {
                     <AuthProvider>
                         <ResourceTierProvider>
                             <ToastProvider>
-                                <AppRoutes />
+                                <NotificationsProvider>
+                                    <AppRoutes />
+                                </NotificationsProvider>
                                 <Toaster />
                             </ToastProvider>
                         </ResourceTierProvider>

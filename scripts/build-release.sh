@@ -42,10 +42,10 @@ else
     halt "Cannot determine version. Set VERSION or create a VERSION file."
 fi
 
-case "$(uname -m)" in
-    x86_64)        DL_ARCH="amd64" ;;
+case "${BUILD_ARCH:-$(uname -m)}" in
+    x86_64|amd64)  DL_ARCH="amd64" ;;
     aarch64|arm64) DL_ARCH="arm64" ;;
-    *)             halt "Unsupported architecture: $(uname -m)" ;;
+    *)             halt "Unsupported architecture: ${BUILD_ARCH:-$(uname -m)}" ;;
 esac
 
 OUTPUT="serverkit-${RELEASE_TAG}-linux-${DL_ARCH}.tar.gz"

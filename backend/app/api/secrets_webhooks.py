@@ -7,6 +7,8 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.services.secret_vault_service import SecretService, SecretVaultService
 from app.services.webhook_gateway_service import WebhookGatewayService
+from app.services.workspace_service import WorkspaceService
+from app.models import User, Workspace
 
 bp = Blueprint('secrets_webhooks', __name__)
 
@@ -14,6 +16,11 @@ bp = Blueprint('secrets_webhooks', __name__)
 def _current_user_id() -> int:
     identity = get_jwt_identity()
     return int(identity) if identity else None
+
+
+def _resolve_ws_value():
+    """Return the raw workspace context from header or query string."""
+    return request.headers.get('X-Workspace-Id') or request.args.get('workspace_id')
 
 
 def _resolve_ws():
@@ -24,8 +31,7 @@ def _resolve_ws():
     from app.models import User
     from app.services.workspace_service import WorkspaceService
     user = User.query.get(get_jwt_identity())
-    return WorkspaceService.resolve_workspace_id(
-        user, request.headers.get('X-Workspace-Id') or request.args.get('workspace_id'))
+    return WorkspaceService.resolve_workspace_id(user, _resolve_ws_value())
 
 
 def _json_or_form() -> dict:
@@ -60,8 +66,24 @@ def create_vault():
     name = data.get('name')
     if not name:
         return {'error': 'name is required'}, 400
+    user = User.query.get(get_jwt_identity())
+    # Explicit workspace_id in the body takes precedence over the active context,
+    # but the caller must be a member of that workspace.
+    explicit_ws = data.get('workspace_id')
+    if explicit_ws is not None:
+        try:
+            explicit_ws = int(explicit_ws)
+        except (ValueError, TypeError):
+            return {'error': 'workspace_id must be an integer'}, 400
+        if Workspace.query.get(explicit_ws) is None:
+            return {'error': 'Workspace not found'}, 404
+        if not user.is_admin and WorkspaceService.get_user_role(explicit_ws, user.id) is None:
+            return {'error': 'Workspace access denied'}, 403
+        workspace_id = explicit_ws
+    else:
+        workspace_id = WorkspaceService.resolve_workspace_id(user, _resolve_ws_value())
     result = SecretVaultService.create_vault(name, description=data.get('description'),
-                                             user_id=_current_user_id(), workspace_id=_resolve_ws())
+                                             user_id=user.id, workspace_id=workspace_id)
     if not result.get('success'):
         return {'error': result.get('error')}, 409
     return result, 201

@@ -14,6 +14,7 @@ from app import db
 from app.models.deployment_job import DeploymentJob, DeploymentJobLog
 from app.services.agent_registry import agent_registry
 from app.services.docker_service import DockerService
+from app.services.telemetry_service import TelemetryService, generate_correlation_id
 
 
 class DeploymentStepError(Exception):
@@ -25,6 +26,9 @@ class DeploymentPlanRunner:
 
     def __init__(self, job: DeploymentJob):
         self.job = job
+        self.correlation_id = job.correlation_id or generate_correlation_id()
+        if not job.correlation_id:
+            job.correlation_id = self.correlation_id
 
     @property
     def is_remote(self) -> bool:
@@ -41,6 +45,22 @@ class DeploymentPlanRunner:
         db.session.commit()
 
         self.log('info', f"Deployment started on {self.job.target_server_name}")
+        TelemetryService.emit(
+            source='deployment',
+            event_type='deployment.started',
+            message=f'Deployment started: {self.job.kind}',
+            severity='info',
+            resource_type='deployment_job',
+            resource_id=self.job.id,
+            correlation_id=self.correlation_id,
+            payload={
+                'job_id': self.job.id,
+                'kind': self.job.kind,
+                'target_server_id': self.job.target_server_id,
+                'total_steps': len(steps),
+            },
+            commit=False,
+        )
 
         try:
             for index, step in enumerate(steps, start=1):
@@ -50,6 +70,17 @@ class DeploymentPlanRunner:
                 db.session.commit()
 
                 self.log('info', name, step_index=index)
+                TelemetryService.emit(
+                    source='deployment',
+                    event_type='deployment.step_started',
+                    message=f'Deployment step {index} started: {name}',
+                    severity='info',
+                    resource_type='deployment_job',
+                    resource_id=self.job.id,
+                    correlation_id=self.correlation_id,
+                    payload={'job_id': self.job.id, 'step_index': index, 'step_name': name},
+                    commit=False,
+                )
                 result = self._execute_step(step)
                 results.append({'step': index, 'name': name, 'result': result})
 
@@ -60,6 +91,17 @@ class DeploymentPlanRunner:
             db.session.commit()
 
             self.log('info', 'Deployment completed')
+            TelemetryService.emit(
+                source='deployment',
+                event_type='deployment.completed',
+                message=f'Deployment completed: {self.job.kind}',
+                severity='info',
+                resource_type='deployment_job',
+                resource_id=self.job.id,
+                correlation_id=self.correlation_id,
+                payload={'job_id': self.job.id, 'kind': self.job.kind, 'total_steps': len(steps)},
+                commit=False,
+            )
             return {'success': True, 'steps': results}
 
         except Exception as exc:
@@ -70,6 +112,22 @@ class DeploymentPlanRunner:
             db.session.commit()
 
             self.log('error', str(exc), step_index=self.job.current_step)
+            TelemetryService.emit(
+                source='deployment',
+                event_type='deployment.failed',
+                message=f'Deployment failed: {self.job.kind}',
+                severity='error',
+                resource_type='deployment_job',
+                resource_id=self.job.id,
+                correlation_id=self.correlation_id,
+                payload={
+                    'job_id': self.job.id,
+                    'kind': self.job.kind,
+                    'error': str(exc),
+                    'failed_step': self.job.current_step,
+                },
+                commit=False,
+            )
             return {'success': False, 'error': str(exc), 'steps': results}
 
     def log(self, level: str, message: str, data: Any = None, step_index: int = None):

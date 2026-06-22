@@ -397,118 +397,6 @@ class NotificationService:
     # EMAIL
     # ==========================================
     @classmethod
-    def _get_email_template(cls, alerts: List[Dict]) -> str:
-        """Generate HTML email template for alerts."""
-        hostname = cls.get_hostname()
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # Color mapping for severity
-        severity_styles = {
-            'critical': {'bg': '#fef2f2', 'border': '#ef4444', 'text': '#dc2626'},
-            'warning': {'bg': '#fffbeb', 'border': '#f59e0b', 'text': '#d97706'},
-            'info': {'bg': '#eff6ff', 'border': '#3b82f6', 'text': '#2563eb'},
-            'success': {'bg': '#f0fdf4', 'border': '#22c55e', 'text': '#16a34a'},
-            'test': {'bg': '#f9fafb', 'border': '#6b7280', 'text': '#4b5563'}
-        }
-
-        alerts_html = ""
-        for alert in alerts:
-            severity = alert.get('severity', 'info')
-            style = severity_styles.get(severity, severity_styles['info'])
-
-            alert_html = f"""
-            <div style="margin-bottom: 16px; padding: 16px; background-color: {style['bg']};
-                        border-left: 4px solid {style['border']}; border-radius: 4px;">
-                <div style="color: {style['text']}; font-weight: 600; font-size: 14px;
-                            text-transform: uppercase; margin-bottom: 8px;">
-                    {severity}: {alert.get('type', 'Alert').upper()}
-                </div>
-                <div style="color: #374151; font-size: 14px;">
-                    {alert.get('message', 'No message')}
-                </div>
-            """
-
-            if 'value' in alert or 'threshold' in alert:
-                alert_html += '<div style="margin-top: 12px; font-size: 13px; color: #6b7280;">'
-                if 'value' in alert:
-                    alert_html += f'<span style="margin-right: 16px;">Current: <strong>{alert["value"]}</strong></span>'
-                if 'threshold' in alert:
-                    alert_html += f'<span>Threshold: <strong>{alert["threshold"]}</strong></span>'
-                alert_html += '</div>'
-
-            alert_html += '</div>'
-            alerts_html += alert_html
-
-        template = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                     line-height: 1.6; color: #374151; max-width: 600px; margin: 0 auto; padding: 20px;">
-
-            <!-- Header -->
-            <div style="text-align: center; padding: 24px 0; border-bottom: 1px solid #e5e7eb;">
-                <h1 style="margin: 0; color: #111827; font-size: 24px;">
-                    ServerKit Alert
-                </h1>
-                <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 14px;">
-                    {len(alerts)} alert(s) triggered on {hostname}
-                </p>
-            </div>
-
-            <!-- Alerts -->
-            <div style="padding: 24px 0;">
-                {alerts_html}
-            </div>
-
-            <!-- Footer -->
-            <div style="text-align: center; padding: 24px 0; border-top: 1px solid #e5e7eb;
-                        font-size: 12px; color: #9ca3af;">
-                <p style="margin: 0;">
-                    Sent by ServerKit at {timestamp}
-                </p>
-                <p style="margin: 8px 0 0 0;">
-                    <a href="#" style="color: #6366f1; text-decoration: none;">Manage notification settings</a>
-                </p>
-            </div>
-        </body>
-        </html>
-        """
-        return template
-
-    @classmethod
-    def _get_plain_text_template(cls, alerts: List[Dict]) -> str:
-        """Generate plain text email for alerts."""
-        hostname = cls.get_hostname()
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        lines = [
-            "ServerKit Alert",
-            "=" * 40,
-            f"{len(alerts)} alert(s) triggered on {hostname}",
-            ""
-        ]
-
-        for alert in alerts:
-            severity = alert.get('severity', 'info').upper()
-            alert_type = alert.get('type', 'Alert').upper()
-            lines.append(f"[{severity}] {alert_type}")
-            lines.append(alert.get('message', 'No message'))
-            if 'value' in alert:
-                lines.append(f"  Current: {alert['value']}")
-            if 'threshold' in alert:
-                lines.append(f"  Threshold: {alert['threshold']}")
-            lines.append("")
-
-        lines.append("-" * 40)
-        lines.append(f"Sent by ServerKit at {timestamp}")
-
-        return "\n".join(lines)
-
-    @classmethod
     def send_email(cls, alerts: List[Dict], config: Dict = None) -> Dict:
         """
         Send notification via email with HTML template.
@@ -554,12 +442,17 @@ class NotificationService:
             msg['From'] = f"{config.get('from_name', 'ServerKit')} <{config['from_email']}>"
             msg['To'] = ', '.join(config['to_emails'])
 
-            # Add plain text and HTML versions
-            plain_text = cls._get_plain_text_template(alerts)
-            html_content = cls._get_email_template(alerts)
-
-            msg.attach(MIMEText(plain_text, 'plain'))
-            msg.attach(MIMEText(html_content, 'html'))
+            # Render via the Notification Bus template system (Jinja2),
+            # so monitoring emails share the branded, dark-mode-aware layout.
+            from app.notifications import rendering
+            overall_severity = priority.lower()
+            rendered = rendering.render_email(
+                'monitoring_alert', subject, severity=overall_severity,
+                data={'alerts': alerts, 'hostname': cls.get_hostname()},
+                hostname=cls.get_hostname(),
+            )
+            msg.attach(MIMEText(rendered['text'], 'plain', 'utf-8'))
+            msg.attach(MIMEText(rendered['html'], 'html', 'utf-8'))
 
             # Send email
             smtp_port = config.get('smtp_port', 587)
@@ -649,33 +542,21 @@ class NotificationService:
     # ==========================================
     @classmethod
     def send_all(cls, alerts: List[Dict]) -> Dict:
+        """Send alerts to all configured system channels.
+
+        Now a thin, NON-BLOCKING shim over the Notification Bus: instead of
+        opening SMTP/HTTP connections synchronously on the caller's thread (with
+        no retry and no record), it records a Notification and enqueues a
+        per-channel delivery on the queue bus, which the NotificationConsumer
+        delivers with retry/backoff and logs in the delivery log. The system
+        channels and recipients are unchanged. Callers keep the same
+        {'success': bool, ...} contract.
         """
-        Send alerts to all configured notification channels.
-
-        Returns results for each channel.
-        """
-        config = cls.get_config()
-        results = {}
-
-        if config.get('discord', {}).get('enabled'):
-            results['discord'] = cls.send_discord(alerts, config['discord'])
-
-        if config.get('slack', {}).get('enabled'):
-            results['slack'] = cls.send_slack(alerts, config['slack'])
-
-        if config.get('telegram', {}).get('enabled'):
-            results['telegram'] = cls.send_telegram(alerts, config['telegram'])
-
-        if config.get('email', {}).get('enabled'):
-            results['email'] = cls.send_email(alerts, config['email'])
-
-        if config.get('generic_webhook', {}).get('enabled'):
-            results['generic_webhook'] = cls.send_generic_webhook(alerts, config['generic_webhook'])
-
-        return {
-            'success': all(r.get('success', False) for r in results.values()) if results else True,
-            'results': results
-        }
+        try:
+            from app.notifications.service import NotificationBusService
+            return NotificationBusService.broadcast_system(alerts)
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'results': {}}
 
     # ==========================================
     # TEST NOTIFICATIONS

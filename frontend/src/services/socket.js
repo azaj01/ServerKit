@@ -58,6 +58,11 @@ class SocketService {
         this.socket.on('log_error', (data) => {
             this.emit('log_error', data);
         });
+
+        // New in-app notification pushed to this user's room by the bus.
+        this.socket.on('notification', (data) => {
+            this.emit('notification', data);
+        });
     }
 
     disconnect() {
