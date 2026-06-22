@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ExternalLink, Settings, RefreshCw, Plus, Database, GitBranch, Package, Palette, Archive, Trash2, Replace, ShieldCheck, FolderOpen, FileText, Lock, Copy, Zap, Activity, Globe, BarChart3, FileBarChart, Printer, Download, ChevronDown, Check, AlertTriangle, HardDrive } from 'lucide-react';
+import { ExternalLink, Settings, RefreshCw, Plus, Database, GitBranch, Package, Palette, Archive, Trash2, Replace, ShieldCheck, FolderOpen, FileText, Lock, Copy, Zap, Activity, Globe, BarChart3, FileBarChart, Printer, Download, ChevronDown, Check, AlertTriangle, HardDrive, LayoutDashboard, Layers, Shield, ShieldAlert, CircleCheck, CircleX } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import useTabParam from '../hooks/useTabParam';
 import wordpressApi from '../services/wordpress';
@@ -142,6 +142,25 @@ const EnvSwitcher = ({ options, onSelect }) => {
     );
 };
 
+// Header alert that nags the operator to secure the site when the primary
+// URL is not HTTPS. Clicking it jumps to SSL settings so the user can enable
+// HTTPS in one click (or see why it can't be issued yet, e.g. localhost).
+const SSLAlert = ({ site }) => {
+    const isHttps = (site.url || '').startsWith('https://');
+
+    if (!site.url || isHttps) return null;
+
+    return (
+        <Link
+            to={`/wordpress/${site.id}/settings/ssl`}
+            className="sk-pill sk-pill--amber"
+        >
+            <span className="sk-pill__dot" />
+            Not Secured
+        </Link>
+    );
+};
+
 const WordPressDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -157,12 +176,22 @@ const WordPressDetail = () => {
     const [cloning, setCloning] = useState(false);
     const [cloneName, setCloneName] = useState('');
     const [clonedCreds, setClonedCreds] = useState(null);
+    const [gitStatus, setGitStatus] = useState(null);
 
     useEffect(() => {
         // Show the skeleton again when navigating between environment site ids
         // (env switcher / "Open new site") so stale data never renders.
         setLoading(true);
         loadSite();
+    }, [id]);
+
+    useEffect(() => {
+        // Load Git connection summary so we can surface a repo pill in the header,
+        // matching the Service detail page's "Connect a repository" affordance.
+        if (!id) return;
+        wordpressApi.getGitStatus(id)
+            .then(setGitStatus)
+            .catch(() => setGitStatus(null));
     }, [id]);
 
     async function loadSite() {
@@ -365,6 +394,7 @@ const WordPressDetail = () => {
                         {envOptions && envOptions.length > 1 && (
                             <EnvSwitcher options={envOptions} onSelect={(envId) => navigate(`/wordpress/${envId}`)} />
                         )}
+                        <SSLAlert site={site} />
                     </h1>
                     <div className="app-detail-subtitle">
                         <span>WordPress {site.wp_version || '—'}</span>
@@ -390,19 +420,46 @@ const WordPressDetail = () => {
                 </div>
             </div>
 
+            {/* Repo Connection Pill — same prominent affordance as the service detail page. */}
+            <div className="wp-detail__repo-bar">
+                {gitStatus?.connected ? (
+                    <div
+                        className="wp-detail__repo-pill"
+                        onClick={() => navigate(`/wordpress/${id}/settings/git`)}
+                        title="Repository connected — open Git settings"
+                    >
+                        <GitBranch size={14} />
+                        <span className="wp-detail__repo-url">{extractRepoDisplay(gitStatus.repo_url)}</span>
+                        <span className="wp-detail__repo-arrow">→</span>
+                        <span className="wp-detail__repo-branch">{gitStatus.branch || 'main'}</span>
+                        {gitStatus.auto_deploy && (
+                            <span className="wp-detail__auto-deploy-badge">Auto</span>
+                        )}
+                    </div>
+                ) : (
+                    <button
+                        className="wp-detail__connect-repo"
+                        onClick={() => navigate(`/wordpress/${id}/settings/git`)}
+                    >
+                        <GitBranch size={14} />
+                        Connect a repository
+                    </button>
+                )}
+            </div>
+
             {/* Tabs */}
             <div className="app-detail-tabs">
                 <div
                     className={`app-detail-tab ${activeTab === 'overview' ? 'active' : ''}`}
                     onClick={() => setActiveTab('overview')}
                 >
-                    Overview
+                    <LayoutDashboard size={14} /> Overview
                 </div>
                 <div
                     className={`app-detail-tab ${activeTab === 'environments' ? 'active' : ''}`}
                     onClick={() => setActiveTab('environments')}
                 >
-                    Environments
+                    <Layers size={14} /> Env
                 </div>
                 <div
                     className={`app-detail-tab ${activeTab === 'database' ? 'active' : ''}`}
@@ -421,12 +478,6 @@ const WordPressDetail = () => {
                     onClick={() => setActiveTab('themes')}
                 >
                     <Palette size={14} /> Themes
-                </div>
-                <div
-                    className={`app-detail-tab ${activeTab === 'backups' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('backups')}
-                >
-                    <Archive size={14} /> Backups
                 </div>
                 <div
                     className={`app-detail-tab ${activeTab === 'uptime' ? 'active' : ''}`}
@@ -1757,12 +1808,6 @@ const ReportView = ({ report, onPrint, onDownload, onDelete }) => {
 // Overview Tab
 const OverviewTab = ({ site, onUpdate }) => {
     const toast = useToast();
-    const navigate = useNavigate();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
-    const [wpInfo, setWpInfo] = useState(null);
-    const [updatingCore, setUpdatingCore] = useState(false);
-    const [archiving, setArchiving] = useState(false);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [creatingSnapshot, setCreatingSnapshot] = useState(false);
     const [showEnvModal, setShowEnvModal] = useState(false);
     const [syncingAll, setSyncingAll] = useState(false);
@@ -1775,15 +1820,6 @@ const OverviewTab = ({ site, onUpdate }) => {
     const [showSearchReplace, setShowSearchReplace] = useState(false);
     const [analytics, setAnalytics] = useState(null);
     const [uptime, setUptime] = useState(null);
-
-    // Live WP-CLI info (core version + update availability) — best-effort.
-    useEffect(() => {
-        let active = true;
-        wordpressApi.getWordPressInfo(site.id)
-            .then(data => { if (active) setWpInfo(data.info || data); })
-            .catch(() => { /* info is best-effort; the badge just won't show */ });
-        return () => { active = false; };
-    }, [site.id]);
 
     // Overview KPI + traffic data: uptime (status page) + analytics (access log).
     // Both can be slow or unconfigured, so treat as best-effort (null → "—").
@@ -1800,26 +1836,6 @@ const OverviewTab = ({ site, onUpdate }) => {
         })();
         return () => { cancelled = true; };
     }, [site.id]);
-
-    async function handleUpdateCore() {
-        setUpdatingCore(true);
-        toast.info('Updating WordPress core...', { duration: 4000 });
-        try {
-            const res = await wordpressApi.updateCore(site.id);
-            if (res.success === false) {
-                toast.error(res.error || 'Core update failed');
-                return;
-            }
-            toast.success(res.message || 'WordPress core updated');
-            const fresh = await wordpressApi.getWordPressInfo(site.id);
-            setWpInfo(fresh.info || fresh);
-            onUpdate?.();
-        } catch (err) {
-            toast.error(err.message || 'Core update failed');
-        } finally {
-            setUpdatingCore(false);
-        }
-    }
 
     async function handleQuickSnapshot() {
         setCreatingSnapshot(true);
@@ -1952,53 +1968,6 @@ const OverviewTab = ({ site, onUpdate }) => {
         }
     }
 
-    async function handleArchive() {
-        const ok = await confirm({
-            title: 'Archive Site',
-            message: `Stop and archive "${site.name}"? Containers are stopped but all files and the database are kept. You can unarchive it later.`,
-            confirmText: 'Archive',
-            variant: 'warning',
-        });
-        if (!ok) return;
-        setArchiving(true);
-        toast.info('Archiving site...', { duration: 3000 });
-        try {
-            await wordpressApi.archiveSite(site.id);
-            toast.success('Site archived');
-            onUpdate?.();
-        } catch (err) {
-            toast.error(err.message || 'Failed to archive site');
-        } finally {
-            setArchiving(false);
-        }
-    }
-
-    async function handleUnarchive() {
-        setArchiving(true);
-        toast.info('Unarchiving site...', { duration: 3000 });
-        try {
-            await wordpressApi.unarchiveSite(site.id);
-            toast.success('Site unarchived');
-            onUpdate?.();
-        } catch (err) {
-            toast.error(err.message || 'Failed to unarchive site');
-        } finally {
-            setArchiving(false);
-        }
-    }
-
-    async function handleDelete(createBackup) {
-        toast.info(createBackup ? 'Creating final backup and deleting site...' : 'Deleting site...', { duration: 5000 });
-        try {
-            await wordpressApi.deleteSite(site.id, { createBackup });
-            toast.success('Site deleted');
-            setShowDeleteModal(false);
-            navigate('/wordpress');
-        } catch (err) {
-            toast.error(err.message || 'Failed to delete site');
-        }
-    }
-
     async function handleSearchReplace(data) {
         // data = { search, replace, dry_run }
         toast.info(data.dry_run ? 'Running search-replace preview...' : 'Running search-replace...', { duration: 3000 });
@@ -2023,10 +1992,6 @@ const OverviewTab = ({ site, onUpdate }) => {
         return `${n}`;
     };
     const [diskVal, diskUnit] = (site.disk_usage_human || '').split(' ');
-    const primaryDomain =
-        (site.application?.domains?.find((d) => d.is_primary) || site.application?.domains?.[0])?.name
-        || (site.url ? site.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '—');
-    const isHttps = (site.url || '').startsWith('https://');
     const trafficSeries = analytics?.series || [];
     const fmtTrafficTick = (iso) => new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
@@ -2066,146 +2031,6 @@ const OverviewTab = ({ site, onUpdate }) => {
             </div>
 
             <div className="wp-overview-main">
-                <div className="app-panel">
-                    <div className="app-panel-header">Site information</div>
-                    <div className="app-panel-body">
-                        <div className="app-info-grid">
-                            <div className="app-info-item">
-                                <span className="app-info-label">Primary domain</span>
-                                <span className="app-info-value mono">{primaryDomain}</span>
-                            </div>
-                            <div className="app-info-item">
-                                <span className="app-info-label">WordPress</span>
-                                <span className="app-info-value">
-                                    {wpInfo?.version || site.wp_version || 'Unknown'}
-                                    {wpInfo?.update_available && (
-                                        <>
-                                            <span className="wp-update-badge">
-                                                Update available{wpInfo.latest_version ? `: ${wpInfo.latest_version}` : ''}
-                                            </span>
-                                            <Button variant="outline" size="sm" onClick={handleUpdateCore} disabled={updatingCore}>
-                                                {updatingCore ? 'Updating...' : 'Update'}
-                                            </Button>
-                                        </>
-                                    )}
-                                </span>
-                            </div>
-                            <div className="app-info-item">
-                                <span className="app-info-label">PHP</span>
-                                <span className="app-info-value">{site.application?.php_version || '—'}</span>
-                            </div>
-                            <div className="app-info-item">
-                                <span className="app-info-label">SSL</span>
-                                <span className="app-info-value">{isHttps ? 'Enabled' : 'Not configured'}</span>
-                            </div>
-                            <div className="app-info-item">
-                                <span className="app-info-label">Multisite</span>
-                                <span className="app-info-value">{site.multisite ? 'Yes' : 'No'}</span>
-                            </div>
-                            <div className="app-info-item">
-                                <span className="app-info-label">Admin user</span>
-                                <span className="app-info-value">{site.admin_user || '-'}</span>
-                            </div>
-                            <div className="app-info-item full-width">
-                                <span className="app-info-label">Admin email</span>
-                                <span className="app-info-value">{site.admin_email || '-'}</span>
-                            </div>
-                            {site.created_at && (
-                                <div className="app-info-item">
-                                    <span className="app-info-label">Created</span>
-                                    <span className="app-info-value">{new Date(site.created_at).toLocaleDateString()}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="app-panel wp-traffic-panel">
-                    <div className="app-panel-header">
-                        Traffic
-                        <span className="wp-panel-sub">Last 7 days · unique visits</span>
-                    </div>
-                    <div className="app-panel-body">
-                        {trafficSeries.length > 0 ? (
-                            <ResponsiveContainer width="100%" height={250}>
-                                <AreaChart data={trafficSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="wpOvVisits" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#6d7cff" stopOpacity={0.35} />
-                                            <stop offset="95%" stopColor="#6d7cff" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#888" strokeOpacity={0.15} />
-                                    <XAxis dataKey="hour" tickFormatter={fmtTrafficTick} tick={{ fontSize: 11, fill: '#888' }} minTickGap={28} axisLine={false} tickLine={false} />
-                                    <YAxis allowDecimals={false} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} tick={{ fontSize: 11, fill: '#888' }} width={34} axisLine={false} tickLine={false} />
-                                    <Tooltip labelFormatter={fmtTrafficTick} />
-                                    <Area type="monotone" dataKey="requests" name="Visits" stroke="#8b93ff" fill="url(#wpOvVisits)" strokeWidth={2} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <p className="hint">No traffic recorded for this period yet — it&apos;s parsed from the site&apos;s access log.</p>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            <div className="app-panel wp-activity-panel">
-                <div className="app-panel-header">Recent activity</div>
-                <div className="app-panel-body">
-                    <ActivityFeed projectId={site.id} limit={6} />
-                </div>
-            </div>
-
-            <div className="app-overview-grid">
-            <div className="app-overview-left">
-
-                {/* Database Configuration, Site Health & Git Integration moved off the
-                    Overview — that data lives in the Database / Uptime / Git tabs, and the
-                    Overview now leads with KPIs + Site info + Traffic + Recent activity. */}
-
-                <SiteSSLPanel site={site} />
-
-                <div className="app-panel">
-                    <div className="app-panel-header">Danger Zone</div>
-                    <div className="app-panel-body">
-                        {site.status === 'archived' ? (
-                            <DangerZone
-                                title="Unarchive Site"
-                                description="Restart this site's containers and bring it back online."
-                                action={(
-                                    <Button variant="outline" onClick={handleUnarchive} disabled={archiving}>
-                                        <Archive size={16} />
-                                        {archiving ? 'Unarchiving...' : 'Unarchive'}
-                                    </Button>
-                                )}
-                            />
-                        ) : (
-                            <DangerZone
-                                title="Archive Site"
-                                description="Stop the containers but keep all files and the database. Reversible."
-                                action={(
-                                    <Button variant="outline" onClick={handleArchive} disabled={archiving}>
-                                        <Archive size={16} />
-                                        {archiving ? 'Archiving...' : 'Archive'}
-                                    </Button>
-                                )}
-                            />
-                        )}
-                        <DangerZone
-                            title="Delete Site"
-                            description="Permanently remove this site, all environments, files and databases. A final backup is taken by default."
-                            action={(
-                                <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
-                                    <Trash2 size={16} />
-                                    Delete Site
-                                </Button>
-                            )}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div className="app-overview-right">
                 <div className="app-panel">
                     <div className="app-panel-header">Quick Actions</div>
                     <div className="app-panel-body">
@@ -2307,6 +2132,41 @@ const OverviewTab = ({ site, onUpdate }) => {
                         </div>
                     </div>
                 </div>
+
+                <div className="app-panel wp-traffic-panel">
+                    <div className="app-panel-header">
+                        Traffic
+                        <span className="wp-panel-sub">Last 7 days · unique visits</span>
+                    </div>
+                    <div className="app-panel-body">
+                        {trafficSeries.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={250}>
+                                <AreaChart data={trafficSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="wpOvVisits" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#6d7cff" stopOpacity={0.35} />
+                                            <stop offset="95%" stopColor="#6d7cff" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#888" strokeOpacity={0.15} />
+                                    <XAxis dataKey="hour" tickFormatter={fmtTrafficTick} tick={{ fontSize: 11, fill: '#888' }} minTickGap={28} axisLine={false} tickLine={false} />
+                                    <YAxis allowDecimals={false} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} tick={{ fontSize: 11, fill: '#888' }} width={34} axisLine={false} tickLine={false} />
+                                    <Tooltip labelFormatter={fmtTrafficTick} />
+                                    <Area type="monotone" dataKey="requests" name="Visits" stroke="#8b93ff" fill="url(#wpOvVisits)" strokeWidth={2} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <p className="hint">No traffic recorded for this period yet — it&apos;s parsed from the site&apos;s access log.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="app-panel wp-activity-panel">
+                <div className="app-panel-header">Recent activity</div>
+                <div className="app-panel-body">
+                    <ActivityFeed projectId={site.id} limit={6} />
+                </div>
             </div>
 
             {showEnvModal && (() => {
@@ -2330,32 +2190,13 @@ const OverviewTab = ({ site, onUpdate }) => {
                     onSubmit={handleSearchReplace}
                 />
             )}
-
-            {showDeleteModal && (
-                <DeleteSiteModal
-                    siteName={site.name}
-                    onClose={() => setShowDeleteModal(false)}
-                    onConfirm={handleDelete}
-                />
-            )}
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
-            </div>
         </div>
     );
 };
 
-// SSL Certificate panel — live status + issuance for the site's primary domain
-const SiteSSLPanel = ({ site }) => {
+// SSL Certificate panel — guided one-click SSL that walks the user through the
+// prerequisites (public domain, DNS, admin email) and then issues the cert.
+const SiteSSLPanel = ({ site, onUpdate }) => {
     const toast = useToast();
     const domains = site.application?.domains || [];
     const primaryDomain = (domains.find(d => d.is_primary) || domains[0])?.name || null;
@@ -2363,9 +2204,21 @@ const SiteSSLPanel = ({ site }) => {
     const isPublicDomain = !!primaryDomain
         && !/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(primaryDomain)
         && primaryDomain.includes('.');
+    const hasAdminEmail = !!site.admin_email;
     const [health, setHealth] = useState(null);
     const [checking, setChecking] = useState(true);
     const [issuing, setIssuing] = useState(false);
+
+    // Inline domain attach state (replaces the modal for the SSL flow).
+    const [attachDomain, setAttachDomain] = useState('');
+    const [attaching, setAttaching] = useState(false);
+    const [attachResult, setAttachResult] = useState(null);
+
+    // Connected DNS providers + ServerKit domains so the SSL panel feels linked
+    // to the rest of the app.
+    const [dnsProviders, setDnsProviders] = useState([]);
+    const [serverkitDomains, setServerkitDomains] = useState([]);
+    const [contextLoading, setContextLoading] = useState(true);
 
     useEffect(() => {
         if (!primaryDomain) { setChecking(false); return; }
@@ -2383,6 +2236,26 @@ const SiteSSLPanel = ({ site }) => {
         })();
         return () => { cancelled = true; };
     }, [primaryDomain]);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setContextLoading(true);
+            try {
+                const [providersRes, domainsRes] = await Promise.all([
+                    api.getEmailDNSProviders().then(d => d.providers || []).catch(() => []),
+                    api.getDomains().then(d => d.domains || []).catch(() => []),
+                ]);
+                if (!cancelled) {
+                    setDnsProviders(providersRes);
+                    setServerkitDomains(domainsRes);
+                }
+            } finally {
+                if (!cancelled) setContextLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [site.id]);
 
     async function handleEnableSSL() {
         if (!primaryDomain || !site.admin_email) return;
@@ -2404,7 +2277,41 @@ const SiteSSLPanel = ({ site }) => {
         }
     }
 
+    async function handleAttachDomain(e) {
+        e?.preventDefault();
+        const domain = attachDomain.trim();
+        if (!domain || attaching) return;
+        setAttaching(true);
+        toast.info('Attaching domain — creating DNS and moving the site…', { duration: 5000 });
+        try {
+            const res = await wordpressApi.attachDomain(site.id, { domain, issueSsl: true });
+            if (res.success) {
+                setAttachResult(res);
+                if (res.dns?.created) toast.success(`DNS A record created via ${res.dns.provider}`);
+                else toast.warning('Domain attached — add the DNS record shown to finish.', { duration: 7000 });
+                onUpdate?.();
+            } else {
+                toast.error(res.error || 'Failed to attach domain');
+            }
+        } catch (err) {
+            toast.error(err.message || 'Failed to attach domain');
+        } finally {
+            setAttaching(false);
+        }
+    }
+
     const issued = health?.valid;
+    const attachValid = /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(attachDomain.trim());
+
+    const CheckItem = ({ ok, label }) => (
+        <div className="ssl-check-item">
+            {ok ? <CircleCheck size={14} className="ssl-check-icon ssl-check-icon--ok" /> : <CircleX size={14} className="ssl-check-icon ssl-check-icon--missing" />}
+            <span className={ok ? 'ssl-check-label ssl-check-label--ok' : 'ssl-check-label'}>{label}</span>
+        </div>
+    );
+
+    const rec = attachResult?.dns?.record;
+
     return (
         <div className="app-panel">
             <div className="app-panel-header"><Lock size={16} /> SSL Certificate</div>
@@ -2438,14 +2345,119 @@ const SiteSSLPanel = ({ site }) => {
                         </div>
                     )}
                 </div>
+
                 {!isPublicDomain ? (
-                    <p className="hint">SSL requires a public domain pointed at this server. This site is on <code>{primaryDomain || 'localhost'}</code>, so a certificate cannot be issued here. Map a public domain to the site first.</p>
-                ) : !site.admin_email ? (
-                    <p className="hint">Set an admin email on the site before requesting a certificate.</p>
+                    <div className="ssl-guide">
+                        <p className="hint">SSL requires a public domain pointed at this server. This site is on <code>{primaryDomain || 'localhost'}</code>, so a certificate cannot be issued here.</p>
+                        <div className="ssl-checklist">
+                            <CheckItem ok={false} label="Public domain mapped to this site" />
+                            <CheckItem ok={hasAdminEmail} label="Admin email set for certificate expiry notices" />
+                        </div>
+
+                        {!attachResult ? (
+                            <form className="ssl-inline-attach" onSubmit={handleAttachDomain}>
+                                {contextLoading ? (
+                                    <p className="hint">Loading domain connections…</p>
+                                ) : (
+                                    <div className="ssl-context">
+                                        {dnsProviders.length > 0 ? (
+                                            <div className="ssl-provider-status ssl-provider-status--ok">
+                                                <CircleCheck size={14} />
+                                                DNS auto-managed via {dnsProviders.map(p => p.name || p.provider).join(', ')}
+                                            </div>
+                                        ) : (
+                                            <div className="ssl-provider-status ssl-provider-status--missing">
+                                                <CircleX size={14} />
+                                                No DNS provider connected — add Cloudflare/Route53/etc. for automatic records, or add the DNS record manually after attaching.
+                                            </div>
+                                        )}
+                                        <div className="ssl-context-links">
+                                            <Link to="/settings/connections">DNS connections</Link>
+                                            <span>·</span>
+                                            <Link to="/domains">Manage domains</Link>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="form-group">
+                                    <Label>Domain</Label>
+                                    <Input
+                                        type="text"
+                                        value={attachDomain}
+                                        onChange={(e) => setAttachDomain(e.target.value)}
+                                        placeholder="example.com"
+                                        disabled={attaching}
+                                        list="ssl-existing-domains"
+                                    />
+                                    <datalist id="ssl-existing-domains">
+                                        {serverkitDomains
+                                            .filter(d => !domains.some(ad => ad.name === d.name))
+                                            .map(d => (
+                                                <option key={d.id} value={d.name}>
+                                                    {d.ssl_enabled ? 'SSL enabled' : 'No SSL'}
+                                                </option>
+                                            ))}
+                                    </datalist>
+                                    <span className="form-hint">Pick an existing ServerKit domain or type one you control, without http://</span>
+                                </div>
+                                <div className="app-detail-actions">
+                                    <Button type="submit" disabled={!attachValid || attaching}>
+                                        <Globe size={14} />
+                                        {attaching ? 'Attaching…' : 'Attach Domain & Enable SSL'}
+                                    </Button>
+                                </div>
+                            </form>
+                        ) : (
+                            <div className="ssl-attach-result">
+                                <div className="ssl-attach-result__success">
+                                    <CircleCheck size={16} />
+                                    Site is now at <code>{attachResult.url}</code>
+                                </div>
+                                {attachResult.dns?.created ? (
+                                    <p className="hint">DNS A record created automatically via {attachResult.dns.provider}{attachResult.dns.zone ? ` (zone ${attachResult.dns.zone})` : ''}.</p>
+                                ) : (
+                                    <div className="ssl-attach-result__manual">
+                                        <strong>Add this DNS record to finish:</strong>
+                                        {rec?.value ? (
+                                            <code className="ssl-attach-result__record">{rec.type}&nbsp;&nbsp;{rec.name}&nbsp;→&nbsp;{rec.value}</code>
+                                        ) : (
+                                            <p className="hint">{attachResult.dns?.message}</p>
+                                        )}
+                                    </div>
+                                )}
+                                {attachResult.warning && <p className="hint">{attachResult.warning}</p>}
+                            </div>
+                        )}
+                    </div>
+                ) : !hasAdminEmail ? (
+                    <div className="ssl-guide">
+                        <p className="hint">A public domain is configured, but an admin email is required before requesting a certificate.</p>
+                        <div className="ssl-checklist">
+                            <CheckItem ok label={`Domain ${primaryDomain} configured`} />
+                            <CheckItem ok={false} label="Admin email set" />
+                        </div>
+                        <p className="hint">Update the site&apos;s admin email in Settings → General, then return here to enable SSL.</p>
+                    </div>
                 ) : (
-                    <Button onClick={handleEnableSSL} disabled={issuing} className="ssl-action-btn">
-                        <Lock size={14} /> {issuing ? 'Requesting...' : issued ? 'Re-issue Certificate' : 'Enable SSL'}
-                    </Button>
+                    <div className="ssl-guide">
+                        {issued ? (
+                            <p className="hint">This site is secured with a valid SSL certificate. You can re-issue it if needed.</p>
+                        ) : (
+                            <>
+                                <p className="hint">Everything is ready. One click will request a free certificate from Let&apos;s Encrypt and configure the server.</p>
+                                <div className="ssl-checklist">
+                                    <CheckItem ok label={`Domain ${primaryDomain} configured`} />
+                                    <CheckItem ok label="Admin email set" />
+                                </div>
+                            </>
+                        )}
+                        <div className="app-detail-actions">
+                            <Button onClick={handleEnableSSL} disabled={issuing}>
+                                {issued ? <Shield size={14} /> : <Lock size={14} />}
+                                {issuing ? 'Requesting...' : issued ? 'Re-issue Certificate' : 'Enable SSL'}
+                            </Button>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
@@ -3749,6 +3761,128 @@ const GeneralSettings = ({ onAddDomain, onChangeUrl, onClone }) => (
     </div>
 );
 
+// Danger Zone settings — destructive site-level actions moved out of the
+// Overview tab into Settings so the daily dashboard isn't dominated by them.
+const DangerZoneSettings = ({ site, onUpdate }) => {
+    const toast = useToast();
+    const navigate = useNavigate();
+    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const [archiving, setArchiving] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+    async function handleArchive() {
+        const ok = await confirm({
+            title: 'Archive Site',
+            message: `Stop and archive "${site.name}"? Containers are stopped but all files and the database are kept. You can unarchive it later.`,
+            confirmText: 'Archive',
+            variant: 'warning',
+        });
+        if (!ok) return;
+        setArchiving(true);
+        toast.info('Archiving site...', { duration: 3000 });
+        try {
+            await wordpressApi.archiveSite(site.id);
+            toast.success('Site archived');
+            onUpdate?.();
+        } catch (err) {
+            toast.error(err.message || 'Failed to archive site');
+        } finally {
+            setArchiving(false);
+        }
+    }
+
+    async function handleUnarchive() {
+        setArchiving(true);
+        toast.info('Unarchiving site...', { duration: 3000 });
+        try {
+            await wordpressApi.unarchiveSite(site.id);
+            toast.success('Site unarchived');
+            onUpdate?.();
+        } catch (err) {
+            toast.error(err.message || 'Failed to unarchive site');
+        } finally {
+            setArchiving(false);
+        }
+    }
+
+    async function handleDelete(createBackup) {
+        toast.info(createBackup ? 'Creating final backup and deleting site...' : 'Deleting site...', { duration: 5000 });
+        try {
+            await wordpressApi.deleteSite(site.id, { createBackup });
+            toast.success('Site deleted');
+            setShowDeleteModal(false);
+            navigate('/wordpress');
+        } catch (err) {
+            toast.error(err.message || 'Failed to delete site');
+        }
+    }
+
+    return (
+        <>
+            {confirmState.isOpen && (
+                <ConfirmDialog
+                    isOpen={confirmState.isOpen}
+                    title={confirmState.title}
+                    message={confirmState.message}
+                    confirmText={confirmState.confirmText}
+                    variant={confirmState.variant}
+                    onConfirm={handleConfirm}
+                    onCancel={handleCancel}
+                />
+            )}
+            {showDeleteModal && (
+                <DeleteSiteModal
+                    siteName={site.name}
+                    onClose={() => setShowDeleteModal(false)}
+                    onConfirm={handleDelete}
+                />
+            )}
+            <div className="app-overview-grid">
+                <div className="app-overview-left">
+                    <div className="app-panel danger-zone-panel">
+                        <div className="app-panel-header">Danger Zone</div>
+                        <div className="app-panel-body danger-zone-body">
+                            {site.status === 'archived' ? (
+                                <DangerZone
+                                    title="Unarchive Site"
+                                    description="Restart this site's containers and bring it back online."
+                                    action={(
+                                        <Button variant="outline" onClick={handleUnarchive} disabled={archiving}>
+                                            <Archive size={16} />
+                                            {archiving ? 'Unarchiving...' : 'Unarchive'}
+                                        </Button>
+                                    )}
+                                />
+                            ) : (
+                                <DangerZone
+                                    title="Archive Site"
+                                    description="Stop the containers but keep all files and the database. Reversible."
+                                    action={(
+                                        <Button variant="outline" onClick={handleArchive} disabled={archiving}>
+                                            <Archive size={16} />
+                                            {archiving ? 'Archiving...' : 'Archive'}
+                                        </Button>
+                                    )}
+                                />
+                            )}
+                            <DangerZone
+                                title="Delete Site"
+                                description="Permanently remove this site, all environments, files and databases. A final backup is taken by default."
+                                action={(
+                                    <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
+                                        <Trash2 size={16} />
+                                        Delete Site
+                                    </Button>
+                                )}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
+
 // Grouped left nav for the Settings tab. Each item just re-renders the existing
 // per-feature component (passed a single `ctx`), so behavior is unchanged — only
 // the home moves here to keep the top tab strip short. Groups give the nav
@@ -3761,15 +3895,22 @@ const WP_SETTINGS_GROUPS = [
         { id: 'php', label: 'PHP', icon: Settings, render: (ctx) => <PhpTab siteId={ctx.siteId} /> },
         { id: 'updates', label: 'Updates', icon: RefreshCw, render: (ctx) => <UpdatesTab siteId={ctx.siteId} /> },
     ] },
+    { label: 'Data', items: [
+        { id: 'backups', label: 'Backups', icon: Archive, render: (ctx) => <BackupsTab siteId={ctx.siteId} /> },
+    ] },
     { label: 'Connections', items: [
         { id: 'git', label: 'Git', icon: GitBranch, render: (ctx) => <GitTab siteId={ctx.siteId} site={ctx.site} onUpdate={ctx.onUpdate} /> },
     ] },
     { label: 'Security', items: [
         { id: 'security', label: 'Security', icon: Lock, render: (ctx) => <SecurityTab siteId={ctx.siteId} /> },
+        { id: 'ssl', label: 'SSL', icon: Shield, render: (ctx) => <SiteSSLPanel site={ctx.site} onUpdate={ctx.onUpdate} /> },
         { id: 'vulnerabilities', label: 'Vulnerabilities', icon: ShieldCheck, render: (ctx) => <VulnerabilitiesTab siteId={ctx.siteId} /> },
     ] },
     { label: 'Reports', items: [
         { id: 'reports', label: 'Reports', icon: FileBarChart, render: (ctx) => <ReportsTab siteId={ctx.siteId} /> },
+    ] },
+    { label: 'Danger Zone', items: [
+        { id: 'danger-zone', label: 'Danger Zone', icon: ShieldAlert, render: (ctx) => <DangerZoneSettings site={ctx.site} onUpdate={ctx.onUpdate} /> },
     ] },
 ];
 
@@ -3810,5 +3951,16 @@ const SettingsTab = ({ siteId, site, onUpdate, onAddDomain, onChangeUrl, onClone
         </div>
     );
 };
+
+function extractRepoDisplay(url) {
+    if (!url) return '';
+    try {
+        const cleaned = url.replace(/\.git$/, '').replace(/^https?:\/\/[^@]+@/, 'https://');
+        const parts = cleaned.split(/[/:]/).filter(Boolean);
+        return parts.slice(-2).join('/');
+    } catch {
+        return url;
+    }
+}
 
 export default WordPressDetail;

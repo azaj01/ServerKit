@@ -35,7 +35,9 @@ const TAB_LABELS = {
     overview: 'Overview',
     events: 'Events',
     logs: 'Logs',
-    environment: 'Environment',
+    // 'Environment Variables' instead of 'Environment' so it isn't confused
+    // with Settings → Environment Type (deployment environment).
+    environment: 'Env Vars',
     shell: 'Shell',
     metrics: 'Metrics',
     packages: 'Packages',
@@ -228,6 +230,8 @@ const ServiceDetail = () => {
     const isGitBased = service.source !== 'manual' && service.source !== 'upload';
     const isUpload = service.source === 'upload';
     const isManual = service.source === 'manual';
+    const domains = service.domains || [];
+    const primaryDomain = (domains.find(d => d.is_primary) || domains[0])?.name || '';
 
     return (
         <div className="app-detail-page app-detail-page--wide svc-detail">
@@ -380,15 +384,15 @@ const ServiceDetail = () => {
                         {service.port && <span>Port {service.port}</span>}
                         {service.port && <span className="separator">&middot;</span>}
                         <span>Created {new Date(service.created_at).toLocaleDateString()}</span>
-                        {service.domain && (
+                        {primaryDomain && (
                             <>
                                 <span className="separator">&middot;</span>
                                 <a
-                                    href={`https://${service.domain}`}
+                                    href={`https://${primaryDomain}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    {service.domain}
+                                    {primaryDomain}
                                 </a>
                             </>
                         )}
@@ -526,6 +530,8 @@ const ServiceDetail = () => {
                     <SettingsTab
                         app={service}
                         deployConfig={deployConfig}
+                        domains={domains}
+                        primaryDomain={primaryDomain}
                         onUpdate={reload}
                     />
                 )}

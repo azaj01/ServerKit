@@ -1,134 +1,11 @@
 // ============================================
 // SERVICES LIST PAGE
+// Shares the WordPress list layout (.wp-list) for a consistent list UX.
+// Only service-specific cell bits live here (source badge, row actions).
 // ============================================
 
 .services-page {
-    &__header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: $space-6;
-
-        h1 {
-            font-size: $font-size-2xl;
-            font-weight: $font-weight-bold;
-            color: $text-primary;
-            margin: 0;
-        }
-    }
-
-    &__subtitle {
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-        margin-top: $space-1;
-    }
-
-    &__filters {
-        display: flex;
-        gap: $space-3;
-        margin-bottom: $space-5;
-    }
-
-    &__search {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-        background: $bg-card;
-        border: 1px solid $border-default;
-        border-radius: $radius-lg;
-        padding: 0 $space-3;
-        transition: border-color $transition-fast;
-
-        &:focus-within {
-            border-color: $accent-primary;
-        }
-
-        svg {
-            color: $text-tertiary;
-            flex-shrink: 0;
-        }
-
-        input {
-            flex: 1;
-            background: none;
-            border: none;
-            padding: $space-2 0;
-            color: $text-primary;
-            font-size: $font-size-sm;
-            outline: none;
-
-            &::placeholder {
-                color: $text-tertiary;
-            }
-        }
-    }
-
-    &__filter-select {
-        background: $bg-card;
-        border: 1px solid $border-default;
-        border-radius: $radius-lg;
-        padding: $space-2 $space-3;
-        color: $text-secondary;
-        font-size: $font-size-sm;
-        outline: none;
-        cursor: pointer;
-        min-width: 120px;
-
-        &:focus {
-            border-color: $accent-primary;
-        }
-    }
-
-    // Redesign KPI strip (replaces the StatStrip)
-    .svc-kpis {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: $space-4;
-        margin-bottom: $space-4;
-
-        @media (max-width: $breakpoint-lg) { grid-template-columns: repeat(2, 1fr); }
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
-    }
-
-    // dense list (demo .dtable) — surface card around an .sk-dtable
-    &__tablecard {
-        background: var(--surface);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--radius);
-        overflow: hidden;
-    }
-
-    &__table {
-        td { white-space: nowrap; }
-
-        // checkbox gutter
-        .services-page__ck {
-            width: 36px;
-            padding-right: 0;
-        }
-
-        .services-page__th-actions { text-align: right; }
-
-        @media (max-width: $breakpoint-md) {
-            // drop Source + Domain + Last Deploy on narrow screens
-            th:nth-child(3), td:nth-child(3),
-            th:nth-child(4), td:nth-child(4),
-            th:nth-child(6), td:nth-child(6) { display: none; }
-        }
-    }
-
-    &__type-icon {
-        width: 30px;
-        height: 30px;
-        border-radius: 9px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-
-    // source badge (demo .src-badge): repo provider icon + owner/name
+    // Source badge (repo / manual / upload) used inside the shared .sk-dtable.
     &__src-badge {
         display: inline-flex;
         align-items: center;
@@ -160,61 +37,11 @@
         }
     }
 
-    &__nil { color: var(--text-ghost); }
-
+    // Row-level action buttons (start / stop / restart).
     &__actions {
         display: flex;
         gap: $space-1;
         justify-content: flex-end;
-    }
-
-    &__empty {
-        text-align: center;
-        padding: $space-16 $space-8;
-
-        h3 {
-            color: $text-primary;
-            margin: $space-4 0 $space-2;
-        }
-
-        p {
-            color: $text-tertiary;
-            margin-bottom: $space-5;
-        }
-    }
-
-    &__empty-icon {
-        color: $text-tertiary;
-        opacity: 0.5;
-    }
-
-    // Checkbox
-    &__checkbox {
-        width: 16px;
-        height: 16px;
-        accent-color: var(--accent-primary, $accent-primary);
-        cursor: pointer;
-        flex-shrink: 0;
-    }
-
-    // Bulk Actions Bar
-    &__bulk-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: $space-3 $space-5;
-        background: var(--accent-glow, fade($accent-primary-raw, 8%));
-        border: 1px solid var(--accent-primary, $accent-primary);
-        border-radius: $radius-lg;
-        margin-bottom: $space-4;
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-        color: $text-primary;
-    }
-
-    &__bulk-actions {
-        display: flex;
-        gap: $space-2;
     }
 }
 

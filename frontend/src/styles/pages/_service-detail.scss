@@ -819,6 +819,78 @@ h3.svc-eyebrow {
 }
 
 // ============================================
+// DOMAIN & SSL PANEL (service settings)
+// Mirrors the WordPress SiteSSLPanel layout so both detail pages feel the same.
+// ============================================
+.svc-domain-panel {
+    .ssl-guide {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+        margin-top: $space-3;
+    }
+
+    .ssl-checklist {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+        padding: $space-3;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+    }
+
+    .ssl-check-item {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        color: var(--text-dim);
+    }
+
+    .ssl-check-icon {
+        flex-shrink: 0;
+
+        &--ok { color: var(--green); }
+        &--missing { color: var(--amber); }
+    }
+
+    .ssl-check-label {
+        &--ok { color: var(--text); }
+    }
+
+    .ssl-inline-attach {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+        margin-top: $space-3;
+        padding-top: $space-3;
+        border-top: 1px solid var(--border-soft);
+    }
+
+    .ssl-context {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    .ssl-context-links {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-xs;
+        color: var(--text-faint);
+
+        a {
+            color: var(--accent-bright);
+            text-decoration: none;
+
+            &:hover { text-decoration: underline; }
+        }
+    }
+}
+
+// ============================================
 // OVERVIEW TAB
 // ============================================
 .overview-tab {
