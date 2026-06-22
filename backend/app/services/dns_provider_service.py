@@ -143,16 +143,18 @@ class DNSProviderService:
     @classmethod
     def set_record(cls, provider_id: int, zone_id: str, record_type: str,
                    name: str, value: str, ttl: int = 3600,
-                   proxied: bool = False, priority: int = None) -> Dict:
+                   proxied: bool = False, priority: int = None,
+                   source: str = 'provider') -> Dict:
         """Create or update a DNS record. ``proxied``/``priority`` are honored by
-        the Cloudflare path; other providers ignore them."""
+        the Cloudflare path; other providers ignore them. ``source`` tags the write
+        in the ownership ledger."""
         config = DNSProviderConfig.query.get(provider_id)
         if not config:
             return {'success': False, 'error': 'Provider not found'}
 
         if config.provider == 'cloudflare':
             return cls._cloudflare_set_record(config, zone_id, record_type, name, value, ttl,
-                                              proxied=proxied, priority=priority)
+                                              proxied=proxied, priority=priority, source=source)
         elif config.provider == 'route53':
             return cls._route53_set_record(config, zone_id, record_type, name, value, ttl)
         elif config.provider == 'digitalocean':
@@ -188,21 +190,21 @@ class DNSProviderService:
         # Deploy DKIM record
         dkim_name = f'{selector}._domainkey.{domain}'
         dkim_value = f'v=DKIM1; k=rsa; p={dkim_public_key}'
-        results['dkim'] = cls.set_record(provider_id, zone_id, 'TXT', dkim_name, dkim_value)
+        results['dkim'] = cls.set_record(provider_id, zone_id, 'TXT', dkim_name, dkim_value, source='email')
 
         # Deploy SPF record
         spf_value = 'v=spf1 mx a ~all'
         if server_ip:
             spf_value = f'v=spf1 mx a ip4:{server_ip} ~all'
-        results['spf'] = cls.set_record(provider_id, zone_id, 'TXT', domain, spf_value)
+        results['spf'] = cls.set_record(provider_id, zone_id, 'TXT', domain, spf_value, source='email')
 
         # Deploy DMARC record
         dmarc_name = f'_dmarc.{domain}'
         dmarc_value = f'v=DMARC1; p=quarantine; rua=mailto:dmarc@{domain}; pct=100'
-        results['dmarc'] = cls.set_record(provider_id, zone_id, 'TXT', dmarc_name, dmarc_value)
+        results['dmarc'] = cls.set_record(provider_id, zone_id, 'TXT', dmarc_name, dmarc_value, source='email')
 
         # Deploy MX record
-        results['mx'] = cls.set_record(provider_id, zone_id, 'MX', domain, f'10 mail.{domain}')
+        results['mx'] = cls.set_record(provider_id, zone_id, 'MX', domain, f'10 mail.{domain}', source='email')
 
         all_ok = all(r.get('success') for r in results.values())
         return {
@@ -250,10 +252,13 @@ class DNSProviderService:
         if not config:
             return {'created': False, 'reason': 'no_provider', 'record': record,
                     'message': f'No connected DNS provider manages {domain} — add this record manually.'}
-        res = cls.set_record(config.id, zone['id'], 'A', domain, ip)
+        res = cls.set_record(config.id, zone['id'], 'A', domain, ip, source='auto-dns')
         if res.get('success'):
             return {'created': True, 'provider': config.name, 'zone': zone.get('name'), 'record': record}
-        return {'created': False, 'reason': 'api_error', 'error': res.get('error'),
+        # A foreign record we won't clobber surfaces as its own reason so the caller
+        # can tell the user "you already have a record here" rather than a vague error.
+        reason = 'foreign_record' if res.get('conflict') else 'api_error'
+        return {'created': False, 'reason': reason, 'error': res.get('error'),
                 'provider': config.name, 'record': record}
 
     @staticmethod
@@ -293,7 +298,7 @@ class DNSProviderService:
 
         apex = (zone.get('name') or domain).strip().lower().rstrip('.')
         record = {'type': 'CAA', 'name': apex, 'value': value}
-        res = cls.set_record(config.id, zone['id'], 'CAA', apex, value)
+        res = cls.set_record(config.id, zone['id'], 'CAA', apex, value, source='caa')
         if res.get('success'):
             return {'created': True, 'provider': config.name, 'zone': apex, 'record': record}
         return {'created': False, 'reason': 'api_error', 'error': res.get('error'),
@@ -325,24 +330,36 @@ class DNSProviderService:
     @classmethod
     def _cloudflare_set_record(cls, config: DNSProviderConfig, zone_id: str,
                                 record_type: str, name: str, value: str, ttl: int,
-                                proxied: bool = False, priority: int = None) -> Dict:
-        """Create or update a Cloudflare DNS record (idempotent upsert by name)."""
+                                proxied: bool = False, priority: int = None,
+                                source: str = 'provider') -> Dict:
+        """Create or update a Cloudflare DNS record (idempotent upsert by name),
+        gated by the ownership guard so an automatic write never clobbers a record
+        the user created themselves."""
         from app.services.dns.base import DnsRecordSpec
+        from app.services.dns_ownership_service import DnsOwnershipService
         spec = DnsRecordSpec(record_type=record_type, name=name, content=value,
                              ttl=ttl, priority=priority, proxied=proxied)
-        res = cls._cloudflare_client(config).upsert(zone_id, spec)
+        res = DnsOwnershipService.guarded_upsert(
+            cls._cloudflare_client(config), provider='cloudflare', provider_zone_id=zone_id,
+            spec=spec, source=source, config_id=config.id, allow_foreign=False)
         # Preserve the historical {success, message|error} contract callers expect.
         if res.get('success'):
             return {'success': True,
                     'message': res.get('message', f'{record_type} record set for {name}')}
-        return {'success': False, 'error': res.get('error', 'Unknown error')}
+        out = {'success': False, 'error': res.get('error', 'Unknown error')}
+        if res.get('conflict'):
+            out['conflict'] = True
+        return out
 
     @classmethod
     def _cloudflare_delete_record(cls, config: DNSProviderConfig, zone_id: str,
                                    record_type: str, name: str) -> Dict:
-        """Delete a Cloudflare DNS record (by type+name)."""
-        return cls._cloudflare_client(config).delete(
-            zone_id, record_type=record_type, name=name)
+        """Delete a Cloudflare DNS record ServerKit owns (by type+name); a foreign
+        record with that name is left untouched."""
+        from app.services.dns_ownership_service import DnsOwnershipService
+        return DnsOwnershipService.guarded_delete(
+            cls._cloudflare_client(config), provider_zone_id=zone_id,
+            record_type=record_type, name=name)
 
     @staticmethod
     def _host_relative_to_zone(name: str, zone: str) -> str:

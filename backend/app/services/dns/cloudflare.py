@@ -88,6 +88,36 @@ class CloudflareClient:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
+    def list_records(self, zone_id: str) -> dict:
+        """List every record in a zone (paginated) — the live state the mirror
+        classifies into ServerKit-owned vs the user's own records."""
+        try:
+            out, page = [], 1
+            while True:
+                resp = requests.get(
+                    f'{API_BASE}/zones/{zone_id}/dns_records?per_page=100&page={page}',
+                    headers=self._headers(), timeout=15)
+                data = resp.json()
+                if not data.get('success'):
+                    return {'success': False, 'error': _first_error(data)}
+                for r in data.get('result', []):
+                    out.append({
+                        'id': r.get('id'),
+                        'type': r.get('type'),
+                        'name': r.get('name'),
+                        'content': r.get('content', ''),
+                        'ttl': r.get('ttl'),
+                        'proxied': bool(r.get('proxied', False)),
+                        'priority': r.get('priority'),
+                    })
+                info = data.get('result_info') or {}
+                if page >= (info.get('total_pages') or 1):
+                    break
+                page += 1
+            return {'success': True, 'records': out}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
     # ── records ─────────────────────────────────────────────────────────────
     def _payload(self, spec: DnsRecordSpec) -> dict:
         """Render a record spec into a Cloudflare ``dns_records`` payload."""

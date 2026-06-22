@@ -131,6 +131,16 @@ def check_propagation(domain):
     return jsonify({'domain': domain, 'record_type': record_type, 'results': results})
 
 
+@dns_zones_bp.route('/<int:zone_id>/mirror', methods=['GET'])
+@jwt_required()
+def zone_mirror(zone_id):
+    """Live provider records for a zone, each tagged serverkit-owned vs external."""
+    zone = DNSZoneService.get_zone(zone_id)
+    if not zone:
+        return jsonify({'error': 'Zone not found'}), 404
+    return jsonify(DNSZoneService.list_provider_records(zone))
+
+
 @dns_zones_bp.route('/<int:zone_id>/export', methods=['GET'])
 @jwt_required()
 def export_zone(zone_id):

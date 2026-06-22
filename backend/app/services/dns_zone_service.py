@@ -149,6 +149,39 @@ class DNSZoneService:
         ).all()
 
     @staticmethod
+    def list_provider_records(zone):
+        """The live provider record list for a zone, each tagged ``serverkit`` or
+        ``external`` — so the UI can show everything in the user's zone while making
+        clear which records ServerKit owns (and may touch) vs the user's own."""
+        if zone.provider != 'cloudflare':
+            return {'success': False, 'error': 'Mirror is only available for Cloudflare zones'}
+        credential = DNSZoneService._resolve_credential(zone)
+        if not credential:
+            return {'success': False, 'error': 'No connected credential resolves for this zone'}
+
+        from app.services.dns import CloudflareClient
+        from app.services.dns_ownership_service import DnsOwnershipService
+
+        res = CloudflareClient(credential).list_records(zone.provider_zone_id)
+        if not res.get('success'):
+            return res
+
+        owned_ids, owned_keys = DnsOwnershipService.owned_keys(zone.provider_zone_id)
+        records = []
+        for r in res['records']:
+            owned = (r['id'] in owned_ids) or \
+                ((r['type'], (r['name'] or '').lower().rstrip('.')) in owned_keys)
+            records.append({**r, 'managed_by': 'serverkit' if owned else 'external'})
+        return {
+            'success': True,
+            'records': records,
+            'counts': {
+                'serverkit': sum(1 for x in records if x['managed_by'] == 'serverkit'),
+                'external': sum(1 for x in records if x['managed_by'] == 'external'),
+            },
+        }
+
+    @staticmethod
     def create_record(zone_id, data):
         zone = DNSZone.query.get(zone_id)
         if not zone:
@@ -379,20 +412,25 @@ class DNSZoneService:
 
     @staticmethod
     def _cloudflare_sync(zone, record, action, credential):
-        """Push a single record change to Cloudflare via the shared client.
+        """Push a single record change to Cloudflare via the shared client, gated by
+        the ownership ledger.
 
-        ``upsert`` is idempotent: it updates by ``provider_record_id`` when known,
-        otherwise finds the record by name (so a re-create doesn't duplicate and an
-        update doesn't silently no-op when the id was never captured)."""
+        ``upsert`` is idempotent (updates by ``provider_record_id`` when known, else
+        by name). The Zones page is explicit zone management, so it adopts a matching
+        record and records ServerKit ownership (``allow_foreign=True``)."""
         from app.services.dns import CloudflareClient
         from app.services.dns.base import DnsRecordSpec
+        from app.services.dns_ownership_service import DnsOwnershipService
 
         client = CloudflareClient(credential)
         zone_id = zone.provider_zone_id
 
         if action in ('create', 'update'):
-            res = client.upsert(zone_id, DnsRecordSpec.from_record(record),
-                                record_id=record.provider_record_id)
+            res = DnsOwnershipService.guarded_upsert(
+                client, provider='cloudflare', provider_zone_id=zone_id,
+                spec=DnsRecordSpec.from_record(record), source='zone',
+                config_id=zone.dns_provider_config_id,
+                known_record_id=record.provider_record_id, allow_foreign=True)
             if res.get('success'):
                 rid = res.get('record_id')
                 if rid and rid != record.provider_record_id:
@@ -402,4 +440,6 @@ class DNSZoneService:
                 logger.error('Cloudflare sync %s failed for %s: %s',
                              action, record.name, res.get('error'))
         elif action == 'delete' and record.provider_record_id:
-            client.delete(zone_id, record_id=record.provider_record_id)
+            DnsOwnershipService.guarded_delete(
+                client, provider_zone_id=zone_id, record_type=record.record_type,
+                name=record.name, provider_record_id=record.provider_record_id)

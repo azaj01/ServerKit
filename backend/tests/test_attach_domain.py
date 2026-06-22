@@ -67,7 +67,7 @@ def test_ensure_a_record_auto_creates(app, monkeypatch):
                         classmethod(lambda cls, pid: {'success': True, 'zones': [{'id': 'z1', 'name': 'example.com'}]}))
     captured = {}
 
-    def fake_set(cls, pid, zid, rtype, name, value, ttl=3600):
+    def fake_set(cls, pid, zid, rtype, name, value, ttl=3600, **kwargs):
         captured.update({'zid': zid, 'rtype': rtype, 'name': name, 'value': value})
         return {'success': True}
 

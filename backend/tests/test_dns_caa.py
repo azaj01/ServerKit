@@ -56,7 +56,7 @@ def test_ensure_caa_record_writes_at_zone_apex(app, monkeypatch):
         lambda cls, d: (type('C', (), {'id': 1, 'name': 'cf'})(),
                         {'id': 'zoneABC', 'name': 'Example.COM'})))
     monkeypatch.setattr(S, 'set_record', classmethod(
-        lambda cls, pid, zid, rtype, name, value, ttl=3600:
+        lambda cls, pid, zid, rtype, name, value, ttl=3600, **kw:
             (calls.update(zid=zid, rtype=rtype, name=name, value=value) or {'success': True})))
 
     r = S.ensure_caa_record('panel.example.com')

@@ -29,6 +29,7 @@ from app.models.agent_plugin import AgentPlugin, AgentPluginInstall
 from app.models.server_template import ServerTemplate, ServerTemplateAssignment
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceApiKey, ResourceGrant
 from app.models.dns_zone import DNSZone, DNSRecord
+from app.models.managed_dns_record import ManagedDnsRecord
 from app.models.tunnel import Tunnel
 from app.models.exposed_service import ExposedService
 from app.models.status_page import StatusPage, StatusComponent, HealthCheck, StatusIncident, StatusIncidentUpdate
@@ -61,7 +62,7 @@ __all__ = [
     'AgentPlugin', 'AgentPluginInstall',
     'ServerTemplate', 'ServerTemplateAssignment',
     'Workspace', 'WorkspaceMember', 'WorkspaceApiKey', 'ResourceGrant',
-    'DNSZone', 'DNSRecord',
+    'DNSZone', 'DNSRecord', 'ManagedDnsRecord',
     'Tunnel', 'ExposedService',
     'StatusPage', 'StatusComponent', 'HealthCheck', 'StatusIncident', 'StatusIncidentUpdate',
     'CloudProvider', 'CloudServer', 'CloudSnapshot',
