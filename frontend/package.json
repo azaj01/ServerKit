@@ -10,7 +10,7 @@
         "preview": "vite preview"
     },
     "optionalDependencies": {
-        "@rollup/rollup-win32-x64-msvc": "^4.60.0"
+        "@rollup/rollup-win32-x64-msvc": "^4.62.2"
     },
     "dependencies": {
         "@radix-ui/react-accordion": "^1.2.12",

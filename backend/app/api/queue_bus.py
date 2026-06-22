@@ -22,6 +22,18 @@ def _is_admin(user):
     return user is not None and getattr(user, 'role', None) == 'admin'
 
 
+def _ensure_group_mutable(group_slug):
+    """Reject HTTP mutations against system-owned queue groups.
+
+    System groups (jobs, notifications, webhook deliveries, ...) are managed by
+    the panel itself and are read-only over the REST API. Internal producers and
+    consumers call ``QueueBusService`` directly and are unaffected by this guard.
+    """
+    group = QueueBusService.get_group(group_slug)
+    if group and group.get('owner_type') == 'system':
+        raise QueueBusError('System queue groups are read-only', 403)
+
+
 def _handle_error(e):
     if isinstance(e, QueueBusError):
         return jsonify({'error': e.message}), e.status_code
@@ -101,6 +113,7 @@ def get_group(group_slug):
 @jwt_required()
 def update_group(group_slug):
     try:
+        _ensure_group_mutable(group_slug)
         data = request.get_json() or {}
         group = QueueBusService.update_group(
             slug=group_slug,
@@ -117,6 +130,7 @@ def update_group(group_slug):
 @jwt_required()
 def delete_group(group_slug):
     try:
+        _ensure_group_mutable(group_slug)
         result = QueueBusService.delete_group(group_slug)
         return jsonify(result), 200
     except Exception as e:
@@ -143,6 +157,7 @@ def list_queues(group_slug):
 @jwt_required()
 def create_queue(group_slug):
     try:
+        _ensure_group_mutable(group_slug)
         data = request.get_json() or {}
         slug = data.get('slug')
         name = data.get('name')
@@ -180,6 +195,7 @@ def get_queue(group_slug, queue_slug):
 @jwt_required()
 def update_queue(group_slug, queue_slug):
     try:
+        _ensure_group_mutable(group_slug)
         data = request.get_json() or {}
         queue = QueueBusService.update_queue(
             group_slug=group_slug,
@@ -197,6 +213,7 @@ def update_queue(group_slug, queue_slug):
 @jwt_required()
 def delete_queue(group_slug, queue_slug):
     try:
+        _ensure_group_mutable(group_slug)
         result = QueueBusService.delete_queue(group_slug, queue_slug)
         return jsonify(result), 200
     except Exception as e:
@@ -230,6 +247,7 @@ def list_messages(group_slug, queue_slug):
 @jwt_required()
 def send_message(group_slug, queue_slug):
     try:
+        _ensure_group_mutable(group_slug)
         data = request.get_json() or {}
         payload = data.get('payload')
         priority = data.get('priority', 0)
@@ -314,6 +332,7 @@ def fail_message(group_slug, queue_slug, message_id):
 @jwt_required()
 def requeue_message(group_slug, queue_slug, message_id):
     try:
+        _ensure_group_mutable(group_slug)
         message = QueueBusService.requeue(group_slug, queue_slug, message_id)
         return jsonify({'message': message}), 200
     except Exception as e:
@@ -324,6 +343,7 @@ def requeue_message(group_slug, queue_slug, message_id):
 @jwt_required()
 def delete_message(group_slug, queue_slug, message_id):
     try:
+        _ensure_group_mutable(group_slug)
         result = QueueBusService.delete_message(group_slug, queue_slug, message_id)
         return jsonify(result), 200
     except Exception as e:

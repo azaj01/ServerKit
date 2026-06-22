@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
 import { api } from '../services/api';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from './ui/select';
 
 const ACTIVE_KEY = 'active_workspace_id';
 const ACTIVE_WS_KEY = 'active_workspace';  // full workspace object for nav/brand settings
@@ -63,8 +70,7 @@ const WorkspaceSwitcher = () => {
 
     if (workspaces.length === 0) return null;
 
-    const handleChange = (e) => {
-        const value = e.target.value;
+    const handleChange = (value) => {
         if (value === 'all') {
             localStorage.removeItem(ACTIVE_KEY);
             localStorage.removeItem(ACTIVE_WS_KEY);
@@ -80,20 +86,18 @@ const WorkspaceSwitcher = () => {
     };
 
     return (
-        <div className="workspace-switcher">
-            <Building2 size={14} className="workspace-switcher__icon" aria-hidden="true" />
-            <select
-                className="workspace-switcher__select"
-                value={active}
-                onChange={handleChange}
-                aria-label="Active workspace"
-            >
-                <option value="all">All workspaces</option>
+        <Select value={active} onValueChange={handleChange}>
+            <SelectTrigger className="workspace-switcher__trigger" aria-label="Active workspace">
+                <Building2 size={14} className="workspace-switcher__icon" aria-hidden="true" />
+                <SelectValue placeholder="All workspaces" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">All workspaces</SelectItem>
                 {workspaces.map((w) => (
-                    <option key={w.id} value={String(w.id)}>{w.name}</option>
+                    <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                 ))}
-            </select>
-        </div>
+            </SelectContent>
+        </Select>
     );
 };
 

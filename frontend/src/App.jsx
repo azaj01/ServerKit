@@ -71,6 +71,7 @@ import Deployments from './pages/Deployments';
 import GpuMonitor from './pages/GpuMonitor';
 import DynamicDns from './pages/DynamicDns';
 import QueueOperations from './pages/QueueOperations';
+import QueueDetail from './pages/QueueDetail';
 import Notifications from './pages/Notifications';
 import DeliveryLog from './pages/DeliveryLog';
 import Telemetry from './pages/Telemetry';
@@ -114,6 +115,15 @@ const PAGE_TITLES = {
     '/agent-plugins': 'Marketplace',
     '/server-templates': 'Server Templates',
     '/workspaces': 'Workspaces',
+    '/workspaces/:id': 'Workspace',
+    '/workspaces/:id/overview': 'Workspace Overview',
+    '/workspaces/:id/servers': 'Workspace Servers',
+    '/workspaces/:id/services': 'Workspace Services',
+    '/workspaces/:id/sites': 'Workspace Sites',
+    '/workspaces/:id/members': 'Workspace Members',
+    '/workspaces/:id/settings': 'Workspace Settings',
+    '/workspaces/:id/settings/general': 'Workspace Settings',
+    '/workspaces/:id/settings/navigation': 'Workspace Navigation Permissions',
     '/dns': 'DNS Zones',
     '/status-pages': 'Status Pages',
     '/cloud': 'Cloud Provisioning',
@@ -142,18 +152,32 @@ function PageTitleUpdater() {
 
         // Handle dynamic routes and tab sub-routes
         if (!title) {
+            if (path.startsWith('/workspaces/')) {
+                const parts = path.split('/');
+                const tab = parts[3];
+                const section = parts[4];
+                if (tab === 'settings' && section) {
+                    title = PAGE_TITLES[`/workspaces/:id/settings/${section}`] || 'Workspace Settings';
+                } else if (tab) {
+                    title = PAGE_TITLES[`/workspaces/:id/${tab}`] || 'Workspace';
+                } else {
+                    title = 'Workspace';
+                }
+            }
             // Check if it's a base page with a tab suffix (e.g., /security/firewall)
-            const basePath = '/' + path.split('/')[1];
-            if (PAGE_TITLES[basePath]) {
-                title = PAGE_TITLES[basePath];
-            } else if (pluginTitles && pluginTitles[basePath]) {
-                title = pluginTitles[basePath];
-            } else if (path.startsWith('/services/')) title = 'Service Details';
-            else if (path.startsWith('/apps/')) title = 'Application Details';
-            else if (path.startsWith('/servers/')) title = 'Server Details';
-            else if (path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
-            else if (path.startsWith('/wordpress/')) title = 'WordPress Site';
-            else title = 'ServerKit';
+            else {
+                const basePath = '/' + path.split('/')[1];
+                if (PAGE_TITLES[basePath]) {
+                    title = PAGE_TITLES[basePath];
+                } else if (pluginTitles && pluginTitles[basePath]) {
+                    title = pluginTitles[basePath];
+                } else if (path.startsWith('/services/')) title = 'Service Details';
+                else if (path.startsWith('/apps/')) title = 'Application Details';
+                else if (path.startsWith('/servers/')) title = 'Server Details';
+                else if (path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
+                else if (path.startsWith('/wordpress/')) title = 'WordPress Site';
+                else title = 'ServerKit';
+            }
         }
 
         document.title = title ? `${title} | ServerKit` : 'ServerKit';
@@ -326,6 +350,8 @@ function AppRoutes() {
                 <Route path="agent-plugins" element={<Navigate to="/marketplace" replace />} />
                 <Route path="workspaces" element={<Workspaces />} />
                 <Route path="workspaces/:id" element={<WorkspaceDetail />} />
+                <Route path="workspaces/:id/:tab" element={<WorkspaceDetail />} />
+                <Route path="workspaces/:id/:tab/:section" element={<WorkspaceDetail />} />
                 <Route element={<TabGroupLayout tabs={MARKET_TABS} />}>
                     <Route path="marketplace" element={<Marketplace />} />
                     <Route path="downloads" element={<Downloads />} />
@@ -366,6 +392,7 @@ function AppRoutes() {
                 <Route path="secrets" element={<SecretsWebhooks />} />
                 <Route path="secrets/:tab" element={<SecretsWebhooks />} />
                 <Route path="queue" element={<QueueOperations />} />
+                <Route path="queue/:groupSlug/:queueSlug" element={<QueueDetail />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="admin/notifications" element={<DeliveryLog />} />
                 <Route path="telemetry" element={<Telemetry />} />

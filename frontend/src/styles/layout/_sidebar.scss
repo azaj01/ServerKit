@@ -267,35 +267,39 @@
 
 // Scrollable Navigation Container
 // Active-workspace selector (#33) — sits between the brand and the nav.
-.workspace-switcher {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
+// Uses the Radix Select UI component so the dropdown is fully theme-aware.
+.workspace-switcher__trigger.ui-select-trigger {
+    width: calc(100% - #{$space-6});
     margin: 0 $space-3 $space-2;
     padding: $space-1 $space-2;
     background-color: $bg-card;
     border: 1px solid $border-default;
     border-radius: $radius-md;
+    color: $text-primary;
+    font-size: $font-size-sm;
+    cursor: pointer;
+    transition: border-color $transition-base, background-color $transition-base;
 
-    &__icon {
+    &:hover {
+        border-color: $border-active;
+        background-color: $bg-hover;
+    }
+
+    &:focus-visible {
+        outline: 2px solid $accent-primary;
+        outline-offset: 1px;
+    }
+
+    .workspace-switcher__icon {
         flex-shrink: 0;
         color: $text-secondary;
     }
 
-    &__select {
-        flex: 1;
-        min-width: 0;
-        border: none;
-        background: transparent;
-        color: $text-primary;
-        font-size: $font-size-sm;
-        cursor: pointer;
-        outline: none;
-
-        &:focus-visible {
-            outline: 2px solid $accent-primary;
-            outline-offset: 1px;
-        }
+    // Value text wrapper
+    > span:first-of-type {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 }
 
@@ -739,7 +743,7 @@
                 }
 
                 .brand-section,
-                .workspace-switcher,
+                .workspace-switcher__trigger,
                 .user-mini {
                     justify-content: center;
                     gap: 0;
@@ -749,7 +753,8 @@
                 .brand-star,
                 .nav-category,
                 .nav-expand-btn,
-                .workspace-switcher__select,
+                .workspace-switcher__trigger > span,
+                .workspace-switcher__trigger .ui-select-icon,
                 .user-meta,
                 .user-menu-arrow {
                     display: none;
@@ -802,7 +807,7 @@
             flex-shrink: 0;
         }
 
-        .workspace-switcher {
+        .workspace-switcher__trigger {
             margin: 0;
             flex-shrink: 0;
             max-width: 170px;
