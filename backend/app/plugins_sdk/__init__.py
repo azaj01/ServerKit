@@ -90,9 +90,11 @@ def audit(action, target_type, target_id=None, details=None, user_id=None):
 from app.plugins_sdk import ai
 from app.queue_bus.sdk import QueueBusSdk
 from app.notifications.sdk import NotifySdk
+from app.jobs.sdk import JobsSdk
 
 queue = QueueBusSdk()
 notify = NotifySdk()
+jobs = JobsSdk()
 
 __all__ = [
     'db',
@@ -106,4 +108,5 @@ __all__ = [
     'ai',
     'queue',
     'notify',
+    'jobs',
 ]
