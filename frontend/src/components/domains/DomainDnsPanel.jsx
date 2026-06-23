@@ -1,16 +1,17 @@
-// The DNS records section shown inside the Domains drawer — the same inline
-// experience for an app-created domain and a Cloudflare zone, so the two no longer
-// feel like different products. For a Cloudflare domain it shows the *live* zone
-// records (tagged ServerKit-managed vs your own), so you can see the real DNS
-// without leaving the drawer; for a ServerKit/manual zone it shows the managed
-// records. Admins can add a record inline (the zone is adopted on demand), and
-// deeper management links out to the Cloudflare ops surface / full DNS page.
+// The DNS records section shown inside the Domains drawer — the single DNS surface.
+// For a Cloudflare domain it shows the *live* zone records (tagged ServerKit-managed
+// vs your own) so you see the real DNS without leaving the drawer; for a
+// ServerKit/manual zone it shows the managed records. Admins can add records inline
+// (the zone is adopted on demand), turn any A/AAAA record into a token-updatable
+// Dynamic DNS host, export the zone, and check propagation. Deeper management links
+// out to the Cloudflare ops surface.
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Network, Plus, RefreshCw, ExternalLink, Cloud, ShieldCheck } from 'lucide-react';
+import { Plus, RefreshCw, Cloud, ShieldCheck, Radio, Download, Activity } from 'lucide-react';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { ProviderBrandIcon } from '../icons/ProviderBrands';
+import DdnsTokenCallout from './DdnsTokenCallout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField, FormRow } from '../FormField';
@@ -20,7 +21,10 @@ import {
 
 const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'CAA', 'NS'];
 const PROXYABLE = ['A', 'AAAA', 'CNAME'];
+const DYNAMIC_TYPES = ['A', 'AAAA']; // Dynamic DNS only makes sense for IP records.
 const EMPTY_FORM = { record_type: 'A', name: '@', content: '', ttl: 3600, priority: '', proxied: false };
+
+const norm = (s) => (s || '').toLowerCase().replace(/\.$/, '');
 
 const normalizeLive = (r) => ({
     id: r.id, type: r.type, name: r.name, content: r.content,
@@ -36,6 +40,7 @@ export default function DomainDnsPanel({ domain, isAdmin }) {
     const toast = useToast();
     const isCloudflare = domain?.provider === 'cloudflare';
     const canLive = isCloudflare && !!domain?.provider_zone_id && !!domain?.config_id;
+    const base = norm(domain?.name);
 
     const [records, setRecords] = useState([]);
     const [state, setState] = useState('loading'); // loading | ready | none | error
@@ -45,11 +50,45 @@ export default function DomainDnsPanel({ domain, isAdmin }) {
     const [form, setForm] = useState(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
 
+    // Dynamic DNS hosts for this zone, the just-revealed token, and per-record busy.
+    const [hosts, setHosts] = useState([]);
+    const [revealedHost, setRevealedHost] = useState(null);
+    const [busyKey, setBusyKey] = useState(null);
+
+    // Power tools (moved from the retired DNS Zones page).
+    const [exporting, setExporting] = useState(false);
+    const [propOpen, setPropOpen] = useState(false);
+    const [propLoading, setPropLoading] = useState(false);
+    const [propResults, setPropResults] = useState(null);
+
+    // ── FQDN helpers — reconcile live (FQDN) vs managed (relative) record names ──
+    const recordFqdn = useCallback((r) => {
+        const n = norm(r.name);
+        if (!n || n === '@') return base;
+        if (n === base || n.endsWith(`.${base}`)) return n;
+        return `${n}.${base}`;
+    }, [base]);
+    const recordRelativeName = useCallback((r) => {
+        const fq = recordFqdn(r);
+        return fq === base ? '@' : fq.slice(0, -(base.length + 1));
+    }, [recordFqdn, base]);
+
+    const hostByFqdn = new Map(hosts.map((h) => [norm(h.hostname), h]));
+    const hostFor = (r) => hostByFqdn.get(recordFqdn(r));
+
+    const loadHosts = useCallback(async () => {
+        try {
+            const d = await api.getDdnsHosts();
+            setHosts(d.hosts || []);
+        } catch { /* best-effort: hosts just won't be tagged */ }
+    }, []);
+
     const load = useCallback(async () => {
         if (!domain) return;
         setState('loading');
         setError('');
         setZoneId(domain.zone_id || null); // reset so a prior domain's id can't leak in
+        loadHosts();
         try {
             if (canLive) {
                 const res = await api.getProviderRecords(domain.config_id, domain.provider_zone_id);
@@ -74,9 +113,13 @@ export default function DomainDnsPanel({ domain, isAdmin }) {
             setError(e.message || 'Could not load records');
             setState('error');
         }
-    }, [domain, canLive]);
+    }, [domain, canLive, loadHosts]);
 
-    useEffect(() => { setShowAdd(false); setForm(EMPTY_FORM); load(); }, [load]);
+    useEffect(() => {
+        setShowAdd(false); setForm(EMPTY_FORM);
+        setRevealedHost(null); setPropOpen(false); setPropResults(null);
+        load();
+    }, [load]);
 
     // Materialize the local zone row on demand (writes / Cloudflare ops need it).
     async function ensureZone() {
@@ -109,6 +152,80 @@ export default function DomainDnsPanel({ domain, isAdmin }) {
         }
     }
 
+    // ── Dynamic DNS — turn a record into a token-updatable host ───────────────
+    async function handleMakeDynamic(r) {
+        setBusyKey(recordFqdn(r));
+        try {
+            const zid = await ensureZone();
+            const host = await api.createDdnsHost({ zone_id: zid, record_name: recordRelativeName(r) });
+            setRevealedHost(host); // includes the one-time token
+            toast.success('Dynamic DNS enabled');
+            await loadHosts();
+        } catch (e) {
+            toast.error(e.message || 'Failed to enable Dynamic DNS');
+        } finally {
+            setBusyKey(null);
+        }
+    }
+
+    async function handleRegenerate(host) {
+        try {
+            const updated = await api.regenerateDdnsToken(host.id);
+            setRevealedHost(updated);
+            toast.success('Token regenerated');
+            await loadHosts();
+        } catch (e) {
+            toast.error(e.message || 'Failed to regenerate token');
+        }
+    }
+
+    async function handleStopDynamic(host) {
+        if (!confirm(`Disable Dynamic DNS for ${host.hostname}? Its update token will stop working.`)) return;
+        try {
+            await api.deleteDdnsHost(host.id);
+            if (revealedHost?.id === host.id) setRevealedHost(null);
+            toast.success('Dynamic DNS disabled');
+            await loadHosts();
+        } catch (e) {
+            toast.error(e.message || 'Failed to disable Dynamic DNS');
+        }
+    }
+
+    // ── Power tools ───────────────────────────────────────────────────────────
+    async function handleExport() {
+        setExporting(true);
+        try {
+            const zid = await ensureZone();
+            const data = await api.exportDNSZone(zid);
+            const blob = new Blob([data.zone_file || ''], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${domain.name}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            toast.error(e.message || 'Export failed');
+        } finally {
+            setExporting(false);
+        }
+    }
+
+    async function handleCheckPropagation() {
+        if (propOpen) { setPropOpen(false); return; }
+        setPropOpen(true);
+        setPropLoading(true);
+        try {
+            const d = await api.checkDNSPropagation(domain.name);
+            setPropResults(d.results || []);
+        } catch (e) {
+            toast.error(e.message || 'Propagation check failed');
+            setPropResults([]);
+        } finally {
+            setPropLoading(false);
+        }
+    }
+
     async function openCloudflareOps() {
         try {
             const zid = await ensureZone();
@@ -121,6 +238,8 @@ export default function DomainDnsPanel({ domain, isAdmin }) {
     // A proxied A/AAAA/CNAME means Cloudflare terminates TLS at its edge — i.e. the
     // site is served over HTTPS with no separate certificate to manage here.
     const hasProxiedSSL = isCloudflare && records.some((r) => r.proxied && PROXYABLE.includes(r.type));
+    const showActions = isAdmin || records.some((r) => !!hostFor(r));
+    const canExport = state === 'ready' && records.length > 0 && (isAdmin || !!zoneId);
 
     return (
         <div className="ddp">
@@ -139,6 +258,10 @@ export default function DomainDnsPanel({ domain, isAdmin }) {
                     )}
                 </div>
             </div>
+
+            {revealedHost && (
+                <DdnsTokenCallout host={revealedHost} onDismiss={() => setRevealedHost(null)} />
+            )}
 
             {canLive && (
                 <p className="ddp__hint">
@@ -211,42 +334,102 @@ export default function DomainDnsPanel({ domain, isAdmin }) {
                                     <th className="ddp__c-ttl">TTL</th>
                                     {isCloudflare && <th className="ddp__c-proxy">Proxy</th>}
                                     {canLive && <th className="ddp__c-src">Source</th>}
+                                    {showActions && <th className="ddp__c-act" />}
                                 </tr>
                             </thead>
                             <tbody>
-                                {records.map((r) => (
-                                    <tr key={r.id}>
-                                        <td><span className={`dns-rtype dns-rtype--${(r.type || '').toLowerCase()}`}>{r.type}</span></td>
-                                        <td className="sk-cell-mono ddp__c-name" title={r.name}>{r.name}</td>
-                                        <td className="sk-cell-mono ddp__content" title={r.content}>{r.priority ? `${r.priority} ` : ''}{r.content}</td>
-                                        <td className="sk-cell-mono">{r.ttl === 1 ? 'Auto' : r.ttl}</td>
-                                        {isCloudflare && (
-                                            <td>{r.proxied
-                                                ? <span className="ddp__proxy ddp__proxy--on"><Cloud size={12} /> Proxied</span>
-                                                : <span className="ddp__proxy">DNS only</span>}</td>
-                                        )}
-                                        {canLive && (
-                                            <td>{r.source === 'serverkit'
-                                                ? <span className="ddp__src ddp__src--sk">ServerKit</span>
-                                                : <span className="ddp__src">External</span>}</td>
-                                        )}
-                                    </tr>
-                                ))}
+                                {records.map((r) => {
+                                    const host = hostFor(r);
+                                    const dynamicable = DYNAMIC_TYPES.includes(r.type);
+                                    return (
+                                        <tr key={r.id}>
+                                            <td><span className={`dns-rtype dns-rtype--${(r.type || '').toLowerCase()}`}>{r.type}</span></td>
+                                            <td className="sk-cell-mono ddp__c-name" title={r.name}>{r.name}</td>
+                                            <td className="sk-cell-mono ddp__content" title={r.content}>{r.priority ? `${r.priority} ` : ''}{r.content}</td>
+                                            <td className="sk-cell-mono">{r.ttl === 1 ? 'Auto' : r.ttl}</td>
+                                            {isCloudflare && (
+                                                <td>{r.proxied
+                                                    ? <span className="ddp__proxy ddp__proxy--on"><Cloud size={12} /> Proxied</span>
+                                                    : <span className="ddp__proxy">DNS only</span>}</td>
+                                            )}
+                                            {canLive && (
+                                                <td>{r.source === 'serverkit'
+                                                    ? <span className="ddp__src ddp__src--sk">ServerKit</span>
+                                                    : <span className="ddp__src">External</span>}</td>
+                                            )}
+                                            {showActions && (
+                                                <td className="ddp__c-act">
+                                                    {host ? (
+                                                        <span className="ddp__dynwrap">
+                                                            <span className="ddp__dyn" title={host.last_ip ? `Last IP ${host.last_ip}` : 'No update yet'}>
+                                                                <Radio size={11} /> Dynamic
+                                                            </span>
+                                                            {isAdmin && (
+                                                                <>
+                                                                    <Button variant="ghost" size="sm" className="ddp__iconbtn" title="Regenerate token" onClick={() => handleRegenerate(host)}>
+                                                                        <RefreshCw size={13} />
+                                                                    </Button>
+                                                                    <Button variant="ghost" size="sm" className="ddp__stopbtn" title="Disable Dynamic DNS" onClick={() => handleStopDynamic(host)}>
+                                                                        Stop
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    ) : (
+                                                        isAdmin && dynamicable && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleMakeDynamic(r)}
+                                                                disabled={busyKey === recordFqdn(r)}
+                                                            >
+                                                                <Radio size={13} /> {busyKey === recordFqdn(r) ? 'Enabling…' : 'Make dynamic'}
+                                                            </Button>
+                                                        )
+                                                    )}
+                                                </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
                 )
             )}
 
+            {propOpen && (
+                <div className="ddp__prop">
+                    {propLoading && <p className="ddp__msg">Checking propagation…</p>}
+                    {!propLoading && (propResults?.length ? (
+                        propResults.map((r, i) => (
+                            <div key={i} className="ddp__prop-row">
+                                <span className={`status-dot status-dot--${r.propagated ? 'success' : 'danger'}`} />
+                                <strong>{r.nameserver}</strong>
+                                <span className="ddp__prop-ip">({r.ip})</span>
+                                <span className="ddp__prop-res">{r.result?.join(', ') || 'No result'}</span>
+                            </div>
+                        ))
+                    ) : (
+                        <p className="ddp__msg">No propagation data.</p>
+                    ))}
+                </div>
+            )}
+
             <div className="ddp__foot">
+                {canExport && (
+                    <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
+                        <Download size={14} /> {exporting ? 'Exporting…' : 'Export'}
+                    </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={handleCheckPropagation}>
+                    <Activity size={14} /> {propOpen ? 'Hide propagation' : 'Check propagation'}
+                </Button>
                 {isCloudflare && (
                     <Button variant="outline" size="sm" onClick={openCloudflareOps}>
                         <ProviderBrandIcon provider="cloudflare" size={14} /> Open in Cloudflare
                     </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => navigate('/dns')}>
-                    <Network size={14} /> Full DNS page <ExternalLink size={12} />
-                </Button>
             </div>
         </div>
     );

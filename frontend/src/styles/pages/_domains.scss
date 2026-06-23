@@ -270,6 +270,63 @@
         padding-top: $space-2;
         border-top: 1px solid $border-subtle;
     }
+
+    // Per-record actions column — "Make dynamic" / Dynamic-host controls.
+    &__c-act { width: 168px; text-align: right; }
+
+    &__dynwrap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+    }
+
+    // "Dynamic" badge on a record that is a token-updatable DDNS host.
+    &__dyn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 7px;
+        border-radius: $radius-full;
+        font-size: 11px;
+        font-weight: $font-weight-medium;
+        color: var(--accent-bright);
+        background: var(--accent-bg);
+
+        svg { flex-shrink: 0; }
+    }
+
+    &__iconbtn { padding-inline: $space-2; }
+    &__stopbtn { color: $danger; }
+
+    // Inline propagation results (moved from the retired DNS Zones page).
+    &__prop {
+        display: flex;
+        flex-direction: column;
+        padding: $space-2 $space-3;
+        background: var(--surface-2);
+        border-radius: $radius-md;
+    }
+
+    &__prop-row {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        padding: $space-2 0;
+        font-size: $font-size-sm;
+        border-bottom: 1px solid $border-subtle;
+
+        &:last-child { border-bottom: none; }
+    }
+
+    &__prop-ip { color: $text-tertiary; }
+
+    &__prop-res {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: $font-size-xs;
+        color: $text-secondary;
+    }
 }
 
 // ── Detail drawer body ──────────────────────────────────────
@@ -392,5 +449,88 @@
         width: 16px;
         height: 16px;
         accent-color: $accent-primary;
+    }
+}
+
+// ── Relocated from the retired DNS Zones / Dynamic DNS pages ─────────────────
+// Colored DNS record-type chip — used by the drawer's record table and the
+// Connections → DNS activity feed (DnsActivity.jsx), so it stays global.
+.dns-rtype {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    background: var(--surface-3);
+    color: var(--text-dim);
+
+    &--a, &--aaaa, &--ns { background: var(--accent-bg); color: var(--accent-bright); }
+    &--cname { background: var(--cyan-bg); color: var(--cyan); }
+    &--mx { background: var(--amber-bg); color: var(--amber); }
+    &--txt, &--spf { background: var(--green-bg); color: var(--green); }
+    &--soa, &--srv, &--caa { background: var(--violet-bg); color: var(--violet); }
+}
+
+// One-time Dynamic DNS token callout (DdnsTokenCallout.jsx, shown in the drawer).
+.ddns-token-callout {
+    margin-top: $spacing-lg;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber);
+    border-radius: var(--radius);
+    padding: $spacing-md $spacing-lg;
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+        font-size: 13.5px;
+        color: var(--text);
+
+        svg { color: var(--amber); flex-shrink: 0; }
+    }
+
+    &__close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+
+        &:hover { color: var(--text); }
+    }
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+        margin-top: $spacing-md;
+    }
+
+    &__label {
+        flex-shrink: 0;
+        width: 84px;
+        font-family: var(--mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-faint);
+    }
+
+    &__value {
+        flex: 1;
+        min-width: 0;
+        background: var(--surface);
+        border: 1px solid var(--border-soft);
+        border-radius: $radius-sm;
+        padding: $spacing-xs $spacing-sm;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text);
+        word-break: break-all;
     }
 }

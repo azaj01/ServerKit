@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Globe, Plus, ShieldCheck, RefreshCw, Trash2, ExternalLink,
     AlertTriangle, Clock, Lock, Search, ChevronRight,
@@ -33,6 +34,7 @@ const Domains = () => {
     const [filter, setFilter] = useState('all');
     const [drawerDomain, setDrawerDomain] = useState(null);
     const [regInfo, setRegInfo] = useState(null);            // lazy registration lookup for the open drawer
+    const [searchParams, setSearchParams] = useSearchParams();
 
     // Modal states
     const [showAddModal, setShowAddModal] = useState(false);
@@ -264,6 +266,20 @@ const Domains = () => {
             : filter === 'ssl' ? sslState(d) === 'expiring'
                 : filter === 'issues' ? (d.source !== 'provider' && !d.ssl_enabled) : true
     ));
+
+    // Deep-link: /domains?open=<domain> opens that domain's drawer once data has
+    // loaded — keeps links sensible now that this is the single DNS surface.
+    useEffect(() => {
+        const want = searchParams.get('open');
+        if (!want || loading || drawerDomain) return;
+        const row = mergedRows.find((d) => norm(d.name) === norm(want));
+        if (row) {
+            setDrawerDomain(row);
+            const next = new URLSearchParams(searchParams);
+            next.delete('open');
+            setSearchParams(next, { replace: true });
+        }
+    }, [loading, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useTopbarActions(() =>
         <>

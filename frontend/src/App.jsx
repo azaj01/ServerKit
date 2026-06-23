@@ -58,7 +58,6 @@ import ServerTemplates from './pages/ServerTemplates';
 import RemoteAccess from './pages/RemoteAccess';
 import Workspaces from './pages/Workspaces';
 import WorkspaceDetail from './pages/WorkspaceDetail';
-import DNSZones from './pages/DNSZones';
 import CloudflareZoneSettings from './pages/CloudflareZoneSettings';
 import StatusPages from './pages/StatusPages';
 import PublicStatusPage from './pages/PublicStatusPage';
@@ -70,7 +69,6 @@ import AppMap from './pages/AppMap';
 import Documentation from './pages/Documentation';
 import Deployments from './pages/Deployments';
 import GpuMonitor from './pages/GpuMonitor';
-import DynamicDns from './pages/DynamicDns';
 import QueueOperations from './pages/QueueOperations';
 import QueueDetail from './pages/QueueDetail';
 import Notifications from './pages/Notifications';
@@ -330,10 +328,13 @@ function AppRoutes() {
                 <Route path="workflow" element={<WorkflowBuilder />} />
                 <Route element={<TabGroupLayout tabs={DOMAIN_TABS} />}>
                     <Route path="domains" element={<Domains />} />
-                    <Route path="dns" element={<DNSZones />} />
                     <Route path="ssl" element={<SSLCertificates />} />
-                    <Route path="dynamic-dns" element={<DynamicDns />} />
                 </Route>
+                {/* DNS Zones + Dynamic DNS were merged into the Domains surface
+                    (records + per-record Dynamic DNS live in the domain drawer) —
+                    keep the old paths working by redirecting. */}
+                <Route path="dns" element={<Navigate to="/domains" replace />} />
+                <Route path="dynamic-dns" element={<Navigate to="/domains" replace />} />
                 {/* Cloudflare zone settings — a detail page reached from a
                     Cloudflare-managed DNS zone (full-bleed, own top bar). */}
                 <Route path="cloudflare/zones/:zoneId" element={<CloudflareZoneSettings />} />
