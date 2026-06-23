@@ -2166,19 +2166,16 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
 
     @classmethod
     def _canonical_site_url(cls, app) -> str:
-        """The URL WordPress serves under — its primary domain if one exists,
-        else the panel's canonical origin, else the legacy localhost:<port>
-        address. Used to build correct search-replace pairs when cloning."""
+        """The URL WordPress actually serves under — its primary domain if one
+        exists, else the legacy localhost:<port> address it was installed with.
+        Used to build correct search-replace pairs when cloning or swapping URLs,
+        so it must reflect what's baked into the DB, not the panel's origin."""
         from app.models.domain import Domain
-        from app.services.site_domain_service import SiteDomainService
         d = (Domain.query.filter_by(application_id=app.id, is_primary=True).first()
              or Domain.query.filter_by(application_id=app.id).first())
         if d:
             scheme = 'https' if d.ssl_enabled else 'http'
             return f'{scheme}://{d.name}'
-        panel_origin = SiteDomainService.panel_origin()
-        if panel_origin:
-            return panel_origin
         if app.port:
             return f'http://localhost:{app.port}'
         return None
