@@ -41,6 +41,12 @@ const TEMPLATE_ICONS = {
     'jaeger': BarChart3,
     'plausible': BarChart3,
     'umami': BarChart3,
+    'beszel': BarChart3,
+    'signoz': BarChart3,
+    // Search
+    'meilisearch': Search,
+    'typesense': Search,
+    'searxng': Search,
     // CMS / Blog
     'wordpress': Globe,
     'ghost': FileText,
@@ -102,11 +108,15 @@ const TEMPLATE_ICONS = {
     'n8n': Workflow,
     // Notifications
     'gotify': MessageSquare,
+    'ntfy': MessageSquare,
     // Security
     'vaultwarden': Lock,
     'authelia': Shield,
     'keycloak': Shield,
     'crowdsec': Shield,
+    'authentik': Shield,
+    'wg-easy': Shield,
+    'pihole': Shield,
     // Database tools
     'phpmyadmin': Database,
     'pgadmin': Database,
