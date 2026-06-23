@@ -74,6 +74,26 @@ const TEMPLATE_ICONS = {
     'photoprism': Image,
     'immich': Image,
     'navidrome': Music,
+    'audiobookshelf': Music,
+    'calibre-web': BookOpen,
+    'sonarr': Video,
+    'radarr': Video,
+    'jellyseerr': Video,
+    'prowlarr': Search,
+    'qbittorrent': HardDrive,
+    // News / RSS
+    'freshrss': Newspaper,
+    'miniflux': Newspaper,
+    // Documents
+    'paperless-ngx': FileText,
+    'stirling-pdf': FileText,
+    'memos': FileText,
+    // Finance
+    'actualbudget': TrendingUp,
+    'firefly-iii': TrendingUp,
+    // Project management
+    'vikunja': Check,
+    'plane': Workflow,
     // Productivity
     'bookstack': BookOpen,
     'wikijs': BookOpen,
