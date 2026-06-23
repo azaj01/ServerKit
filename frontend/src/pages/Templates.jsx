@@ -20,7 +20,10 @@ const FEATURED_TEMPLATES = [
     'uptime-kuma', 'gitea', 'vaultwarden', 'jellyfin', 'ghost', 'n8n'
 ];
 
-// Icon mapping for templates
+// Icon strategy: every template ships an inline lucide-style base64 SVG in its
+// YAML `icon:` field (rendered first by renderIcon). This map is the keyed
+// fallback used when a template has no inline icon or it fails to load, so the
+// grid never shows a broken image. Keep ids here in sync with backend/templates.
 const TEMPLATE_ICONS = {
     // AI / LLM
     'prompture-hub': Cpu,
@@ -295,7 +298,51 @@ const Templates = () => {
             database: Database,
             'home-automation': Home,
             analytics: TrendingUp,
-            iot: Cpu
+            iot: Cpu,
+            // AI / LLM
+            ai: Cpu,
+            llm: Cpu,
+            gateway: Server,
+            rag: Cpu,
+            chat: MessageSquare,
+            'low-code': Workflow,
+            workflow: Workflow,
+            // Search
+            search: Search,
+            vector: Database,
+            // Notifications / messaging
+            notifications: MessageSquare,
+            messaging: MessageSquare,
+            communication: MessageSquare,
+            support: MessageSquare,
+            // Documents / news
+            documents: FileText,
+            pdf: FileText,
+            notes: FileText,
+            rss: Newspaper,
+            news: Newspaper,
+            // Finance / business
+            finance: TrendingUp,
+            business: TrendingUp,
+            // Productivity / tasks
+            tasks: Workflow,
+            'project-management': Workflow,
+            bookmarks: BookOpen,
+            ebooks: BookOpen,
+            audiobooks: Music,
+            automation: Workflow,
+            downloads: HardDrive,
+            // Identity / networking / privacy
+            identity: Shield,
+            sso: Shield,
+            vpn: Shield,
+            privacy: Lock,
+            dns: Globe,
+            forum: Users,
+            community: Users,
+            // Observability
+            observability: BarChart3,
+            apm: BarChart3
         };
         const Icon = icons[category] || Container;
         return <Icon size={14} />;

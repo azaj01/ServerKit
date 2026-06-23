@@ -169,6 +169,35 @@ class DeploymentJobService:
             'port_accessible': port_accessible,
         }
 
+        # Optional auto-domain: when the template opts in (top-level `auto_domain: true`)
+        # and a managed-sites base domain is configured, publish the app at
+        # <slug>.<base_domain> with an nginx vhost. HTTPS is applied ONLY if the
+        # base domain's wildcard cert is already set up (HTTP otherwise) — this never
+        # forces SSL. Best-effort and non-fatal; remote-server installs are skipped
+        # (the panel's nginx can't proxy a container on another host). See
+        # SiteDomainService.give_subdomain.
+        auto_domain = bool(plan.get('auto_domain'))
+        if not auto_domain:
+            try:
+                tmpl = TemplateService.get_template(plan.get('template_id'))
+                auto_domain = bool(tmpl.get('success') and tmpl['template'].get('auto_domain'))
+            except Exception:
+                auto_domain = False
+        if auto_domain and not job.target_server_id and app.app_type == 'docker' and app.port:
+            try:
+                from app.services.site_domain_service import SiteDomainService
+                dom = SiteDomainService.give_subdomain(app)
+                result['auto_domain'] = dom
+                if dom.get('success'):
+                    DeploymentPlanRunner(job).log(
+                        'info', f"Published at {dom.get('url')}", dom)
+                else:
+                    DeploymentPlanRunner(job).log(
+                        'warn', f"Auto-domain skipped: {dom.get('error')}", dom)
+            except Exception as exc:
+                result['auto_domain'] = {'success': False, 'error': str(exc)}
+                DeploymentPlanRunner(job).log('warn', f"Auto-domain failed: {exc}")
+
         job.app_id = app.id
         job.set_result({**job.get_result(), **result})
         db.session.commit()

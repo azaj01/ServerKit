@@ -402,6 +402,49 @@ class TemplateService:
         return templates
 
     @classmethod
+    def build_repo_index(cls, repo_name: str = 'serverkit-official') -> Dict:
+        """Build the ``index.json`` document that describes the locally-bundled
+        templates as a publishable repository.
+
+        This is the exact shape :meth:`fetch_remote_templates` / :meth:`sync_templates`
+        consume from ``<repo_url>/index.json`` (templates served at
+        ``<repo_url>/templates/<id>.yaml``). Publishing a repo is then just:
+        host the ``templates/*.yaml`` files plus this ``index.json``. Lets
+        Prompture Hub & friends ship template updates without a panel release.
+        """
+        templates = [
+            {
+                'id': t['id'],
+                'name': t.get('name'),
+                'version': t.get('version'),
+                'description': t.get('description'),
+                'icon': t.get('icon'),
+                'categories': t.get('categories', []),
+            }
+            for t in cls.list_local_templates()
+        ]
+        return {
+            'name': repo_name,
+            'schema_version': cls.SCHEMA_VERSION,
+            'generated_at': datetime.now().isoformat(),
+            'count': len(templates),
+            'templates': templates,
+        }
+
+    @classmethod
+    def export_repo_index(cls, dest_path: str = None) -> Dict:
+        """Write :meth:`build_repo_index` to ``dest_path`` (defaults to
+        ``index.json`` alongside the bundled templates). Returns a status dict."""
+        index = cls.build_repo_index()
+        path = dest_path or os.path.join(cls.LOCAL_TEMPLATES_DIR, 'index.json')
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(index, f, indent=2)
+            return {'success': True, 'path': path, 'count': index['count']}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    @classmethod
     def fetch_remote_templates(cls, repo_url: str) -> List[Dict]:
         """Fetch templates from a remote repository."""
         templates = []
@@ -1152,8 +1195,14 @@ class TemplateService:
         except Exception:
             variables = {}
 
-        # Add any new variables with defaults
-        for var_name, var_config in template.get('variables', {}).items():
+        # Add any new variables with defaults. Templates may declare variables as
+        # a list ([{name: ...}, ...]) or a dict ({NAME: {...}}); normalize to dict
+        # so converted templates (which use the list form) update correctly.
+        template_vars = template.get('variables', {})
+        if isinstance(template_vars, list):
+            template_vars = {v['name']: v for v in template_vars
+                             if isinstance(v, dict) and 'name' in v}
+        for var_name, var_config in template_vars.items():
             if var_name not in variables:
                 variables[var_name] = cls.generate_value(var_config)
 
@@ -1181,6 +1230,20 @@ class TemplateService:
             compose_content = cls.generate_compose(template, variables)
             with open(compose_path, 'w') as f:
                 f.write(compose_content)
+
+            # Re-render any template-defined files and re-apply their bind mounts,
+            # so templates that ship config via a `files:` section (e.g. litellm,
+            # signoz, posthog) keep working across updates instead of losing the
+            # mounted config when the compose is regenerated.
+            if 'files' in template:
+                files_result = cls._process_template_files(
+                    template['files'], app_path, compose_path, variables
+                )
+                if not files_result.get('success'):
+                    # Roll back to the backed-up compose and abort the update.
+                    if os.path.exists(backup_path):
+                        shutil.copy(backup_path, compose_path)
+                    return files_result
 
             # Update installation info
             install_info['template_version'] = template.get('version')

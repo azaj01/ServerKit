@@ -388,6 +388,27 @@ def sync_templates():
     return jsonify(result), 200
 
 
+@templates_bp.route('/repos/index', methods=['GET'])
+@jwt_required()
+def repo_index():
+    """Return the index.json describing the locally-bundled templates.
+
+    This is the document a template repository serves at ``<repo>/index.json``;
+    exposing it lets this instance act as (or seed) a community template repo.
+    """
+    return jsonify(TemplateService.build_repo_index()), 200
+
+
+@templates_bp.route('/repos/index/export', methods=['POST'])
+@jwt_required()
+@admin_required
+def export_repo_index():
+    """Write index.json next to the bundled templates so the directory can be
+    published as a repository."""
+    result = TemplateService.export_repo_index()
+    return jsonify(result), 200 if result.get('success') else 400
+
+
 # ==================== LOCAL TEMPLATE MANAGEMENT ====================
 
 @templates_bp.route('/local', methods=['POST'])
