@@ -81,6 +81,20 @@ function buildCron(frequency, time, days) {
 }
 
 const ScheduleCard = ({ policy, remoteConfigured, onSave, saving }) => {
+    if (!policy) {
+        return (
+            <div className="app-panel schedule-card">
+                <div className="app-panel-header">
+                    <Calendar size={16} />
+                    <span>Schedule</span>
+                </div>
+                <div className="app-panel-body">
+                    <p className="app-panel-hint">Loading backup schedule...</p>
+                </div>
+            </div>
+        );
+    }
+
     const initial = deriveFromCron(policy.schedule_cron);
 
     const [frequency, setFrequency] = useState(initial.frequency);

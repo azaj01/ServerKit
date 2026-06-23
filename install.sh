@@ -428,6 +428,22 @@ fetch_release() {
     mkdir -p "$(dirname "$INSTALL_DIR")"
     tar xzf "$tarball" -C "$(dirname "$INSTALL_DIR")"
     rm -f "$tarball"
+
+    # Normalize tarball layout: older archives have serverkit/ at root,
+    # newer ones have opt/serverkit/.
+    UNPACKED_DIR="$(dirname "$INSTALL_DIR")/serverkit"
+    if [ ! -d "$UNPACKED_DIR" ]; then
+        UNPACKED_DIR="$(dirname "$INSTALL_DIR")/opt/serverkit"
+    fi
+    if [ ! -d "$UNPACKED_DIR" ]; then
+        UNPACKED_DIR=$(find "$(dirname "$INSTALL_DIR")" -maxdepth 2 -type d -name serverkit | head -n1)
+    fi
+    [ -d "$UNPACKED_DIR" ] || halt "Release tarball layout is unrecognized (expected serverkit/ or opt/serverkit/)."
+    if [ "$UNPACKED_DIR" != "$INSTALL_DIR" ]; then
+        mv "$UNPACKED_DIR" "$INSTALL_DIR"
+    fi
+    chmod +x "$INSTALL_DIR/serverkit"
+    chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
     good "Release unpacked into $INSTALL_DIR"
 }
 

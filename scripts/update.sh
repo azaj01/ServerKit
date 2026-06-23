@@ -13,6 +13,24 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
+# Automatic rollback on release swap failure
+# ---------------------------------------------------------------------------
+cleanup_on_failure() {
+    local rc=$?
+    [ "$rc" -eq 0 ] && return 0
+    if [ ! -d "$INSTALL_DIR" ] && [ -d "$INSTALL_DIR.old" ]; then
+        warn "Update failed (exit $rc) — restoring previous installation..."
+        mv "$INSTALL_DIR.old" "$INSTALL_DIR"
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl start "$BACKEND_SERVICE" 2>/dev/null || true
+        systemctl start nginx 2>/dev/null || true
+        warn "Rollback complete. Inspect logs: journalctl -u serverkit -n 50"
+    fi
+    return "$rc"
+}
+trap cleanup_on_failure EXIT
+
+# ---------------------------------------------------------------------------
 # Terminal styling (violet ServerKit identity, degrades to plain text)
 # ---------------------------------------------------------------------------
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
@@ -69,11 +87,28 @@ BACKEND_SERVICE="serverkit"
 # ---------------------------------------------------------------------------
 # Pick install mode: release tarball vs. source tree
 # ---------------------------------------------------------------------------
-if [ "$INSTALL_FROM_RELEASE" != "1" ] && [ ! -d "$INSTALL_DIR/backend/src" ]; then
-    step "No source tree found — switching to release download."
-    INSTALL_FROM_RELEASE=1
-fi
+# Default workflow: dev branch -> PR to main -> `serverkit update` on server.
+# So unless the operator explicitly asks for a release tarball, we always pull
+# the latest main source and rebuild. If the install came from a release
+# tarball (no .git), we convert it to a shallow git checkout so future updates
+# track main directly.
 [ "$BUILD_FROM_SOURCE" = "1" ] && INSTALL_FROM_RELEASE=0
+
+if [ "$INSTALL_FROM_RELEASE" != "1" ] && [ ! -d "$INSTALL_DIR/.git" ]; then
+    step "No source tree found — converting install to a git checkout from main..."
+    tmp_env=$(mktemp)
+    tmp_db=$(mktemp)
+    cp "$INSTALL_DIR/.env" "$tmp_env" 2>/dev/null || true
+    cp "$INSTALL_DIR/backend/instance/serverkit.db" "$tmp_db" 2>/dev/null || true
+    rm -rf "$INSTALL_DIR"
+    git clone --depth 1 --branch main "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR" \
+        || halt "Failed to clone ${GITHUB_REPO}.git"
+    cp "$tmp_env" "$INSTALL_DIR/.env" 2>/dev/null || true
+    mkdir -p "$INSTALL_DIR/backend/instance"
+    cp "$tmp_db" "$INSTALL_DIR/backend/instance/serverkit.db" 2>/dev/null || true
+    rm -f "$tmp_env" "$tmp_db"
+    step "Source tree cloned from main."
+fi
 
 # ---------------------------------------------------------------------------
 # Self-refresh: replace this script with the release copy and re-exec, so an
@@ -247,22 +282,59 @@ if [ "$INSTALL_FROM_RELEASE" = "1" ]; then
     tar xzf "$TARBALL" -C "$STAGE"
     rm -f "$TARBALL"
 
+    # Locate the unpacked tree. Older tarballs have a top-level `serverkit/`
+    # directory; newer ones use `opt/serverkit/` (matches the archive prefix).
+    UNPACKED_DIR="$STAGE/serverkit"
+    if [ ! -d "$UNPACKED_DIR" ]; then
+        UNPACKED_DIR="$STAGE/opt/serverkit"
+    fi
+    if [ ! -d "$UNPACKED_DIR" ]; then
+        UNPACKED_DIR=$(find "$STAGE" -maxdepth 2 -type d -name serverkit | head -n1)
+    fi
+    [ -d "$UNPACKED_DIR" ] || halt "Release tarball layout is unrecognized (expected serverkit/ or opt/serverkit/)."
+
+    # Ensure the instance directory exists before copying the live database.
+    mkdir -p "$UNPACKED_DIR/backend/instance"
+
     # Carry the live .env and database across.
-    cp "$INSTALL_DIR/.env" "$STAGE/serverkit/.env" 2>/dev/null || true
+    cp "$INSTALL_DIR/.env" "$UNPACKED_DIR/.env" 2>/dev/null || true
     cp "$INSTALL_DIR/backend/instance/serverkit.db" \
-        "$STAGE/serverkit/backend/instance/serverkit.db" 2>/dev/null || true
+        "$UNPACKED_DIR/backend/instance/serverkit.db" 2>/dev/null || true
+
+    # Remove any stale backup from a previous failed/interrupted update so
+    # mv doesn't try to overwrite a file/non-directory with a directory.
+    if [ -e "$INSTALL_DIR.old" ]; then
+        rm -rf "$INSTALL_DIR.old"
+    fi
 
     mv "$INSTALL_DIR" "$INSTALL_DIR.old"
-    mv "$STAGE/serverkit" "$INSTALL_DIR"
+    mv "$UNPACKED_DIR" "$INSTALL_DIR"
     rm -rf "$STAGE"
+
+    # Release tarballs don't always preserve executable bits.
+    chmod +x "$INSTALL_DIR/serverkit"
+    chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
     good "Release deployed."
 
     # Release tarballs no longer include a pre-built venv (the absolute paths
     # break on the target). Rebuild it locally from requirements.txt.
     rebuild_virtualenv
+
+    # Release tarballs also don't ship pre-built frontend assets, and the
+    # docker-compose volume mount requires the dist/ tree on the host.
+    step "Rebuilding the frontend..."
+    cd "$INSTALL_DIR/frontend"
+    npm ci --prefer-offline 2>&1 | tail -3
+    NODE_OPTIONS="--max-old-space-size=1024" npm run build 2>&1 | tail -5
+    good "Frontend built."
 else
     phase "Updating Source"
     cd "$INSTALL_DIR"
+
+    step "Pulling latest main from GitHub..."
+    git fetch origin
+    git reset --hard origin/main
+    good "Source updated to origin/main."
 
     chmod +x "$INSTALL_DIR/serverkit"
     chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
@@ -373,7 +445,10 @@ good "Configuration refreshed."
 phase "Starting Services"
 systemctl start "$BACKEND_SERVICE"
 cd "$INSTALL_DIR"
-docker compose up -d 2>&1 | tail -5
+# Recreate the frontend container so its bind mount follows the current
+# frontend/dist inode (npm run build deletes and recreates the directory).
+docker compose up -d --force-recreate frontend 2>&1 | tail -5
+docker compose up -d backend 2>&1 | tail -5
 systemctl start nginx
 good "Services started."
 
