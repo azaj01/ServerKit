@@ -585,6 +585,25 @@ def get_app(app_id):
     return jsonify({'app': _attach_deploy_config(app.to_dict(include_linked=True))}), 200
 
 
+@apps_bp.route('/<int:app_id>/compose-services', methods=['GET'])
+@jwt_required()
+def get_compose_services(app_id):
+    """List the compose service names for an app.
+
+    Lets the env-var editor offer a per-service targeting choice. Empty for
+    non-compose apps or when the base compose can't be read.
+    """
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_access_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+
+    from app.services.compose_env_service import ComposeEnvService
+    return jsonify({'services': ComposeEnvService.list_services(app)}), 200
+
+
 # ---- Per-resource access grants (#33 per-site ACL): share an app with a user ----
 
 @apps_bp.route('/<int:app_id>/grants', methods=['GET'])

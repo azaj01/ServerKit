@@ -76,17 +76,22 @@ export async function deleteVariableGroup(groupId) {
 
 // ----------------------------------------------- variables within a group
 
-export async function addGroupVariable(groupId, { key, value = '', isSecret = false }) {
+export async function addGroupVariable(groupId, { key, value = '', isSecret = false, targetService = null }) {
+    const body = { key, value, is_secret: isSecret };
+    // Empty/null target_service means "all services".
+    if (targetService) body.target_service = targetService;
     return this.request(`/shared/variable-groups/${groupId}/variables`, {
         method: 'POST',
-        body: { key, value, is_secret: isSecret },
+        body,
     });
 }
 
-export async function updateGroupVariable(groupId, variableId, { value, isSecret } = {}) {
+export async function updateGroupVariable(groupId, variableId, { value, isSecret, targetService } = {}) {
     const body = {};
     if (value !== undefined) body.value = value;
     if (isSecret !== undefined) body.is_secret = isSecret;
+    // Passing target_service (even empty string) sets it; empty clears to all services.
+    if (targetService !== undefined) body.target_service = targetService;
     return this.request(`/shared/variable-groups/${groupId}/variables/${variableId}`, {
         method: 'PUT',
         body,

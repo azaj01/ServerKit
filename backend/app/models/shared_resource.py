@@ -126,6 +126,9 @@ class SharedVariable(db.Model):
     key = db.Column(db.String(255), nullable=False)
     encrypted_value = db.Column(db.Text, nullable=False)
     is_secret = db.Column(db.Boolean, default=False)
+    # Compose service this var targets (NULL = all services), mirroring
+    # EnvironmentVariable.target_service so shared vars can also be scoped.
+    target_service = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     __table_args__ = (
@@ -150,6 +153,7 @@ class SharedVariable(db.Model):
             'group_id': self.group_id,
             'key': self.key,
             'is_secret': self.is_secret,
+            'target_service': self.target_service,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
         if include_value:

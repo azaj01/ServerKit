@@ -30,6 +30,7 @@ const SharedVariableGroups = ({ scopeType = 'workspace', scopeId = 'default' }) 
     const [varKey, setVarKey] = useState('');
     const [varValue, setVarValue] = useState('');
     const [varSecret, setVarSecret] = useState(false);
+    const [varTarget, setVarTarget] = useState('');
 
     // attach form
     const [attachType, setAttachType] = useState(RESOURCE_TYPES[0]);
@@ -96,10 +97,12 @@ const SharedVariableGroups = ({ scopeType = 'workspace', scopeId = 'default' }) 
         try {
             await api.addGroupVariable(selectedId, {
                 key: varKey.trim(), value: varValue, isSecret: varSecret,
+                targetService: varTarget.trim() || null,
             });
             setVarKey('');
             setVarValue('');
             setVarSecret(false);
+            setVarTarget('');
             loadDetail(selectedId);
             loadGroups();
         } catch (err) {
@@ -220,6 +223,7 @@ const SharedVariableGroups = ({ scopeType = 'workspace', scopeId = 'default' }) 
                                         <tr>
                                             <th>Key</th>
                                             <th>Value</th>
+                                            <th>Target service</th>
                                             <th></th>
                                         </tr>
                                     </thead>
@@ -228,6 +232,18 @@ const SharedVariableGroups = ({ scopeType = 'workspace', scopeId = 'default' }) 
                                             <tr key={v.id} className={v.is_secret ? 'is-secret' : ''}>
                                                 <td className="shared-vars-table__key">{v.key}</td>
                                                 <td className="shared-vars-table__value">{v.value}</td>
+                                                <td className="shared-vars-table__target">
+                                                    {v.target_service ? (
+                                                        <span
+                                                            className="env-target-chip"
+                                                            title={`Applies only to the "${v.target_service}" service`}
+                                                        >
+                                                            &rarr; {v.target_service}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="shared-vars-table__target-all">all services</span>
+                                                    )}
+                                                </td>
                                                 <td>
                                                     <button
                                                         type="button"
@@ -259,6 +275,14 @@ const SharedVariableGroups = ({ scopeType = 'workspace', scopeId = 'default' }) 
                                     onChange={(e) => setVarValue(e.target.value)}
                                     placeholder="value"
                                     className="shared-groups__var-value"
+                                />
+                                <Input
+                                    type="text"
+                                    value={varTarget}
+                                    onChange={(e) => setVarTarget(e.target.value)}
+                                    placeholder="all services"
+                                    className="shared-groups__var-target"
+                                    title="Target compose service (leave blank to apply to all services)"
                                 />
                                 <label className="shared-groups__secret">
                                     <Checkbox checked={varSecret} onCheckedChange={setVarSecret} />

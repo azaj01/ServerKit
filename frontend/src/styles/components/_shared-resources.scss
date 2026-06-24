@@ -263,6 +263,15 @@
         word-break: break-all;
     }
 
+    &__target {
+        white-space: nowrap;
+    }
+
+    &__target-all {
+        color: $text-tertiary;
+        font-size: $font-size-xs;
+    }
+
     &__group {
         color: $text-tertiary;
         white-space: nowrap;
@@ -422,6 +431,12 @@
     &__var-value {
         flex: 1;
         min-width: 140px;
+    }
+
+    &__var-target {
+        width: 150px;
+        flex-shrink: 0;
+        font-family: $font-mono;
     }
 
     &__secret {

@@ -26,6 +26,9 @@ from app.models.shared_resource import (
     SharedVariableGroupAttachment,
 )
 
+# Sentinel: distinguish "leave target_service unchanged" from "clear to all (None)".
+_UNSET = object()
+
 
 def _audit(action, **kwargs):
     """Best-effort audit log for a shared-resource mutation.
@@ -231,8 +234,12 @@ class SharedResourceService:
     # --------------------------------------------- variables within a group
 
     @staticmethod
-    def set_variable(group_id, key, value, is_secret=False):
-        """Create or update a variable in a group (upsert by key)."""
+    def set_variable(group_id, key, value, is_secret=False, target_service=_UNSET):
+        """Create or update a variable in a group (upsert by key).
+
+        ``target_service`` scopes the var to one compose service (None = all).
+        Left unset on update, the existing target is preserved.
+        """
         group = SharedVariableGroup.query.get(group_id)
         if not group:
             return None
@@ -240,15 +247,19 @@ class SharedResourceService:
         if not key:
             raise ValueError('key is required')
 
+        norm_target = None if target_service in ('', _UNSET) else target_service
         var = SharedVariable.query.filter_by(group_id=group_id, key=key).first()
         created = var is None
         if var is None:
-            var = SharedVariable(group_id=group_id, key=key, is_secret=bool(is_secret))
+            var = SharedVariable(group_id=group_id, key=key, is_secret=bool(is_secret),
+                                 target_service=norm_target)
             var.value = value if value is not None else ''
             db.session.add(var)
         else:
             var.value = value if value is not None else ''
             var.is_secret = bool(is_secret)
+            if target_service is not _UNSET:
+                var.target_service = norm_target
         db.session.commit()
         _audit(
             'resource.update',
@@ -261,7 +272,7 @@ class SharedResourceService:
         return var
 
     @staticmethod
-    def update_variable(variable_id, value=None, is_secret=None):
+    def update_variable(variable_id, value=None, is_secret=None, target_service=_UNSET):
         var = SharedVariable.query.get(variable_id)
         if not var:
             return None
@@ -269,6 +280,8 @@ class SharedResourceService:
             var.value = value
         if is_secret is not None:
             var.is_secret = bool(is_secret)
+        if target_service is not _UNSET:
+            var.target_service = None if target_service in ('', None) else target_service
         db.session.commit()
         _audit(
             'resource.update',
@@ -437,7 +450,8 @@ class SharedResourceService:
 
     @staticmethod
     def resolve_hierarchical_from_layers(layers, direct_vars=None,
-                                         mask_secrets=True, interpolate=True):
+                                         mask_secrets=True, interpolate=True,
+                                         service=None):
         """Pure merge over pre-fetched layers — the unit-testable core.
 
         ``layers`` is an ordered iterable of ``(source_scope, groups)`` tuples
@@ -459,12 +473,23 @@ class SharedResourceService:
         resolved = {}
         plaintext_by_key = {}
 
+        def _targets(var):
+            """A var applies when it targets all services (NULL) or, if a service
+            is requested, that specific service."""
+            tgt = getattr(var, 'target_service', None)
+            if service is None or tgt in (None, ''):
+                return True
+            return tgt == service
+
         def _apply(source_scope, var, group):
+            if not _targets(var):
+                return
             plaintext = var.value  # decrypted
             resolved[var.key] = {
                 'key': var.key,
                 'plaintext': plaintext,
                 'is_secret': bool(var.is_secret),
+                'target_service': getattr(var, 'target_service', None),
                 'group_id': group.id if group is not None else None,
                 'group_name': group.name if group is not None else None,
                 'source_scope': source_scope,
@@ -497,7 +522,7 @@ class SharedResourceService:
 
     @staticmethod
     def resolve_hierarchical(resource_type, resource_id, context=None,
-                             mask_secrets=True, interpolate=True):
+                             mask_secrets=True, interpolate=True, service=None):
         """DB-backed hierarchical resolution for a resource.
 
         ``context`` may carry ``workspace_id``, ``project_id`` and
@@ -529,5 +554,5 @@ class SharedResourceService:
 
         return SharedResourceService.resolve_hierarchical_from_layers(
             layers, direct_vars=None, mask_secrets=mask_secrets,
-            interpolate=interpolate,
+            interpolate=interpolate, service=service,
         )

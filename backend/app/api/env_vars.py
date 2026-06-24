@@ -64,12 +64,14 @@ def create_env_var(app_id):
     value = data.get('value', '')
     is_secret = data.get('is_secret', False)
     description = data.get('description')
+    target_service = data.get('target_service')
 
     if not key:
         return jsonify({'error': 'Key is required'}), 400
 
     env_var, created, err = EnvService.set_env_var(
-        app_id, key, value, is_secret, description, current_user_id
+        app_id, key, value, is_secret, description, current_user_id,
+        target_service=target_service
     )
 
     if err:
@@ -138,6 +140,9 @@ def update_env_var(app_id, key):
 
     if description is not None:
         existing.description = description
+
+    if 'target_service' in data:
+        existing.target_service = data.get('target_service') or None
 
     from app import db
     db.session.commit()

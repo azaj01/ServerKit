@@ -55,6 +55,25 @@ class ComposeEnvService:
     def override_path(cls, project_path):
         return os.path.join(project_path, cls.OVERRIDE_NAME)
 
+    @classmethod
+    def list_services(cls, app):
+        """Service names declared in a managed compose app's base compose.
+
+        Used by the UI to offer a per-service targeting choice. Returns [] for
+        non-compose apps or when the base compose can't be read.
+        """
+        try:
+            root = getattr(app, 'root_path', None)
+            if not root or not os.path.isdir(root):
+                return []
+            base = cls.find_base_compose(root, getattr(app, 'compose_file', None))
+            if not base:
+                return []
+            base_path = base if os.path.isabs(base) else os.path.join(root, base)
+            return cls._service_names(base_path)
+        except Exception:  # pragma: no cover - defensive
+            return []
+
     @staticmethod
     def _app_for_project(project_path):
         """The managed Application whose root_path is this project dir, if any."""
@@ -113,18 +132,27 @@ class ComposeEnvService:
                 return None
 
             from app.services.env_service import EnvService
-            env = EnvService.get_effective_env(app.id)
-            if not env:
-                # No effective env → make sure no stale override lingers.
+            # Per-service effective env: a variable lands on every service unless
+            # it targets a specific one (EnvironmentVariable/SharedVariable
+            # .target_service). Local env vars override shared variable groups.
+            per_service = EnvService.get_effective_env_for_services(app.id, service_names)
+            if not per_service or not any(per_service.values()):
+                # No effective env on any service → make sure no stale override lingers.
                 cls._remove_override(project_path)
                 return None
 
-            environment = {k: cls._escape(v) for k, v in env.items() if k}
-            override = {
-                'services': {
-                    name: {'environment': dict(environment)} for name in service_names
+            services_block = {}
+            for name in service_names:
+                svc_env = per_service.get(name) or {}
+                if not svc_env:
+                    continue  # nothing targeted at this service
+                services_block[name] = {
+                    'environment': {k: cls._escape(v) for k, v in svc_env.items() if k}
                 }
-            }
+            if not services_block:
+                cls._remove_override(project_path)
+                return None
+            override = {'services': services_block}
 
             override_path = cls.override_path(project_path)
             header = (

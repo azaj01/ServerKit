@@ -170,6 +170,7 @@ def add_variable(group_id):
         var = SharedResourceService.set_variable(
             group_id, data['key'], data.get('value', ''),
             is_secret=bool(data.get('is_secret', False)),
+            target_service=data.get('target_service') if 'target_service' in data else None,
         )
     except ValueError as e:
         return _bad(str(e))
@@ -183,11 +184,11 @@ def add_variable(group_id):
 @jwt_required()
 def update_variable(group_id, variable_id):
     data = request.get_json() or {}
-    var = SharedResourceService.update_variable(
-        variable_id,
-        value=data.get('value'),
-        is_secret=data.get('is_secret'),
-    )
+    _kwargs = {'value': data.get('value'), 'is_secret': data.get('is_secret')}
+    if 'target_service' in data:
+        # Only forward when the client sent it, so it's preserved otherwise.
+        _kwargs['target_service'] = data.get('target_service')
+    var = SharedResourceService.update_variable(variable_id, **_kwargs)
     if not var or var.group_id != group_id:
         return _bad('variable not found', 404)
     return jsonify(var.to_dict(mask_secrets=True))

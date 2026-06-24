@@ -31,22 +31,23 @@ def _make_compose_app(tmp_path, workspace_id=99):
     return a
 
 
-def _set_local(app_id, key, value, is_secret=False):
+def _set_local(app_id, key, value, is_secret=False, target_service=None):
     from app import db
     from app.models import EnvironmentVariable
-    ev = EnvironmentVariable(application_id=app_id, key=key, is_secret=is_secret)
+    ev = EnvironmentVariable(application_id=app_id, key=key, is_secret=is_secret,
+                            target_service=target_service)
     ev.value = value
     db.session.add(ev)
     db.session.commit()
 
 
-def _make_scoped_group(scope_type, scope_id, key, value):
+def _make_scoped_group(scope_type, scope_id, key, value, target_service=None):
     from app import db
     from app.models.shared_resource import SharedVariableGroup, SharedVariable
     g = SharedVariableGroup(scope_type=scope_type, scope_id=str(scope_id), name='g')
     db.session.add(g)
     db.session.commit()
-    v = SharedVariable(group_id=g.id, key=key, is_secret=False)
+    v = SharedVariable(group_id=g.id, key=key, is_secret=False, target_service=target_service)
     v.value = value
     db.session.add(v)
     db.session.commit()
@@ -80,6 +81,40 @@ def test_refresh_writes_overlay_for_every_service(app, tmp_path):
             assert env['SHARED_KEY'] == 'shared_val'   # shared group injected
             assert env['LOCAL_KEY'] == 'local_val'
             assert env['OVERRIDE_ME'] == 'local_wins'   # local beat the shared group
+
+
+def test_per_service_targeting(app, tmp_path):
+    from app.services.compose_env_service import ComposeEnvService
+    with app.app_context():
+        a = _make_compose_app(tmp_path, workspace_id=77)
+        # untargeted → both services
+        _set_local(a.id, 'COMMON', 'everywhere')
+        # local targeted at web only
+        _set_local(a.id, 'WEB_ONLY', 'w', target_service='web')
+        # shared var targeted at db only
+        _make_scoped_group('workspace', 77, 'DB_ONLY', 'd', target_service='db')
+
+        path = ComposeEnvService.refresh_for_project(str(tmp_path))
+        with open(path, encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+
+        web = data['services']['web']['environment']
+        db = data['services']['db']['environment']
+
+        assert web['COMMON'] == 'everywhere' and db['COMMON'] == 'everywhere'
+        assert web['WEB_ONLY'] == 'w' and 'WEB_ONLY' not in db
+        assert db['DB_ONLY'] == 'd' and 'DB_ONLY' not in web
+
+
+def test_effective_env_for_services_helper(app, tmp_path):
+    from app.services.env_service import EnvService
+    with app.app_context():
+        a = _make_compose_app(tmp_path, workspace_id=88)
+        _set_local(a.id, 'ALL', 'a')
+        _set_local(a.id, 'ONLY_DB', 'x', target_service='db')
+        per = EnvService.get_effective_env_for_services(a.id, ['web', 'db'])
+        assert per['web'] == {'ALL': 'a'}
+        assert per['db'] == {'ALL': 'a', 'ONLY_DB': 'x'}
 
 
 def test_dollar_signs_are_escaped(app, tmp_path):
