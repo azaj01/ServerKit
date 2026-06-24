@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Network, RefreshCw, Server as ServerIcon } from 'lucide-react';
+import { AlertTriangle, Boxes, Network, RefreshCw, Server as ServerIcon } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
@@ -85,27 +85,39 @@ const FleetProxy = () => {
         </Button>
     ), [loading]);
 
-    // Summary counts by proxy type for the header.
+    // Summary counts by proxy type for the header, plus fleet-wide app and
+    // ingress-mismatch totals (each server row carries app_count / mismatch_count).
     const summary = useMemo(() => {
-        const counts = { total: rows.length, nginx: 0, traefik: 0, caddy: 0 };
+        const counts = { total: rows.length, nginx: 0, traefik: 0, caddy: 0, apps: 0, mismatches: 0 };
         rows.forEach((row) => {
             const type = row.proxy_type || 'nginx';
             if (counts[type] != null) counts[type] += 1;
+            counts.apps += row.app_count || 0;
+            counts.mismatches += row.mismatch_count || 0;
         });
         return counts;
     }, [rows]);
 
     const summaryTiles = [
         { key: 'total', label: 'Servers', value: summary.total, icon: ServerIcon, meta: typeMeta('nginx') },
-        { key: 'nginx', label: 'Host Nginx', value: summary.nginx, meta: typeMeta('nginx') },
+        { key: 'apps', label: 'Apps', value: summary.apps, icon: Boxes, meta: typeMeta('nginx') },
         { key: 'traefik', label: 'Traefik', value: summary.traefik, meta: typeMeta('traefik') },
         { key: 'caddy', label: 'Caddy', value: summary.caddy, meta: typeMeta('caddy') },
+        {
+            key: 'mismatches',
+            label: 'Ingress mismatches',
+            value: summary.mismatches,
+            icon: AlertTriangle,
+            meta: typeMeta('nginx'),
+            warn: summary.mismatches > 0,
+        },
     ];
 
     const columns = [
         { key: 'server', header: 'Server' },
         { key: 'type', header: 'Proxy type' },
         { key: 'status', header: 'Status' },
+        { key: 'apps', header: 'Apps' },
         { key: 'lastRegenerated', header: 'Last regenerated' },
         { key: 'networks', header: 'Networks' },
         { key: 'actions', header: '', className: 'fleet-proxy__col-actions' },
@@ -131,7 +143,10 @@ const FleetProxy = () => {
                 {summaryTiles.map((tile) => {
                     const Icon = tile.icon;
                     return (
-                        <div key={tile.key} className="fleet-proxy__summary-tile">
+                        <div
+                            key={tile.key}
+                            className={`fleet-proxy__summary-tile${tile.warn ? ' fleet-proxy__summary-tile--warn' : ''}`}
+                        >
                             <span className="fleet-proxy__summary-label">
                                 {Icon ? <Icon size={14} /> : (
                                     <span className={`fleet-proxy__swatch fleet-proxy__swatch--${tile.meta.kind}`} />
@@ -184,6 +199,17 @@ const FleetProxy = () => {
                                         <Pill kind={STATUS_KIND[row.status] || 'gray'}>
                                             {STATUS_LABEL[row.status] || row.status || 'Unknown'}
                                         </Pill>
+                                    </td>
+                                    <td>
+                                        <div className="fleet-proxy__apps">
+                                            <span className="fleet-proxy__muted">{row.app_count ?? 0}</span>
+                                            {row.mismatch_count > 0 && (
+                                                <Pill kind="amber" dot={false}>
+                                                    <AlertTriangle size={12} />
+                                                    {row.mismatch_count} ingress mismatch{row.mismatch_count === 1 ? '' : 'es'}
+                                                </Pill>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="fleet-proxy__muted">
                                         {formatTimestamp(row.last_regenerated_at)}

@@ -6,6 +6,14 @@ export async function getServerProxy(serverId) {
     return this.request(`/servers/${serverId}/proxy`);
 }
 
+// Ingress-plane audit for a single server: compares each app's expected ingress
+// plane against the server's active proxy. Returns
+// { server_id, server_name, proxy_type, expected_plane, app_count,
+//   mismatch_count, apps: [{ id, name, app_type, ingress_plane, mismatch, reason }] }.
+export async function getServerIngressAudit(serverId) {
+    return this.request(`/servers/${serverId}/proxy/ingress-audit`);
+}
+
 // Fleet-wide proxy posture: one row per server. Returns { servers: [...] }.
 // Backed by GET /api/v1/servers/proxy/overview (a static prefix that never
 // collides with the per-server /servers/<id>/proxy route).

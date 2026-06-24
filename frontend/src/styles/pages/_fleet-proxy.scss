@@ -44,10 +44,11 @@
         }
     }
 
-    // Summary strip: counts by proxy type.
+    // Summary strip: counts by proxy type, fleet app total, and ingress
+    // mismatches. Auto-fit so the row reflows as tiles are added.
     &__summary {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: $space-3;
 
         @media (max-width: $breakpoint-md) {
@@ -63,6 +64,29 @@
         background: $bg-elevated;
         border: 1px solid $border-subtle;
         border-radius: $radius-md;
+
+        // Mismatch tile when the fleet has at least one ingress mismatch.
+        &--warn {
+            background: $warning-bg;
+            border-color: $warning-border;
+
+            .fleet-proxy__summary-label,
+            .fleet-proxy__summary-value {
+                color: $warning;
+            }
+        }
+    }
+
+    // "Apps" cell: count plus an optional amber mismatch pill.
+    &__apps {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        flex-wrap: wrap;
+
+        .sk-pill svg {
+            margin-right: 2px;
+        }
     }
 
     &__summary-label {

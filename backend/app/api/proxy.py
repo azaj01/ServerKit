@@ -51,6 +51,21 @@ def get_proxy(server_id):
     return jsonify(ProxyStackService.status(server_id))
 
 
+@proxy_bp.route('/<server_id>/proxy/ingress-audit', methods=['GET'])
+@jwt_required()
+def ingress_audit(server_id):
+    """Which of a server's apps disagree with its configured proxy mode.
+
+    Returns the expected ingress plane for the server plus a per-app list with
+    a ``mismatch`` flag, so the UI can warn when host-Nginx apps are running on
+    a server whose active proxy is a Dockerized stack (or vice versa).
+    """
+    _, err = _require_server(server_id)
+    if err:
+        return err
+    return jsonify(ProxyStackService.ingress_audit(server_id))
+
+
 @proxy_bp.route('/<server_id>/proxy/compose-preview', methods=['GET'])
 @jwt_required()
 def compose_preview(server_id):

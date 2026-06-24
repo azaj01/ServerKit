@@ -38,6 +38,14 @@ const STATUS_PILL = {
     failed: 'red',
 };
 
+// Ingress plane → label + Pill kind. Host Nginx is the neutral default;
+// a managed proxy stack reads as the accent (cyan) choice. NULL/undefined
+// reads as host Nginx, matching the backend.
+const INGRESS_META = {
+    proxy_stack: { label: 'Proxy stack', kind: 'cyan' },
+    nginx: { label: 'Nginx', kind: 'gray' },
+};
+
 const ApplicationDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -125,6 +133,7 @@ const ApplicationDetail = () => {
     const isRunning = app.status === 'running';
     const typeInfo = getServiceType(app.app_type);
     const statusInfo = getStatusConfig(app.status);
+    const ingressMeta = INGRESS_META[app.ingress_plane] || INGRESS_META.nginx;
 
     return (
         <div className="page-container app-detail-page">
@@ -190,6 +199,7 @@ const ApplicationDetail = () => {
                     <h1>
                         {app.name}
                         <Pill kind={STATUS_PILL[statusInfo.dotClass] || 'gray'}>{statusInfo.label}</Pill>
+                        <Pill kind={ingressMeta.kind} dot={false}>{ingressMeta.label}</Pill>
                         {app.environment_type && app.environment_type !== 'standalone' && (
                             <EnvTag env={app.environment_type}>
                                 {app.environment_type === 'production' ? 'PROD' :

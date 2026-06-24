@@ -9,6 +9,7 @@ import {
     GitBranch,
     Link2,
     Lock,
+    Network,
     Package,
     RefreshCw,
     Rocket,
@@ -135,6 +136,10 @@ const NewService = () => {
     const [appType, setAppType] = useState('auto');
     const [buildMethod, setBuildMethod] = useState('auto');
     const [port, setPort] = useState('');
+    // Ingress plane: 'nginx' (host Nginx, the default) or 'proxy_stack' (a
+    // Dockerized Traefik/Caddy stack). Only honored by the backend for
+    // container-eligible app types; everything else is forced to host Nginx.
+    const [ingressPlane, setIngressPlane] = useState('nginx');
     const [autoDeploy, setAutoDeploy] = useState(true);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -185,6 +190,15 @@ const NewService = () => {
         ? `Auto -> ${formatBuildMethod(recommended.build_method)}`
         : formatBuildMethod(buildMethod);
 
+    // A managed proxy stack only routes container-based services. The "Proxy
+    // stack" ingress option is offered when the selected type resolves to a
+    // container: Docker explicitly, Auto-detect (which may resolve to a
+    // container), or a Compose-managed local service. Every other type
+    // (PHP/Python/static) is served by host Nginx and the backend forces it.
+    const ingressProxyEligible = appType === 'docker'
+        || appType === 'auto'
+        || (sourceMode === 'local' && managedBy === 'docker_compose');
+
     const loadGithubStatus = useCallback(async () => {
         try {
             const data = await api.getGithubSourceStatus();
@@ -222,6 +236,14 @@ const NewService = () => {
     useEffect(() => {
         loadGithubStatus();
     }, [loadGithubStatus]);
+
+    // Keep the ingress choice valid: if the selected type is no longer
+    // proxy-eligible, snap back to host Nginx (the forced default).
+    useEffect(() => {
+        if (!ingressProxyEligible && ingressPlane !== 'nginx') {
+            setIngressPlane('nginx');
+        }
+    }, [ingressProxyEligible, ingressPlane]);
 
     // Load projects for the optional Project / Environment selector. Best-effort:
     // if it fails the selector simply stays empty and creation is unaffected.
@@ -440,6 +462,7 @@ const NewService = () => {
                     compose_file: composeFile.trim() || undefined,
                     systemd_unit: systemdUnit.trim() || undefined,
                     managed_by: managedBy === 'auto' ? undefined : managedBy,
+                    ingress_plane: ingressProxyEligible ? ingressPlane : 'nginx',
                     ...projectEnvPayload,
                 };
                 const result = await api.createManualApp(payload);
@@ -451,6 +474,7 @@ const NewService = () => {
                 formData.append('name', serviceName);
                 formData.append('app_type', appType);
                 formData.append('auto_deploy', autoDeploy ? 'true' : 'false');
+                formData.append('ingress_plane', ingressProxyEligible ? ingressPlane : 'nginx');
                 if (projectEnvPayload.project_id) formData.append('project_id', projectEnvPayload.project_id);
                 if (projectEnvPayload.environment_id) formData.append('environment_id', projectEnvPayload.environment_id);
                 const result = await api.uploadAppZip(formData);
@@ -464,6 +488,7 @@ const NewService = () => {
                     build_method: buildMethod,
                     port: port ? Number(port) : null,
                     auto_deploy: autoDeploy,
+                    ingress_plane: ingressProxyEligible ? ingressPlane : 'nginx',
                     ...projectEnvPayload,
                 };
                 if (recommended.dockerfile_path) payload.dockerfile_path = recommended.dockerfile_path;
@@ -995,6 +1020,14 @@ const NewService = () => {
                                 <strong>{autoDeploy ? 'On' : 'Off'}</strong>
                             </div>
                         )}
+                        <div>
+                            <span>Ingress</span>
+                            <strong>
+                                {ingressProxyEligible && ingressPlane === 'proxy_stack'
+                                    ? 'Proxy stack'
+                                    : 'Host Nginx'}
+                            </strong>
+                        </div>
                     </div>
 
                     <button
@@ -1103,6 +1136,25 @@ const NewService = () => {
                                             <span>{sourceMode === 'upload' ? 'Deploy immediately after upload.' : 'Webhook deployment for this branch.'}</span>
                                         </div>
                                         <Switch checked={autoDeploy} onCheckedChange={setAutoDeploy} />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="new-service-page__field">
+                                <Label htmlFor="ingress-plane">Ingress</Label>
+                                {ingressProxyEligible ? (
+                                    <select
+                                        id="ingress-plane"
+                                        value={ingressPlane}
+                                        onChange={(e) => setIngressPlane(e.target.value)}
+                                    >
+                                        <option value="nginx">Host Nginx (default)</option>
+                                        <option value="proxy_stack">Proxy stack (Traefik / Caddy)</option>
+                                    </select>
+                                ) : (
+                                    <div className="new-service-page__note">
+                                        <Network size={16} />
+                                        <span>Served by host Nginx</span>
                                     </div>
                                 )}
                             </div>

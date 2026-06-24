@@ -98,4 +98,81 @@
         color: $danger-color;
         font-size: $font-size-sm;
     }
+
+    // Ingress-plane mismatch banner: apps whose expected plane disagrees with
+    // the server's active proxy.
+    &__ingress-warning {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+        padding: $space-4;
+        background: $warning-bg;
+        border: 1px solid $warning-border;
+        border-radius: $radius-lg;
+    }
+
+    &__ingress-warning-head {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        color: $warning;
+
+        strong {
+            font-size: $font-size-sm;
+            font-weight: $font-weight-semibold;
+            color: $text-primary;
+        }
+    }
+
+    &__ingress-warning-text {
+        margin: 0;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+        line-height: 1.5;
+
+        strong {
+            color: $text-primary;
+        }
+    }
+
+    &__ingress-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: $space-1;
+    }
+
+    &__ingress-item {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: $space-2;
+        font-size: $font-size-sm;
+    }
+
+    &__ingress-link {
+        font-weight: $font-weight-medium;
+        color: $accent-primary;
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    &__ingress-reason {
+        color: $text-tertiary;
+        font-size: $font-size-xs;
+    }
+
+    // Subtle "all aligned" note when there are apps but no mismatches.
+    &__ingress-ok {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        color: $success;
+    }
 }

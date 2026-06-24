@@ -458,6 +458,18 @@ def _resolve_project_env(data, workspace_id):
     return project.id, environment_id
 
 
+def _resolve_ingress_plane(data, app_type, managed_by=None):
+    """Resolve the ingress plane ('nginx' | 'proxy_stack') for a new app.
+
+    Defaults to host Nginx. A requested 'proxy_stack' is only honored for
+    container-based services; for every other type it falls back to nginx, so
+    the boundary between the two reverse proxies stays explicit and a PHP/
+    WordPress/static/Python app can never be tagged for a Dockerized proxy.
+    """
+    from app.utils.ingress import normalize_ingress_plane
+    return normalize_ingress_plane(data.get('ingress_plane'), app_type, managed_by)
+
+
 def _can_access_app(user, app):
     """Read access (#33 ACL) — delegates to the shared seam."""
     from app.services.resource_grant_service import ResourceGrantService
@@ -686,6 +698,7 @@ def create_app_from_repository():
         buildpack_type=buildpack_type,
         buildpack_plan=json.dumps(buildpack_plan) if buildpack_plan else None,
         buildpack_overrides=json.dumps(buildpack_overrides) if buildpack_overrides else None,
+        ingress_plane=_resolve_ingress_plane(data, resolved_app_type),
         project_id=project_id,
         environment_id=environment_id,
     )
@@ -790,6 +803,7 @@ def create_app():
         compose_file=data.get('compose_file'),
         systemd_unit=data.get('systemd_unit'),
         managed_by=data.get('managed_by'),
+        ingress_plane=_resolve_ingress_plane(data, app_type, data.get('managed_by')),
         user_id=current_user_id,
         workspace_id=ws_id,
         project_id=project_id,
@@ -873,6 +887,7 @@ def create_manual_app():
         compose_file=compose_file,
         systemd_unit=systemd_unit,
         managed_by=managed_by,
+        ingress_plane=_resolve_ingress_plane(data, app_type, managed_by),
         user_id=current_user_id,
         workspace_id=ws_id,
         project_id=project_id,
@@ -991,6 +1006,10 @@ def upload_app_archive():
                 root_path=current_dir,
                 compose_file=compose_file,
                 managed_by='docker_compose' if detected == 'docker' else None,
+                ingress_plane=_resolve_ingress_plane(
+                    request.form, detected,
+                    'docker_compose' if detected == 'docker' else None,
+                ),
                 version=new_version,
                 upload_path=upload_archive_path,
                 user_id=current_user_id,

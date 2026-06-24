@@ -43,11 +43,13 @@ def test_fleet_overview_one_row_per_server(app):
         ids = {row['server_id'] for row in overview}
         assert ids == {sid_a, sid_b, sid_c}
 
-        # Each row carries the expected flat shape.
+        # Each row carries the expected flat shape (incl. ingress reconciliation
+        # counts so the dashboard can flag apps that disagree with the proxy).
         row = overview[0]
         assert set(row.keys()) == {
             'server_id', 'server_name', 'proxy_type', 'status',
             'last_regenerated_at', 'networks_count',
+            'app_count', 'mismatch_count',
         }
 
 

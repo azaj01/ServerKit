@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Pill, SegControl } from '../ds';
 import EmptyState from '../EmptyState';
-import { Network } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Network } from 'lucide-react';
+
+// Human label for an ingress plane, used in the mismatch banner copy.
+const PLANE_LABEL = {
+    nginx: 'host Nginx',
+    proxy_stack: 'the proxy stack',
+};
 
 // Managed reverse-proxy stack panel for a server.
 //
@@ -40,6 +47,10 @@ const ProxyStackPanel = ({ serverId }) => {
     const [preview, setPreview] = useState(null);
     const [busy, setBusy] = useState(false);
 
+    // Ingress-plane audit: which apps expect a plane that disagrees with the
+    // server's active proxy. Refreshed on mount and after any proxy mutation.
+    const [audit, setAudit] = useState(null);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -58,6 +69,22 @@ const ProxyStackPanel = ({ serverId }) => {
     useEffect(() => {
         load();
     }, [load]);
+
+    // Best-effort ingress-plane audit. Never blocks the panel; on failure the
+    // banner simply stays hidden.
+    const loadAudit = useCallback(async () => {
+        try {
+            const data = await api.getServerIngressAudit(serverId);
+            setAudit(data);
+        } catch (err) {
+            console.error('Failed to load ingress audit:', err);
+            setAudit(null);
+        }
+    }, [serverId]);
+
+    useEffect(() => {
+        loadAudit();
+    }, [loadAudit]);
 
     // Refresh the compose preview whenever the selected type changes.
     const loadPreview = useCallback(async (proxyType) => {
@@ -83,6 +110,7 @@ const ProxyStackPanel = ({ serverId }) => {
             await api.switchServerProxy(serverId, selectedType);
             toast.success(`Switched to ${selectedType}`);
             await load();
+            await loadAudit();
         } catch (err) {
             toast.error(err.message || 'Failed to switch proxy');
         } finally {
@@ -113,6 +141,7 @@ const ProxyStackPanel = ({ serverId }) => {
                 toast.error(res.error || 'Regenerate failed');
             }
             await load();
+            await loadAudit();
         } catch (err) {
             toast.error(err.message || 'Failed to regenerate config');
         } finally {
@@ -134,6 +163,7 @@ const ProxyStackPanel = ({ serverId }) => {
                 toast.success('Stack deployed');
             }
             await load();
+            await loadAudit();
         } catch (err) {
             toast.error(err.message || 'Failed to deploy stack');
         } finally {
@@ -176,6 +206,39 @@ const ProxyStackPanel = ({ serverId }) => {
                 Host Nginx is the default and is recommended for PHP/WordPress. You can
                 opt into a Dockerized Traefik or Caddy proxy deployed as a Compose stack.
             </p>
+
+            {audit && audit.mismatch_count > 0 && (
+                <div className="proxy-panel__ingress-warning" role="alert">
+                    <div className="proxy-panel__ingress-warning-head">
+                        <AlertTriangle size={16} />
+                        <strong>
+                            {audit.mismatch_count} app{audit.mismatch_count === 1 ? '' : 's'} on the wrong ingress plane
+                        </strong>
+                    </div>
+                    <p className="proxy-panel__ingress-warning-text">
+                        This server&apos;s active proxy is <strong>{audit.proxy_type}</strong>, which
+                        expects <strong>{PLANE_LABEL[audit.expected_plane] || audit.expected_plane}</strong>.
+                        The apps below expect the other plane:
+                    </p>
+                    <ul className="proxy-panel__ingress-list">
+                        {(audit.apps || []).filter(a => a.mismatch).map(a => (
+                            <li key={a.id} className="proxy-panel__ingress-item">
+                                <Link to={`/apps/${a.id}`} className="proxy-panel__ingress-link">
+                                    {a.name}
+                                </Link>
+                                {a.reason && <span className="proxy-panel__ingress-reason">{a.reason}</span>}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {audit && audit.mismatch_count === 0 && audit.app_count > 0 && (
+                <div className="proxy-panel__ingress-ok">
+                    <CheckCircle2 size={14} />
+                    All {audit.app_count} app{audit.app_count === 1 ? '' : 's'} aligned with this server&apos;s ingress plane.
+                </div>
+            )}
 
             <section className="proxy-panel__section">
                 <label className="proxy-panel__label">Proxy type</label>

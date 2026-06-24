@@ -7,6 +7,10 @@ from app import db
 # FK targets resolvable regardless of import order.
 from app.models import project as _project  # noqa: F401
 from app.models import environment as _environment  # noqa: F401
+from app.utils.ingress import (
+    default_ingress_plane as _default_ingress_plane,
+    proxy_eligible as _proxy_eligible,
+)
 
 
 class Application(db.Model):
@@ -42,6 +46,11 @@ class Application(db.Model):
     compose_file = db.Column(db.String(200), nullable=True)
     systemd_unit = db.Column(db.String(100), nullable=True)
     managed_by = db.Column(db.String(20), nullable=True)  # 'docker_compose', 'systemd'
+
+    # Ingress plane: which reverse proxy is expected to serve this app —
+    # 'nginx' (host Nginx, the default) or 'proxy_stack' (Dockerized
+    # Traefik/Caddy). NULL is treated as the default. See app/utils/ingress.py.
+    ingress_plane = db.Column(db.String(20), nullable=True)
 
     # Upload versioning
     version = db.Column(db.Integer, default=0, nullable=False)
@@ -98,6 +107,8 @@ class Application(db.Model):
             'compose_file': self.compose_file,
             'systemd_unit': self.systemd_unit,
             'managed_by': self.managed_by,
+            'ingress_plane': self.ingress_plane or _default_ingress_plane(self.app_type, self.managed_by),
+            'ingress_proxy_eligible': _proxy_eligible(self.app_type, self.managed_by),
             'version': self.version,
             'upload_path': self.upload_path,
             'private_slug': self.private_slug,

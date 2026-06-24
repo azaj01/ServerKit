@@ -512,20 +512,30 @@ class ProxyStackService:
         except Exception as e:  # pragma: no cover - DB guard
             logger.warning(f"fleet_overview stack query failed: {e}")
 
+        # One query for every server-bound app, grouped by server, so each row
+        # can report how many of its apps disagree with the server's proxy mode.
+        apps_by_server = ProxyStackService._apps_by_server()
+
         overview = []
         for server in servers:
             stack = stacks_by_server.get(server.id)
+            proxy_type = (stack.proxy_type if stack else 'nginx') or 'nginx'
+            app_count, mismatch_count = ProxyStackService._ingress_counts(
+                proxy_type, apps_by_server.get(server.id, [])
+            )
             if stack is not None:
                 overview.append({
                     'server_id': server.id,
                     'server_name': server.name,
-                    'proxy_type': stack.proxy_type or 'nginx',
+                    'proxy_type': proxy_type,
                     'status': stack.status or 'unknown',
                     'last_regenerated_at': (
                         stack.last_regenerated_at.isoformat()
                         if stack.last_regenerated_at else None
                     ),
                     'networks_count': len(stack.networks_list()),
+                    'app_count': app_count,
+                    'mismatch_count': mismatch_count,
                 })
             else:
                 # No managed stack → host nginx is in charge. 'host' is a
@@ -538,9 +548,97 @@ class ProxyStackService:
                     'status': 'host',
                     'last_regenerated_at': None,
                     'networks_count': 0,
+                    'app_count': app_count,
+                    'mismatch_count': mismatch_count,
                 })
 
         return overview
+
+    # ------------------------------------------------------------------
+    # Ingress-plane reconciliation (which proxy is expected to serve an app)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _apps_by_server():
+        """Map server_id -> [Application] for every server-bound app. Guarded."""
+        grouped = {}
+        try:
+            from app.models.application import Application
+            apps = Application.query.filter(Application.server_id.isnot(None)).all()
+        except Exception as e:  # pragma: no cover - DB guard
+            logger.warning(f"_apps_by_server query failed: {e}")
+            return grouped
+        for app in apps:
+            grouped.setdefault(app.server_id, []).append(app)
+        return grouped
+
+    @staticmethod
+    def _ingress_counts(proxy_type, apps):
+        """(app_count, mismatch_count) for a server's apps vs its proxy mode."""
+        from app.utils.ingress import expected_plane_for_proxy, default_ingress_plane
+        expected = expected_plane_for_proxy(proxy_type)
+        mismatches = 0
+        for app in apps:
+            plane = app.ingress_plane or default_ingress_plane(app.app_type, app.managed_by)
+            if plane != expected:
+                mismatches += 1
+        return len(apps), mismatches
+
+    @staticmethod
+    def ingress_audit(server_id):
+        """Per-server ingress reconciliation: which apps disagree with the
+        server's configured proxy mode.
+
+        A host can only run one ingress plane on 80/443, so an app tagged for
+        the *other* plane than the server's active proxy would either be
+        unreachable or collide. This surfaces those so the operator can fix the
+        boundary (move the app, or switch the server's proxy). Best-effort.
+        """
+        from app.utils.ingress import expected_plane_for_proxy, default_ingress_plane
+
+        server = None
+        proxy_type = 'nginx'
+        apps = []
+        try:
+            from app.models.server import Server
+            from app.models.proxy_stack import ProxyStack
+            from app.models.application import Application
+            server = Server.query.get(server_id)
+            stack = ProxyStack.query.filter_by(server_id=server_id).first()
+            proxy_type = (stack.proxy_type if stack else 'nginx') or 'nginx'
+            apps = Application.query.filter_by(server_id=server_id).all()
+        except Exception as e:  # pragma: no cover - DB guard
+            logger.warning(f"ingress_audit query failed: {e}")
+
+        expected = expected_plane_for_proxy(proxy_type)
+        rows = []
+        mismatches = 0
+        for app in apps:
+            plane = app.ingress_plane or default_ingress_plane(app.app_type, app.managed_by)
+            mismatch = plane != expected
+            if mismatch:
+                mismatches += 1
+            rows.append({
+                'id': app.id,
+                'name': app.name,
+                'app_type': app.app_type,
+                'ingress_plane': plane,
+                'mismatch': mismatch,
+                'reason': (
+                    f"App expects '{plane}' but this server's proxy is "
+                    f"'{proxy_type}' (expects '{expected}')."
+                ) if mismatch else None,
+            })
+
+        return {
+            'server_id': server_id,
+            'server_name': server.name if server else None,
+            'proxy_type': proxy_type,
+            'expected_plane': expected,
+            'app_count': len(apps),
+            'mismatch_count': mismatches,
+            'apps': rows,
+        }
 
     @staticmethod
     def status(server_id):
