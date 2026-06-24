@@ -4,6 +4,7 @@ from flask_jwt_extended import jwt_required
 from app.middleware.rbac import admin_required
 from app.models import Application
 from app.services.backup_service import BackupService
+from app.services.backup_policy_service import BackupPolicyService, BackupPolicyError
 from app.services.storage_provider_service import StorageProviderService
 from app import db, paths
 
@@ -90,6 +91,111 @@ def list_runs():
         item['target_subtype'] = policy.target_subtype
         runs.append(item)
     return jsonify({'runs': runs}), 200
+
+
+# --------------------------------------------------------------------------- #
+# Generic policy-driven backup CRUD by (target_type, target_id) (§8).
+# One surface for every BackupPolicy target — apps, WordPress sites, databases,
+# file path-lists, servers. The per-resource mounts
+# (/apps/:id/backup-policy, /wordpress/sites/:id/backup-policy) remain as
+# grant-aware aliases; this mount is admin-only and is the only way to drive the
+# database/files/server targets that have no per-resource page.
+# --------------------------------------------------------------------------- #
+
+@backups_bp.route('/policies/<target_type>/<int:target_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_target_policy(target_type, target_id):
+    """Protection policy + status for any target (creates a default if absent)."""
+    try:
+        BackupPolicyService.validate_target_type(target_type)
+        policy = BackupPolicyService.get_or_create_policy(target_type, target_id)
+    except BackupPolicyError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify(BackupPolicyService.serialize_policy_view(policy)), 200
+
+
+@backups_bp.route('/policies/<target_type>/<int:target_id>', methods=['PUT'])
+@jwt_required()
+@admin_required
+def update_target_policy(target_type, target_id):
+    """Update a policy. Body may include target_subtype/target_meta (needed to
+    describe database/files targets) plus the usual schedule/retention fields."""
+    data = request.get_json() or {}
+    subtype = data.pop('target_subtype', None)
+    meta = data.pop('target_meta', None)
+    try:
+        BackupPolicyService.validate_target_type(target_type)
+        policy = BackupPolicyService.get_or_create_policy(target_type, target_id, subtype, meta)
+        BackupPolicyService.update_policy(policy, data)
+    except BackupPolicyError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify(BackupPolicyService.serialize_policy_view(policy)), 200
+
+
+@backups_bp.route('/policies/<target_type>/<int:target_id>/run', methods=['POST'])
+@jwt_required()
+@admin_required
+def run_target_policy(target_type, target_id):
+    """Enqueue a one-off backup for any target."""
+    try:
+        BackupPolicyService.validate_target_type(target_type)
+        policy = BackupPolicyService.get_or_create_policy(target_type, target_id)
+        job = BackupPolicyService.run_policy_now(policy, manual=True)
+    except BackupPolicyError as e:
+        return jsonify({'error': str(e)}), 409
+    return jsonify({'success': True, 'job_id': job.id}), 202
+
+
+@backups_bp.route('/policies/<target_type>/<int:target_id>/runs', methods=['GET'])
+@jwt_required()
+@admin_required
+def list_target_runs(target_type, target_id):
+    try:
+        BackupPolicyService.validate_target_type(target_type)
+        policy = BackupPolicyService.get_or_create_policy(target_type, target_id)
+    except BackupPolicyError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'runs': BackupPolicyService.list_runs(policy)}), 200
+
+
+@backups_bp.route('/policies/<target_type>/<int:target_id>/runs/<int:run_id>/restore', methods=['POST'])
+@jwt_required()
+@admin_required
+def restore_target_run(target_type, target_id, run_id):
+    try:
+        BackupPolicyService.validate_target_type(target_type)
+        policy = BackupPolicyService.get_or_create_policy(target_type, target_id)
+        job = BackupPolicyService.request_restore(policy, run_id, request.get_json() or {})
+    except BackupPolicyError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'success': True, 'job_id': job.id}), 202
+
+
+@backups_bp.route('/policies/<target_type>/<int:target_id>/runs/<int:run_id>/verify', methods=['POST'])
+@jwt_required()
+@admin_required
+def verify_target_run(target_type, target_id, run_id):
+    try:
+        BackupPolicyService.validate_target_type(target_type)
+        policy = BackupPolicyService.get_or_create_policy(target_type, target_id)
+        result = BackupPolicyService.verify_run(policy, run_id)
+    except BackupPolicyError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify(result), 200
+
+
+@backups_bp.route('/policies/<target_type>/<int:target_id>/runs/<int:run_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_target_run(target_type, target_id, run_id):
+    try:
+        BackupPolicyService.validate_target_type(target_type)
+        policy = BackupPolicyService.get_or_create_policy(target_type, target_id)
+        BackupPolicyService.delete_run(policy, run_id)
+    except BackupPolicyError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'success': True}), 200
 
 
 @backups_bp.route('/config', methods=['GET'])
