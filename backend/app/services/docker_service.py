@@ -768,6 +768,28 @@ class DockerService:
         return cmd
 
     @classmethod
+    def _compose_cmd_with_overlay(cls, project_path, compose_file=None):
+        """Base compose command, including the ServerKit env override when one
+        applies.
+
+        For a managed compose app this regenerates ``docker-compose.serverkit.yml``
+        (the app's effective env: shared variable groups under its own local env
+        vars) and adds it as a second ``-f`` so those values reach the containers.
+        For non-app dirs (e.g. a proxy stack) or apps with no effective env it
+        falls back to the plain base command unchanged. Best-effort — never raises.
+        """
+        try:
+            from app.services.compose_env_service import ComposeEnvService
+            override = ComposeEnvService.refresh_for_project(project_path, compose_file)
+            if override:
+                base = ComposeEnvService.find_base_compose(project_path, compose_file)
+                if base:
+                    return cls._get_compose_cmd() + ['-f', base, '-f', override]
+        except Exception as e:  # pragma: no cover - defensive
+            logger.debug('compose overlay command build failed for %s: %s', project_path, e)
+        return cls._compose_base_cmd(compose_file)
+
+    @classmethod
     def compose_list(cls):
         """List Docker Compose projects known to the Docker CLI."""
         try:
@@ -859,9 +881,15 @@ class DockerService:
 
     @classmethod
     def compose_up(cls, project_path, detach=True, build=False, compose_file=None):
-        """Start Docker Compose services."""
+        """Start Docker Compose services.
+
+        Injects the managed env override (shared variable groups + the app's own
+        local env vars) for managed compose apps via ``_compose_cmd_with_overlay``.
+        ``up -d`` recreates containers whose merged config changed, so updated env
+        takes effect on the next deploy.
+        """
         try:
-            cmd = cls._compose_base_cmd(compose_file) + ['up']
+            cmd = cls._compose_cmd_with_overlay(project_path, compose_file) + ['up']
             if detach:
                 cmd.append('-d')
             if build:
