@@ -54,6 +54,23 @@ export async function pingServer(id) {
     });
 }
 
+// Server Onboarding (lifecycle state machine)
+export async function startServerOnboarding(id) {
+    return this.request(`/servers/${id}/onboarding/start`, {
+        method: 'POST'
+    });
+}
+
+export async function retryServerOnboarding(id) {
+    return this.request(`/servers/${id}/onboarding/retry`, {
+        method: 'POST'
+    });
+}
+
+export async function getServerOnboardingStatus(id) {
+    return this.request(`/servers/${id}/onboarding/status`);
+}
+
 // Server Registration
 //
 // Optionally pass { expires_in } to control token lifetime in seconds.

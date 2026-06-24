@@ -159,6 +159,38 @@ def create_app(config_name=None):
     from app.api.monitoring import monitoring_bp
     app.register_blueprint(monitoring_bp, url_prefix='/api/v1/monitoring')
 
+    # Register blueprints - Container status aggregator
+    from app.api.container_status import container_status_bp
+    app.register_blueprint(container_status_bp, url_prefix='/api/v1/status')
+
+    # Register blueprints - Build packs (zero-Dockerfile detection)
+    from app.api.buildpacks import buildpacks_bp
+    app.register_blueprint(buildpacks_bp, url_prefix='/api/v1/buildpacks')
+
+    # Register blueprints - Deployment config snapshots + diff
+    from app.api.snapshots import snapshots_bp
+    app.register_blueprint(snapshots_bp, url_prefix='/api/v1/apps')
+
+    # Register blueprints - Projects & Environments hierarchy
+    from app.api.projects import projects_bp
+    app.register_blueprint(projects_bp, url_prefix='/api/v1/projects')
+    from app.api.environments import environments_bp
+    app.register_blueprint(environments_bp, url_prefix='/api/v1/environments')
+
+    # Register blueprints - Polymorphic shared resources (tags + variable groups)
+    from app.api.shared_resources import shared_resources_bp
+    app.register_blueprint(shared_resources_bp, url_prefix='/api/v1/shared')
+
+    # Register blueprints - PR preview environments
+    from app.api.previews import previews_bp
+    app.register_blueprint(previews_bp, url_prefix='/api/v1/apps')
+    from app.api.webhooks import webhooks_bp
+    app.register_blueprint(webhooks_bp, url_prefix='/api/v1/webhooks')
+
+    # Register blueprints - Per-server managed proxy stack
+    from app.api.proxy import proxy_bp
+    app.register_blueprint(proxy_bp, url_prefix='/api/v1/servers')
+
     # Register blueprints - Notifications
     from app.api.notifications import notifications_bp
     app.register_blueprint(notifications_bp, url_prefix='/api/v1/notifications')
@@ -457,6 +489,10 @@ def create_app(config_name=None):
         BackupService.register_jobs()
         from app.services.backup_policy_service import BackupPolicyService
         BackupPolicyService.register_jobs()
+        from app.services.server_onboarding_service import ServerOnboardingService
+        ServerOnboardingService.register_jobs()
+        from app.services.preview_service import PreviewService
+        PreviewService.register_jobs()
         start_job_system(app, seed=seed_builtin_schedules)
 
     # Request body size limit

@@ -81,9 +81,59 @@
     }
 
     .env-description-input {
-        width: 100%;
+        flex: 1;
         font-size: $font-size-sm;
         color: $text-secondary;
+    }
+
+    // Second form row: description + optional compose-service target
+    .env-form-meta-row {
+        display: flex;
+        gap: $space-2;
+        align-items: stretch;
+    }
+}
+
+// "Applies to" selector — compose-service targeting (add form)
+.env-target-select {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    flex-shrink: 0;
+    color: $text-tertiary;
+    font-size: $font-size-sm;
+
+    &__label {
+        white-space: nowrap;
+    }
+
+    select,
+    &__control {
+        padding: $space-2 $space-3;
+        background: $bg-body;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-sm;
+        color: $text-primary;
+        font-size: $font-size-sm;
+
+        &:hover {
+            border-color: $border-active;
+        }
+    }
+}
+
+// Standalone select control used in the inline edit row
+.env-target-select__control {
+    padding: $space-2 $space-3;
+    background: $bg-body;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    color: $text-primary;
+    font-size: $font-size-sm;
+    flex-shrink: 0;
+
+    &:hover {
+        border-color: $border-active;
     }
 }
 
@@ -187,12 +237,31 @@
         display: flex;
         gap: $space-2;
         margin-top: $space-2;
+        flex-wrap: wrap;
 
         input {
             flex: 1;
             font-family: $font-mono;
         }
     }
+}
+
+// Subtle chip showing the compose service a variable is scoped to.
+// Standalone so it can be reused in the shared-variables table too.
+.env-target-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: 1px $space-2;
+    border-radius: $radius-sm;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    font-weight: 600;
+    line-height: 1.5;
+    color: $accent-primary;
+    background: rgba($accent-primary-raw, 0.12);
+    border: 1px solid rgba($accent-primary-raw, 0.22);
+    white-space: nowrap;
 }
 
 .btn-icon {

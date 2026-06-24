@@ -1,25 +1,10 @@
 import { useState } from 'react';
 import { Copy, Check, AlertTriangle } from 'lucide-react';
 import Modal from '../Modal';
+import ApiKeyScopesModal from '../api/ApiKeyScopesModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-
-const SCOPE_OPTIONS = [
-    { value: '*', label: 'Full Access' },
-    { value: 'apps:read', label: 'Apps (Read)' },
-    { value: 'apps:write', label: 'Apps (Write)' },
-    { value: 'docker:read', label: 'Docker (Read)' },
-    { value: 'docker:write', label: 'Docker (Write)' },
-    { value: 'system:read', label: 'System (Read)' },
-    { value: 'databases:read', label: 'Databases (Read)' },
-    { value: 'databases:write', label: 'Databases (Write)' },
-    { value: 'backups:read', label: 'Backups (Read)' },
-    { value: 'backups:write', label: 'Backups (Write)' },
-    { value: 'domains:read', label: 'Domains (Read)' },
-    { value: 'domains:write', label: 'Domains (Write)' },
-];
 
 const TIER_OPTIONS = [
     { value: 'standard', label: 'Standard', desc: '100 req/min' },
@@ -34,20 +19,6 @@ const ApiKeyModal = ({ onClose, onSubmit, createdKey }) => {
     const [expiresAt, setExpiresAt] = useState('');
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState(false);
-
-    const handleScopeToggle = (scope) => {
-        if (scope === '*') {
-            setScopes(['*']);
-            return;
-        }
-        setScopes(prev => {
-            const filtered = prev.filter(s => s !== '*');
-            if (filtered.includes(scope)) {
-                return filtered.filter(s => s !== scope);
-            }
-            return [...filtered, scope];
-        });
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -129,18 +100,7 @@ const ApiKeyModal = ({ onClose, onSubmit, createdKey }) => {
 
                         <div className="form-group">
                             <Label>Scopes</Label>
-                            <div className="api-key-modal__scopes">
-                                {SCOPE_OPTIONS.map(s => (
-                                    <label key={s.value} className="api-key-modal__scope-item">
-                                        <Checkbox
-                                            checked={scopes.includes(s.value) || (s.value !== '*' && scopes.includes('*'))}
-                                            disabled={s.value !== '*' && scopes.includes('*')}
-                                            onCheckedChange={() => handleScopeToggle(s.value)}
-                                        />
-                                        <span>{s.label}</span>
-                                    </label>
-                                ))}
-                            </div>
+                            <ApiKeyScopesModal value={scopes} onChange={setScopes} />
                         </div>
 
                         <div className="form-group">

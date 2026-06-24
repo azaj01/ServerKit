@@ -5,10 +5,12 @@ WP-CLI bridge (WordPressService.wp_cli), so containerized sites work.
 Integrity runs in a background thread (verify-checksums fetches from wordpress.org
 and can be slow) so the single worker never blocks; debug/cron are quick.
 
-Deferred (needs infra absent in the Docker-localhost model): a per-site
-wp-login/xmlrpc brute-force rate-limit jail (Fail2ban / nginx limit_req). Managed
-sites are localhost:PORT apache containers with no host-side per-site access log
-for a jail to watch; revisit once a per-site reverse-proxy/log layer exists.
+Brute-force protection (shipped): each managed site already has a per-site nginx
+reverse-proxy vhost whose access log records wp-login/xmlrpc hits with the real
+client IP, so a per-site Fail2ban jail can watch it. ``get_brute_force`` /
+``set_brute_force`` here are a thin WordPress-facing wrapper over
+``Fail2banJailService`` (the jail-management layer); the jail is enabled by default
+when a site is created and torn down when it is deleted.
 """
 
 import json
@@ -164,3 +166,36 @@ class WpSecurityService:
         if not res.get('success'):
             return {'success': False, 'error': res.get('error')}
         return cls.get_cron(path)
+
+    # ---------- brute-force protection (per-site Fail2ban jail) ----------
+
+    @classmethod
+    def get_brute_force(cls, site):
+        """Per-site login brute-force status (availability, on/off, live bans).
+
+        Returns the jail layer's status verbatim, plus a ``no_application`` flag for
+        the (unexpected) case of a site with no linked application."""
+        from app.services.fail2ban_jail_service import Fail2banJailService
+        app = getattr(site, 'application', None)
+        if not app:
+            return {'available': False, 'enabled': False, 'no_application': True}
+        return Fail2banJailService.get_status(app)
+
+    @classmethod
+    def set_brute_force(cls, site, enabled):
+        """Enable or disable the site's WP-login brute-force jail."""
+        from app.services.fail2ban_jail_service import Fail2banJailService
+        app = getattr(site, 'application', None)
+        if not app:
+            return {'success': False, 'error': 'Site has no linked application'}
+        return (Fail2banJailService.enable_wp_jail(app) if enabled
+                else Fail2banJailService.disable_jail(app))
+
+    @classmethod
+    def unban_brute_force(cls, site, ip):
+        """Unban an IP from this site's brute-force jail."""
+        from app.services.fail2ban_jail_service import Fail2banJailService
+        app = getattr(site, 'application', None)
+        if not app:
+            return {'success': False, 'error': 'Site has no linked application'}
+        return Fail2banJailService.unban(app, ip)

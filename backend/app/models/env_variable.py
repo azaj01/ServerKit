@@ -19,6 +19,9 @@ class EnvironmentVariable(db.Model):
     encrypted_value = db.Column(db.Text, nullable=False)
     is_secret = db.Column(db.Boolean, default=False)  # Mark sensitive values
     description = db.Column(db.String(500), nullable=True)  # Optional description
+    # Compose service this var targets (NULL = all services). Lets a compose app
+    # scope a variable to one service in the managed env overlay.
+    target_service = db.Column(db.String(120), nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -80,6 +83,7 @@ class EnvironmentVariable(db.Model):
             'key': self.key,
             'is_secret': self.is_secret,
             'description': self.description,
+            'target_service': self.target_service,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

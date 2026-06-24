@@ -114,10 +114,10 @@ class SettingsService:
         # AI assistant (core primitive — powered by Prompture). The API key is
         # stored encrypted and is NEVER returned by the settings API (see SECRET_AI_KEYS).
         'ai_enabled': {'value': False, 'type': 'boolean', 'description': 'Enable the AI assistant'},
-        'ai_provider': {'value': '', 'type': 'string', 'description': 'Prompture provider (openai/claude/google/groq/openrouter/ollama/lmstudio)'},
+        'ai_provider': {'value': '', 'type': 'string', 'description': 'Prompture provider (prompture-hub/openai/claude/google/groq/openrouter/ollama/lmstudio)'},
         'ai_model': {'value': '', 'type': 'string', 'description': 'Model id for the selected provider'},
         'ai_api_key_encrypted': {'value': '', 'type': 'string', 'description': 'Encrypted provider API key (never returned by the API)'},
-        'ai_endpoint': {'value': '', 'type': 'string', 'description': 'Custom endpoint (ollama/lmstudio; reserved for OpenAI-compatible gateways)'},
+        'ai_endpoint': {'value': '', 'type': 'string', 'description': 'Custom endpoint (ollama/lmstudio/prompture-hub OpenAI-compatible gateway, e.g. http://localhost:1984/v1)'},
         'ai_max_cost_usd': {'value': 0.5, 'type': 'string', 'description': 'Per-conversation cost ceiling in USD (budget_policy=degrade)'},
         'ai_fallback_models': {'value': [], 'type': 'json', 'description': 'Ordered fallback model ids when the primary is over budget/unavailable'},
         'ai_pii_redaction': {'value': True, 'type': 'boolean', 'description': 'Redact PII from AI input and tool output'},

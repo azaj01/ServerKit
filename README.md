@@ -232,6 +232,18 @@ English | [Español](docs/README.es.md) | [中文版](docs/README.zh-CN.md) | [P
 
 **Marketplace** — Over 60+ one-click templates for popular apps (Immich, Ghost, Authelia, etc.)
 
+**Build Packs** — Zero-Dockerfile detection that inspects a repo and generates a Dockerfile + compose from a build plan (defers to an author-provided Dockerfile when present)
+
+**Declarative Templates** — A documented catalog schema with auto-resolved `${SERVICE_*}` magic variables (password/user/FQDN/URL/base64) so templates never hardcode generated secrets or hosts
+
+**Projects & Environments** — Group applications into a Workspace → Project → Environment hierarchy with workspace-scoped access and resource counts
+
+**Config Snapshots** — Immutable, secret-masked configuration snapshots captured before each deploy, with diff and one-click restore + redeploy
+
+**Container Status** — One deterministic health status per app, aggregated from its containers and pushed live (healthy / degraded / restarting / unhealthy)
+
+**PR Preview Environments** — Ephemeral previews driven by a pull-request webhook that open, redeploy, and tear down per PR
+
 ### 🏗️ Infrastructure
 
 **Domain Management** — Nginx virtual hosts with easy configuration
@@ -306,6 +318,10 @@ English | [Español](docs/README.es.md) | [中文版](docs/README.zh-CN.md) | [P
 
 **API Key Rotation** — Secure credential rotation with acknowledgment handshake
 
+**Server Onboarding** — A guided onboarding state machine (validate → install prerequisites → install Docker → pair agent → ready) driven on the job bus with a live progress log
+
+**Per-Server Proxy Stack** — Opt-in Dockerized Traefik or Caddy per server with a compose preview before switching; host nginx remains the default
+
 **Cross-Server Metrics** — Historical metrics with comparison charts and retention policies
 
 ### 📊 Monitoring & Alerts
@@ -336,6 +352,10 @@ English | [Español](docs/README.es.md) | [中文版](docs/README.zh-CN.md) | [P
 
 **API Keys** — Tiered API keys (standard/elevated/unlimited) with rate limiting, usage analytics, and OpenAPI documentation
 
+**API Token Scopes** — Fine-grained, additive scopes for API keys (enforced for programmatic `X-API-Key` callers; JWT/session users stay RBAC-governed)
+
+**Shared Resources** — Polymorphic tags and attachable shared variable groups with a merged "resolved" view and masked secrets
+
 **Webhook Subscriptions** — Event-driven webhooks with HMAC signatures, retry logic, and custom headers
 
 ### 🎨 Customization
@@ -363,6 +383,18 @@ curl -fsSL https://serverkit.ai/install.sh | bash
 ```
 
 > Works on Ubuntu 22.04+, Debian 12+, Fedora, and RHEL/Rocky/AlmaLinux 9+. Sets up everything automatically.
+>
+> Optional: `PANEL_DOMAIN=panel.example.com` sets the domain and tries Let's Encrypt; `SERVERKIT_OFFLINE_TARBALL=...` installs from a local tarball.
+
+### Update
+
+```bash
+sudo serverkit update
+```
+
+Atomic blue/green update with pre-flight checks, DB backup, migration, and
+automatic rollback. Use `--dry-run` to preview, `--branch dev` for dev builds,
+or `--release [version]` for release tarballs.
 
 ### Option 2: Docker
 
@@ -521,6 +553,7 @@ Full details: [ROADMAP.md](ROADMAP.md)
 | [Agent Pairing](docs/pairing.md) | Secure short-code agent enrollment |
 | [API Reference](docs/API.md) | REST API endpoints |
 | [New Features](docs/NEW_FEATURES.md) | Endpoint & page reference for the latest `dev` features |
+| [Enhancements](docs/ENHANCEMENTS.md) | Guide to the ten developer-experience, team/scale, fleet, and security capabilities |
 | [Changelog](CHANGELOG.md) | Release history and notable changes |
 | [Roadmap](ROADMAP.md) | Development roadmap and planned features |
 | [Contributing](CONTRIBUTING.md) | How to contribute |

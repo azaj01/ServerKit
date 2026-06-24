@@ -11,17 +11,10 @@ import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getServiceType, getStatusConfig } from '../utils/serviceTypes';
 import { Button } from '@/components/ui/button';
-import { PageTopbar, MetricCard, Pill, Gauge } from '@/components/ds';
+import { PageTopbar, MetricCard, Gauge } from '@/components/ds';
 import SearchFilterBar from '../components/SearchFilterBar';
-
-// statusInfo.dotClass → ds Pill kind
-const STATUS_PILL = {
-    live: 'green',
-    stopped: 'gray',
-    deploying: 'amber',
-    building: 'amber',
-    failed: 'red',
-};
+import ContainerStatusPill from '../components/status/ContainerStatusPill';
+import { useContainerStatus } from '../hooks/useContainerStatus';
 
 const Applications = () => {
     const navigate = useNavigate();
@@ -247,7 +240,7 @@ const Applications = () => {
                                             </span>
                                         </td>
                                         <td>
-                                            <Pill kind={STATUS_PILL[statusInfo.dotClass] || 'gray'}>{statusInfo.label}</Pill>
+                                            <AppStatusCell app={app} fallbackLabel={statusInfo.label} />
                                             {app.port && (
                                                 <div className="sk-cell-sub">port {app.port}</div>
                                             )}
@@ -338,6 +331,13 @@ const Applications = () => {
             />
         </div>
     );
+};
+
+// Per-row aggregated container status, driven by the centralized aggregator.
+// Falls back to the app's persisted status label until the aggregator resolves.
+const AppStatusCell = ({ app, fallbackLabel }) => {
+    const { status } = useContainerStatus(app.id);
+    return <ContainerStatusPill status={status} fallbackLabel={fallbackLabel} />;
 };
 
 // Per-row icon action (tones via modifier classes — no inline colors)

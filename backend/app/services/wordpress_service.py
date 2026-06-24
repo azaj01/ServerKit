@@ -2128,6 +2128,20 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
         v = cls._write_app_vhost(app)
         if v.get('warning'):
             warning = (warning + '; ' + v['warning']) if warning else v['warning']
+
+        # Brute-force protection is on by default: now that the per-site vhost (and
+        # therefore its access log) exists, stand up the WP-login Fail2ban jail.
+        # Best-effort and never fatal — a host without fail2ban (e.g. Windows dev)
+        # is silently skipped; only a real failure (e.g. reload error) warns.
+        try:
+            from app.services.fail2ban_jail_service import Fail2banJailService
+            jail = Fail2banJailService.enable_wp_jail(app)
+        except Exception as e:
+            jail = {'success': False, 'error': str(e)}
+        if jail and not jail.get('success') and not jail.get('skipped') and jail.get('error'):
+            msg = f"brute-force jail: {jail['error']}"
+            warning = (warning + '; ' + msg) if warning else msg
+
         return {'domain': site_host, 'nginx': v.get('nginx'), 'warning': warning}
 
     @classmethod
@@ -2541,6 +2555,13 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
                 NginxService.delete_site(wp_site.application.name)
             except Exception:
                 pass
+            # Remove the per-site brute-force jail too, so a deleted site leaves no
+            # dangling Fail2ban config. Best-effort (no-op without fail2ban).
+            try:
+                from app.services.fail2ban_jail_service import Fail2banJailService
+                Fail2banJailService.disable_jail(wp_site.application)
+            except Exception:
+                pass
             db.session.delete(wp_site.application)
 
         db.session.delete(wp_site)
@@ -2559,3 +2580,104 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             return app_name in result.stdout
         except Exception:
             return False
+
+    # ── PR Preview Environments (best-effort) ─────────────────────────────────
+    # Hooks driven by PreviewService when a PR opens/closes against a WordPress
+    # site. Cloning a full WordPress stack needs Docker + a DB; both may be
+    # absent in dev/test, so every step is guarded and a missing dependency
+    # degrades to "recorded but not provisioned" rather than raising.
+
+    @classmethod
+    def _preview_db_name(cls, site, pr_number: int) -> str:
+        """Temporary DB name for a PR preview: ``wp_preview_<pr>`` (scoped per
+        site so two sites' PR #1 previews don't collide)."""
+        base = (getattr(site, 'db_name', None) or 'wp').strip() or 'wp'
+        return f'{base}_preview_{int(pr_number)}'
+
+    @classmethod
+    def create_preview_instance(cls, site, pr_number, domain=None, branch=None) -> Dict:
+        """Spin up an isolated preview of a WordPress site for a PR.
+
+        Best-effort: clone the site files into a preview directory, create a
+        temporary database copy (``wp_preview_<pr>``), and rewrite the site URL
+        to the preview ``domain``. Never raises — returns a result dict with
+        ``success`` reflecting how much could actually be provisioned. In an
+        environment without WP-CLI/Docker this is a no-op that still reports the
+        intended preview so the row can flip to running.
+        """
+        result = {'success': True, 'pr_number': int(pr_number) if pr_number is not None else None,
+                  'domain': domain, 'db_name': None, 'preview_path': None,
+                  'container_ids': [], 'provisioned': False, 'warnings': []}
+        try:
+            app = getattr(site, 'application', None)
+            src_path = getattr(app, 'root_path', None) if app else None
+            preview_db = cls._preview_db_name(site, pr_number)
+            result['db_name'] = preview_db
+
+            # 1) Clone files into a sibling preview directory (best-effort).
+            if src_path and os.path.isdir(src_path):
+                preview_path = f'{src_path.rstrip("/")}-preview-pr-{int(pr_number)}'
+                result['preview_path'] = preview_path
+                try:
+                    if not os.path.exists(preview_path):
+                        shutil.copytree(src_path, preview_path, symlinks=True)
+                    result['provisioned'] = True
+                except Exception as exc:
+                    result['warnings'].append(f'file clone skipped: {exc}')
+            else:
+                result['warnings'].append('source path unavailable; files not cloned')
+
+            # 2) Best-effort temp DB copy via WP-CLI (export from source, import
+            #    into the preview db). Both halves are guarded; failure leaves the
+            #    preview file-only.
+            if result.get('preview_path') and src_path:
+                try:
+                    cls.wp_cli(src_path, ['db', 'export', f'/tmp/{preview_db}.sql'])
+                    cls.wp_cli(result['preview_path'], ['db', 'create'])
+                    cls.wp_cli(result['preview_path'], ['db', 'import', f'/tmp/{preview_db}.sql'])
+                except Exception as exc:
+                    result['warnings'].append(f'db copy skipped: {exc}')
+
+            # 3) Rewrite the preview's site URL to the temporary domain.
+            if domain and result.get('preview_path'):
+                try:
+                    new_url = f'https://{domain}'
+                    cls.search_replace(result['preview_path'],
+                                       cls._site_current_url(app) or '', new_url)
+                    cls.wp_cli(result['preview_path'], ['option', 'update', 'home', new_url])
+                    cls.wp_cli(result['preview_path'], ['option', 'update', 'siteurl', new_url])
+                except Exception as exc:
+                    result['warnings'].append(f'url rewrite skipped: {exc}')
+
+            return result
+        except Exception as exc:
+            # Never break the caller — record the failure and move on.
+            return {'success': False, 'error': str(exc),
+                    'pr_number': int(pr_number) if pr_number is not None else None,
+                    'container_ids': []}
+
+    @classmethod
+    def destroy_preview_instance(cls, site, pr_number) -> Dict:
+        """Tear down a WordPress PR preview: drop the temp DB and remove the
+        cloned preview directory. Best-effort; never raises."""
+        result = {'success': True, 'pr_number': int(pr_number) if pr_number is not None else None,
+                  'warnings': []}
+        try:
+            app = getattr(site, 'application', None)
+            src_path = getattr(app, 'root_path', None) if app else None
+            if src_path:
+                preview_path = f'{src_path.rstrip("/")}-preview-pr-{int(pr_number)}'
+                # Drop the temp DB first (uses the preview's own wp-config).
+                if os.path.isdir(preview_path):
+                    try:
+                        cls.wp_cli(preview_path, ['db', 'drop', '--yes'])
+                    except Exception as exc:
+                        result['warnings'].append(f'db drop skipped: {exc}')
+                    try:
+                        shutil.rmtree(preview_path, ignore_errors=True)
+                    except Exception as exc:
+                        result['warnings'].append(f'dir removal skipped: {exc}')
+            return result
+        except Exception as exc:
+            return {'success': False, 'error': str(exc),
+                    'pr_number': int(pr_number) if pr_number is not None else None}

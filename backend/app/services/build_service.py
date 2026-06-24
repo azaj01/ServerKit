@@ -103,7 +103,9 @@ class BuildService:
                        env_vars: Dict = None,
                        cache_enabled: bool = True,
                        timeout: int = None,
-                       keep_deployments: int = 5) -> Dict:
+                       keep_deployments: int = 5,
+                       buildpack_plan: Dict = None,
+                       buildpack_overrides: Dict = None) -> Dict:
         """Configure build settings for an app.
 
         Args:
@@ -133,6 +135,8 @@ class BuildService:
             'cache_enabled': cache_enabled,
             'timeout': timeout or cls.DEFAULT_TIMEOUT,
             'keep_deployments': keep_deployments,
+            'buildpack_plan': buildpack_plan,
+            'buildpack_overrides': buildpack_overrides,
             'created_at': datetime.now().isoformat(),
             'last_build': None,
             'build_count': 0
@@ -352,6 +356,77 @@ class BuildService:
             return {'success': False, 'error': str(e), 'build_log': build_log}
 
     @classmethod
+    def build_with_buildpack(cls, app_id: int, app_path: str,
+                             plan: Dict = None,
+                             overrides: Dict = None,
+                             image_tag: str = None,
+                             build_args: Dict = None,
+                             no_cache: bool = False,
+                             timeout: int = None,
+                             log_callback: Callable[[str], None] = None) -> Optional[Dict]:
+        """Build via the transparent build-pack layer.
+
+        Detects the stack (or uses a persisted plan), generates a Dockerfile into
+        the build workspace, then delegates to the standard ``build_with_dockerfile``
+        path. Returns ``None`` (so the caller can fall back to nixpacks) when no
+        Dockerfile can be generated — i.e. the stack is 'unknown', or the repo
+        already ships its own Dockerfile (let the dockerfile path handle that).
+        """
+        # Imported lazily to keep BuildService importable without the buildpack
+        # module (and to avoid any import cycle).
+        from app.services.buildpack_service import BuildpackService
+
+        # Reuse a persisted plan if available; otherwise detect from the source.
+        effective_plan = plan or BuildpackService.detect(app_path)
+        if overrides:
+            effective_plan = BuildpackService.apply_overrides(effective_plan, overrides)
+
+        builder = (effective_plan or {}).get('builder')
+        # Repo ships its own Dockerfile, or we can't confidently generate one —
+        # signal the caller to fall back rather than writing a junk Dockerfile.
+        if builder in ('dockerfile-present', 'unknown', None):
+            return None
+
+        dockerfile = BuildpackService.generate_dockerfile(effective_plan)
+        if not dockerfile or dockerfile.lstrip().startswith('# Unable'):
+            return None
+
+        # Write the generated Dockerfile under a ServerKit-specific name so we
+        # never clobber a user file, and build it from the source directory.
+        generated_name = 'Dockerfile.serverkit'
+        generated_path = os.path.join(app_path, generated_name)
+        try:
+            with open(generated_path, 'w', encoding='utf-8') as fh:
+                fh.write(dockerfile)
+        except OSError as exc:
+            return {'success': False, 'error': f'Could not write generated Dockerfile: {exc}'}
+
+        if log_callback:
+            log_callback(f'[buildpack] Generated {generated_name} for '
+                         f"{effective_plan.get('language') or 'app'} "
+                         f"({effective_plan.get('framework') or 'generic'})")
+
+        result = cls.build_with_dockerfile(
+            app_id=app_id,
+            app_path=app_path,
+            dockerfile_path=generated_name,
+            image_tag=image_tag,
+            build_args=build_args,
+            no_cache=no_cache,
+            timeout=timeout,
+            log_callback=log_callback,
+        )
+        # Annotate the build log so it's clear this was a build-pack build.
+        if isinstance(result, dict) and result.get('build_log'):
+            result['build_log']['build_method'] = 'buildpack'
+            result['build_log']['buildpack'] = {
+                'builder': builder,
+                'language': effective_plan.get('language'),
+                'framework': effective_plan.get('framework'),
+            }
+        return result
+
+    @classmethod
     def build_with_nixpacks(cls, app_id: int, app_path: str,
                            image_tag: str = None,
                            env_vars: Dict = None,
@@ -569,6 +644,23 @@ class BuildService:
                 log_callback=log_callback
             )
         elif build_method == 'nixpacks':
+            # Transparent build-pack path: prefer generating a Dockerfile from the
+            # BuildpackService plan and building it via the standard Docker path —
+            # this is reproducible and inspectable. Fall back to the opaque
+            # nixpacks binary only if generation isn't possible (unknown stack or
+            # a Dockerfile is already present in the repo).
+            buildpack = cls.build_with_buildpack(
+                app_id=app_id,
+                app_path=app_path,
+                plan=build_config.get('buildpack_plan'),
+                overrides=build_config.get('buildpack_overrides'),
+                build_args=build_config.get('build_args'),
+                no_cache=no_cache or not build_config.get('cache_enabled', True),
+                timeout=timeout,
+                log_callback=log_callback,
+            )
+            if buildpack is not None:
+                return buildpack
             return cls.build_with_nixpacks(
                 app_id=app_id,
                 app_path=app_path,

@@ -260,6 +260,10 @@ export async function getApiKeys() {
     return this.request('/api-keys/');
 }
 
+export async function getApiKeyScopes() {
+    return this.request('/api-keys/scopes');
+}
+
 export async function createApiKey(data) {
     return this.request('/api-keys/', { method: 'POST', body: data });
 }

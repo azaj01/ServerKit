@@ -171,10 +171,13 @@ export async function getEnvVar(appId, key) {
     return this.request(`/apps/${appId}/env/${encodeURIComponent(key)}`);
 }
 
-export async function createEnvVar(appId, key, value, isSecret = false, description = null) {
+export async function createEnvVar(appId, key, value, isSecret = false, description = null, targetService = null) {
+    const body = { key, value, is_secret: isSecret, description };
+    // Only send target_service when set; empty/null means "all services".
+    if (targetService) body.target_service = targetService;
     return this.request(`/apps/${appId}/env`, {
         method: 'POST',
-        body: { key, value, is_secret: isSecret, description }
+        body
     });
 }
 
@@ -218,6 +221,12 @@ export async function clearEnvVars(appId) {
     return this.request(`/apps/${appId}/env/clear`, {
         method: 'DELETE'
     });
+}
+
+// Compose service names for an app (empty list for non-compose apps).
+// Used to target an env var at a single compose service.
+export async function getComposeServices(appId) {
+    return this.request(`/apps/${appId}/compose-services`);
 }
 
 // Docker App Logs and Status

@@ -19,8 +19,13 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Settings and environment contract
 # ---------------------------------------------------------------------------
-INSTALL_DIR="/opt/serverkit"
-VENV_DIR="$INSTALL_DIR/venv"
+SERVERKIT_DIR="${SERVERKIT_DIR:-/opt/serverkit}"
+INSTALL_DIR="$SERVERKIT_DIR"
+BASE_NAME="$(basename "$INSTALL_DIR")"
+BASE_DIR="$(dirname "$INSTALL_DIR")"
+DIR_A="$BASE_DIR/${BASE_NAME}-a"
+DIR_B="$BASE_DIR/${BASE_NAME}-b"
+VENV_DIR="${SERVERKIT_VENV_DIR:-$INSTALL_DIR/venv}"
 LOG_DIR="/var/log/serverkit"
 DATA_DIR="/var/lib/serverkit"
 BACKUP_DIR="/var/backups/serverkit"
@@ -40,6 +45,8 @@ CHANNEL="${CHANNEL:-Stable}"
 PANEL_DOMAIN="${PANEL_DOMAIN:-}"
 PANEL_PORT="${PANEL_PORT:-80}"
 SERVERKIT_SKIP_SSL="${SERVERKIT_SKIP_SSL:-0}"
+SERVERKIT_OFFLINE_TARBALL="${SERVERKIT_OFFLINE_TARBALL:-}"
+SERVERKIT_MIRROR_URL="${SERVERKIT_MIRROR_URL:-}"
 
 # Runtime state populated as we go (declared up-front for `set -u`).
 OS_FAMILY="unknown"
@@ -48,6 +55,7 @@ DL_ARCH=""
 PKG_MGR=""
 SAFE_MODE=false
 SSL_MODE="insecure"
+FIRST_SLOT="$DIR_A"
 
 # ---------------------------------------------------------------------------
 # Terminal styling
@@ -405,46 +413,69 @@ resolve_release_tag() {
 fetch_release() {
     phase "Downloading Pre-built Release"
 
-    local tag; tag=$(resolve_release_tag)
-    if [ -z "$tag" ]; then
-        warn "Latest release tag unknown — falling back to a source build."
-        INSTALL_FROM_RELEASE=0
-        return 1
-    fi
-    good "Latest release: $tag"
+    local tag tarball tmp_dir unpacked
 
-    local base="https://github.com/${GITHUB_REPO}/releases/download/${tag}"
-    local tarball="/tmp/serverkit-${tag}-linux-${DL_ARCH}.tar.gz"
+    if [ -n "$SERVERKIT_OFFLINE_TARBALL" ]; then
+        [ -f "$SERVERKIT_OFFLINE_TARBALL" ] || halt "Offline tarball not found: $SERVERKIT_OFFLINE_TARBALL"
+        tag="offline"
+        tarball="$SERVERKIT_OFFLINE_TARBALL"
+        good "Using offline tarball: $tarball"
+    else
+        tag=$(resolve_release_tag)
+        if [ -z "$tag" ]; then
+            warn "Latest release tag unknown — falling back to a source build."
+            INSTALL_FROM_RELEASE=0
+            return 1
+        fi
+        good "Latest release: $tag"
 
-    step "Fetching release tarball (${DL_ARCH})..."
-    if ! curl -sfL "${base}/serverkit-${tag}-linux-${DL_ARCH}.tar.gz" -o "$tarball"; then
-        warn "No release tarball for this platform — falling back to source."
-        INSTALL_FROM_RELEASE=0
-        return 1
+        local base
+        if [ -n "$SERVERKIT_MIRROR_URL" ]; then
+            base="$SERVERKIT_MIRROR_URL"
+        else
+            base="https://github.com/${GITHUB_REPO}/releases/download/${tag}"
+        fi
+
+        tarball="/tmp/serverkit-${tag}-linux-${DL_ARCH}.tar.gz"
+        step "Fetching release tarball (${DL_ARCH})..."
+        if ! curl -sfL "${base}/serverkit-${tag}-linux-${DL_ARCH}.tar.gz" -o "$tarball"; then
+            warn "No release tarball for this platform — falling back to source."
+            INSTALL_FROM_RELEASE=0
+            return 1
+        fi
+
+        step "Verifying checksum..."
+        if curl -sfL "${base}/checksums.txt" -o "/tmp/serverkit-checksums-${tag}.txt"; then
+            if ! (cd /tmp && sha256sum -c <(grep "serverkit-${tag}-linux-${DL_ARCH}.tar.gz" "serverkit-checksums-${tag}.txt") >/dev/null 2>&1); then
+                halt "Checksum verification failed for release tarball."
+            fi
+            good "Checksum verified"
+        else
+            warn "Could not download checksums.txt — skipping verification"
+        fi
     fi
 
     step "Unpacking release..."
-    rm -rf "$INSTALL_DIR"
-    mkdir -p "$(dirname "$INSTALL_DIR")"
-    tar xzf "$tarball" -C "$(dirname "$INSTALL_DIR")"
-    rm -f "$tarball"
+    tmp_dir="$(mktemp -d)"
+    tar xzf "$tarball" -C "$tmp_dir"
 
-    # Normalize tarball layout: older archives have serverkit/ at root,
-    # newer ones have opt/serverkit/.
-    UNPACKED_DIR="$(dirname "$INSTALL_DIR")/serverkit"
-    if [ ! -d "$UNPACKED_DIR" ]; then
-        UNPACKED_DIR="$(dirname "$INSTALL_DIR")/opt/serverkit"
+    unpacked="$tmp_dir/serverkit"
+    [ ! -d "$unpacked" ] && unpacked="$tmp_dir/opt/serverkit"
+    if [ ! -d "$unpacked" ]; then
+        unpacked="$(find "$tmp_dir" -maxdepth 2 -type d -name serverkit | head -n1)"
     fi
-    if [ ! -d "$UNPACKED_DIR" ]; then
-        UNPACKED_DIR=$(find "$(dirname "$INSTALL_DIR")" -maxdepth 2 -type d -name serverkit | head -n1)
-    fi
-    [ -d "$UNPACKED_DIR" ] || halt "Release tarball layout is unrecognized (expected serverkit/ or opt/serverkit/)."
-    if [ "$UNPACKED_DIR" != "$INSTALL_DIR" ]; then
-        mv "$UNPACKED_DIR" "$INSTALL_DIR"
-    fi
+    [ -d "$unpacked" ] || halt "Release tarball layout is unrecognized (expected serverkit/ or opt/serverkit/)."
+
+    ensure_install_layout
+    rm -rf "$FIRST_SLOT"
+    cp -a "$unpacked" "$FIRST_SLOT"
+    rm -rf "$tmp_dir"
+
+    [ -L "$INSTALL_DIR" ] || ln -s "$FIRST_SLOT" "$INSTALL_DIR"
+
     chmod +x "$INSTALL_DIR/serverkit"
     chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
-    good "Release unpacked into $INSTALL_DIR"
+    good "Release unpacked into $FIRST_SLOT"
 }
 
 # ---------------------------------------------------------------------------
@@ -453,9 +484,11 @@ fetch_release() {
 sync_source() {
     phase "Source Code"
 
-    if [ -d "$INSTALL_DIR/.git" ]; then
+    ensure_install_layout
+
+    if [ -d "$FIRST_SLOT/.git" ]; then
         step "Refreshing the existing checkout..."
-        cd "$INSTALL_DIR"
+        cd "$FIRST_SLOT"
         if ! git pull --ff-only; then
             warn "Fast-forward failed (local edits?) — hard-resetting to origin/main."
             git fetch origin
@@ -463,18 +496,34 @@ sync_source() {
         fi
     else
         step "Cloning ServerKit..."
-        rm -rf "$INSTALL_DIR"
-        git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR"
-        cd "$INSTALL_DIR"
+        rm -rf "$FIRST_SLOT"
+        git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "$FIRST_SLOT"
+        cd "$FIRST_SLOT"
     fi
+    [ -L "$INSTALL_DIR" ] || ln -sfn "$FIRST_SLOT" "$INSTALL_DIR"
     good "Repository ready."
 }
 
 # ---------------------------------------------------------------------------
-# On-disk layout
+# On-disk layout (blue/green slots + symlink)
 # ---------------------------------------------------------------------------
+ensure_install_layout() {
+    # Migrate legacy real-directory installs into the blue/green layout.
+    if [ -d "$INSTALL_DIR" ] && [ ! -L "$INSTALL_DIR" ]; then
+        step "Migrating to blue/green install layout..."
+        mv "$INSTALL_DIR" "$FIRST_SLOT"
+        ln -s "$FIRST_SLOT" "$INSTALL_DIR"
+        good "Active install is now $INSTALL_DIR → $FIRST_SLOT"
+    fi
+
+    mkdir -p "$DIR_A" "$DIR_B"
+    [ -L "$INSTALL_DIR" ] || ln -s "$FIRST_SLOT" "$INSTALL_DIR"
+}
+
 make_directories() {
     phase "Creating Directories"
+
+    ensure_install_layout
 
     local d
     for d in "$LOG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$CONFIG_DIR" "$INSTALL_DIR/backend/instance"; do
@@ -494,8 +543,20 @@ make_directories() {
 build_virtualenv() {
     phase "Python Environment"
 
+    # If the release shipped a pre-built venv at the expected path, use it.
+    if [ "$INSTALL_FROM_RELEASE" = "1" ] && [ -f "$FIRST_SLOT/venv/bin/activate" ] && [ -x "$FIRST_SLOT/venv/bin/python" ]; then
+        step "Using pre-built virtual environment from release..."
+        rm -rf "$VENV_DIR"
+        cp -a "$FIRST_SLOT/venv" "$VENV_DIR"
+        good "Virtual environment installed from release."
+        return
+    fi
+
     step "Creating the virtual environment..."
     $PYTHON_BIN -m venv "$VENV_DIR"
+    if [ ! -f "$VENV_DIR/bin/activate" ]; then
+        halt "Virtual environment creation failed: $VENV_DIR/bin/activate not found."
+    fi
     source "$VENV_DIR/bin/activate"
 
     step "Installing Python dependencies..."
@@ -822,10 +883,12 @@ revert_install() {
     systemctl stop serverkit 2>/dev/null || true
     systemctl stop nginx 2>/dev/null || true
 
-    if [ -d "$INSTALL_DIR.backup" ]; then
-        rm -rf "$INSTALL_DIR"
-        mv "$INSTALL_DIR.backup" "$INSTALL_DIR"
-        warn "Restored the previous installation from backup."
+    local active
+    active="$(readlink -f "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
+    if [ -d "$active.backup" ]; then
+        rm -rf "$active"
+        cp -a "$active.backup" "$active"
+        warn "Restored the previous installation from $active.backup"
     fi
 
     systemctl daemon-reload
@@ -856,10 +919,12 @@ await_health() {
 # Safety copy of an existing install before we touch it
 # ---------------------------------------------------------------------------
 snapshot_existing() {
-    if [ -d "$INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR.backup" ]; then
+    local active
+    active="$(readlink -f "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
+    if [ -d "$active" ] && [ ! -d "$active.backup" ]; then
         step "Backing up the existing installation..."
-        cp -a "$INSTALL_DIR" "$INSTALL_DIR.backup"
-        good "Backup saved to $INSTALL_DIR.backup"
+        cp -a "$active" "$active.backup"
+        good "Backup saved to $active.backup"
     fi
 }
 
@@ -971,9 +1036,9 @@ main() {
         build_frontend
     else
         make_directories
-        # Always build the virtualenv locally. Release tarballs no longer ship a
-        # pre-built venv because absolute shebangs/paths in a relocated venv
-        # break on the target machine (e.g. 203/EXEC from systemd).
+        # Release tarballs now ship a pre-built, relocatable venv. If one is
+        # present, build_virtualenv will use it; otherwise it falls back to a
+        # local build.
         provision_python
         build_virtualenv
     fi

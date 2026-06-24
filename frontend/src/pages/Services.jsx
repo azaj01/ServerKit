@@ -1,16 +1,36 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Layers, Plus, Square, Play, RotateCw, GitBranch, Github, FolderOpen, FileArchive, Search } from 'lucide-react';
+import { Layers, Plus, Square, Play, RotateCw, GitBranch, Github, FolderOpen, FileArchive, Search, FolderKanban } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { getServiceType, getStatusConfig, formatRelativeTime } from '../utils/serviceTypes';
 import EmptyState from '../components/EmptyState';
-import { Pill, SegControl, ServiceTile } from '@/components/ds';
+import { Pill, SegControl, ServiceTile, EnvTag } from '@/components/ds';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from '@/components/ui/dialog';
 
 const STATUS_PILL = { running: 'green', stopped: 'gray', deploying: 'amber', building: 'amber', failed: 'red' };
+
+// Sentinels for the move-to-project Select (Radix forbids empty-string values).
+const UNASSIGN = '__unassign__';
+const NO_ENV = '__no_env__';
 
 const Services = () => {
     const navigate = useNavigate();
@@ -22,6 +42,7 @@ const Services = () => {
     const [actionLoading, setActionLoading] = useState(null);
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [bulkLoading, setBulkLoading] = useState(false);
+    const [showMoveDialog, setShowMoveDialog] = useState(false);
 
     useEffect(() => {
         loadApps();
@@ -148,6 +169,10 @@ const Services = () => {
                         <div className="wp-list__bulkbar">
                             <span className="wp-list__bulkcount">{selectedIds.size} selected</span>
                             <div className="wp-list__bulkactions">
+                                <Button variant="outline" size="sm" onClick={() => setShowMoveDialog(true)} disabled={bulkLoading}>
+                                    <FolderKanban size={14} />
+                                    Move to project
+                                </Button>
                                 <Button variant="outline" size="sm" onClick={() => handleBulkAction('restart')} disabled={bulkLoading}>
                                     Restart All
                                 </Button>
@@ -185,6 +210,7 @@ const Services = () => {
                                             />
                                         </th>
                                         <th>Service</th>
+                                        <th>Project</th>
                                         <th>Source</th>
                                         <th>Domain</th>
                                         <th>Status</th>
@@ -239,6 +265,21 @@ const Services = () => {
                                                             <div className="sk-cell-sub">{typeInfo.label}</div>
                                                         </span>
                                                     </div>
+                                                </td>
+                                                <td>
+                                                    {app.project_name ? (
+                                                        <span className="services-page__project">
+                                                            <span className="services-page__project-name" title={app.project_name}>
+                                                                <FolderKanban size={12} aria-hidden="true" />
+                                                                {app.project_name}
+                                                            </span>
+                                                            {app.environment_name && (
+                                                                <EnvTag env={app.environment_name}>{app.environment_name}</EnvTag>
+                                                            )}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="services-page__unassigned">Unassigned</span>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     {app.deploy_repo_url ? (
@@ -310,7 +351,143 @@ const Services = () => {
                     )}
                 </div>
             )}
+
+            <MoveToProjectDialog
+                open={showMoveDialog}
+                onOpenChange={setShowMoveDialog}
+                count={selectedIds.size}
+                onMove={async (projectId, environmentId) => {
+                    setBulkLoading(true);
+                    try {
+                        await api.moveAppsToProject([...selectedIds], projectId, environmentId);
+                        toast.success(
+                            projectId === null
+                                ? `Unassigned ${selectedIds.size} service(s)`
+                                : `Moved ${selectedIds.size} service(s)`
+                        );
+                        setShowMoveDialog(false);
+                        setSelectedIds(new Set());
+                        await loadApps();
+                    } catch (err) {
+                        toast.error(err.message || 'Failed to move services');
+                    } finally {
+                        setBulkLoading(false);
+                    }
+                }}
+            />
         </div>
+    );
+};
+
+// Bulk "Move to project" modal: pick a project, then one of its environments
+// (or leave unassigned). Loads the project list lazily on open; fetches the
+// chosen project's environments on selection.
+const MoveToProjectDialog = ({ open, onOpenChange, count, onMove }) => {
+    const toast = useToast();
+    const [projects, setProjects] = useState([]);
+    const [environments, setEnvironments] = useState([]);
+    const [projectValue, setProjectValue] = useState(UNASSIGN);
+    const [envValue, setEnvValue] = useState(NO_ENV);
+    const [loadingProjects, setLoadingProjects] = useState(false);
+    const [loadingEnvs, setLoadingEnvs] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+        // Reset selection each time the dialog opens.
+        setProjectValue(UNASSIGN);
+        setEnvValue(NO_ENV);
+        setEnvironments([]);
+        setLoadingProjects(true);
+        api.getProjects()
+            .then((data) => setProjects(Array.isArray(data?.projects) ? data.projects : []))
+            .catch(() => toast.error('Failed to load projects'))
+            .finally(() => setLoadingProjects(false));
+    }, [open, toast]);
+
+    async function handleProjectChange(value) {
+        setProjectValue(value);
+        setEnvValue(NO_ENV);
+        setEnvironments([]);
+        if (value === UNASSIGN) return;
+        setLoadingEnvs(true);
+        try {
+            const data = await api.getProject(value);
+            const envs = Array.isArray(data?.project?.environments) ? data.project.environments : [];
+            setEnvironments(envs);
+        } catch {
+            toast.error('Failed to load environments');
+        } finally {
+            setLoadingEnvs(false);
+        }
+    }
+
+    async function handleSubmit() {
+        const projectId = projectValue === UNASSIGN ? null : Number(projectValue);
+        const environmentId = envValue === NO_ENV ? null : Number(envValue);
+        setSubmitting(true);
+        try {
+            await onMove(projectId, environmentId);
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Move to project</DialogTitle>
+                    <DialogDescription>
+                        Assign {count} selected service{count === 1 ? '' : 's'} to a project and
+                        environment, or leave them unassigned.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="services-move">
+                    <div className="services-move__field">
+                        <Label htmlFor="move-project">Project</Label>
+                        <Select value={projectValue} onValueChange={handleProjectChange} disabled={loadingProjects}>
+                            <SelectTrigger id="move-project">
+                                <SelectValue placeholder={loadingProjects ? 'Loading…' : 'Select a project'} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={UNASSIGN}>Unassigned</SelectItem>
+                                {projects.map((p) => (
+                                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {projectValue !== UNASSIGN && (
+                        <div className="services-move__field">
+                            <Label htmlFor="move-env">Environment</Label>
+                            <Select value={envValue} onValueChange={setEnvValue} disabled={loadingEnvs}>
+                                <SelectTrigger id="move-env">
+                                    <SelectValue placeholder={loadingEnvs ? 'Loading…' : 'No specific environment'} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={NO_ENV}>No specific environment</SelectItem>
+                                    {environments.map((e) => (
+                                        <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        Cancel
+                    </Button>
+                    <Button type="button" onClick={handleSubmit} disabled={submitting || loadingProjects}>
+                        {submitting ? 'Moving…' : (projectValue === UNASSIGN ? 'Unassign' : 'Move')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 };
 

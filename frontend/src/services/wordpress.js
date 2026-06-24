@@ -245,6 +245,12 @@ const wordpressApi = {
     runCron: (siteId) => api.request(`${BASE_PATH}/${siteId}/cron/run`, { method: 'POST' }),
     setCronDisabled: (siteId, disabled) => api.request(`${BASE_PATH}/${siteId}/cron`, { method: 'POST', body: { disabled } }),
 
+    // Per-site brute-force protection: a WP-login Fail2ban jail watching the
+    // site's reverse-proxy access log.
+    getBruteForce: (siteId) => api.request(`${BASE_PATH}/${siteId}/security/bruteforce`),
+    setBruteForce: (siteId, enabled) => api.request(`${BASE_PATH}/${siteId}/security/bruteforce`, { method: 'POST', body: { enabled } }),
+    unbanBruteForceIp: (siteId, ip) => api.request(`${BASE_PATH}/${siteId}/security/bruteforce/unban`, { method: 'POST', body: { ip } }),
+
     // Monthly client reports (#33): persisted per-month uptime/updates/backups/vuln rollups
     getReports: (siteId) => api.request(`${BASE_PATH}/${siteId}/reports`),
     generateReport: (siteId, body = {}) => api.request(`${BASE_PATH}/${siteId}/reports/generate`, { method: 'POST', body }),

@@ -16,12 +16,25 @@ import EmptyState from '../components/EmptyState';
 
 // Featured templates (curated list)
 const FEATURED_TEMPLATES = [
-    'wordpress', 'nextcloud', 'grafana', 'portainer', 'uptime-kuma',
-    'gitea', 'vaultwarden', 'jellyfin', 'ghost', 'n8n'
+    'prompture-hub', 'wordpress', 'nextcloud', 'grafana', 'portainer',
+    'uptime-kuma', 'gitea', 'vaultwarden', 'jellyfin', 'ghost', 'n8n'
 ];
 
-// Icon mapping for templates
+// Icon strategy: every template ships an inline lucide-style base64 SVG in its
+// YAML `icon:` field (rendered first by renderIcon). This map is the keyed
+// fallback used when a template has no inline icon or it fails to load, so the
+// grid never shows a broken image. Keep ids here in sync with backend/templates.
 const TEMPLATE_ICONS = {
+    // AI / LLM
+    'prompture-hub': Cpu,
+    'ollama-webui': Cpu,
+    'qdrant': Database,
+    'chroma': Database,
+    'litellm': Cpu,
+    'flowise': Workflow,
+    'langflow': Workflow,
+    'anythingllm': Cpu,
+    'librechat': MessageSquare,
     // Monitoring
     'uptime-kuma': BarChart3,
     'grafana': BarChart3,
@@ -31,6 +44,12 @@ const TEMPLATE_ICONS = {
     'jaeger': BarChart3,
     'plausible': BarChart3,
     'umami': BarChart3,
+    'beszel': BarChart3,
+    'signoz': BarChart3,
+    // Search
+    'meilisearch': Search,
+    'typesense': Search,
+    'searxng': Search,
     // CMS / Blog
     'wordpress': Globe,
     'ghost': FileText,
@@ -64,17 +83,51 @@ const TEMPLATE_ICONS = {
     'photoprism': Image,
     'immich': Image,
     'navidrome': Music,
+    'audiobookshelf': Music,
+    'calibre-web': BookOpen,
+    'sonarr': Video,
+    'radarr': Video,
+    'jellyseerr': Video,
+    'prowlarr': Search,
+    'qbittorrent': HardDrive,
+    // News / RSS
+    'freshrss': Newspaper,
+    'miniflux': Newspaper,
+    // Documents
+    'paperless-ngx': FileText,
+    'stirling-pdf': FileText,
+    'memos': FileText,
+    // Finance
+    'actualbudget': TrendingUp,
+    'firefly-iii': TrendingUp,
+    // Project management
+    'vikunja': Check,
+    'plane': Workflow,
     // Productivity
     'bookstack': BookOpen,
     'wikijs': BookOpen,
     'outline': FileText,
     'excalidraw': FileText,
     'n8n': Workflow,
+    // Notifications
+    'gotify': MessageSquare,
+    'ntfy': MessageSquare,
     // Security
     'vaultwarden': Lock,
     'authelia': Shield,
     'keycloak': Shield,
     'crowdsec': Shield,
+    'authentik': Shield,
+    'wg-easy': Shield,
+    'pihole': Shield,
+    // Business / niche
+    'chatwoot': MessageSquare,
+    'documenso': FileText,
+    'metabase': BarChart3,
+    'posthog': TrendingUp,
+    'nodebb': Users,
+    'linkding': BookOpen,
+    'karakeep': BookOpen,
     // Database tools
     'phpmyadmin': Database,
     'pgadmin': Database,
@@ -245,7 +298,51 @@ const Templates = () => {
             database: Database,
             'home-automation': Home,
             analytics: TrendingUp,
-            iot: Cpu
+            iot: Cpu,
+            // AI / LLM
+            ai: Cpu,
+            llm: Cpu,
+            gateway: Server,
+            rag: Cpu,
+            chat: MessageSquare,
+            'low-code': Workflow,
+            workflow: Workflow,
+            // Search
+            search: Search,
+            vector: Database,
+            // Notifications / messaging
+            notifications: MessageSquare,
+            messaging: MessageSquare,
+            communication: MessageSquare,
+            support: MessageSquare,
+            // Documents / news
+            documents: FileText,
+            pdf: FileText,
+            notes: FileText,
+            rss: Newspaper,
+            news: Newspaper,
+            // Finance / business
+            finance: TrendingUp,
+            business: TrendingUp,
+            // Productivity / tasks
+            tasks: Workflow,
+            'project-management': Workflow,
+            bookmarks: BookOpen,
+            ebooks: BookOpen,
+            audiobooks: Music,
+            automation: Workflow,
+            downloads: HardDrive,
+            // Identity / networking / privacy
+            identity: Shield,
+            sso: Shield,
+            vpn: Shield,
+            privacy: Lock,
+            dns: Globe,
+            forum: Users,
+            community: Users,
+            // Observability
+            observability: BarChart3,
+            apm: BarChart3
         };
         const Icon = icons[category] || Container;
         return <Icon size={14} />;

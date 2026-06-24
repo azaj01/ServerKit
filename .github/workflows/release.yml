@@ -105,11 +105,13 @@ jobs:
           BUILD_ARCH: ${{ matrix.arch }}
         run: bash scripts/build-release.sh
 
-      - name: Upload tarball artifact
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: serverkit-tarball-${{ matrix.arch }}
-          path: serverkit-*.tar.gz
+          name: serverkit-release-${{ matrix.arch }}
+          path: |
+            serverkit-*.tar.gz
+            checksums.txt
           if-no-files-found: error
 
   build-docker:
@@ -159,22 +161,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download release tarballs
+      - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release-tarballs
-          pattern: serverkit-tarball-*
+          path: release-artifacts
+          pattern: serverkit-release-*
           merge-multiple: true
 
-      - name: Generate checksums for tracked release files
+      - name: Assemble release files
         run: |
           mkdir -p release
           cp VERSION release/VERSION
           cp docker-compose.yml release/docker-compose.yml
           cp Dockerfile release/Dockerfile
-          mv release-tarballs/serverkit-*.tar.gz release/ 2>/dev/null || true
+          mv release-artifacts/serverkit-*.tar.gz release/ 2>/dev/null || true
+          mv release-artifacts/checksums.txt release/checksums.txt 2>/dev/null || true
           cd release
-          sha256sum * > checksums.txt
+          sha256sum serverkit-*.tar.gz >> checksums.txt
+          sort -u checksums.txt -o checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release

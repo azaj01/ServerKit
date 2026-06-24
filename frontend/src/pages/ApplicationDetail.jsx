@@ -15,6 +15,11 @@ import LinkedAppsSection from '../components/LinkedAppsSection';
 import LinkAppModal from '../components/LinkAppModal';
 import ContainerOpsPanel from '../components/apps/ContainerOpsPanel';
 import WafPanel from '../components/apps/WafPanel';
+import PreviewList from '../components/previews/PreviewList';
+import DeploymentTimeline from '../components/deployments/DeploymentTimeline';
+import BuildpackPreview from '../components/buildpack/BuildpackPreview';
+import TagsPanel from '../components/shared/TagsPanel';
+import EnvironmentVariablesPanel from '../components/shared/EnvironmentVariablesPanel';
 import { getServiceType, getStatusConfig } from '../utils/serviceTypes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Pill, EnvTag } from '@/components/ds';
 
-const VALID_TABS = ['overview', 'environment', 'packages', 'gunicorn', 'commands', 'ops', 'waf', 'build', 'deploy', 'logs', 'settings'];
+const VALID_TABS = ['overview', 'environment', 'packages', 'gunicorn', 'commands', 'ops', 'waf', 'build', 'deploy', 'previews', 'logs', 'settings'];
 
 // statusInfo.dotClass → ds Pill kind
 const STATUS_PILL = {
@@ -31,6 +36,14 @@ const STATUS_PILL = {
     deploying: 'amber',
     building: 'amber',
     failed: 'red',
+};
+
+// Ingress plane → label + Pill kind. Host Nginx is the neutral default;
+// a managed proxy stack reads as the accent (cyan) choice. NULL/undefined
+// reads as host Nginx, matching the backend.
+const INGRESS_META = {
+    proxy_stack: { label: 'Proxy stack', kind: 'cyan' },
+    nginx: { label: 'Nginx', kind: 'gray' },
 };
 
 const ApplicationDetail = () => {
@@ -120,6 +133,7 @@ const ApplicationDetail = () => {
     const isRunning = app.status === 'running';
     const typeInfo = getServiceType(app.app_type);
     const statusInfo = getStatusConfig(app.status);
+    const ingressMeta = INGRESS_META[app.ingress_plane] || INGRESS_META.nginx;
 
     return (
         <div className="page-container app-detail-page">
@@ -185,6 +199,7 @@ const ApplicationDetail = () => {
                     <h1>
                         {app.name}
                         <Pill kind={STATUS_PILL[statusInfo.dotClass] || 'gray'}>{statusInfo.label}</Pill>
+                        <Pill kind={ingressMeta.kind} dot={false}>{ingressMeta.label}</Pill>
                         {app.environment_type && app.environment_type !== 'standalone' && (
                             <EnvTag env={app.environment_type}>
                                 {app.environment_type === 'production' ? 'PROD' :
@@ -222,6 +237,7 @@ const ApplicationDetail = () => {
                     )}
                     <TabsTrigger value="build">Build</TabsTrigger>
                     <TabsTrigger value="deploy">Deploy</TabsTrigger>
+                    <TabsTrigger value="previews">Previews</TabsTrigger>
                     <TabsTrigger value="logs">Logs</TabsTrigger>
                     <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
@@ -258,10 +274,13 @@ const ApplicationDetail = () => {
                         </TabsContent>
                     )}
                     <TabsContent value="build">
-                        <BuildTab appId={app.id} appPath={app.path} />
+                        <BuildTab appId={app.id} appPath={app.path} app={app} />
                     </TabsContent>
                     <TabsContent value="deploy">
                         <DeployTab appId={app.id} appPath={app.path} />
+                    </TabsContent>
+                    <TabsContent value="previews">
+                        <PreviewList appId={app.id} />
                     </TabsContent>
                     <TabsContent value="logs">
                         <LogsTab app={app} />
@@ -534,6 +553,21 @@ const OverviewTab = ({ app, onUpdate }) => {
                         </div>
                     </div>
                 )}
+
+                {/* Tags Panel (polymorphic shared resource) */}
+                <div className="app-panel">
+                    <div className="app-panel-header">Tags</div>
+                    <div className="app-panel-body">
+                        <TagsPanel resourceType="application" resourceId={app.id} />
+                    </div>
+                </div>
+
+                {/* Shared Variables Panel (resolved from attached groups) */}
+                <div className="app-panel">
+                    <div className="app-panel-body">
+                        <EnvironmentVariablesPanel resourceType="application" resourceId={app.id} />
+                    </div>
+                </div>
             </div>
 
             {showLinkModal && (
@@ -868,7 +902,7 @@ const CommandsTab = ({ appId, appType }) => {
     );
 };
 
-const BuildTab = ({ appId, appPath }) => {
+const BuildTab = ({ appId, appPath, app }) => {
     const toast = useToast();
     const { confirm: confirmBuild, confirmState: confirmBuildState, handleConfirm: handleBuildConfirm, handleCancel: handleBuildCancel } = useConfirm();
     const [buildConfig, setBuildConfig] = useState(null);
@@ -883,6 +917,19 @@ const BuildTab = ({ appId, appPath }) => {
     const [selectedLog, setSelectedLog] = useState(null);
     const [buildLogs, setBuildLogs] = useState([]);
     const [error, setError] = useState(null);
+    const [bpDockerfile, setBpDockerfile] = useState(null);
+
+    // When the app was created from a detected build pack, fetch a read-only
+    // preview of the generated Dockerfile for transparency.
+    useEffect(() => {
+        let active = true;
+        if (app?.buildpack_plan) {
+            api.generateBuildpack(app.buildpack_plan, app.buildpack_overrides || {}, app.name)
+                .then((res) => { if (active) setBpDockerfile(res?.dockerfile || null); })
+                .catch(() => {});
+        }
+        return () => { active = false; };
+    }, [app?.buildpack_plan, app?.buildpack_overrides, app?.name]);
 
     const [configForm, setConfigForm] = useState({
         buildMethod: 'auto',
@@ -1064,6 +1111,17 @@ const BuildTab = ({ appId, appPath }) => {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {app?.buildpack_plan && (
+                <div className="card">
+                    <h3>Build Pack</h3>
+                    <BuildpackPreview
+                        plan={app.buildpack_plan}
+                        dockerfile={bpDockerfile}
+                        overrides={app.buildpack_overrides || {}}
+                    />
                 </div>
             )}
 
@@ -1646,6 +1704,18 @@ const DeployTab = ({ appId, appPath }) => {
                     </div>
                 </>
             )}
+
+            {/* Config snapshot timeline + diff — additive, independent of git
+                config so it shows the deploy history & config changes for any app. */}
+            <div className="card deploy-timeline-card">
+                <h3>Deployment Timeline</h3>
+                <p className="deploy-timeline-card__hint">
+                    An immutable configuration snapshot (env keys, domains, image, build
+                    method, volumes) is captured before each deployment. Secret values are
+                    masked. Open a snapshot to diff it against the previous one or restore it.
+                </p>
+                <DeploymentTimeline appId={appId} />
+            </div>
 
             {showConfigModal && (
                 <div className="modal-overlay" onClick={() => setShowConfigModal(false)}>

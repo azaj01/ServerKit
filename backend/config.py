@@ -88,6 +88,17 @@ class Config:
     SSL_MODE = _resolve_ssl_mode()
     HSTS_ENABLED = SSL_MODE == 'secure'
 
+    # ── Build packs ─────────────────────────────────────────────────────
+    # Path to the optional nixpacks binary (used by build_service's opaque
+    # nixpacks path). The transparent build-pack layer (buildpack_service)
+    # generates a Dockerfile instead and does not require this. Workspace dir
+    # is where build packs clone/stage sources for detection + generation.
+    NIXPACKS_BIN = os.environ.get('NIXPACKS_BIN', 'nixpacks')
+    BUILDPACK_WORKSPACE_DIR = os.environ.get(
+        'BUILDPACK_WORKSPACE_DIR',
+        os.path.join(os.environ.get('SERVERKIT_CACHE_DIR', '/var/cache/serverkit'), 'buildpacks'),
+    )
+
 
 class DevelopmentConfig(Config):
     DEBUG = True

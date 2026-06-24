@@ -30,7 +30,10 @@ import {
 import PackagesTab from '../components/serverdetail/PackagesTab';
 import ServicesTab from '../components/serverdetail/ServicesTab';
 import SystemStatusCard from '../components/serverdetail/SystemStatusCard';
+import OnboardingWizard from '../components/server/OnboardingWizard';
+import ProxyStackPanel from '../components/proxy/ProxyStackPanel';
 import RemoteAccess from '../pages/RemoteAccess';
+import TagsPanel from '../components/shared/TagsPanel';
 import EmptyState from '../components/EmptyState';
 import { BellRing, Boxes, Container, Clock3, Cloud } from 'lucide-react';
 
@@ -56,7 +59,7 @@ const ServerDetail = () => {
     const [securityAlerts, setSecurityAlerts] = useState([]);
     const toast = useToast();
 
-    const validTabs = ['overview', 'docker', 'cron', 'cloudflared', 'packages', 'services', 'metrics', 'alerts', 'remote-access', 'settings'];
+    const validTabs = ['overview', 'docker', 'proxy', 'cron', 'cloudflared', 'packages', 'services', 'metrics', 'alerts', 'remote-access', 'settings'];
     const activeTab = validTabs.includes(tab) ? tab : 'overview';
 
     const loadServer = useCallback(async () => {
@@ -237,6 +240,7 @@ const ServerDetail = () => {
     const tabs = [
         { id: 'overview', label: 'Overview' },
         { id: 'docker', label: 'Docker' },
+        { id: 'proxy', label: 'Proxy' },
         ...(server.capabilities?.cron ? [{ id: 'cron', label: 'Cron' }] : []),
         ...(server.capabilities?.cloudflared ? [{ id: 'cloudflared', label: 'Tunnels' }] : []),
         ...(server.capabilities?.packages ? [{ id: 'packages', label: 'Packages' }] : []),
@@ -345,6 +349,9 @@ const ServerDetail = () => {
                     <TabsContent value="docker">
                         <DockerTab serverId={id} serverStatus={server.status} server={server} />
                     </TabsContent>
+                    <TabsContent value="proxy">
+                        <ProxyStackPanel serverId={id} />
+                    </TabsContent>
                     {server.capabilities?.cron && (
                         <TabsContent value="cron">
                             <CronTab serverId={id} serverStatus={server.status} />
@@ -435,8 +442,30 @@ const OverviewTab = ({ server, metrics, systemInfo, onRefreshServer }) => {
     const totalDisk = systemInfo?.total_disk || server.total_disk;
     const osLabel = `${systemInfo?.os || server.os_type || 'Unknown'}${systemInfo?.os_version || server.os_version ? ` ${systemInfo?.os_version || server.os_version}` : ''}`;
 
+    // Surface the onboarding wizard while a server is still being
+    // provisioned. Hidden once onboarding reaches 'ready' (or was never
+    // started) so it doesn't clutter a healthy server's overview.
+    const showOnboarding =
+        server.onboarding_state &&
+        !['ready', 'pending'].includes(server.onboarding_state);
+
     return (
         <div className="overview-tab">
+            {showOnboarding && (
+                <div className="overview-tab__onboarding">
+                    <OnboardingWizard
+                        serverId={server.id}
+                        initialState={server.onboarding_state}
+                        onStateChange={(newState) => {
+                            // Refresh the parent server payload when onboarding
+                            // reaches a terminal state so the card hides itself.
+                            if (newState === 'ready' || newState === 'failed') {
+                                onRefreshServer?.();
+                            }
+                        }}
+                    />
+                </div>
+            )}
             <div className="server-stats-strip">
                 <KpiTile
                     icon={<PulseIcon />}
@@ -2071,6 +2100,19 @@ const SettingsTab = ({ server, onUpdate, onRegenerateToken, onDelete }) => {
                         </div>
                     )}
                 </div>
+            </div>
+
+            <div className="form-section form-section--accent shared-resources-section">
+                <div className="form-section__header">
+                    <span className="form-section__icon"><TagIcon /></span>
+                    <div>
+                        <h3>Tags</h3>
+                        <p className="section-description">
+                            Free-form labels for grouping and filtering this server across the panel.
+                        </p>
+                    </div>
+                </div>
+                <TagsPanel resourceType="server" resourceId={server.id} />
             </div>
 
             <DangerZone

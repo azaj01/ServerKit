@@ -4,8 +4,11 @@ import os
 import json
 import shutil
 import subprocess
+import logging
 from datetime import datetime
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class GitDeployService:
@@ -64,6 +67,16 @@ class GitDeployService:
             # Create snapshot for rollback
             snapshot = cls._create_snapshot(app)
             deployment.snapshot_data = json.dumps(snapshot)
+
+            # Also capture an immutable *config* snapshot (env keys + masked
+            # values, domains, image, volumes, build method) for the deployment
+            # timeline / config diff. Best-effort: never block a deploy. Note we
+            # don't link a Deployment FK here — this path uses GitDeployment.
+            try:
+                from app.services.configuration_service import ConfigurationService
+                ConfigurationService.create_snapshot(app)
+            except Exception as cfg_err:
+                logger.warning('Config snapshot capture failed (git deploy): %s', cfg_err)
 
             logs = []
 

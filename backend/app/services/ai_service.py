@@ -38,7 +38,11 @@ logger = logging.getLogger(__name__)
 # Provider catalog (curated; the user may also type a free-form provider/model)
 # ---------------------------------------------------------------------------
 # Maps provider -> the ProviderEnvironment attribute that carries its API key.
+# `prompture-hub` is a self-hosted, OpenAI-compatible gateway; it reuses Prompture's
+# `cachibot` driver (same dialect) so the panel can call a local hub with a scoped
+# hub key instead of holding raw provider keys.
 _KEY_ATTR = {
+    "prompture-hub": "cachibot_api_key",
     "openai": "openai_api_key",
     "claude": "claude_api_key",
     "google": "google_api_key",
@@ -48,11 +52,18 @@ _KEY_ATTR = {
 }
 # Providers that take a custom endpoint instead of (or alongside) a key.
 _ENDPOINT_ATTR = {
+    "prompture-hub": "cachibot_endpoint",
     "ollama": "ollama_endpoint",
     "lmstudio": "lmstudio_endpoint",
 }
+# Curated providers whose model specs resolve through a *different* underlying
+# Prompture driver than their id (e.g. the hub speaks the OpenAI-compatible
+# `cachibot` dialect). Identity for everything else.
+_DRIVER_PROVIDER = {"prompture-hub": "cachibot"}
 
 CURATED_PROVIDERS = [
+    {"id": "prompture-hub", "label": "Prompture Hub (self-hosted)", "needs_key": True, "supports_endpoint": True,
+     "models": []},
     {"id": "openai", "label": "OpenAI", "needs_key": True, "supports_endpoint": False,
      "models": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"]},
     {"id": "claude", "label": "Anthropic (Claude)", "needs_key": True, "supports_endpoint": False,
@@ -69,6 +80,11 @@ CURATED_PROVIDERS = [
      "models": []},
 ]
 _PROVIDER_BY_ID = {p["id"]: p for p in CURATED_PROVIDERS}
+
+
+def _driver_provider(provider: str) -> str:
+    """Map a curated provider id to the Prompture driver prefix that resolves it."""
+    return _DRIVER_PROVIDER.get((provider or "").strip(), (provider or "").strip())
 
 SYSTEM_BASE = (
     "You are ServerKit AI, an assistant embedded in the ServerKit server control "
@@ -141,7 +157,7 @@ def is_configured() -> bool:
 def current_model_name() -> str:
     provider = (_setting("ai_provider", "") or "").strip()
     model = (_setting("ai_model", "") or "").strip()
-    return f"{provider}/{model}" if provider and model else ""
+    return f"{_driver_provider(provider)}/{model}" if provider and model else ""
 
 
 def _decrypted_key() -> Optional[str]:
@@ -190,7 +206,7 @@ def list_models(provider: str) -> dict:
     fallback = _PROVIDER_BY_ID.get(provider, {}).get("models", [])
     try:
         from prompture.drivers import get_driver_for_model
-        driver = get_driver_for_model(f"{provider}/", env=build_provider_env(provider=provider))
+        driver = get_driver_for_model(f"{_driver_provider(provider)}/", env=build_provider_env(provider=provider))
         lister = getattr(driver, "list_models", None)
         if callable(lister):
             models = lister()
@@ -207,7 +223,7 @@ def test_settings(provider: str, model: str, api_key: Optional[str] = None,
     try:
         from prompture.drivers import get_driver_for_model
         env = build_provider_env(provider=provider, api_key=api_key, endpoint=endpoint)
-        driver = get_driver_for_model(f"{provider}/{model}", env=env)
+        driver = get_driver_for_model(f"{_driver_provider(provider)}/{model}", env=env)
         lister = getattr(driver, "list_models", None)
         if callable(lister):
             try:

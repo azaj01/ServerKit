@@ -9,6 +9,7 @@ import {
     GitBranch,
     Link2,
     Lock,
+    Network,
     Package,
     RefreshCw,
     Rocket,
@@ -26,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import BuildpackPreview from '@/components/buildpack/BuildpackPreview';
 
 const APP_TYPE_OPTIONS = [
     { value: 'auto', label: 'Auto-detect' },
@@ -134,9 +136,19 @@ const NewService = () => {
     const [appType, setAppType] = useState('auto');
     const [buildMethod, setBuildMethod] = useState('auto');
     const [port, setPort] = useState('');
+    // Ingress plane: 'nginx' (host Nginx, the default) or 'proxy_stack' (a
+    // Dockerized Traefik/Caddy stack). Only honored by the backend for
+    // container-eligible app types; everything else is forced to host Nginx.
+    const [ingressPlane, setIngressPlane] = useState('nginx');
     const [autoDeploy, setAutoDeploy] = useState(true);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+
+    // Build-pack detection (zero-Dockerfile). Runs when a repo is selected and
+    // the build method routes through the build pack (auto / nixpacks).
+    const [buildpack, setBuildpack] = useState(null);
+    const [buildpackLoading, setBuildpackLoading] = useState(false);
+    const [buildpackOverrides, setBuildpackOverrides] = useState({});
 
     // Manual / local service fields
     const [localPath, setLocalPath] = useState('');
@@ -147,6 +159,12 @@ const NewService = () => {
     // Upload fields
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadDragOver, setUploadDragOver] = useState(false);
+
+    // Optional Project / Environment assignment (opt-in hierarchy).
+    const [projects, setProjects] = useState([]);
+    const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
+    const [projectEnvironments, setProjectEnvironments] = useState([]);
 
     const githubConnection = githubStatus?.connection;
     const githubConfigured = githubStatus?.configured;
@@ -171,6 +189,15 @@ const NewService = () => {
     const buildSummary = buildMethod === 'auto' && recommended.build_method
         ? `Auto -> ${formatBuildMethod(recommended.build_method)}`
         : formatBuildMethod(buildMethod);
+
+    // A managed proxy stack only routes container-based services. The "Proxy
+    // stack" ingress option is offered when the selected type resolves to a
+    // container: Docker explicitly, Auto-detect (which may resolve to a
+    // container), or a Compose-managed local service. Every other type
+    // (PHP/Python/static) is served by host Nginx and the backend forces it.
+    const ingressProxyEligible = appType === 'docker'
+        || appType === 'auto'
+        || (sourceMode === 'local' && managedBy === 'docker_compose');
 
     const loadGithubStatus = useCallback(async () => {
         try {
@@ -209,6 +236,53 @@ const NewService = () => {
     useEffect(() => {
         loadGithubStatus();
     }, [loadGithubStatus]);
+
+    // Keep the ingress choice valid: if the selected type is no longer
+    // proxy-eligible, snap back to host Nginx (the forced default).
+    useEffect(() => {
+        if (!ingressProxyEligible && ingressPlane !== 'nginx') {
+            setIngressPlane('nginx');
+        }
+    }, [ingressProxyEligible, ingressPlane]);
+
+    // Load projects for the optional Project / Environment selector. Best-effort:
+    // if it fails the selector simply stays empty and creation is unaffected.
+    useEffect(() => {
+        let cancelled = false;
+        api.getProjects()
+            .then(data => {
+                if (cancelled) return;
+                setProjects(Array.isArray(data?.projects) ? data.projects : []);
+            })
+            .catch(() => { if (!cancelled) setProjects([]); });
+        return () => { cancelled = true; };
+    }, []);
+
+    // When a project is picked, load its environments and default-select the
+    // default one. Clearing the project clears the environment.
+    useEffect(() => {
+        if (!selectedProjectId) {
+            setProjectEnvironments([]);
+            setSelectedEnvironmentId('');
+            return undefined;
+        }
+        let cancelled = false;
+        api.getProject(selectedProjectId)
+            .then(data => {
+                if (cancelled) return;
+                const envs = Array.isArray(data?.project?.environments) ? data.project.environments : [];
+                setProjectEnvironments(envs);
+                const def = envs.find(e => e.is_default) || envs[0];
+                setSelectedEnvironmentId(def ? String(def.id) : '');
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setProjectEnvironments([]);
+                    setSelectedEnvironmentId('');
+                }
+            });
+        return () => { cancelled = true; };
+    }, [selectedProjectId]);
 
     useEffect(() => {
         if (sourceMode === 'github' && githubConnection) {
@@ -264,6 +338,52 @@ const NewService = () => {
             }
         }
     }, [selectedRepo, nameTouched]);
+
+    // Build-pack detection. Only repo-based sources (github/manual/template) and
+    // only when the build method routes through the build pack. Resets overrides
+    // whenever the underlying repository changes.
+    const buildpackEligible = (buildMethod === 'auto' || buildMethod === 'nixpacks')
+        && (sourceMode === 'github' || sourceMode === 'manual' || sourceMode === 'template');
+
+    useEffect(() => {
+        if (!buildpackEligible) {
+            setBuildpack(null);
+            setBuildpackLoading(false);
+            return undefined;
+        }
+
+        const body = { branch: branch || 'main', name: detectedServiceName || 'app' };
+        if (sourceMode === 'github' && selectedRepo && githubConnection) {
+            body.source_connection_id = githubConnection.id;
+            body.repository_full_name = selectedRepo.full_name;
+            body.repo_url = `https://github.com/${selectedRepo.full_name}.git`;
+        } else if (sourceMode === 'template' && selectedTemplate) {
+            body.repo_url = selectedTemplate.repoUrl;
+        } else if (sourceMode === 'manual' && normalizedManualRepo) {
+            body.repo_url = normalizedManualRepo;
+        } else {
+            setBuildpack(null);
+            return undefined;
+        }
+
+        let cancelled = false;
+        setBuildpackLoading(true);
+        setBuildpackOverrides({});
+        api.detectBuildpack(body)
+            .then((data) => {
+                if (!cancelled) setBuildpack(data);
+            })
+            .catch(() => {
+                // Detection is best-effort; the user can still pick a method.
+                if (!cancelled) setBuildpack(null);
+            })
+            .finally(() => {
+                if (!cancelled) setBuildpackLoading(false);
+            });
+
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [buildpackEligible, sourceMode, selectedRepo, selectedTemplate, normalizedManualRepo, branch, githubConnection]);
 
     async function handleConnectGithub() {
         try {
@@ -327,6 +447,12 @@ const NewService = () => {
         }
 
         setSubmitting(true);
+        // Optional Project / Environment assignment, included only when picked.
+        const projectEnvPayload = {};
+        if (selectedProjectId) {
+            projectEnvPayload.project_id = Number(selectedProjectId);
+            if (selectedEnvironmentId) projectEnvPayload.environment_id = Number(selectedEnvironmentId);
+        }
         try {
             if (sourceMode === 'local') {
                 const payload = {
@@ -336,6 +462,8 @@ const NewService = () => {
                     compose_file: composeFile.trim() || undefined,
                     systemd_unit: systemdUnit.trim() || undefined,
                     managed_by: managedBy === 'auto' ? undefined : managedBy,
+                    ingress_plane: ingressProxyEligible ? ingressPlane : 'nginx',
+                    ...projectEnvPayload,
                 };
                 const result = await api.createManualApp(payload);
                 toast.success('Manual service registered');
@@ -346,6 +474,9 @@ const NewService = () => {
                 formData.append('name', serviceName);
                 formData.append('app_type', appType);
                 formData.append('auto_deploy', autoDeploy ? 'true' : 'false');
+                formData.append('ingress_plane', ingressProxyEligible ? ingressPlane : 'nginx');
+                if (projectEnvPayload.project_id) formData.append('project_id', projectEnvPayload.project_id);
+                if (projectEnvPayload.environment_id) formData.append('environment_id', projectEnvPayload.environment_id);
                 const result = await api.uploadAppZip(formData);
                 toast.success('Upload service created');
                 navigate(`/services/${result.app.id}`);
@@ -357,10 +488,18 @@ const NewService = () => {
                     build_method: buildMethod,
                     port: port ? Number(port) : null,
                     auto_deploy: autoDeploy,
+                    ingress_plane: ingressProxyEligible ? ingressPlane : 'nginx',
+                    ...projectEnvPayload,
                 };
                 if (recommended.dockerfile_path) payload.dockerfile_path = recommended.dockerfile_path;
                 if (recommended.custom_build_cmd) payload.custom_build_cmd = recommended.custom_build_cmd;
                 if (recommended.custom_start_cmd) payload.custom_start_cmd = recommended.custom_start_cmd;
+                if (buildpackEligible && buildpack?.plan) {
+                    payload.buildpack_plan = buildpack.plan;
+                    if (Object.keys(buildpackOverrides).length > 0) {
+                        payload.buildpack_overrides = buildpackOverrides;
+                    }
+                }
 
                 if (sourceMode === 'github') {
                     payload.source_connection_id = githubConnection.id;
@@ -836,6 +975,16 @@ const NewService = () => {
                         </div>
                     )}
 
+                    {buildpackEligible && (buildpackLoading || buildpack?.plan) && (
+                        <BuildpackPreview
+                            plan={buildpack?.plan}
+                            dockerfile={buildpack?.dockerfile}
+                            overrides={buildpackOverrides}
+                            onChange={setBuildpackOverrides}
+                            loading={buildpackLoading}
+                        />
+                    )}
+
                     <div className="new-service-page__summary">
                         <div>
                             <span>Source</span>
@@ -871,6 +1020,14 @@ const NewService = () => {
                                 <strong>{autoDeploy ? 'On' : 'Off'}</strong>
                             </div>
                         )}
+                        <div>
+                            <span>Ingress</span>
+                            <strong>
+                                {ingressProxyEligible && ingressPlane === 'proxy_stack'
+                                    ? 'Proxy stack'
+                                    : 'Host Nginx'}
+                            </strong>
+                        </div>
                     </div>
 
                     <button
@@ -982,6 +1139,57 @@ const NewService = () => {
                                     </div>
                                 )}
                             </div>
+
+                            <div className="new-service-page__field">
+                                <Label htmlFor="ingress-plane">Ingress</Label>
+                                {ingressProxyEligible ? (
+                                    <select
+                                        id="ingress-plane"
+                                        value={ingressPlane}
+                                        onChange={(e) => setIngressPlane(e.target.value)}
+                                    >
+                                        <option value="nginx">Host Nginx (default)</option>
+                                        <option value="proxy_stack">Proxy stack (Traefik / Caddy)</option>
+                                    </select>
+                                ) : (
+                                    <div className="new-service-page__note">
+                                        <Network size={16} />
+                                        <span>Served by host Nginx</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {projects.length > 0 && (
+                                <div className="new-service-page__two-col">
+                                    <div className="new-service-page__field">
+                                        <Label htmlFor="project">Project <span className="new-service-page__optional">(optional)</span></Label>
+                                        <select
+                                            id="project"
+                                            value={selectedProjectId}
+                                            onChange={(e) => setSelectedProjectId(e.target.value)}
+                                        >
+                                            <option value="">No project</option>
+                                            {projects.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {selectedProjectId && (
+                                        <div className="new-service-page__field">
+                                            <Label htmlFor="environment">Environment</Label>
+                                            <select
+                                                id="environment"
+                                                value={selectedEnvironmentId}
+                                                onChange={(e) => setSelectedEnvironmentId(e.target.value)}
+                                            >
+                                                {projectEnvironments.map(env => (
+                                                    <option key={env.id} value={env.id}>{env.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 

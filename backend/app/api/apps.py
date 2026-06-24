@@ -414,6 +414,149 @@ def set_app_workspace(app_id):
     return jsonify({'message': 'Workspace updated', 'app': app.to_dict()}), 200
 
 
+@apps_bp.route('/move-to-project', methods=['POST'])
+@jwt_required()
+def move_apps_to_project():
+    """Bulk-assign apps to a project/environment (or unassign them).
+
+    Body: ``{app_ids: [...], project_id, environment_id}``.
+
+    Mirrors the per-create ``_resolve_project_env`` validation, but PER APP so a
+    mixed-workspace selection is handled safely:
+
+      - The project must belong to the app's own workspace.
+      - The environment must belong to that project.
+
+    Invalid pairings are silently dropped to None (the app is unassigned rather
+    than mis-assigned) — never an error. ``project_id: null`` unassigns. Only
+    apps the caller can edit are touched; the rest are skipped. Returns the
+    updated rows.
+    """
+    from app.models.project import Project
+    from app.models.environment import Environment
+
+    user = User.query.get(get_jwt_identity())
+    data = request.get_json() or {}
+
+    raw_ids = data.get('app_ids')
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return jsonify({'error': 'app_ids must be a non-empty list'}), 400
+
+    def _as_int(v):
+        if v in (None, '', 'null'):
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    app_ids = [i for i in (_as_int(x) for x in raw_ids) if i is not None]
+    req_project_id = _as_int(data.get('project_id'))
+    req_environment_id = _as_int(data.get('environment_id'))
+
+    updated = []
+    skipped = []
+    for app_id in app_ids:
+        app = Application.query.get(app_id)
+        if not app:
+            skipped.append(app_id)
+            continue
+        if not _can_edit_app(user, app):
+            skipped.append(app_id)
+            continue
+
+        if req_project_id is None:
+            # Explicit unassign.
+            app.project_id = None
+            app.environment_id = None
+            updated.append(app)
+            continue
+
+        # Validate the project belongs to THIS app's workspace.
+        project = Project.query.get(req_project_id)
+        if project is None or project.workspace_id != app.workspace_id:
+            # Invalid for this app → drop the assignment (unassign), never error.
+            app.project_id = None
+            app.environment_id = None
+            updated.append(app)
+            continue
+
+        # Validate the environment belongs to the resolved project.
+        environment_id = req_environment_id
+        if environment_id is not None:
+            env = Environment.query.get(environment_id)
+            if env is None or env.project_id != project.id:
+                environment_id = None
+
+        app.project_id = project.id
+        app.environment_id = environment_id
+        updated.append(app)
+
+    db.session.commit()
+
+    return jsonify({
+        'message': f'Updated {len(updated)} application(s)',
+        'apps': [a.to_dict() for a in updated],
+        'skipped': skipped,
+    }), 200
+
+
+def _resolve_project_env(data, workspace_id):
+    """Validate optional project_id/environment_id from a create payload against
+    the app's workspace. Returns (project_id, environment_id) with invalid values
+    silently ignored (set to None), so a bad/foreign id can never break a create.
+
+    - project must belong to `workspace_id`.
+    - environment must belong to that project; if an environment is supplied
+      without a project, its parent project is used (still workspace-checked).
+    """
+    from app.models.project import Project
+    from app.models.environment import Environment
+
+    def _as_int(v):
+        if v in (None, '', 'null'):
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    project_id = _as_int(data.get('project_id'))
+    environment_id = _as_int(data.get('environment_id'))
+    if project_id is None and environment_id is None:
+        return None, None
+
+    env = None
+    if environment_id is not None:
+        env = Environment.query.get(environment_id)
+        if env is None:
+            environment_id = None
+        elif project_id is None:
+            project_id = env.project_id
+
+    project = Project.query.get(project_id) if project_id is not None else None
+    if project is None or project.workspace_id != workspace_id:
+        # No valid project in this workspace -> drop both.
+        return None, None
+
+    # Environment must belong to the resolved project.
+    if env is not None and env.project_id != project.id:
+        environment_id = None
+    return project.id, environment_id
+
+
+def _resolve_ingress_plane(data, app_type, managed_by=None):
+    """Resolve the ingress plane ('nginx' | 'proxy_stack') for a new app.
+
+    Defaults to host Nginx. A requested 'proxy_stack' is only honored for
+    container-based services; for every other type it falls back to nginx, so
+    the boundary between the two reverse proxies stays explicit and a PHP/
+    WordPress/static/Python app can never be tagged for a Dockerized proxy.
+    """
+    from app.utils.ingress import normalize_ingress_plane
+    return normalize_ingress_plane(data.get('ingress_plane'), app_type, managed_by)
+
+
 def _can_access_app(user, app):
     """Read access (#33 ACL) — delegates to the shared seam."""
     from app.services.resource_grant_service import ResourceGrantService
@@ -440,6 +583,25 @@ def get_app(app_id):
 
     # Single app requests include linked app info by default
     return jsonify({'app': _attach_deploy_config(app.to_dict(include_linked=True))}), 200
+
+
+@apps_bp.route('/<int:app_id>/compose-services', methods=['GET'])
+@jwt_required()
+def get_compose_services(app_id):
+    """List the compose service names for an app.
+
+    Lets the env-var editor offer a per-service targeting choice. Empty for
+    non-compose apps or when the base compose can't be read.
+    """
+    user = User.query.get(get_jwt_identity())
+    app = Application.query.get(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    if not _can_access_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
+
+    from app.services.compose_env_service import ComposeEnvService
+    return jsonify({'services': ComposeEnvService.list_services(app)}), 200
 
 
 # ---- Per-resource access grants (#33 per-site ACL): share an app with a user ----
@@ -524,6 +686,11 @@ def create_app_from_repository():
     dockerfile_path = (data.get('dockerfile_path') or '').strip() or None
     custom_build_cmd = (data.get('custom_build_cmd') or '').strip() or None
     custom_start_cmd = (data.get('custom_start_cmd') or '').strip() or None
+    # Build-pack plan/overrides (optional). Provided by the detection step in the
+    # New Service wizard. Persisted on the Application so the generated Dockerfile
+    # is reproducible and the Build tab can render the plan.
+    buildpack_plan = data.get('buildpack_plan') if isinstance(data.get('buildpack_plan'), dict) else None
+    buildpack_overrides = data.get('buildpack_overrides') if isinstance(data.get('buildpack_overrides'), dict) else None
 
     if not name or len(name) < 2:
         return jsonify({'error': 'Service name must be at least 2 characters'}), 400
@@ -606,6 +773,27 @@ def create_app_from_repository():
     custom_build_cmd = custom_build_cmd or recommended.get('custom_build_cmd')
     custom_start_cmd = custom_start_cmd or recommended.get('custom_start_cmd')
 
+    # When the build method routes through the build-pack layer, persist the
+    # (possibly overridden) plan on the Application so the generated Dockerfile is
+    # reproducible. Detect from the freshly-cloned source if no plan was supplied.
+    buildpack_type = None
+    if resolved_build_method in ('nixpacks', 'auto'):
+        from app.services.buildpack_service import BuildpackService
+        effective_plan = buildpack_plan or BuildpackService.detect(app_path)
+        if buildpack_overrides:
+            effective_plan = BuildpackService.apply_overrides(effective_plan, buildpack_overrides)
+        buildpack_plan = effective_plan
+        buildpack_type = (effective_plan or {}).get('builder')
+
+    # Optional Project / Environment assignment. Validated against the resolved
+    # workspace; invalid/foreign ids are silently dropped (non-breaking).
+    from app.services.workspace_service import WorkspaceService
+    _ws_id = WorkspaceService.resolve_workspace_id(
+        user, request.headers.get('X-Workspace-Id') or request.args.get('workspace_id'))
+    if _ws_id is None:
+        _ws_id = WorkspaceService.ensure_default_workspace().id
+    project_id, environment_id = _resolve_project_env(data, _ws_id)
+
     app = Application(
         name=name,
         app_type=resolved_app_type,
@@ -613,6 +801,12 @@ def create_app_from_repository():
         root_path=app_path,
         user_id=current_user_id,
         port=port,
+        buildpack_type=buildpack_type,
+        buildpack_plan=json.dumps(buildpack_plan) if buildpack_plan else None,
+        buildpack_overrides=json.dumps(buildpack_overrides) if buildpack_overrides else None,
+        ingress_plane=_resolve_ingress_plane(data, resolved_app_type),
+        project_id=project_id,
+        environment_id=environment_id,
     )
 
     try:
@@ -636,6 +830,8 @@ def create_app_from_repository():
             dockerfile_path=dockerfile_path,
             custom_build_cmd=custom_build_cmd,
             custom_start_cmd=custom_start_cmd,
+            buildpack_plan=buildpack_plan,
+            buildpack_overrides=buildpack_overrides,
         )
         if not build_result.get('success'):
             raise RuntimeError(build_result.get('error', 'Failed to configure build'))
@@ -698,6 +894,8 @@ def create_app():
     if ws_id is None:
         ws_id = WorkspaceService.ensure_default_workspace().id
 
+    project_id, environment_id = _resolve_project_env(data, ws_id)
+
     app = Application(
         name=name,
         app_type=app_type,
@@ -711,8 +909,11 @@ def create_app():
         compose_file=data.get('compose_file'),
         systemd_unit=data.get('systemd_unit'),
         managed_by=data.get('managed_by'),
+        ingress_plane=_resolve_ingress_plane(data, app_type, data.get('managed_by')),
         user_id=current_user_id,
-        workspace_id=ws_id
+        workspace_id=ws_id,
+        project_id=project_id,
+        environment_id=environment_id,
     )
 
     db.session.add(app)
@@ -781,6 +982,8 @@ def create_manual_app():
     if ws_id is None:
         ws_id = WorkspaceService.ensure_default_workspace().id
 
+    project_id, environment_id = _resolve_project_env(data, ws_id)
+
     app = Application(
         name=name,
         app_type=app_type,
@@ -790,8 +993,11 @@ def create_manual_app():
         compose_file=compose_file,
         systemd_unit=systemd_unit,
         managed_by=managed_by,
+        ingress_plane=_resolve_ingress_plane(data, app_type, managed_by),
         user_id=current_user_id,
         workspace_id=ws_id,
+        project_id=project_id,
+        environment_id=environment_id,
     )
 
     db.session.add(app)
@@ -897,6 +1103,7 @@ def upload_app_archive():
             app.root_path = current_dir
             app.updated_at = datetime.utcnow()
         else:
+            project_id, environment_id = _resolve_project_env(request.form, ws_id)
             app = Application(
                 name=name,
                 app_type=detected,
@@ -905,10 +1112,16 @@ def upload_app_archive():
                 root_path=current_dir,
                 compose_file=compose_file,
                 managed_by='docker_compose' if detected == 'docker' else None,
+                ingress_plane=_resolve_ingress_plane(
+                    request.form, detected,
+                    'docker_compose' if detected == 'docker' else None,
+                ),
                 version=new_version,
                 upload_path=upload_archive_path,
                 user_id=current_user_id,
                 workspace_id=ws_id,
+                project_id=project_id,
+                environment_id=environment_id,
             )
             db.session.add(app)
 

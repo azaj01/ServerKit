@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.middleware.rbac import get_current_user
+from app.middleware.api_scope_middleware import SCOPES, require_scope
 from app.services.api_key_service import ApiKeyService
 from app.services.audit_service import AuditService
 from app.models.audit_log import AuditLog
@@ -10,8 +11,16 @@ from app.models.audit_log import AuditLog
 api_keys_bp = Blueprint('api_keys', __name__)
 
 
+@api_keys_bp.route('/scopes', methods=['GET'])
+@jwt_required()
+def list_scopes():
+    """Return the canonical catalog of assignable API key scopes."""
+    return jsonify({'scopes': SCOPES})
+
+
 @api_keys_bp.route('/', methods=['GET'])
 @jwt_required()
+@require_scope('read')
 def list_keys():
     """List the current user's API keys."""
     user = get_current_user()

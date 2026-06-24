@@ -29,6 +29,11 @@ class NginxService:
     SITES_ENABLED = os.path.join(NGINX_CONF_DIR, 'sites-enabled')
     NGINX_BIN = os.environ.get('NGINX_BIN', '/usr/sbin/nginx')
     LOCATIONS_DIR = os.path.join(NGINX_CONF_DIR, 'serverkit-locations')
+    # Per-site log directory. Must stay in sync with the access_log/error_log
+    # paths hard-coded in the site templates below. site_access_log_path() is the
+    # single source of truth consumers should use (e.g. the fail2ban jail layer
+    # watches this exact file), so the path can never drift from what nginx writes.
+    LOG_DIR = '/var/log/nginx'
 
     # Templates
     PHP_SITE_TEMPLATE = '''server {{
@@ -530,6 +535,21 @@ location /p/ {{
         )
         redirect = cls.SSL_REDIRECT_TEMPLATE.format(domains=domains)
         return redirect + '\n' + https_config
+
+    @classmethod
+    def site_access_log_path(cls, name: str) -> str:
+        """Path of the per-site nginx access log for site ``name`` — the same
+        ``/var/log/nginx/{name}.access.log`` the site templates write. This is the
+        canonical accessor so consumers (e.g. the fail2ban brute-force jail) never
+        hard-code the path and it can't drift from the generated vhost. Always a
+        POSIX path (these are Linux server logs), independent of the panel's OS."""
+        return f'{cls.LOG_DIR}/{name}.access.log'
+
+    @classmethod
+    def site_error_log_path(cls, name: str) -> str:
+        """Path of the per-site nginx error log for site ``name`` (companion to
+        :meth:`site_access_log_path`)."""
+        return f'{cls.LOG_DIR}/{name}.error.log'
 
     @classmethod
     def enable_site(cls, name: str) -> Dict:

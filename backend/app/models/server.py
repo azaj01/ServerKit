@@ -96,6 +96,15 @@ class Server(db.Model):
     last_seen = db.Column(db.DateTime)
     last_error = db.Column(db.Text)
 
+    # Onboarding lifecycle (separate from the flat `status` above). Tracks the
+    # provisioning state machine: pending -> validating ->
+    # installing_prerequisites -> installing_docker -> pairing_agent -> ready
+    # (or failed). `onboarding_progress` mirrors the latest log rows as JSON for
+    # cheap reads; the authoritative history is in server_onboarding_logs.
+    onboarding_state = db.Column(db.String(40), nullable=True, default='pending')
+    onboarding_progress = db.Column(db.Text, nullable=True)  # JSON snapshot of recent steps
+    onboarding_updated_at = db.Column(db.DateTime, nullable=True)
+
     # Agent Info
     agent_version = db.Column(db.String(20))
     agent_id = db.Column(db.String(36), unique=True, index=True)  # Agent's UUID
@@ -392,6 +401,21 @@ class Server(db.Model):
 
         return True
 
+    def _onboarding_progress_list(self):
+        """Decode the cached onboarding_progress JSON snapshot to a list.
+
+        Returns an empty list when unset or malformed so the API/UI never
+        crash on legacy/partial data.
+        """
+        if not self.onboarding_progress:
+            return []
+        try:
+            import json
+            data = json.loads(self.onboarding_progress)
+            return data if isinstance(data, list) else []
+        except (TypeError, ValueError):
+            return []
+
     def to_dict(self, include_metrics=False):
         result = {
             'id': self.id,
@@ -406,6 +430,9 @@ class Server(db.Model):
             'status': self.status,
             'last_seen': self.last_seen.isoformat() if self.last_seen else None,
             'last_error': self.last_error,
+            'onboarding_state': self.onboarding_state,
+            'onboarding_progress': self._onboarding_progress_list(),
+            'onboarding_updated_at': self.onboarding_updated_at.isoformat() if self.onboarding_updated_at else None,
             'agent_version': self.agent_version,
             'agent_id': self.agent_id,
             'os_type': self.os_type,

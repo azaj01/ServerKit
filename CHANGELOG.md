@@ -20,6 +20,39 @@ awaiting a stable release:
 
 ### Added
 
+- **Container status aggregator** — collapses an app's per-container Docker
+  states into one deterministic status (`running:healthy` … `degraded` …
+  `unknown`) at `/api/v1/status/app/<id>` and `/api/v1/status/apps`, with
+  change-only pushes over the `container_status` Socket.IO channel.
+- **API token scopes** — fine-grained, additive scopes for API keys (enforced
+  only for `X-API-Key` requests; JWT/session callers stay RBAC-governed), a
+  `require_scope` decorator, and a scope catalog at `/api/v1/api-keys/scopes`.
+- **Server onboarding state machine** — a linear lifecycle (validating →
+  installing prerequisites → installing Docker → pairing agent → ready/failed)
+  driven on the job bus, with start/retry/status at
+  `/api/v1/servers/<id>/onboarding/*` and an ordered progress log.
+- **Declarative template catalog** — a documented catalog schema
+  (`/api/v1/templates/catalog/schema`) with auto-resolved `${SERVICE_*}` magic
+  variables (password/user/FQDN/URL/base64) so templates never hardcode generated
+  secrets or hosts. See [docs/TEMPLATE_CATALOG_SCHEMA.md](docs/TEMPLATE_CATALOG_SCHEMA.md).
+- **Build packs** — zero-Dockerfile detection that inspects a repo and generates
+  a Dockerfile + compose from a build plan (`/api/v1/buildpacks/detect`,
+  `/generate`), persisted on the application row; defers to an author-provided
+  Dockerfile when present.
+- **Deployment config snapshots** — immutable, secret-masked config snapshots
+  captured before each deploy, with diff and one-click restore + redeploy at
+  `/api/v1/apps/<id>/snapshots[/<id>/diff|/restore]`.
+- **Projects & Environments** — a Workspace → Project → Environment → Apps
+  hierarchy (`/api/v1/projects`, `/api/v1/environments`) with workspace-scoped
+  access and resource counts.
+- **Shared resources** — polymorphic tags and attachable shared variable groups
+  with a merged "resolved" view and masked secrets (`/api/v1/shared/...`).
+- **PR preview environments** — ephemeral previews driven by a pull-request
+  webhook (`/api/v1/webhooks/pull-request/<token>`) that open, redeploy, and tear
+  down per PR, managed at `/api/v1/apps/<id>/previews`.
+- **Per-server managed proxy stack** — opt-in Dockerized Traefik or Caddy per
+  server with a compose preview before switching, host nginx remaining the
+  default (`/api/v1/servers/<id>/proxy*`).
 - **Multi-platform agent & fleet management** — native Go agent for Linux,
   Windows, and macOS with HMAC-SHA256 auth and WebSocket + HTTP-poll transports,
   plus a fleet dashboard (inventory, connection status, approval queue,

@@ -10,6 +10,7 @@ export const SERVER_TABS = [
     { to: '/servers', label: 'Servers', end: true, icon: <Server size={15} /> },
     { to: '/fleet', label: 'Agent Fleet', icon: <Users size={15} /> },
     { to: '/fleet-monitor', label: 'Fleet Monitor', icon: <Activity size={15} /> },
+    { to: '/fleet-proxy', label: 'Fleet Proxy', icon: <Network size={15} /> },
     { to: '/cloud', label: 'Cloud Servers', icon: <Cloud size={15} /> },
     { to: '/remote-access', label: 'Remote Access', icon: <Network size={15} /> },
     { to: '/server-templates', label: 'Config Templates', icon: <FileCog size={15} /> },

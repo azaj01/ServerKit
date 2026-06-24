@@ -1065,18 +1065,20 @@ const SecurityTab = ({ siteId }) => {
     const [debug, setDebug] = useState(null);
     const [cron, setCron] = useState(null);
     const [vulns, setVulns] = useState(null);
+    const [brute, setBrute] = useState(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
 
     const loadAll = React.useCallback(async () => {
         try {
-            const [i, d, c, v] = await Promise.all([
+            const [i, d, c, v, b] = await Promise.all([
                 wordpressApi.getIntegrity(siteId).catch(() => null),
                 wordpressApi.getDebug(siteId).catch(() => null),
                 wordpressApi.getCron(siteId).catch(() => null),
                 wordpressApi.getVulnerabilities(siteId).catch(() => null),
+                wordpressApi.getBruteForce(siteId).catch(() => null),
             ]);
-            setIntegrity(i); setDebug(d); setCron(c); setVulns(v);
+            setIntegrity(i); setDebug(d); setCron(c); setVulns(v); setBrute(b);
         } finally {
             setLoading(false);
         }
@@ -1122,6 +1124,26 @@ const SecurityTab = ({ siteId }) => {
         catch (err) { toast.error(err.message || 'Failed to update WP-Cron'); }
         finally { setBusy(false); }
     }
+    async function toggleBrute() {
+        const wasEnabled = brute?.enabled;
+        setBusy(true);
+        try {
+            const res = await wordpressApi.setBruteForce(siteId, !wasEnabled);
+            if (res.success === false) { toast.error(res.error || 'Failed to update protection'); return; }
+            setBrute(await wordpressApi.getBruteForce(siteId));
+            toast.success(wasEnabled ? 'Brute-force protection disabled' : 'Brute-force protection enabled');
+        } catch (err) { toast.error(err.message || 'Failed to update protection'); }
+        finally { setBusy(false); }
+    }
+    async function unbanIp(ip) {
+        setBusy(true);
+        try {
+            const res = await wordpressApi.unbanBruteForceIp(siteId, ip);
+            toast[res.success ? 'success' : 'error'](res.success ? `Unbanned ${ip}` : (res.error || 'Failed to unban'));
+            setBrute(await wordpressApi.getBruteForce(siteId));
+        } catch (err) { toast.error(err.message || 'Failed to unban'); }
+        finally { setBusy(false); }
+    }
 
     if (loading) return <OverviewGridSkeleton panels={2} />;
 
@@ -1150,6 +1172,11 @@ const SecurityTab = ({ siteId }) => {
             detail: vulns?.scanned_at
                 ? `${(vsum.critical ?? 0) + (vsum.high ?? 0)} found`
                 : 'no scan yet',
+        },
+        {
+            label: 'Login brute-force protection',
+            state: brute?.available === false ? 'unknown' : (brute?.enabled ? 'pass' : 'fail'),
+            detail: brute?.available === false ? 'fail2ban unavailable' : (brute?.enabled ? 'jail active' : 'not protected'),
         },
     ];
     const scored = checks.filter(c => c.state !== 'unknown');
@@ -1228,6 +1255,41 @@ const SecurityTab = ({ siteId }) => {
                             <Button variant="outline" size="sm" onClick={toggleCron} disabled={busy}>{cron?.disabled ? 'Enable WP-Cron' : 'Disable WP-Cron'}</Button>
                         </div>
                         <p className="hint">Disable WP-Cron only if a real system cron hits wp-cron.php — otherwise scheduled tasks (publishing, updates) will not run.</p>
+                    </div>
+                </div>
+
+                <div className="app-panel">
+                    <div className="app-panel-header">Brute-force protection</div>
+                    <div className="app-panel-body">
+                        {brute?.available === false ? (
+                            <p className="hint">Fail2ban isn’t installed on this server, so login brute-force protection is inactive. Install it from the <strong>Security → Fail2ban</strong> page to enable per-site jails.</p>
+                        ) : (
+                            <>
+                                <div className="app-info-grid">
+                                    <div className="app-info-item"><span className="app-info-label">Login jail</span><span className="app-info-value"><Pill kind={brute?.enabled ? 'green' : 'gray'}>{brute?.enabled ? 'active' : 'off'}</Pill></span></div>
+                                    <div className="app-info-item"><span className="app-info-label">Currently banned</span><span className="app-info-value">{brute?.currently_banned ?? 0}</span></div>
+                                    <div className="app-info-item"><span className="app-info-label">Total bans</span><span className="app-info-value">{brute?.total_banned ?? 0}</span></div>
+                                </div>
+                                <div className="app-detail-actions">
+                                    <Button variant="outline" size="sm" onClick={toggleBrute} disabled={busy}>{brute?.enabled ? 'Disable protection' : 'Enable protection'}</Button>
+                                </div>
+                                {(brute?.banned_ips?.length > 0) && (
+                                    <div className="wp-banlist">
+                                        {brute.banned_ips.map(ip => (
+                                            <div key={ip} className="wp-banlist__row">
+                                                <span className="wp-banlist__ip">{ip}</span>
+                                                <Button variant="ghost" size="sm" onClick={() => unbanIp(ip)} disabled={busy}>Unban</Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <p className="hint">
+                                    Bans IPs that repeatedly POST to <code>wp-login.php</code> or <code>xmlrpc.php</code>
+                                    {brute?.thresholds ? ` (${brute.thresholds.maxretry} attempts / ${Math.round(brute.thresholds.findtime / 60)} min → ${Math.round(brute.thresholds.bantime / 60)} min ban)` : ''}.
+                                    {brute?.available && brute?.fail2ban_running === false ? ' Fail2ban is installed but not running — start it on the Security page.' : ''}
+                                </p>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

@@ -1405,6 +1405,30 @@
         overflow-wrap: anywhere;
     }
 
+    // ---- Brute-force jail: banned-IP rows with an inline Unban action ----
+    .wp-banlist {
+        margin-top: $space-3;
+        border: 1px solid var(--border-soft);
+        border-radius: $radius-md;
+        overflow: hidden;
+    }
+    .wp-banlist__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-3;
+        padding: 8px $space-4;
+
+        & + & {
+            border-top: 1px solid var(--border-soft);
+        }
+    }
+    .wp-banlist__ip {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--text-code);
+    }
+
     // ---- Run-history / incident rows (Updates + Reports) ----
     .wp-run-row {
         display: flex;

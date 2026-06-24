@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Pill } from '@/components/ds/Pill';
 
 const ApiSettingsTab = () => {
     const { isAdmin } = useAuth();
@@ -95,6 +96,7 @@ const ApiKeysSection = () => {
                             <tr>
                                 <th>Name</th>
                                 <th>Key</th>
+                                <th>Scopes</th>
                                 <th>Tier</th>
                                 <th>Last Used</th>
                                 <th>Status</th>
@@ -106,6 +108,24 @@ const ApiKeysSection = () => {
                                 <tr key={key.id}>
                                     <td className="api-settings__key-name">{key.name}</td>
                                     <td><code className="api-settings__key-prefix">{key.key_prefix}...</code></td>
+                                    <td>
+                                        <div className="api-settings__scopes">
+                                            {(!key.scopes || key.scopes.length === 0) ? (
+                                                <span className="api-settings__muted">None</span>
+                                            ) : key.scopes.includes('*') ? (
+                                                <Pill kind="violet">Full access</Pill>
+                                            ) : (
+                                                <>
+                                                    {key.scopes.slice(0, 3).map(s => (
+                                                        <Pill key={s} kind="cyan" dot={false}>{s}</Pill>
+                                                    ))}
+                                                    {key.scopes.length > 3 && (
+                                                        <Pill kind="gray" dot={false}>+{key.scopes.length - 3}</Pill>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td>
                                         <Badge variant="outline">{key.tier}</Badge>
                                     </td>

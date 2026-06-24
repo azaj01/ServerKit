@@ -17,6 +17,11 @@ metric_subscribers = set()
 metric_thread = None
 metric_stop_event = threading.Event()
 
+# Store active aggregated container-status subscriptions
+container_status_subscribers = set()
+container_status_thread = None
+container_status_stop_event = threading.Event()
+
 # Store active build subscriptions
 build_subscribers = {}  # sid -> app_id
 build_log_queues = {}  # app_id -> queue
@@ -121,6 +126,10 @@ def handle_disconnect():
     if sid in metric_subscribers:
         metric_subscribers.remove(sid)
 
+    # Remove from container-status subscribers
+    if sid in container_status_subscribers:
+        container_status_subscribers.remove(sid)
+
     # Stop any log streams for this client
     log_streamer.stop_stream(sid)
 
@@ -173,6 +182,70 @@ def broadcast_metrics():
             print(f"Error broadcasting metrics: {e}")
 
         time.sleep(2)  # Update every 2 seconds
+
+
+# ==================== AGGREGATED CONTAINER STATUS ====================
+
+@socketio.on('subscribe_container_status')
+def handle_subscribe_container_status():
+    """Subscribe to aggregated container-status change events.
+
+    Mirrors the metrics pattern: a single background thread polls the
+    aggregator and broadcasts ONLY the apps whose status changed since the last
+    tick (channel 'container_status'). Clients reconcile by app_id.
+    """
+    global container_status_thread, container_status_stop_event
+
+    sid = request.sid
+    container_status_subscribers.add(sid)
+
+    if container_status_thread is None or not container_status_thread.is_alive():
+        container_status_stop_event.clear()
+        container_status_thread = threading.Thread(
+            target=broadcast_container_status,
+            args=(current_app._get_current_object(),),
+            daemon=True,
+        )
+        container_status_thread.start()
+
+    emit('subscribed', {'channel': 'container_status'})
+
+
+@socketio.on('unsubscribe_container_status')
+def handle_unsubscribe_container_status():
+    """Unsubscribe from aggregated container-status events."""
+    sid = request.sid
+    if sid in container_status_subscribers:
+        container_status_subscribers.remove(sid)
+    emit('unsubscribed', {'channel': 'container_status'})
+
+
+def broadcast_container_status(flask_app):
+    """Broadcast changed aggregated container statuses to all subscribers.
+
+    Runs in a background thread for as long as there are subscribers. Each tick
+    asks the aggregator for the deltas (it keeps the last-emitted snapshot in
+    memory) and emits only those. Defensive: any Docker/DB error is swallowed so
+    the loop survives a transient outage. Needs an app context because the
+    aggregator touches the ORM.
+    """
+    global container_status_stop_event
+
+    from app.services import container_status_service as css
+
+    while not container_status_stop_event.is_set() and container_status_subscribers:
+        try:
+            with flask_app.app_context():
+                changed = css.get_changed_app_statuses()
+            if changed:
+                socketio.emit('container_status', {
+                    'statuses': changed,
+                    'timestamp': time.time(),
+                }, room=None)
+        except Exception as e:
+            print(f"Error broadcasting container status: {e}")
+
+        time.sleep(5)  # Re-evaluate every 5 seconds
 
 
 @socketio.on('subscribe_terminal')

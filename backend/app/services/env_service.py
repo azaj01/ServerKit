@@ -5,9 +5,16 @@ Handles CRUD operations for application environment variables,
 including encryption, history tracking, and .env file operations.
 """
 
+import logging
 import re
 from app import db
 from app.models import Application, EnvironmentVariable, EnvironmentVariableHistory
+
+logger = logging.getLogger(__name__)
+
+# Sentinel so callers can distinguish "leave target_service unchanged" (default)
+# from "clear it to all-services" (None) on update.
+_UNSET = object()
 
 
 class EnvService:
@@ -37,6 +44,106 @@ class EnvService:
         return [ev.to_dict(include_value=True, mask_secrets=mask_secrets) for ev in env_vars]
 
     @staticmethod
+    def get_effective_env(application_id):
+        """Resolve the environment an app's container should actually receive.
+
+        Merges, lowest → highest precedence:
+
+            shared variable groups (workspace < project < environment < direct)
+                < the app's own local environment variables
+
+        So a key set both in a shared group and locally yields the LOCAL value
+        (matching the "Set locally — local value applies" hint in the UI), and
+        shared groups fill in everything the app doesn't define itself.
+
+        Returns a plain ``{key: value}`` dict with secrets DECRYPTED — this is
+        the value injected into the running container, so callers must treat it
+        as sensitive. Shared resolution is best-effort: if it fails, the app's
+        local env vars are still returned so a deploy is never blocked.
+        """
+        app = Application.query.get(application_id)
+        if not app:
+            return {}
+
+        merged = {}
+
+        # 1) Shared variable groups — the base layer (lowest precedence).
+        try:
+            from app.services.shared_resource_service import SharedResourceService
+            context = {
+                # scope_id is stored as a string when groups are created, so
+                # coerce the app's numeric ids to match on lookup.
+                'workspace_id': str(app.workspace_id) if app.workspace_id is not None else None,
+                'project_id': str(app.project_id) if app.project_id is not None else None,
+                'environment_id': str(app.environment_id) if app.environment_id is not None else None,
+            }
+            resolved = SharedResourceService.resolve_hierarchical(
+                'application', application_id, context=context,
+                mask_secrets=False, interpolate=True,
+            )
+            for entry in resolved or []:
+                key = entry.get('key')
+                if key:
+                    merged[key] = entry.get('value')
+        except Exception as e:  # best-effort — never block a deploy on shared vars
+            logger.warning('Shared variable resolution failed for app %s: %s', application_id, e)
+
+        # 2) Local env vars — the override layer (highest precedence wins).
+        for ev in EnvironmentVariable.query.filter_by(application_id=application_id).all():
+            merged[ev.key] = ev.value  # decrypted via the model's `value` property
+
+        return merged
+
+    @staticmethod
+    def get_effective_env_for_services(application_id, service_names):
+        """Per-service effective env for a compose app.
+
+        For each service in ``service_names`` returns the merged ``{key: value}``
+        it should receive: variables targeting all services (``target_service``
+        NULL) plus variables targeting that specific service, with the app's own
+        local env vars overriding shared variable groups. Variables targeted at a
+        *different* service are excluded for that service.
+
+        Returns ``{service_name: {key: value}}`` (decrypted). Best-effort — shared
+        resolution failures fall back to local vars and never block a deploy.
+        """
+        app = Application.query.get(application_id)
+        if not app or not service_names:
+            return {}
+
+        context = {
+            'workspace_id': str(app.workspace_id) if app.workspace_id is not None else None,
+            'project_id': str(app.project_id) if app.project_id is not None else None,
+            'environment_id': str(app.environment_id) if app.environment_id is not None else None,
+        }
+        local_vars = EnvironmentVariable.query.filter_by(application_id=application_id).all()
+
+        result = {}
+        for svc in service_names:
+            env = {}
+            # Shared groups applicable to this service (NULL-target + this svc).
+            try:
+                from app.services.shared_resource_service import SharedResourceService
+                resolved = SharedResourceService.resolve_hierarchical(
+                    'application', application_id, context=context,
+                    mask_secrets=False, interpolate=True, service=svc,
+                )
+                for entry in resolved or []:
+                    key = entry.get('key')
+                    if key:
+                        env[key] = entry.get('value')
+            except Exception as e:  # best-effort
+                logger.warning('Shared resolution failed for app %s svc %s: %s',
+                               application_id, svc, e)
+            # Local vars override; include all-services + this-service targets.
+            for ev in local_vars:
+                tgt = ev.target_service
+                if tgt in (None, '') or tgt == svc:
+                    env[ev.key] = ev.value
+            result[svc] = env
+        return result
+
+    @staticmethod
     def get_env_var(application_id, key):
         """Get a single environment variable by key."""
         return EnvironmentVariable.query.filter_by(
@@ -50,15 +157,22 @@ class EnvService:
         return EnvironmentVariable.query.get(env_var_id)
 
     @staticmethod
-    def set_env_var(application_id, key, value, is_secret=False, description=None, user_id=None):
+    def set_env_var(application_id, key, value, is_secret=False, description=None,
+                    user_id=None, target_service=_UNSET):
         """
         Set an environment variable (create or update).
         Returns (env_var, created, error)
+
+        ``target_service`` scopes the var to one compose service (None = all
+        services). Left unset on update, the existing target is preserved.
         """
         # Validate key
         valid, error = EnvService.validate_key(key)
         if not valid:
             return None, False, error
+
+        # Normalize an empty target to "all services" (None).
+        norm_target = None if target_service in ('', _UNSET) else target_service
 
         # Check if application exists
         app = Application.query.get(application_id)
@@ -75,6 +189,8 @@ class EnvService:
             existing.is_secret = is_secret
             if description is not None:
                 existing.description = description
+            if target_service is not _UNSET:
+                existing.target_service = norm_target
 
             # Record history
             EnvironmentVariableHistory.record_change(
@@ -90,6 +206,7 @@ class EnvService:
                 key=key,
                 is_secret=is_secret,
                 description=description,
+                target_service=norm_target,
                 created_by=user_id
             )
             env_var.value = value

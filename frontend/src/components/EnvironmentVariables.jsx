@@ -19,12 +19,17 @@ const EnvironmentVariables = ({ appId }) => {
     const [newValue, setNewValue] = useState('');
     const [newIsSecret, setNewIsSecret] = useState(false);
     const [newDescription, setNewDescription] = useState('');
+    const [newTargetService, setNewTargetService] = useState('');
+
+    // Compose service targeting (empty list => single-container app, hide selector)
+    const [composeServices, setComposeServices] = useState([]);
 
     // UI state
     const [showValues, setShowValues] = useState({});
     const [allVisible, setAllVisible] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editValue, setEditValue] = useState('');
+    const [editTargetService, setEditTargetService] = useState('');
     const [showImportModal, setShowImportModal] = useState(false);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [importContent, setImportContent] = useState('');
@@ -36,7 +41,18 @@ const EnvironmentVariables = ({ appId }) => {
 
     useEffect(() => {
         loadEnvVars();
+        loadComposeServices();
     }, [appId]);
+
+    async function loadComposeServices() {
+        try {
+            const data = await api.getComposeServices(appId);
+            setComposeServices(data.services || []);
+        } catch {
+            // Non-compose apps or errors: keep single-container UX (no selector).
+            setComposeServices([]);
+        }
+    }
 
     async function loadEnvVars() {
         try {
@@ -60,12 +76,13 @@ const EnvironmentVariables = ({ appId }) => {
 
         setSaving(true);
         try {
-            await api.createEnvVar(appId, newKey.trim(), newValue, newIsSecret, newDescription || null);
+            await api.createEnvVar(appId, newKey.trim(), newValue, newIsSecret, newDescription || null, newTargetService || null);
             toast.success('Environment variable added');
             setNewKey('');
             setNewValue('');
             setNewIsSecret(false);
             setNewDescription('');
+            setNewTargetService('');
             loadEnvVars();
         } catch (err) {
             toast.error(err.message || 'Failed to add environment variable');
@@ -79,10 +96,17 @@ const EnvironmentVariables = ({ appId }) => {
 
         setSaving(true);
         try {
-            await api.updateEnvVar(appId, key, { value: editValue });
+            const payload = { value: editValue };
+            // Only thread target_service through for compose apps. Empty string
+            // clears the var back to all-services; a name targets one service.
+            if (composeServices.length > 0) {
+                payload.target_service = editTargetService || '';
+            }
+            await api.updateEnvVar(appId, key, payload);
             toast.success('Environment variable updated');
             setEditingId(null);
             setEditValue('');
+            setEditTargetService('');
             loadEnvVars();
         } catch (err) {
             toast.error(err.message || 'Failed to update environment variable');
@@ -136,11 +160,13 @@ const EnvironmentVariables = ({ appId }) => {
     function startEditing(envVar) {
         setEditingId(envVar.id);
         setEditValue(envVar.value);
+        setEditTargetService(envVar.target_service || '');
     }
 
     function cancelEditing() {
         setEditingId(null);
         setEditValue('');
+        setEditTargetService('');
     }
 
     async function handleExport(includeSecrets = true) {
@@ -310,13 +336,29 @@ const EnvironmentVariables = ({ appId }) => {
                         Add
                     </Button>
                 </div>
-                <Input
-                    type="text"
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    placeholder="Optional description..."
-                    className="env-description-input"
-                />
+                <div className="env-form-meta-row">
+                    <Input
+                        type="text"
+                        value={newDescription}
+                        onChange={(e) => setNewDescription(e.target.value)}
+                        placeholder="Optional description..."
+                        className="env-description-input"
+                    />
+                    {composeServices.length > 0 && (
+                        <label className="env-target-select" title="Inject this variable into a single compose service">
+                            <span className="env-target-select__label">Applies to</span>
+                            <select
+                                value={newTargetService}
+                                onChange={(e) => setNewTargetService(e.target.value)}
+                            >
+                                <option value="">All services</option>
+                                {composeServices.map((svc) => (
+                                    <option key={svc} value={svc}>{svc}</option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
+                </div>
             </form>
 
             {/* Filter */}
@@ -352,6 +394,14 @@ const EnvironmentVariables = ({ appId }) => {
                                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                             </svg>
+                                        </span>
+                                    )}
+                                    {envVar.target_service && (
+                                        <span
+                                            className="env-target-chip"
+                                            title={`Applies only to the "${envVar.target_service}" service`}
+                                        >
+                                            &rarr; {envVar.target_service}
                                         </span>
                                     )}
                                 </span>
@@ -435,6 +485,19 @@ const EnvironmentVariables = ({ appId }) => {
                                             if (e.key === 'Escape') cancelEditing();
                                         }}
                                     />
+                                    {composeServices.length > 0 && (
+                                        <select
+                                            className="env-target-select__control"
+                                            value={editTargetService}
+                                            onChange={(e) => setEditTargetService(e.target.value)}
+                                            title="Inject this variable into a single compose service"
+                                        >
+                                            <option value="">All services</option>
+                                            {composeServices.map((svc) => (
+                                                <option key={svc} value={svc}>{svc}</option>
+                                            ))}
+                                        </select>
+                                    )}
                                     <Button size="sm" onClick={() => handleUpdate(envVar.key)}>
                                         Save
                                     </Button>

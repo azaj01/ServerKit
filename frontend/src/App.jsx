@@ -59,6 +59,10 @@ import ServerTemplates from './pages/ServerTemplates';
 import RemoteAccess from './pages/RemoteAccess';
 import Workspaces from './pages/Workspaces';
 import WorkspaceDetail from './pages/WorkspaceDetail';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
+import SharedVariables from './pages/SharedVariables';
+import FleetProxy from './pages/FleetProxy';
 import CloudflareZoneSettings from './pages/CloudflareZoneSettings';
 import StatusPages from './pages/StatusPages';
 import PublicStatusPage from './pages/PublicStatusPage';
@@ -87,6 +91,9 @@ const PAGE_TITLES = {
     '/setup': 'Setup',
     '/services': 'Services',
     '/services/new': 'New Service',
+    '/projects': 'Projects',
+    '/shared-variables': 'Shared Variables',
+    '/fleet-proxy': 'Fleet Proxy',
     '/apps': 'Applications',
     '/wordpress': 'WordPress Sites',
     '/wordpress/projects': 'WordPress Projects',
@@ -347,6 +354,7 @@ function AppRoutes() {
                     <Route path="servers" element={<Servers />} />
                     <Route path="fleet" element={<AgentFleet />} />
                     <Route path="fleet-monitor" element={<FleetMonitor />} />
+                    <Route path="fleet-proxy" element={<FleetProxy />} />
                     <Route path="cloud" element={<CloudProvision />} />
                     <Route path="remote-access" element={<RemoteAccess />} />
                     <Route path="server-templates" element={<ServerTemplates />} />
@@ -354,6 +362,10 @@ function AppRoutes() {
                 <Route path="servers/:id" element={<ServerDetail />} />
                 <Route path="servers/:id/:tab" element={<ServerDetail />} />
                 <Route path="agent-plugins" element={<Navigate to="/marketplace" replace />} />
+                <Route path="projects" element={<Projects />} />
+                <Route path="projects/:id" element={<ProjectDetail />} />
+                <Route path="projects/:id/:tab" element={<ProjectDetail />} />
+                <Route path="shared-variables" element={<SharedVariables />} />
                 <Route path="workspaces" element={<Workspaces />} />
                 <Route path="workspaces/:id" element={<WorkspaceDetail />} />
                 <Route path="workspaces/:id/:tab" element={<WorkspaceDetail />} />

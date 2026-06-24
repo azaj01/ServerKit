@@ -68,12 +68,22 @@
 @import 'components/_ui';
 @import 'components/_design-system';  // redesign shared primitives (sk-* namespace)
 @import 'components/_system-notices';
+@import 'components/container-status';
+@import 'components/api-key-scopes';
+@import 'components/onboarding-wizard';
+@import 'components/buildpack';
+@import 'components/deployments';
+@import 'components/shared-resources';
+@import 'components/previews';
+@import 'components/proxy';
 
 // --------------------------------------------
 // 5. PAGE-SPECIFIC STYLES
 // --------------------------------------------
 @import 'pages/_auth';
 @import 'pages/_dashboard';
+@import 'pages/projects';
+@import 'pages/fleet-proxy';
 @import 'pages/_applications';
 @import 'pages/_docker';
 @import 'pages/_databases';

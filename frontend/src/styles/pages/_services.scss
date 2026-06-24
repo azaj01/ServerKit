@@ -37,11 +37,58 @@
         }
     }
 
+    // Project / environment badge in the list row. Shows which project (and
+    // optional environment) an app lives in; a subtle "Unassigned" chip otherwise.
+    &__project {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        flex-wrap: wrap;
+    }
+
+    &__project-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: $font-size-sm;
+        color: $text-primary;
+
+        svg { flex-shrink: 0; color: $text-secondary; }
+    }
+
+    &__unassigned {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border: 1px dashed $border-subtle;
+        border-radius: 999px;
+        font-size: 11.5px;
+        color: $text-secondary;
+    }
+
     // Row-level action buttons (start / stop / restart).
     &__actions {
         display: flex;
         gap: $space-1;
         justify-content: flex-end;
+    }
+}
+
+// "Move to project" bulk-action dialog body.
+.services-move {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+    padding: $space-2 0;
+
+    &__field {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
     }
 }
 

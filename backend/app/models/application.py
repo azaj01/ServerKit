@@ -1,6 +1,17 @@
 from datetime import datetime
 from app import db
 
+# Application carries FKs to projects.id / environments.id (opt-in Project /
+# Environment hierarchy). Import those modules here so their tables are always
+# registered on db.Model's metadata whenever Application is loaded, keeping the
+# FK targets resolvable regardless of import order.
+from app.models import project as _project  # noqa: F401
+from app.models import environment as _environment  # noqa: F401
+from app.utils.ingress import (
+    default_ingress_plane as _default_ingress_plane,
+    proxy_eligible as _proxy_eligible,
+)
+
 
 class Application(db.Model):
     __tablename__ = 'applications'
@@ -20,6 +31,13 @@ class Application(db.Model):
     docker_image = db.Column(db.String(200), nullable=True)
     container_id = db.Column(db.String(100), nullable=True)
 
+    # Build packs (zero-Dockerfile deploys). When the build method routes through
+    # the build-pack layer, the detected plan and any user overrides are persisted
+    # here so the generated Dockerfile is reproducible and the UI can show it.
+    buildpack_type = db.Column(db.String(20), nullable=True)   # 'nixpacks' | 'static' | 'dockerfile-present' | 'unknown'
+    buildpack_plan = db.Column(db.Text, nullable=True)         # JSON: the detected build plan
+    buildpack_overrides = db.Column(db.Text, nullable=True)    # JSON: user overrides applied to the plan
+
     # Source / lifecycle: github (repo clone), template (built-in template),
     # manual (local path already on server), upload (zip upload managed by ServerKit)
     source = db.Column(db.String(20), default='github', nullable=False)
@@ -28,6 +46,11 @@ class Application(db.Model):
     compose_file = db.Column(db.String(200), nullable=True)
     systemd_unit = db.Column(db.String(100), nullable=True)
     managed_by = db.Column(db.String(20), nullable=True)  # 'docker_compose', 'systemd'
+
+    # Ingress plane: which reverse proxy is expected to serve this app —
+    # 'nginx' (host Nginx, the default) or 'proxy_stack' (Dockerized
+    # Traefik/Caddy). NULL is treated as the default. See app/utils/ingress.py.
+    ingress_plane = db.Column(db.String(20), nullable=True)
 
     # Upload versioning
     version = db.Column(db.Integer, default=0, nullable=False)
@@ -53,12 +76,21 @@ class Application(db.Model):
     # Workspace scoping (#33). Nullable: existing rows are backfilled to a default
     # workspace by migration 015; new rows are stamped on create.
     workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=True, index=True)
+    # Project / Environment hierarchy (opt-in). Nullable: existing apps stay
+    # "unassigned" and keep working; stamped on create when provided.
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True, index=True)
+    environment_id = db.Column(db.Integer, db.ForeignKey('environments.id'), nullable=True, index=True)
 
     # Relationships
     # Use 'subquery' to eagerly load domains in a single query, avoiding N+1
     domains = db.relationship('Domain', backref='application', lazy='subquery', cascade='all, delete-orphan')
     linked_app = db.relationship('Application', remote_side=[id], backref='linked_from', foreign_keys=[linked_app_id])
     server = db.relationship('Server', backref=db.backref('applications', lazy='dynamic'))
+    # Lightweight, read-only relationships to resolve the project/environment
+    # names in to_dict() (the FK columns above are the source of truth). No
+    # backref/cascade — these only exist so an app row can show where it lives.
+    project = db.relationship('Project', foreign_keys=[project_id], viewonly=True)
+    environment = db.relationship('Environment', foreign_keys=[environment_id], viewonly=True)
 
     def to_dict(self, include_linked=False):
         import json
@@ -73,10 +105,15 @@ class Application(db.Model):
             'root_path': self.root_path,
             'docker_image': self.docker_image,
             'container_id': self.container_id,
+            'buildpack_type': self.buildpack_type,
+            'buildpack_plan': json.loads(self.buildpack_plan) if self.buildpack_plan else None,
+            'buildpack_overrides': json.loads(self.buildpack_overrides) if self.buildpack_overrides else None,
             'source': self.source,
             'compose_file': self.compose_file,
             'systemd_unit': self.systemd_unit,
             'managed_by': self.managed_by,
+            'ingress_plane': self.ingress_plane or _default_ingress_plane(self.app_type, self.managed_by),
+            'ingress_proxy_eligible': _proxy_eligible(self.app_type, self.managed_by),
             'version': self.version,
             'upload_path': self.upload_path,
             'private_slug': self.private_slug,
@@ -91,6 +128,13 @@ class Application(db.Model):
             'user_id': self.user_id,
             'server_id': self.server_id,
             'workspace_id': self.workspace_id,
+            'project_id': self.project_id,
+            'environment_id': self.environment_id,
+            # Derived display names for the project/environment this app lives in
+            # (null when unassigned). Resolved via the viewonly relationships above
+            # and guarded for None so unassigned apps keep working.
+            'project_name': self.project.name if self.project else None,
+            'environment_name': self.environment.name if self.environment else None,
             'server_name': self.server.name if self.server else 'Local server',
             'domains': [d.to_dict() for d in self.domains]
         }

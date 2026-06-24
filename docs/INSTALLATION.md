@@ -11,6 +11,71 @@ To connect additional servers to this panel, install the agent — see the
 [serverkit-agent README](https://github.com/jhd3197/serverkit-agent/blob/main/README.md)
 and [pairing.md](pairing.md). ServerKit is a modern server management panel for managing web applications, databases, Docker containers, and more.
 
+## One-Line Install (Recommended)
+
+```bash
+curl -fsSL https://serverkit.ai/install.sh | sudo bash
+```
+
+The installer provisions Python, Docker, Nginx, SSL (best-effort), and systemd
+services automatically. It uses an atomic blue/green layout: `/opt/serverkit` is
+a symlink to either `/opt/serverkit-a` or `/opt/serverkit-b`, so failed updates
+can roll back instantly.
+
+### Install options
+
+| Variable | Purpose |
+|----------|---------|
+| `PANEL_DOMAIN=panel.example.com` | Set the panel domain and attempt Let's Encrypt |
+| `SERVERKIT_SKIP_SSL=1` | Skip HTTPS/certbot entirely |
+| `INSTALL_FROM_RELEASE=1` | Install from the latest GitHub release tarball instead of cloning source |
+| `SERVERKIT_VERSION=v1.7.0` | Pin a specific release version |
+| `SERVERKIT_OFFLINE_TARBALL=/path/to/...tar.gz` | Use a local tarball instead of downloading |
+| `SERVERKIT_MIRROR_URL=https://mirror.example.com/releases` | Fetch releases/checksums from a private mirror |
+
+Example with a domain:
+
+```bash
+curl -fsSL https://serverkit.ai/install.sh | sudo PANEL_DOMAIN=panel.example.com bash
+```
+
+Example offline install:
+
+```bash
+curl -fsSL https://serverkit.ai/install.sh | \
+  sudo SERVERKIT_OFFLINE_TARBALL=/tmp/serverkit-v1.7.0-linux-amd64.tar.gz bash
+```
+
+## Updating ServerKit
+
+```bash
+sudo serverkit update
+```
+
+The updater runs pre-flight checks, backs up the database, deploys into the
+inactive blue/green slot, runs `flask db upgrade`, switches the symlink
+atomically, and performs a health check. If the health check fails, it rolls
+back to the previous slot automatically.
+
+### Update options
+
+```bash
+sudo serverkit update --dry-run          # preview changes without applying
+sudo serverkit update --force            # force update even if already current
+sudo serverkit update --branch dev       # update from a git branch
+sudo serverkit update --release          # update to the latest release
+sudo serverkit update --release v1.7.0   # pin a release
+```
+
+Offline and mirror updates are also supported:
+
+```bash
+sudo SERVERKIT_OFFLINE_TARBALL=/tmp/serverkit-v1.7.0-linux-amd64.tar.gz \
+  serverkit update --release
+
+sudo SERVERKIT_MIRROR_URL=https://mirror.example.com/releases serverkit update
+```
+
 ## Table of Contents
 
 - [Requirements](#requirements)

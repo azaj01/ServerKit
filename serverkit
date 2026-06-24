@@ -35,7 +35,7 @@ HUE_OK_TC="$(paint 52 211 153)"; HUE_WARN_TC="$(paint 250 204 21)"; HUE_ERR_TC="
 
 # Configuration
 INSTALL_DIR="${SERVERKIT_DIR:-/opt/serverkit}"
-VENV_DIR="$INSTALL_DIR/venv"
+VENV_DIR="${SERVERKIT_VENV_DIR:-$INSTALL_DIR/venv}"
 BACKEND_SERVICE="serverkit"
 FRONTEND_CONTAINER="serverkit-frontend"
 
@@ -76,8 +76,32 @@ check_installed() {
     fi
 }
 
+require_venv() {
+    # If the expected virtual environment is missing, try to locate an existing
+    # one from legacy/alternative layouts before giving up.
+    if [ ! -f "$VENV_DIR/bin/activate" ] || [ ! -x "$VENV_DIR/bin/python" ]; then
+        print_warning "Virtual environment missing at $VENV_DIR"
+        local candidate found_venv=""
+        for candidate in "$INSTALL_DIR/venv" "$INSTALL_DIR/backend/venv" \
+                         "$INSTALL_DIR/backend/.venv" "$INSTALL_DIR/.venv"; do
+            if [ -f "$candidate/bin/activate" ] && [ -x "$candidate/bin/python" ]; then
+                found_venv="$candidate"
+                break
+            fi
+        done
+        if [ -n "$found_venv" ] && [ "$found_venv" != "$VENV_DIR" ]; then
+            print_info "Using virtual environment at $found_venv"
+            VENV_DIR="$found_venv"
+        else
+            print_error "No usable Python virtual environment found. Run serverkit update to rebuild it."
+            exit 1
+        fi
+    fi
+}
+
 run_cli() {
     # Run CLI commands directly on host using the virtual environment
+    require_venv
     cd "$INSTALL_DIR/backend"
     source "$VENV_DIR/bin/activate"
     python cli.py "$@"
@@ -180,7 +204,8 @@ cmd_help() {
     echo "  update [options]  Update ServerKit"
     echo "                      --branch <name>  Switch to specific branch (e.g., dev)"
     echo "                      --release [vX.Y.Z]  Update from release tarball"
-    echo "                      --force          Skip version check"
+    echo "                      --force          Force update even if already latest"
+    echo "                      --dry-run        Show what would change without applying"
     echo "  branch            Show current branch"
     echo "  uninstall         Uninstall ServerKit"
     echo ""
@@ -381,30 +406,31 @@ cmd_branch() {
 }
 
 cmd_update() {
-    local force_update=false
-    local target_branch=""
-    local use_release=false
-    local release_version=""
+    local update_args=()
 
-    # Parse arguments
+    # Parse arguments and forward them to the canonical update script.
     while [[ $# -gt 0 ]]; do
         case $1 in
             --force|-f)
-                force_update=true
+                update_args+=("--force")
                 shift
                 ;;
             --branch|-b)
-                target_branch="$2"
+                update_args+=("--branch" "$2")
                 shift 2
                 ;;
             --release|-r)
-                use_release=true
+                update_args+=("--release")
                 if [[ -n "${2:-}" ]] && [[ ! "$2" =~ ^- ]]; then
-                    release_version="$2"
+                    update_args+=("$2")
                     shift 2
                 else
                     shift
                 fi
+                ;;
+            --dry-run|-n)
+                update_args+=("--dry-run")
+                shift
                 ;;
             *)
                 shift
@@ -417,184 +443,13 @@ cmd_update() {
     print_header
     echo ""
 
-    # Dev mode: branch-based source update
-    if [ -n "$target_branch" ]; then
-        if [ ! -d "$INSTALL_DIR/.git" ]; then
-            print_error "Cannot switch branches: $INSTALL_DIR is not a git repository (release install)."
-            print_info "Use 'serverkit update --release' to update from a release tarball."
-            exit 1
-        fi
-        _update_source "$target_branch" "$force_update"
-        return
+    if [ ! -x "$INSTALL_DIR/scripts/update.sh" ]; then
+        print_error "Updater not found at $INSTALL_DIR/scripts/update.sh"
+        exit 1
     fi
 
-    # Release mode: download pre-built tarball
-    if [ "$use_release" = true ]; then
-        if [ -n "$release_version" ]; then
-            SERVERKIT_VERSION="$release_version" bash "$INSTALL_DIR/scripts/update.sh"
-        else
-            INSTALL_FROM_RELEASE=1 bash "$INSTALL_DIR/scripts/update.sh"
-        fi
-        return
-    fi
-
-    # Default mode: prefer robust update.sh if available
-    if [ -x "$INSTALL_DIR/scripts/update.sh" ]; then
-        bash "$INSTALL_DIR/scripts/update.sh"
-        return
-    fi
-
-    # Fallback to legacy inline source update
-    _update_source "main" "$force_update"
-}
-
-_update_source() {
-    local target_branch="$1"
-    local force_update="$2"
-
-    cd "$INSTALL_DIR"
-
-    # Get current branch
-    local current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-
-    # If no branch specified, use current branch (or main if detached)
-    if [ -z "$target_branch" ]; then
-        target_branch="$current_branch"
-        if [ "$target_branch" = "HEAD" ]; then
-            target_branch="main"
-        fi
-    fi
-
-    # Get versions
-    CURRENT_VERSION=$(get_local_version)
-
-    # For non-main branches, skip version comparison
-    if [ "$target_branch" != "main" ]; then
-        force_update=true
-        print_warning "Updating to branch: $target_branch (dev mode)"
-        echo ""
-    else
-        REMOTE_VERSION=$(get_remote_version)
-        echo "  Installed version: $CURRENT_VERSION"
-        echo "  Latest version:    $REMOTE_VERSION"
-        echo ""
-    fi
-
-    # Check if update is needed (skip if --force or non-main branch)
-    if [ "$force_update" = false ] && [ "$REMOTE_VERSION" != "unknown" ]; then
-        set +e  # Temporarily disable exit on error
-        compare_versions "$CURRENT_VERSION" "$REMOTE_VERSION"
-        local result=$?
-        set -e  # Re-enable exit on error
-        if [ $result -eq 0 ]; then
-            print_success "Already running the latest version."
-            echo ""
-            read -p "Force update anyway? [y/N] " -n 1 -r
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                exit 0
-            fi
-        fi
-    fi
-
-    print_info "Updating ServerKit to branch: $target_branch..."
-
-    # Stop services
-    print_info "Stopping services..."
-    systemctl stop $BACKEND_SERVICE || true
-    docker compose down || true
-
-    # Fetch all branches and pull changes
-    print_info "Fetching latest changes..."
-    git fetch origin --prune
-
-    # Checkout target branch
-    print_info "Switching to branch: $target_branch..."
-    git checkout "$target_branch" 2>/dev/null || git checkout -b "$target_branch" "origin/$target_branch"
-    git reset --hard "origin/$target_branch"
-
-    # Restore executable permissions
-    chmod +x "$INSTALL_DIR/serverkit"
-    chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
-
-    # Ensure SERVERKIT_ENCRYPTION_KEY exists for installs that pre-date it
-    if ! grep -q '^SERVERKIT_ENCRYPTION_KEY=' "$INSTALL_DIR/.env" 2>/dev/null; then
-        print_info "Generating SERVERKIT_ENCRYPTION_KEY for existing install..."
-        key=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
-        echo "" >> "$INSTALL_DIR/.env"
-        echo "# Encryption key for agent pairing payloads and secrets at rest" >> "$INSTALL_DIR/.env"
-        echo "SERVERKIT_ENCRYPTION_KEY=$key" >> "$INSTALL_DIR/.env"
-        print_success "SERVERKIT_ENCRYPTION_KEY added to .env"
-    fi
-
-    # Get new version from VERSION file
-    NEW_VERSION=$(get_local_version)
-    NEW_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-
-    # Update Python dependencies
-    print_info "Updating Python dependencies..."
-    source "$VENV_DIR/bin/activate"
-    pip install -r "$INSTALL_DIR/backend/requirements.txt" --quiet
-
-    # Sync app templates
-    print_info "Syncing app templates..."
-    mkdir -p /etc/serverkit/templates
-    cp -r "$INSTALL_DIR/backend/templates/"*.yaml /etc/serverkit/templates/ 2>/dev/null || true
-    cp -r "$INSTALL_DIR/backend/templates/"*.yml /etc/serverkit/templates/ 2>/dev/null || true
-
-    # Remove any nginx configs that use server_name _ besides serverkit-managed ones
-    mkdir -p /etc/nginx/serverkit-locations
-    for conf in /etc/nginx/sites-enabled/*; do
-        [ -f "$conf" ] || continue
-        name=$(basename "$conf")
-        # Skip all ServerKit-managed configs
-        case "$name" in serverkit-*) continue ;; esac
-        if grep -Eq 'server_name[[:space:]]+_;' "$conf" 2>/dev/null; then
-            print_warning "Removing conflicting catch-all config: $name"
-            rm -f "/etc/nginx/sites-enabled/$name"
-            rm -f "/etc/nginx/sites-available/$name"
-        fi
-    done
-
-    # Update main nginx config
-    if [ -f "$INSTALL_DIR/nginx/sites-available/serverkit.conf" ]; then
-        cp "$INSTALL_DIR/nginx/sites-available/serverkit.conf" /etc/nginx/sites-available/
-    fi
-
-    # Clean up Docker to prevent networking issues
-    print_info "Cleaning up Docker..."
-    docker network prune -f 2>/dev/null || true
-    docker system prune -f 2>/dev/null || true
-
-    # Rebuild frontend (no cache to ensure fresh build)
-    print_info "Rebuilding frontend..."
-    docker compose build --no-cache
-
-    # Reload systemd in case service file changed
-    systemctl daemon-reload
-
-    # Restart services
-    print_info "Starting services..."
-    systemctl start $BACKEND_SERVICE
-    docker compose up -d
-
-    sleep 5
-
-    # Track successful update
-    curl -s "https://serverkit.ai/track/update?v=${NEW_VERSION}" >/dev/null 2>&1 || true
-
-    echo ""
-    print_success "ServerKit updated!"
-    echo "  Branch:           $target_branch"
-    echo "  Commit:           $NEW_COMMIT"
-    echo "  Version:          $NEW_VERSION"
-    echo ""
-
-    if [ "$target_branch" != "main" ]; then
-        print_warning "Running on '$target_branch' branch. Use 'serverkit update --branch main' to return to stable."
-    fi
-
-    cmd_status_brief
+    SERVERKIT_DIR="$INSTALL_DIR" SERVERKIT_VENV_DIR="$VENV_DIR" \
+        bash "$INSTALL_DIR/scripts/update.sh" "${update_args[@]}"
 }
 
 cmd_uninstall() {
@@ -633,7 +488,12 @@ cmd_uninstall() {
         print_info "Removing files..."
         rm -f /etc/systemd/system/serverkit.service
         rm -f /usr/local/bin/serverkit
+
+        # Remove the active symlink plus both blue/green slots and backups.
         rm -rf "$INSTALL_DIR"
+        rm -rf "${INSTALL_DIR}-a"
+        rm -rf "${INSTALL_DIR}-b"
+        rm -rf "${INSTALL_DIR}.backup"
         rm -rf /var/log/serverkit
         rm -rf /var/lib/serverkit
 

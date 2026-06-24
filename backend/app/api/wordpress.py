@@ -701,6 +701,54 @@ def set_site_cron(app_id):
     return jsonify(WpSecurityService.set_cron_disabled(app.root_path, disabled)), 200
 
 
+@wordpress_bp.route('/sites/<int:app_id>/security/bruteforce', methods=['GET'])
+@jwt_required()
+def get_site_bruteforce(app_id):
+    """Per-site login brute-force status: fail2ban availability, jail on/off, bans."""
+    from app.services.wp_security_service import WpSecurityService
+    app, err = _owner_or_admin_app(app_id)
+    if err:
+        return err
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    return jsonify(WpSecurityService.get_brute_force(wp_site)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/security/bruteforce', methods=['POST'])
+@jwt_required()
+@admin_required
+def set_site_bruteforce(app_id):
+    """Enable/disable the site's WP-login brute-force jail."""
+    from app.services.wp_security_service import WpSecurityService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    enabled = bool((request.get_json() or {}).get('enabled'))
+    return jsonify(WpSecurityService.set_brute_force(wp_site, enabled)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/security/bruteforce/unban', methods=['POST'])
+@jwt_required()
+@admin_required
+def unban_site_bruteforce(app_id):
+    """Unban an IP from the site's brute-force jail."""
+    from app.services.wp_security_service import WpSecurityService
+    app = _resolve_app(app_id)
+    if not app:
+        return jsonify({'error': 'Application not found'}), 404
+    wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
+    if not wp_site:
+        return jsonify({'error': 'Not a WordPress site'}), 400
+    ip = ((request.get_json() or {}).get('ip') or '').strip()
+    if not ip:
+        return jsonify({'error': 'ip is required'}), 400
+    return jsonify(WpSecurityService.unban_brute_force(wp_site, ip)), 200
+
+
 # ---- Safe update manager (#29): run history, on-demand safe update, schedule ----
 
 @wordpress_bp.route('/sites/<int:app_id>/updates', methods=['GET'])

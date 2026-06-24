@@ -33,11 +33,37 @@ export const SIDEBAR_ITEMS = [
         icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>'
     },
     {
-        id: 'workspaces',
-        label: 'Workspaces',
-        route: '/workspaces',
-        category: 'infrastructure',
-        icon: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>'
+        // "Organization" groups the cross-cutting features that structure work
+        // across a team/account — Projects, Shared Variables, and Workspaces —
+        // so they don't each clutter the top level. Renders as a collapsible
+        // group (Sidebar.renderNavItem handles item.subItems). matchPrefixes
+        // keeps the group lit on any of its sub-routes.
+        id: 'organization',
+        label: 'Organization',
+        route: '/projects',
+        matchPrefixes: ['/projects', '/shared-variables', '/workspaces'],
+        category: 'overview',
+        icon: '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/><path d="M9 18v.01"/>',
+        subItems: [
+            {
+                id: 'projects',
+                label: 'Projects',
+                route: '/projects',
+                icon: '<path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.7.9H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+            },
+            {
+                id: 'shared-variables',
+                label: 'Shared Variables',
+                route: '/shared-variables',
+                icon: '<path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="2"/>'
+            },
+            {
+                id: 'workspaces',
+                label: 'Workspaces',
+                route: '/workspaces',
+                icon: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>'
+            }
+        ]
     },
     {
         // Redesign: Servers uses the top-bar layout (REDESIGN_MAP §6 decision 3).

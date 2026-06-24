@@ -535,6 +535,61 @@ def delete_server(server_id):
     return jsonify({'message': 'Server deleted'})
 
 
+# ==================== Onboarding State Machine ====================
+
+@servers_bp.route('/<server_id>/onboarding/start', methods=['POST'])
+@jwt_required()
+@developer_required
+def start_server_onboarding(server_id):
+    """Begin the onboarding lifecycle for a server (pending -> validating ...)."""
+    from app.services.server_onboarding_service import ServerOnboardingService
+
+    server = Server.query.get(server_id)
+    if not server:
+        return jsonify({'error': 'Server not found'}), 404
+
+    try:
+        status = ServerOnboardingService.start(server_id)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 404
+    return jsonify(status)
+
+
+@servers_bp.route('/<server_id>/onboarding/retry', methods=['POST'])
+@jwt_required()
+@developer_required
+def retry_server_onboarding(server_id):
+    """Clear a failed onboarding and resume from validation."""
+    from app.services.server_onboarding_service import ServerOnboardingService
+
+    server = Server.query.get(server_id)
+    if not server:
+        return jsonify({'error': 'Server not found'}), 404
+
+    try:
+        status = ServerOnboardingService.retry(server_id)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 404
+    return jsonify(status)
+
+
+@servers_bp.route('/<server_id>/onboarding/status', methods=['GET'])
+@jwt_required()
+def get_server_onboarding_status(server_id):
+    """Return the onboarding state + ordered progress log for a server."""
+    from app.services.server_onboarding_service import ServerOnboardingService
+
+    server = Server.query.get(server_id)
+    if not server:
+        return jsonify({'error': 'Server not found'}), 404
+
+    try:
+        status = ServerOnboardingService.get_status(server_id)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 404
+    return jsonify(status)
+
+
 # ==================== Registration ====================
 
 @servers_bp.route('/<server_id>/regenerate-token', methods=['POST'])

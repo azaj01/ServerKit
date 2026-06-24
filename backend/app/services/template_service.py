@@ -170,6 +170,282 @@ class TemplateService:
 
         return str(default)
 
+    # ==================================================================
+    # Magic variables
+    # ------------------------------------------------------------------
+    # "Magic variables" let template authors use industry-standard
+    # placeholders that ServerKit auto-resolves at install time, instead of
+    # declaring an explicit ``variables:`` entry for every generated secret.
+    #
+    # Supported tokens (used as ``${SERVICE_<KIND>_<NAME>}`` in compose / files /
+    # scripts), where ``<NAME>`` is an author-chosen identifier that groups
+    # related tokens (the same ``<NAME>`` resolves to a consistent value):
+    #
+    #   SERVICE_PASSWORD_<NAME>  -> a generated strong password
+    #   SERVICE_USER_<NAME>      -> a generated service username (svc_<name>_<rand>)
+    #   SERVICE_FQDN_<NAME>      -> the app's auto-assigned hostname (best-effort)
+    #   SERVICE_URL_<NAME>       -> full URL derived from the FQDN (+ scheme)
+    #   SERVICE_BASE64_<NAME>    -> base64 of a freshly generated secret
+    #
+    # Resolution is PURE and unit-testable: no Docker, no network. The only
+    # contextual input is an optional ``context`` dict (app_name / fqdn / scheme).
+    # ==================================================================
+
+    # Order matters: longer prefixes (BASE64) must be matched before shorter
+    # ones so they are not mis-parsed. Each entry maps the wire prefix to an
+    # internal "kind".
+    MAGIC_PREFIXES = [
+        ('SERVICE_PASSWORD_', 'password'),
+        ('SERVICE_USER_', 'user'),
+        ('SERVICE_FQDN_', 'fqdn'),
+        ('SERVICE_URL_', 'url'),
+        ('SERVICE_BASE64_', 'base64'),
+    ]
+
+    # Matches ``${SERVICE_...}`` magic tokens specifically (a subset of the
+    # generic ``${VAR}`` substitution pattern). ``<NAME>`` may be empty-safe:
+    # we require at least one trailing char after the prefix.
+    MAGIC_TOKEN_PATTERN = r'\$\{(SERVICE_(?:PASSWORD|USER|FQDN|URL|BASE64)_[A-Z0-9_]+)\}'
+
+    # Default password length for magic SERVICE_PASSWORD_* tokens.
+    MAGIC_PASSWORD_LENGTH = 32
+
+    @classmethod
+    def _classify_magic_token(cls, token: str):
+        """Return ``(kind, name)`` for a bare magic token (no ``${}``), or
+        ``(None, None)`` if it is not a recognized magic variable."""
+        for prefix, kind in cls.MAGIC_PREFIXES:
+            if token.startswith(prefix):
+                return kind, token[len(prefix):]
+        return None, None
+
+    @classmethod
+    def _generate_magic_password(cls) -> str:
+        """Strong password for a SERVICE_PASSWORD_* token (alnum, no special
+        chars to stay shell/compose-safe). Reuses the same primitive as
+        ``generate_value(type=password)``."""
+        chars = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(chars) for _ in range(cls.MAGIC_PASSWORD_LENGTH))
+
+    @classmethod
+    def _generate_magic_user(cls, name: str) -> str:
+        """Service username for a SERVICE_USER_* token: ``svc_<name>_<rand>``,
+        lowercased and reduced to ``[a-z0-9_]`` so it is safe as a DB/app user."""
+        base = re.sub(r'[^a-z0-9]+', '_', (name or 'service').lower()).strip('_') or 'service'
+        suffix = secrets.token_hex(2)  # 4 hex chars, keeps it short but unique
+        return f'svc_{base}_{suffix}'
+
+    @classmethod
+    def _resolve_magic_value(cls, kind: str, name: str, context: Dict) -> str:
+        """Resolve a single magic token to a value.
+
+        ``context`` may carry ``fqdn`` / ``scheme`` (and ``app_name``); when an
+        FQDN is not known yet the FQDN/URL forms degrade to a documented
+        placeholder (``localhost``) that the install finalizer can later fill —
+        this keeps resolution best-effort and non-fatal.
+        """
+        context = context or {}
+        if kind == 'password':
+            return cls._generate_magic_password()
+        if kind == 'user':
+            return cls._generate_magic_user(name)
+        if kind == 'base64':
+            import base64
+            secret = secrets.token_bytes(24)
+            return base64.b64encode(secret).decode('ascii')
+        if kind == 'fqdn':
+            return str(context.get('fqdn') or context.get('app_name') or 'localhost')
+        if kind == 'url':
+            scheme = str(context.get('scheme') or 'http')
+            host = context.get('fqdn') or context.get('app_name') or 'localhost'
+            return f'{scheme}://{host}'
+        return ''
+
+    @classmethod
+    def resolve_magic_variables(cls, content: Any, context: Dict = None):
+        """Scan ``content`` for ``${SERVICE_*}`` magic tokens, generate a value
+        once per unique token, substitute, and return ``(substituted, generated)``.
+
+        Args:
+            content: A string, or a (possibly nested) dict/list — e.g. a parsed
+                compose section. Returned with the same shape.
+            context: Optional dict with ``app_name`` / ``fqdn`` / ``scheme`` used
+                to resolve FQDN/URL tokens. No Docker/network access is performed.
+
+        Returns:
+            ``(substituted_content, generated_vars)`` where ``generated_vars`` maps
+            each magic variable name (without ``${}``) to its generated value, so
+            callers can persist them as env vars / surface them post-install.
+            Pure and idempotent for a given ``content`` within one call (the same
+            token always maps to the same generated value here).
+        """
+        context = context or {}
+        generated: Dict[str, str] = {}
+
+        def _collect(text: str):
+            for match in re.finditer(cls.MAGIC_TOKEN_PATTERN, text):
+                token = match.group(1)
+                if token in generated:
+                    continue
+                kind, name = cls._classify_magic_token(token)
+                if kind is None:
+                    continue
+                generated[token] = cls._resolve_magic_value(kind, name, context)
+
+        def _walk_collect(node: Any):
+            if isinstance(node, str):
+                _collect(node)
+            elif isinstance(node, dict):
+                for value in node.values():
+                    _walk_collect(value)
+            elif isinstance(node, list):
+                for item in node:
+                    _walk_collect(item)
+
+        # Pass 1: discover every unique token and generate a stable value.
+        _walk_collect(content)
+
+        # Pass 2: substitute using the generated values. Reuse the existing
+        # ${VAR} substitution so behavior is identical to normal variables.
+        if isinstance(content, str):
+            substituted = cls.substitute_variables(content, generated)
+        else:
+            substituted = cls.substitute_in_dict(content, generated)
+
+        return substituted, generated
+
+    @classmethod
+    def collect_magic_variables(cls, template: Dict, context: Dict = None) -> Dict[str, str]:
+        """Generate the magic variables a template uses, given its declared
+        ``compose`` / ``files`` / ``scripts`` sections, WITHOUT mutating the
+        template. Returns ``{name: value}`` for every ``${SERVICE_*}`` token found.
+
+        This is the wiring entry point for the install flow: the returned dict is
+        merged into the install ``variables`` so the existing ``${VAR}``
+        substitution renders the tokens, and so the secrets land in ``.env`` /
+        post-install output. Templates with no magic tokens get ``{}`` and behave
+        exactly as before.
+        """
+        # Scan the parts that the installer substitutes against.
+        scan_target = {
+            'compose': template.get('compose', {}),
+            'files': template.get('files', []),
+            'scripts': template.get('scripts', {}),
+        }
+        _, generated = cls.resolve_magic_variables(scan_target, context)
+        return generated
+
+    @classmethod
+    def _install_magic_context(cls, template: Dict, app_name: str,
+                               variables: Dict = None) -> Dict:
+        """Build the best-effort ``context`` for magic-variable resolution at
+        install time.
+
+        Resolves the would-be FQDN from the managed-sites base domain when one is
+        configured (the same ``<slug>.<base>`` the finalizer publishes), and the
+        scheme from whether wildcard HTTPS is on. All of this is best-effort and
+        non-fatal: if site routing isn't set up (or we're outside an app context),
+        FQDN/URL tokens fall back to a documented ``localhost`` placeholder that
+        the install finalizer can later fill in.
+        """
+        context = {'app_name': app_name}
+        try:
+            from app.services.site_domain_service import SiteDomainService
+            base = SiteDomainService.base_domain()
+            # Only assign an FQDN when the template opts into auto-domain and a
+            # base domain exists — mirrors the finalizer's publish condition.
+            if base and template.get('auto_domain'):
+                host = SiteDomainService.subdomain_for(app_name)
+                if host:
+                    context['fqdn'] = host
+                    context['scheme'] = 'https' if (
+                        SiteDomainService.https_enabled()
+                        and SiteDomainService.covers(host)
+                    ) else 'http'
+        except Exception:
+            # No app context / site routing not available — leave FQDN unset so
+            # tokens degrade to the localhost placeholder.
+            pass
+        return context
+
+    @classmethod
+    def _collect_magic_for_install(cls, template: Dict, app_name: str,
+                                   variables: Dict = None) -> Dict[str, str]:
+        """Resolve a template's magic variables for an install, using the
+        best-effort FQDN context. Thin wrapper over :meth:`collect_magic_variables`."""
+        context = cls._install_magic_context(template, app_name, variables)
+        return cls.collect_magic_variables(template, context)
+
+    @classmethod
+    def validate_catalog_entry(cls, entry: Dict) -> Dict:
+        """Lightweight validation of a declarative catalog entry (the YAML
+        template shape documented in ``docs/TEMPLATE_CATALOG_SCHEMA.md``).
+
+        Complements :meth:`validate_template` (which the loader uses) with a few
+        catalog-level checks: an ``id`` slug, declared variable ``type`` values,
+        and well-formed magic tokens. Returns ``{'valid': bool, 'errors': [...],
+        'warnings': [...]}``. Non-fatal issues are reported as warnings so the
+        loader stays permissive.
+        """
+        errors: List[str] = []
+        warnings: List[str] = []
+
+        if not isinstance(entry, dict):
+            return {'valid': False, 'errors': ['Catalog entry must be a mapping'], 'warnings': []}
+
+        # Reuse the canonical template validation for required fields/compose.
+        base = cls.validate_template(entry)
+        if not base.get('valid'):
+            errors.extend(base.get('errors', []))
+
+        # id should be a DNS/file-safe slug when present.
+        entry_id = entry.get('id')
+        if entry_id is not None:
+            if not isinstance(entry_id, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', entry_id or ''):
+                errors.append("Field 'id' must be a lowercase slug (a-z, 0-9, dashes)")
+
+        # Validate declared variable types (list or dict form).
+        known_types = {'string', 'password', 'port', 'uuid', 'random', 'boolean', 'select'}
+        raw_vars = entry.get('variables', [])
+        var_items = []
+        if isinstance(raw_vars, list):
+            var_items = [(v.get('name'), v) for v in raw_vars if isinstance(v, dict)]
+        elif isinstance(raw_vars, dict):
+            var_items = list(raw_vars.items())
+        for var_name, var_config in var_items:
+            if not isinstance(var_config, dict):
+                continue
+            vtype = var_config.get('type', 'string')
+            if vtype not in known_types:
+                warnings.append(f"Variable '{var_name}' uses unknown type '{vtype}'")
+
+        # Validate any magic tokens embedded in compose/files/scripts.
+        scan_target = {
+            'compose': entry.get('compose', {}),
+            'files': entry.get('files', []),
+            'scripts': entry.get('scripts', {}),
+        }
+
+        def _check_tokens(node):
+            if isinstance(node, str):
+                for match in re.finditer(r'\$\{(SERVICE_[A-Z0-9_]+)\}', node):
+                    token = match.group(1)
+                    kind, name = cls._classify_magic_token(token)
+                    if kind is None:
+                        warnings.append(f"Unrecognized magic token '${{{token}}}'")
+                    elif not name:
+                        warnings.append(f"Magic token '${{{token}}}' is missing a <NAME> suffix")
+            elif isinstance(node, dict):
+                for value in node.values():
+                    _check_tokens(value)
+            elif isinstance(node, list):
+                for item in node:
+                    _check_tokens(item)
+
+        _check_tokens(scan_target)
+
+        return {'valid': not errors, 'errors': errors, 'warnings': warnings}
+
     @classmethod
     def validate_mysql_connection(cls, host: str, port: int, user: str,
                                    password: str, database: str) -> Dict:
@@ -400,6 +676,49 @@ class TemplateService:
                         })
 
         return templates
+
+    @classmethod
+    def build_repo_index(cls, repo_name: str = 'serverkit-official') -> Dict:
+        """Build the ``index.json`` document that describes the locally-bundled
+        templates as a publishable repository.
+
+        This is the exact shape :meth:`fetch_remote_templates` / :meth:`sync_templates`
+        consume from ``<repo_url>/index.json`` (templates served at
+        ``<repo_url>/templates/<id>.yaml``). Publishing a repo is then just:
+        host the ``templates/*.yaml`` files plus this ``index.json``. Lets
+        Prompture Hub & friends ship template updates without a panel release.
+        """
+        templates = [
+            {
+                'id': t['id'],
+                'name': t.get('name'),
+                'version': t.get('version'),
+                'description': t.get('description'),
+                'icon': t.get('icon'),
+                'categories': t.get('categories', []),
+            }
+            for t in cls.list_local_templates()
+        ]
+        return {
+            'name': repo_name,
+            'schema_version': cls.SCHEMA_VERSION,
+            'generated_at': datetime.now().isoformat(),
+            'count': len(templates),
+            'templates': templates,
+        }
+
+    @classmethod
+    def export_repo_index(cls, dest_path: str = None) -> Dict:
+        """Write :meth:`build_repo_index` to ``dest_path`` (defaults to
+        ``index.json`` alongside the bundled templates). Returns a status dict."""
+        index = cls.build_repo_index()
+        path = dest_path or os.path.join(cls.LOCAL_TEMPLATES_DIR, 'index.json')
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(index, f, indent=2)
+            return {'success': True, 'path': path, 'count': index['count']}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
     @classmethod
     def fetch_remote_templates(cls, repo_url: str) -> List[Dict]:
@@ -651,6 +970,14 @@ class TemplateService:
                     'error': f"Database connection failed: {db_check.get('error')}"
                 }
 
+        # Resolve magic variables (${SERVICE_PASSWORD_*} etc.) used in the
+        # template's compose/files/scripts and merge the generated values into the
+        # install variables. A template with no magic tokens gets {} here, so this
+        # is a no-op for existing templates. User-supplied values win.
+        magic = cls._collect_magic_for_install(template, app_name, variables)
+        for key, value in magic.items():
+            variables.setdefault(key, value)
+
         return {'success': True, 'variables': variables}
 
     @classmethod
@@ -783,6 +1110,11 @@ class TemplateService:
                     'success': False,
                     'error': f"Database connection failed: {db_check.get('error')}"
                 }
+
+        # Resolve magic variables (${SERVICE_*}) and merge generated values.
+        # No-op for templates that don't use magic tokens; user values win.
+        for key, value in cls._collect_magic_for_install(template, app_name, variables).items():
+            variables.setdefault(key, value)
 
         # Create app directory
         app_path = os.path.join(cls.INSTALLED_DIR, app_name)
@@ -1152,8 +1484,14 @@ class TemplateService:
         except Exception:
             variables = {}
 
-        # Add any new variables with defaults
-        for var_name, var_config in template.get('variables', {}).items():
+        # Add any new variables with defaults. Templates may declare variables as
+        # a list ([{name: ...}, ...]) or a dict ({NAME: {...}}); normalize to dict
+        # so converted templates (which use the list form) update correctly.
+        template_vars = template.get('variables', {})
+        if isinstance(template_vars, list):
+            template_vars = {v['name']: v for v in template_vars
+                             if isinstance(v, dict) and 'name' in v}
+        for var_name, var_config in template_vars.items():
             if var_name not in variables:
                 variables[var_name] = cls.generate_value(var_config)
 
@@ -1181,6 +1519,20 @@ class TemplateService:
             compose_content = cls.generate_compose(template, variables)
             with open(compose_path, 'w') as f:
                 f.write(compose_content)
+
+            # Re-render any template-defined files and re-apply their bind mounts,
+            # so templates that ship config via a `files:` section (e.g. litellm,
+            # signoz, posthog) keep working across updates instead of losing the
+            # mounted config when the compose is regenerated.
+            if 'files' in template:
+                files_result = cls._process_template_files(
+                    template['files'], app_path, compose_path, variables
+                )
+                if not files_result.get('success'):
+                    # Roll back to the backed-up compose and abort the update.
+                    if os.path.exists(backup_path):
+                        shutil.copy(backup_path, compose_path)
+                    return files_result
 
             # Update installation info
             install_info['template_version'] = template.get('version')

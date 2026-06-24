@@ -4,6 +4,12 @@ from app.models.domain import Domain
 from app.models.env_variable import EnvironmentVariable, EnvironmentVariableHistory
 from app.models.notification_preferences import NotificationPreferences
 from app.models.deployment import Deployment, DeploymentDiff
+from app.models.deployment_snapshot import DeploymentSnapshot
+from app.models.project import Project
+from app.models.environment import Environment
+from app.models.shared_resource import ResourceTag, SharedVariableGroup, SharedVariable, SharedVariableGroupAttachment
+from app.models.application_preview import ApplicationPreview, ApplicationPreviewSettings
+from app.models.proxy_stack import ProxyStack
 from app.models.deployment_job import DeploymentJob, DeploymentJobLog
 from app.models.system_settings import SystemSettings
 from app.models.audit_log import AuditLog
@@ -11,6 +17,7 @@ from app.models.metrics_history import MetricsHistory
 from app.models.workflow import Workflow, WorkflowExecution, WorkflowLog
 from app.models.webhook import GitWebhook, WebhookLog, GitDeployment
 from app.models.server import Server, ServerGroup, ServerMetrics, ServerCommand, AgentSession, AgentVersion, AgentRollout
+from app.models.server_onboarding_log import ServerOnboardingLog
 from app.models.security_alert import SecurityAlert
 from app.models.wordpress_site import WordPressSite, DatabaseSnapshot, SyncJob, WordPressVulnerability
 from app.models.environment_activity import EnvironmentActivity
@@ -56,9 +63,9 @@ from app.models.domain_registration import DomainRegistration
 
 __all__ = [
     'User', 'Application', 'Domain', 'EnvironmentVariable', 'EnvironmentVariableHistory',
-    'NotificationPreferences', 'Deployment', 'DeploymentDiff', 'DeploymentJob', 'DeploymentJobLog', 'SystemSettings', 'AuditLog',
+    'NotificationPreferences', 'Deployment', 'DeploymentDiff', 'DeploymentSnapshot', 'DeploymentJob', 'DeploymentJobLog', 'SystemSettings', 'AuditLog',
     'MetricsHistory', 'Workflow', 'WorkflowExecution', 'WorkflowLog', 'GitWebhook', 'WebhookLog', 'GitDeployment',
-    'Server', 'ServerGroup', 'ServerMetrics', 'ServerCommand', 'AgentSession', 'AgentVersion', 'AgentRollout', 'SecurityAlert',
+    'Server', 'ServerGroup', 'ServerMetrics', 'ServerCommand', 'AgentSession', 'AgentVersion', 'AgentRollout', 'ServerOnboardingLog', 'SecurityAlert',
     'WordPressSite', 'DatabaseSnapshot', 'SyncJob', 'WordPressVulnerability',
     'EnvironmentActivity', 'PromotionJob', 'SanitizationProfile',
     'EmailDomain', 'EmailAccount', 'EmailAlias', 'EmailForwardingRule', 'DNSProviderConfig', 'EmailRelayConfig',
@@ -88,4 +95,8 @@ __all__ = [
     'EmailProviderConnection',
     'SystemEvent',
     'DomainRegistration',
+    'Project', 'Environment',
+    'ResourceTag', 'SharedVariableGroup', 'SharedVariable', 'SharedVariableGroupAttachment',
+    'ApplicationPreview', 'ApplicationPreviewSettings',
+    'ProxyStack',
 ]
