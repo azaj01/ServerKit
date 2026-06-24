@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Database, GitBranch, Lock, Unlock, Trash2, Play, Square, RefreshCw, Camera, AlertCircle } from 'lucide-react';
 import wordpressApi from '../../services/wordpress';
+import { formatRelativeTime } from '@/utils/time';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,22 +35,6 @@ const ACTION_BADGE_VARIANTS = {
     stopped: 'secondary',
     restarted: 'info'
 };
-
-function formatRelativeTime(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMinutes = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMinutes < 1) return 'Just now';
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-}
 
 const ActivityFeed = ({ projectId, envId, limit = 20, compact = false }) => {
     const [activities, setActivities] = useState([]);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { Button } from '@/components/ui/button';
+import { formatBytes } from '@/utils/formatBytes';
 
 const QuarantineTab = () => {
     const [files, setFiles] = useState([]);
@@ -32,14 +33,6 @@ const QuarantineTab = () => {
         } catch (err) {
             setMessage({ type: 'error', text: err.message });
         }
-    }
-
-    function formatBytes(bytes) {
-        if (!bytes) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
     return (
@@ -84,7 +77,7 @@ const QuarantineTab = () => {
                             {files.map((file, index) => (
                                 <tr key={index}>
                                     <td className="sk-cell-mono sec-path sec-path--red">{file.name}</td>
-                                    <td className="sk-cell-mono">{formatBytes(file.size)}</td>
+                                    <td className="sk-cell-mono">{formatBytes(file.size, { defaultValue: '0 B' })}</td>
                                     <td className="sk-cell-mono sec-faint">{new Date(file.quarantined_at).toLocaleString()}</td>
                                     <td>
                                         <Button

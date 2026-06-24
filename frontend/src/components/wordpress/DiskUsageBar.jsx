@@ -1,5 +1,6 @@
 import React from 'react';
 import { HardDrive } from 'lucide-react';
+import { formatBytes } from '@/utils/formatBytes';
 
 const REFERENCE_THRESHOLD = 10 * 1024 * 1024 * 1024; // 10 GB reference
 
@@ -21,20 +22,11 @@ const DiskUsageBar = ({ usage, showBreakdown = true, compact = false }) => {
 
     const colorClass = percent < 70 ? 'green' : percent < 90 ? 'yellow' : 'red';
 
-    function formatSize(bytes) {
-        if (!bytes) return '0 B';
-        for (const unit of ['B', 'KB', 'MB', 'GB']) {
-            if (bytes < 1024) return `${bytes.toFixed(1)} ${unit}`;
-            bytes /= 1024;
-        }
-        return `${bytes.toFixed(1)} TB`;
-    }
-
     if (compact) {
         return (
-            <div className="disk-usage-compact" title={`Disk: ${formatSize(total)}`}>
+            <div className="disk-usage-compact" title={`Disk: ${formatBytes(total)}`}>
                 <HardDrive size={10} />
-                <span className="disk-usage-compact-text">{formatSize(total)}</span>
+                <span className="disk-usage-compact-text">{formatBytes(total)}</span>
             </div>
         );
     }
@@ -43,24 +35,24 @@ const DiskUsageBar = ({ usage, showBreakdown = true, compact = false }) => {
         <div className="disk-usage-bar-container">
             <div className="disk-usage-header">
                 <HardDrive size={14} />
-                <span className="disk-usage-total">{formatSize(total)}</span>
+                <span className="disk-usage-total">{formatBytes(total)}</span>
             </div>
 
             <div className="disk-usage-bar">
                 <div
                     className={`disk-usage-segment wordpress ${colorClass}`}
                     style={{ width: `${wpPercent}%` }}
-                    title={`WordPress: ${formatSize(wordpress)}`}
+                    title={`WordPress: ${formatBytes(wordpress)}`}
                 />
                 <div
                     className="disk-usage-segment mysql"
                     style={{ width: `${dbPercent}%` }}
-                    title={`MySQL: ${formatSize(mysql)}`}
+                    title={`MySQL: ${formatBytes(mysql)}`}
                 />
                 <div
                     className="disk-usage-segment snapshots"
                     style={{ width: `${snapPercent}%` }}
-                    title={`Snapshots: ${formatSize(snapshots)}`}
+                    title={`Snapshots: ${formatBytes(snapshots)}`}
                 />
             </div>
 
@@ -68,15 +60,15 @@ const DiskUsageBar = ({ usage, showBreakdown = true, compact = false }) => {
                 <div className="disk-usage-legend">
                     <div className="disk-usage-legend-item">
                         <span className="disk-usage-legend-dot wordpress" />
-                        <span>WordPress {formatSize(wordpress)}</span>
+                        <span>WordPress {formatBytes(wordpress)}</span>
                     </div>
                     <div className="disk-usage-legend-item">
                         <span className="disk-usage-legend-dot mysql" />
-                        <span>MySQL {formatSize(mysql)}</span>
+                        <span>MySQL {formatBytes(mysql)}</span>
                     </div>
                     <div className="disk-usage-legend-item">
                         <span className="disk-usage-legend-dot snapshots" />
-                        <span>Snapshots {formatSize(snapshots)}</span>
+                        <span>Snapshots {formatBytes(snapshots)}</span>
                     </div>
                 </div>
             )}

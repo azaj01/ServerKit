@@ -10,6 +10,7 @@ import { HealthDot } from './HealthStatusPanel';
 import DiskUsageBar from './DiskUsageBar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { formatRelativeTime } from '@/utils/time';
 
 const PipelineView = ({
     pipeline,
@@ -289,20 +290,6 @@ const PipelineCard = ({
     const envType = env.environment_type || (isProduction ? 'production' : 'development');
     const domain = env.application?.domains?.[0] || env.url || '';
 
-    function formatRelativeTime(dateString) {
-        if (!dateString) return null;
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffDays = Math.floor(diffMs / 86400000);
-        const diffHours = Math.floor(diffMs / 3600000);
-
-        if (diffHours < 1) return 'Just now';
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
-    }
-
     return (
         <div className={`pipeline-card ${isProduction ? 'production' : ''} ${env.is_locked ? 'locked' : ''}`}>
             <div className="pipeline-card-header">
@@ -474,19 +461,6 @@ const MultidevCard = ({
     const [showMenu, setShowMenu] = useState(false);
     const isRunning = env.status === 'running' || env.application?.status === 'running';
     const domain = env.application?.domains?.[0] || env.url || '';
-
-    function formatRelativeTime(dateString) {
-        if (!dateString) return null;
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffDays = Math.floor(diffMs / 86400000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        if (diffHours < 1) return 'Just now';
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
-    }
 
     const promoteTarget = devEnv || stagingEnv || production;
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
+import { formatBytes } from '@/utils/formatBytes';
 import { useToast } from '../contexts/ToastContext';
 import EmptyState from '../components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -65,14 +66,6 @@ function formatNumber(value, digits = 1) {
 function formatMetric(value, unit = '%') {
     if (typeof value !== 'number' || Number.isNaN(value)) return '-';
     return `${value.toFixed(unit === '' ? 2 : 1)}${unit}`;
-}
-
-function formatBytes(bytes) {
-    if (typeof bytes !== 'number' || Number.isNaN(bytes)) return '-';
-    const gib = bytes / (1024 ** 3);
-    if (gib >= 100) return `${Math.round(gib)} GB`;
-    if (gib >= 1) return `${gib.toFixed(1)} GB`;
-    return `${Math.round(bytes / (1024 ** 2))} MB`;
 }
 
 function getSeverityTone(severity) {

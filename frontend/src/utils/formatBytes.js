@@ -1,25 +1,25 @@
 // Canonical byte/size formatter for the whole frontend.
 //
 // Replaces the ~14 local `formatBytes` / `formatSize` / `formatMemory`
-// implementations that had drifted apart (different decimals, different KB vs
-// KiB conventions, different empty-value handling). Import this instead of
-// rolling a new one.
+// implementations that had drifted apart. The codebase universally treats
+// sizes as binary (divide by 1024) with conventional KB/MB/GB labels, so that
+// is the default here — displayed values stay identical after migration.
 //
 //   formatBytes(1536)                       -> "1.5 KB"
-//   formatBytes(1536, { binary: true })     -> "1.5 KiB"
 //   formatBytes(0)                          -> "0 B"
 //   formatBytes(null)                        -> "-"
-//   formatBytes(1234567, { decimals: 0 })   -> "1 MB"
+//   formatBytes(1234567, { decimals: 2 })   -> "1.18 MB"
+//   formatBytes(2048, { iec: true })        -> "2 KiB"
 //   formatBytes(2048, { suffix: false })    -> "2"
 
 const DECIMAL_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
-const BINARY_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+const IEC_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
 
 export function formatBytes(bytes, options = {}) {
     const {
         decimals = 1,
         suffix = true,
-        binary = false, // true -> KiB/MiB/GiB (1024), false -> KB/MB/GB (1000)
+        iec = false, // true -> KiB/MiB/GiB labels (divisor is always 1024)
         defaultValue = '-',
     } = options;
 
@@ -29,17 +29,16 @@ export function formatBytes(bytes, options = {}) {
     if (!Number.isFinite(value)) return defaultValue;
     if (value === 0) return suffix ? '0 B' : '0';
 
-    const base = binary ? 1024 : 1000;
-    const units = binary ? BINARY_UNITS : DECIMAL_UNITS;
+    const units = iec ? IEC_UNITS : DECIMAL_UNITS;
 
     const negative = value < 0;
     const abs = Math.abs(value);
 
     const exponent = Math.min(
-        Math.floor(Math.log(abs) / Math.log(base)),
+        Math.floor(Math.log(abs) / Math.log(1024)),
         units.length - 1
     );
-    const scaled = abs / base ** exponent;
+    const scaled = abs / 1024 ** exponent;
 
     // Whole-byte values never need decimals.
     const places = exponent === 0 ? 0 : decimals;

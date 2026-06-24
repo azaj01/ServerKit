@@ -63,22 +63,8 @@ export function splitOnMatch(text, query) {
         .map((p) => ({ text: p, match: re.test(p) && p.toLowerCase() === query.toLowerCase() }));
 }
 
-// Bytes formatter shared by sidebar and status bar.
-export function formatBytes(bytes) {
-    if (bytes == null) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
+// Bytes formatter shared by sidebar and status bar — canonical impl.
+export { formatBytes } from '@/utils/formatBytes';
 
-export function formatRelativeTime(iso) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const diff = (Date.now() - d.getTime()) / 1000;
-    if (diff < 60)  return 'just now';
-    if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return d.toLocaleDateString();
-}
+// Relative-time formatter — canonical impl.
+export { formatRelativeTime } from '@/utils/time';

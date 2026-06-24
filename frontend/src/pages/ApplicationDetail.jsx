@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { GitBranch, GitMerge, Boxes } from 'lucide-react';
 import api from '../services/api';
+import { formatBytes } from '@/utils/formatBytes';
 import EmptyState from '../components/EmptyState';
 import useTabParam from '../hooks/useTabParam';
 import { useToast } from '../contexts/ToastContext';
@@ -664,15 +665,6 @@ const RoutingDiagnosticsPanel = ({ appId }) => {
         </div>
     );
 };
-
-// Helper function
-function formatBytes(bytes) {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
 
 // ============================================
 // EXISTING TAB COMPONENTS (preserved)

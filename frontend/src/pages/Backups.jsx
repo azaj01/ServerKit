@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import { Upload, Check, AlertTriangle, Clock, Database, Package, FolderArchive, HardDrive, Cloud, CloudOff, RefreshCw, Trash2, Plus, CheckCircle, XCircle, FileArchive, DollarSign, TrendingUp } from 'lucide-react';
 import api from '../services/api';
+import { formatBytes } from '@/utils/formatBytes';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -358,18 +359,6 @@ const Backups = () => {
         });
     };
 
-    const formatSize = (bytes) => {
-        if (!bytes) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        let unitIndex = 0;
-        let size = bytes;
-        while (size >= 1024 && unitIndex < units.length - 1) {
-            size /= 1024;
-            unitIndex++;
-        }
-        return `${size.toFixed(1)} ${units[unitIndex]}`;
-    };
-
     const formatTimestamp = (timestamp) => {
         return new Date(timestamp).toLocaleString();
     };
@@ -514,7 +503,7 @@ const Backups = () => {
                                                 <span className={`bk-type bk-type--${backup.type}`}>{backup.type}</span>
                                             </td>
                                             <td>{backup.app_name || backup.name?.split('_')[0] || '—'}</td>
-                                            <td className="sk-cell-mono">{formatSize(backup.size)}</td>
+                                            <td className="sk-cell-mono">{formatBytes(backup.size, { defaultValue: '0 B' })}</td>
                                             <td>{getRemoteStatusPill(backup.remote_status)}</td>
                                             <td className="bk-when">{formatTimestamp(backup.timestamp)}</td>
                                             <td className="sk-cell-mono">{formatMoney(((backup.size || 0) / (1024 ** 3)) * (costSummary?.cost_rates?.local || 0))}</td>
@@ -1244,7 +1233,7 @@ const Backups = () => {
                                 </div>
                                 <div className="sk-info-row">
                                     <span className="k">Size</span>
-                                    <span className="v">{formatSize(selectedBackup.size)}</span>
+                                    <span className="v">{formatBytes(selectedBackup.size, { defaultValue: '0 B' })}</span>
                                 </div>
                             </div>
                         </div>

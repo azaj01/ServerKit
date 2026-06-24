@@ -10,6 +10,7 @@ import LogFileList from '../components/log-viewer/LogFileList';
 import LogToolbar from '../components/log-viewer/LogToolbar';
 import LogContent from '../components/log-viewer/LogContent';
 import { formatBytes, logKindFromPath } from '../components/log-viewer/logHelpers';
+import { formatBytes as formatMemory } from '@/utils/formatBytes';
 import { Pill, PageTopbar } from '../components/ds';
 import { Button } from '@/components/ui/button';
 import {
@@ -1639,18 +1640,6 @@ const ServicesTab = () => {
         </div>
     );
 };
-
-// Helper functions
-function formatMemory(bytes) {
-    if (!bytes) return '-';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let i = 0;
-    while (bytes >= 1024 && i < units.length - 1) {
-        bytes /= 1024;
-        i++;
-    }
-    return `${bytes.toFixed(1)} ${units[i]}`;
-}
 
 // Map a process status onto a ds Pill tone.
 function processStatusKind(status) {

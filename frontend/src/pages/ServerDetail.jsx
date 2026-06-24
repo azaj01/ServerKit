@@ -35,6 +35,7 @@ import ProxyStackPanel from '../components/proxy/ProxyStackPanel';
 import RemoteAccess from '../pages/RemoteAccess';
 import TagsPanel from '../components/shared/TagsPanel';
 import EmptyState from '../components/EmptyState';
+import { formatBytes } from '@/utils/formatBytes';
 import { BellRing, Boxes, Container, Clock3, Cloud } from 'lucide-react';
 
 // Server status → ds Pill tone (shared by the header pill and the
@@ -419,13 +420,6 @@ const ServerDetail = () => {
 };
 
 const OverviewTab = ({ server, metrics, systemInfo, onRefreshServer }) => {
-    const formatBytes = (bytes) => {
-        if (!bytes) return 'N/A';
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-    };
-
     const formatUptime = (seconds) => {
         if (!seconds) return 'N/A';
         const days = Math.floor(seconds / 86400);
@@ -546,8 +540,8 @@ const OverviewTab = ({ server, metrics, systemInfo, onRefreshServer }) => {
                                 (cpuModel || 'N/A') + (cpuCores ? ` (${cpuCores} cores)` : '')
                             }
                         />
-                        <InfoRow icon={<MemoryIcon />} label="Total Memory" value={formatBytes(totalMemory)} mono />
-                        <InfoRow icon={<DiskIcon />} label="Total Disk" value={formatBytes(totalDisk)} mono />
+                        <InfoRow icon={<MemoryIcon />} label="Total Memory" value={formatBytes(totalMemory, { defaultValue: 'N/A' })} mono />
+                        <InfoRow icon={<DiskIcon />} label="Total Disk" value={formatBytes(totalDisk, { defaultValue: 'N/A' })} mono />
                     </ul>
                 </div>
 
@@ -1738,13 +1732,6 @@ const CloudflaredLoginCard = ({ login, onCancel }) => {
 };
 
 const MetricsTab = ({ serverId, metrics }) => {
-    const formatBytes = (bytes) => {
-        if (!bytes) return 'N/A';
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-    };
-
     return (
         <div className="metrics-tab">
             <MetricsGraph serverId={serverId} />
@@ -1768,11 +1755,11 @@ const MetricsTab = ({ serverId, metrics }) => {
                             </div>
                             <div className="live-stat">
                                 <span className="live-stat-label">Net TX</span>
-                                <span className="live-stat-value">{formatBytes(metrics.network_sent)}/s</span>
+                                <span className="live-stat-value">{formatBytes(metrics.network_sent, { defaultValue: 'N/A' })}/s</span>
                             </div>
                             <div className="live-stat">
                                 <span className="live-stat-label">Net RX</span>
-                                <span className="live-stat-value">{formatBytes(metrics.network_recv)}/s</span>
+                                <span className="live-stat-value">{formatBytes(metrics.network_recv, { defaultValue: 'N/A' })}/s</span>
                             </div>
                             <div className="live-stat">
                                 <span className="live-stat-label">Containers</span>

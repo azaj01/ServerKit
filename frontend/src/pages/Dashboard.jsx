@@ -15,6 +15,7 @@ import useDashboardLayout from '../hooks/useDashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { MetricCard, Pill, Feed, FeedItem } from '@/components/ds';
+import { formatRelativeTime } from '@/utils/time';
 
 // Map an audit action verb to a tinted icon + semantic tone token.
 // Falls back to a neutral history icon for unrecognised actions.
@@ -40,23 +41,6 @@ function describeActivity(item) {
         ? `${item.target_type}${item.target_id ? ` #${item.target_id}` : ''}`
         : '';
     return { actor, verb, target };
-}
-
-// Short relative time from an ISO timestamp ("just now", "5m ago", "3h ago",
-// "2d ago"), falling back to a localized date for older entries.
-function formatRelativeTime(iso) {
-    if (!iso) return '';
-    const then = new Date(iso);
-    if (isNaN(then)) return '';
-    const secs = Math.floor((Date.now() - then.getTime()) / 1000);
-    if (secs < 60) return 'just now';
-    const mins = Math.floor(secs / 60);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 7) return `${days}d ago`;
-    return then.toLocaleDateString();
 }
 
 // Refresh interval options in seconds

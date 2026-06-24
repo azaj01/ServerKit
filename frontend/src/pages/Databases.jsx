@@ -5,6 +5,7 @@ import {
     Trash2, DatabaseBackup, Copy, FileCode2, Lock,
 } from 'lucide-react';
 import api from '../services/api';
+import { formatBytes } from '@/utils/formatBytes';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -21,14 +22,6 @@ import { listTables, connKey, connLabel, quoteIdent, ENGINE_META } from '../comp
 
 const SIDEBAR_KEY = 'serverkit-dbx-sidebar';
 
-function formatBytes(bytes) {
-    if (!bytes) return null;
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
 function engineState(engine, status) {
     if (engine !== 'mysql' && engine !== 'postgresql') return 'available';
     const s = status?.[engine];
@@ -42,7 +35,7 @@ function dbNode(engine, conn, label, size, idOverride) {
     return {
         id: idOverride || `${engine}:db:${label}`,
         kind: 'database', engine, label, expandable: true, conn,
-        sizeText: formatBytes(size),
+        sizeText: size ? formatBytes(size) : null,
     };
 }
 
