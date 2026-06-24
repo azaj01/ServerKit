@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Check, RotateCcw } from 'lucide-react';
+import { sanitizeSvgInner } from '../../utils/sanitizeSvg';
 import {
     SIDEBAR_ITEMS,
     SIDEBAR_PRESETS,
@@ -170,7 +171,7 @@ const SidebarSettings = () => {
                                         >
                                             <div className="sidebar-item-toggle-info">
                                                 <svg className="sidebar-item-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                    dangerouslySetInnerHTML={{ __html: item.icon }}
+                                                    dangerouslySetInnerHTML={{ __html: sanitizeSvgInner(item.icon) }}
                                                 />
                                                 <span>{item.label}</span>
                                             </div>
