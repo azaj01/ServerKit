@@ -440,6 +440,15 @@ def create_app(config_name=None):
             # connection store (idempotent), so every zone resolves creds the same way.
             from app.services.dns_zone_service import DNSZoneService
             n_zones = DNSZoneService.link_legacy_zones()
+            # Fold a legacy single-row email relay config into the unified
+            # EmailProviderConnection table (§6); idempotent, best-effort.
+            try:
+                from app.services.email_relay_service import EmailRelayService
+                EmailRelayService.migrate_legacy_config()
+            except Exception as _relay_exc:  # never block boot on this
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    f'Email relay legacy migration skipped: {_relay_exc}')
             if n_dns or n_store or n_cloud or n_settings or n_zones:
                 import logging as _logging
                 _logging.getLogger(__name__).info(

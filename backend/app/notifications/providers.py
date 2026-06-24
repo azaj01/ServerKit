@@ -141,6 +141,25 @@ class EmailProviderService:
         return row
 
     @classmethod
+    def update_usage(cls, provider_id, fields):
+        """Toggle a provider's usage flags (§6): uses_notifications, uses_relay,
+        relay_priority. uses_relay is only honored for SMTP connections."""
+        row = cls.get_provider(provider_id)
+        if not row:
+            return None
+        if 'uses_notifications' in fields:
+            row.uses_notifications = bool(fields['uses_notifications'])
+        if 'uses_relay' in fields:
+            row.uses_relay = bool(fields['uses_relay']) and row.provider == 'smtp'
+        if 'relay_priority' in fields and fields['relay_priority'] is not None:
+            try:
+                row.relay_priority = int(fields['relay_priority'])
+            except (TypeError, ValueError):
+                pass
+        db.session.commit()
+        return row
+
+    @classmethod
     def set_default(cls, provider_id):
         row = cls.get_provider(provider_id)
         if not row:
