@@ -272,7 +272,10 @@ const wordpressApi = {
     // =========================================
     PIPELINE_PATH: '/wordpress/projects',
 
-    // Project listing
+    // Pipeline listing. "Pipelines" is the user-facing term (§2); getProjects
+    // is kept as a back-compat alias. Both hit the canonical backend route,
+    // which is also mounted at /wordpress/pipelines.
+    getPipelines: () => api.request('/wordpress/projects'),
     getProjects: () => api.request('/wordpress/projects'),
 
     // Pipeline dashboard

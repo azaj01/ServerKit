@@ -146,6 +146,10 @@ def create_app(config_name=None):
     app.register_blueprint(wordpress_bp, url_prefix='/api/v1/wordpress')
     app.register_blueprint(wordpress_sites_bp, url_prefix='/api/v1/wordpress')
     app.register_blueprint(environment_pipeline_bp, url_prefix='/api/v1/wordpress/projects')
+    # "WordPress Projects" was renamed to "Pipelines" (§2 unification). Mount the
+    # same blueprint under /wordpress/pipelines as a true alias so both URL
+    # spaces resolve identically during the deprecation window.
+    app.register_blueprint(environment_pipeline_bp, url_prefix='/api/v1/wordpress/pipelines', name='environment_pipeline_pipelines')
 
     # Register blueprints - Python
     from app.api.python import python_bp

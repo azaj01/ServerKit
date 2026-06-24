@@ -89,7 +89,8 @@ export const SIDEBAR_ITEMS = [
     {
         // Redesign: WordPress uses the top-bar layout (REDESIGN_MAP §6 dec. 3).
         // Pipeline now lives in the page's top bar (PageTopbar WORDPRESS_TABS),
-        // not as a sidebar sub-item. Route /wordpress/projects is unchanged.
+        // not as a sidebar sub-item. The pipeline list is at /wordpress/pipelines
+        // (renamed from /wordpress/projects in §2; old URLs redirect).
         id: 'wordpress',
         label: 'WordPress',
         route: '/wordpress',

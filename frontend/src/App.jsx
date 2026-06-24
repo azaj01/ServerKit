@@ -96,7 +96,7 @@ const PAGE_TITLES = {
     '/shared-variables': 'Shared Variables',
     '/fleet-proxy': 'Fleet Proxy',
     '/wordpress': 'WordPress Sites',
-    '/wordpress/projects': 'WordPress Projects',
+    '/wordpress/pipelines': 'WordPress Pipelines',
     '/templates': 'Templates',
     '/deployments': 'Deployment Activity',
     '/workflow': 'Workflow Builder',
@@ -158,6 +158,14 @@ function LegacyAppRedirect() {
     return <Navigate to={`/services/${suffix}`} replace />;
 }
 
+// "WordPress Projects" was renamed to "Pipelines" (§2 unification) to end the
+// collision with generic /projects. Forward old deep links to the new space.
+function LegacyWpPipelineRedirect() {
+    const { id, tab } = useParams();
+    const suffix = [id, tab].filter(Boolean).join('/');
+    return <Navigate to={`/wordpress/pipelines/${suffix}`} replace />;
+}
+
 function PageTitleUpdater() {
     const location = useLocation();
     const { page_titles: pluginTitles } = useContributions();
@@ -189,7 +197,7 @@ function PageTitleUpdater() {
                     title = pluginTitles[basePath];
                 } else if (path.startsWith('/services/')) title = 'Service Details';
                 else if (path.startsWith('/servers/')) title = 'Server Details';
-                else if (path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
+                else if (path.startsWith('/wordpress/pipelines/') || path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
                 else if (path.startsWith('/wordpress/')) title = 'WordPress Site';
                 else title = 'ServerKit';
             }
@@ -332,10 +340,14 @@ function AppRoutes() {
                 <Route path="apps/:id/:tab" element={<LegacyAppRedirect />} />
                 <Route element={<TabGroupLayout tabs={WORDPRESS_TABS} />}>
                     <Route path="wordpress" element={<WordPress />} />
-                    <Route path="wordpress/projects" element={<WordPressProjects />} />
+                    <Route path="wordpress/pipelines" element={<WordPressProjects />} />
                 </Route>
-                <Route path="wordpress/projects/:id" element={<WordPressProject />} />
-                <Route path="wordpress/projects/:id/:tab" element={<WordPressProject />} />
+                <Route path="wordpress/pipelines/:id" element={<WordPressProject />} />
+                <Route path="wordpress/pipelines/:id/:tab" element={<WordPressProject />} />
+                {/* Legacy "WordPress Projects" URLs → Pipelines (§2). */}
+                <Route path="wordpress/projects" element={<Navigate to="/wordpress/pipelines" replace />} />
+                <Route path="wordpress/projects/:id" element={<LegacyWpPipelineRedirect />} />
+                <Route path="wordpress/projects/:id/:tab" element={<LegacyWpPipelineRedirect />} />
                 <Route path="wordpress/:id" element={<WordPressDetail />} />
                 <Route path="wordpress/:id/:tab" element={<WordPressDetail />} />
                 {/* Settings sub-section in the URL (e.g. .../settings/git) so the
