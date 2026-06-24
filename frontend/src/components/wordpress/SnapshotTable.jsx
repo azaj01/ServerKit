@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Download, RotateCcw, Trash2, GitCommit, Tag } from 'lucide-react';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { formatBytes } from '@/utils/formatBytes';
+import EmptyState from '../EmptyState';
 
 const SnapshotTable = ({ snapshots, onRestore, onDelete, loading = false }) => {
     const [actionLoading, setActionLoading] = useState({});
@@ -34,7 +35,7 @@ const SnapshotTable = ({ snapshots, onRestore, onDelete, loading = false }) => {
     }
 
     if (loading) {
-        return <div className="loading">Loading snapshots...</div>;
+        return <EmptyState loading title="Loading snapshots..." />;
     }
 
     if (!snapshots || snapshots.length === 0) {

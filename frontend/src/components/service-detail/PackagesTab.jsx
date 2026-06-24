@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import EmptyState from '../EmptyState';
 
 const PackagesTab = ({ appId }) => {
     const toast = useToast();
@@ -52,7 +53,7 @@ const PackagesTab = ({ appId }) => {
     }
 
     if (loading) {
-        return <div className="loading">Loading packages...</div>;
+        return <EmptyState loading title="Loading packages..." />;
     }
 
     return (

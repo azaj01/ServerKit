@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import Modal from './Modal';
+import EmptyState from './EmptyState';
 
 const EnvironmentVariables = ({ appId }) => {
     const toast = useToast();
@@ -255,7 +256,7 @@ const EnvironmentVariables = ({ appId }) => {
         : envVars;
 
     if (loading) {
-        return <div className="loading">Loading environment variables...</div>;
+        return <EmptyState loading title="Loading environment variables..." />;
     }
 
     return (

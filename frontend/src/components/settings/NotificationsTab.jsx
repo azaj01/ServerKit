@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import EmptyState from '../EmptyState';
 
 const NotificationsTab = () => {
     const { isAdmin, user } = useAuth();
@@ -137,7 +138,7 @@ const NotificationsTab = () => {
     }
 
     if (loading) {
-        return <div className="loading">Loading notification settings...</div>;
+        return <EmptyState loading title="Loading notification settings..." />;
     }
 
     const userPrefsUI = (

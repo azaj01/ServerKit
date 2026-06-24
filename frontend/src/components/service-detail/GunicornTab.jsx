@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import EmptyState from '../EmptyState';
 
 const GunicornTab = ({ appId }) => {
     const toast = useToast();
@@ -38,7 +39,7 @@ const GunicornTab = ({ appId }) => {
     }
 
     if (loading) {
-        return <div className="loading">Loading Gunicorn configuration...</div>;
+        return <EmptyState loading title="Loading Gunicorn configuration..." />;
     }
 
     return (

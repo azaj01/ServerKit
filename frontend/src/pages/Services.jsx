@@ -122,7 +122,7 @@ const Services = () => {
     );
 
     if (loading) {
-        return <div className="loading">Loading services...</div>;
+        return <EmptyState loading title="Loading services..." />;
     }
 
     return (

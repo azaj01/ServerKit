@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { formatBytes } from '@/utils/formatBytes';
+import EmptyState from '../EmptyState';
 
 function formatUptime(seconds) {
     if (!seconds) return '-';
@@ -146,7 +147,7 @@ const SystemTab = () => {
     }
 
     if (loading) {
-        return <div className="loading">Loading system information...</div>;
+        return <EmptyState loading title="Loading system information..." />;
     }
 
     return (
@@ -264,7 +265,7 @@ const SystemTab = () => {
                     </div>
                 )}
                 {domainLoading ? (
-                    <div className="loading">Loading domain settings...</div>
+                    <EmptyState loading title="Loading domain settings..." />
                 ) : (
                     <>
                         {detectedDomain?.detected_domain && (

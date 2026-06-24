@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ds';
 import { useDeployments } from '../../hooks/useDeployments';
 import { getDeployStatus, formatRelativeTime, formatDuration } from '../../utils/serviceTypes';
+import EmptyState from '../EmptyState';
 
 // Deployment status → semantic tone (ds Pill kind / dot modifier)
 const DEPLOY_TONE = {
@@ -18,7 +19,7 @@ const EventsTab = ({ appId }) => {
     const [expandedId, setExpandedId] = useState(null);
 
     if (loading) {
-        return <div className="loading">Loading deployment history...</div>;
+        return <EmptyState loading title="Loading deployment history..." />;
     }
 
     if (error) {

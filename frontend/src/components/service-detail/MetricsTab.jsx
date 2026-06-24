@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { Gauge } from '@/components/ds';
+import EmptyState from '../EmptyState';
 
 const MetricsTab = ({ app }) => {
     const [stats, setStats] = useState(null);
@@ -41,7 +42,7 @@ const MetricsTab = ({ app }) => {
     }
 
     if (loading) {
-        return <div className="loading">Loading metrics...</div>;
+        return <EmptyState loading title="Loading metrics..." />;
     }
 
     if (isDocker && stats) {

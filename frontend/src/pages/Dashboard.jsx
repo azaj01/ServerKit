@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { MetricCard, Pill, Feed, FeedItem } from '@/components/ds';
 import { formatRelativeTime } from '@/utils/time';
+import EmptyState from '../components/EmptyState';
 
 // Map an audit action verb to a tinted icon + semantic tone token.
 // Falls back to a neutral history icon for unrecognised actions.
@@ -276,7 +277,7 @@ const Dashboard = () => {
     const isConnected = isRemote ? !remoteLoading && !!remoteMetrics : !!localMetrics;
 
     if (loading && metricsLoading) {
-        return <div className="loading">Loading dashboard...</div>;
+        return <EmptyState loading title="Loading dashboard..." />;
     }
 
     return (
