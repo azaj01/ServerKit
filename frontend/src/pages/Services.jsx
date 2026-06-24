@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Layers, Plus, Square, Play, RotateCw, GitBranch, Github, FolderOpen, FileArchive, Search, FolderKanban } from 'lucide-react';
+import { Layers, Plus, Square, Play, RotateCw, GitBranch, Github, FolderOpen, FileArchive, FolderKanban } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { getServiceType, getStatusConfig, formatRelativeTime } from '../utils/serviceTypes';
-import EmptyState from '../components/EmptyState';
-import { Pill, SegControl, ServiceTile, EnvTag } from '@/components/ds';
+import ResourceListPage from '../components/layouts/ResourceListPage';
+import { Pill, ServiceTile, EnvTag } from '@/components/ds';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -121,237 +121,206 @@ const Services = () => {
         []
     );
 
-    if (loading) {
-        return <EmptyState loading title="Loading services..." />;
-    }
+    const allSelected = filteredApps.length > 0 && filteredApps.every(a => selectedIds.has(a.id));
+
+    const toggleOne = (id, checked) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (checked) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    };
+
+    // DataTable columns. Interactive cells (checkbox, row actions) stop click
+    // propagation so they don't trigger the row's navigate.
+    const columns = [
+        {
+            key: '__select',
+            className: 'wp-list__ck',
+            cellClassName: 'wp-list__ck',
+            header: (
+                <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(checked) => {
+                        setSelectedIds(checked ? new Set(filteredApps.map(a => a.id)) : new Set());
+                    }}
+                    aria-label="Select all services"
+                />
+            ),
+            render: (app) => (
+                <div onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                        checked={selectedIds.has(app.id)}
+                        onCheckedChange={(checked) => toggleOne(app.id, checked)}
+                        aria-label={`Select ${app.name}`}
+                    />
+                </div>
+            ),
+        },
+        {
+            key: 'name',
+            header: 'Service',
+            render: (app) => {
+                const typeInfo = getServiceType(app.app_type);
+                return (
+                    <div className="sk-cell-name">
+                        <ServiceTile name={app.name} size={30} className="wp-list__tile" aria-hidden="true" />
+                        <span>
+                            <div>{app.name}</div>
+                            <div className="sk-cell-sub">{typeInfo.label}</div>
+                        </span>
+                    </div>
+                );
+            },
+        },
+        {
+            key: 'project',
+            header: 'Project',
+            render: (app) => (
+                app.project_name ? (
+                    <span className="services-page__project">
+                        <span className="services-page__project-name" title={app.project_name}>
+                            <FolderKanban size={12} aria-hidden="true" />
+                            {app.project_name}
+                        </span>
+                        {app.environment_name && (
+                            <EnvTag env={app.environment_name}>{app.environment_name}</EnvTag>
+                        )}
+                    </span>
+                ) : (
+                    <span className="services-page__unassigned">Unassigned</span>
+                )
+            ),
+        },
+        {
+            key: 'source',
+            header: 'Source',
+            render: (app) => {
+                const isGithub = (app.deploy_repo_url || '').includes('github.com');
+                if (app.deploy_repo_url) {
+                    return (
+                        <span className="services-page__src-badge" title={app.deploy_repo_url}>
+                            {isGithub ? <Github size={12} /> : <GitBranch size={12} />}
+                            {extractRepoName(app.deploy_repo_url)}
+                        </span>
+                    );
+                }
+                if (app.source === 'manual') {
+                    return (
+                        <span className="services-page__src-badge services-page__src-badge--manual" title={app.root_path || ''}>
+                            <FolderOpen size={12} />
+                            Local
+                        </span>
+                    );
+                }
+                if (app.source === 'upload') {
+                    return (
+                        <span className="services-page__src-badge services-page__src-badge--upload" title={app.upload_path || ''}>
+                            <FileArchive size={12} />
+                            Upload v{app.version || 1}
+                        </span>
+                    );
+                }
+                return <span className="wp-list__dash">—</span>;
+            },
+        },
+        {
+            key: 'domain',
+            header: 'Domain',
+            cellClassName: 'sk-cell-mono',
+            render: (app) => {
+                const primaryDomain = (app.domains?.find(d => d.is_primary) || app.domains?.[0])?.name || '';
+                return primaryDomain || <span className="wp-list__dash">—</span>;
+            },
+        },
+        {
+            key: 'status',
+            header: 'Status',
+            render: (app) => <Pill kind={STATUS_PILL[app.status] || 'gray'}>{getStatusConfig(app.status).label}</Pill>,
+        },
+        {
+            key: 'last_deploy',
+            header: 'Last Deploy',
+            cellClassName: 'sk-cell-mono',
+            render: (app) => (
+                app.last_deploy_at ? formatRelativeTime(app.last_deploy_at) : <span className="wp-list__dash">—</span>
+            ),
+        },
+        {
+            key: '__actions',
+            header: '',
+            width: 70,
+            render: (app) => {
+                const isRunning = app.status === 'running';
+                return (
+                    <div className="services-page__actions" onClick={(e) => e.stopPropagation()}>
+                        {isRunning ? (
+                            <>
+                                <Button variant="ghost" size="sm" onClick={(e) => handleAction(e, app.id, 'restart')} disabled={actionLoading === `${app.id}-restart`} title="Restart">
+                                    <RotateCw size={14} />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={(e) => handleAction(e, app.id, 'stop')} disabled={actionLoading === `${app.id}-stop`} title="Stop">
+                                    <Square size={14} />
+                                </Button>
+                            </>
+                        ) : (
+                            <Button variant="ghost" size="sm" onClick={(e) => handleAction(e, app.id, 'start')} disabled={actionLoading === `${app.id}-start`} title="Start">
+                                <Play size={14} />
+                            </Button>
+                        )}
+                    </div>
+                );
+            },
+        },
+    ];
 
     return (
-        <div className="sk-tabgroup__inner services-page">
-            {apps.length === 0 ? (
-                <EmptyState
-                    size="lg"
-                    icon={Layers}
-                    title="No services found"
-                    description="Connect a repository or install a template to get started"
-                    action={
-                        <Button asChild>
-                            <Link to="/services/new">Create Service</Link>
-                        </Button>
-                    }
-                />
-            ) : (
-                <div className="wp-list">
-                    {/* Toolbar — same layout as the WordPress list page: status tabs on the left, search on the right. */}
-                    <div className="wp-list__toolbar">
-                        <SegControl
-                            value={statusFilter}
-                            onChange={setStatusFilter}
-                            options={[
-                                { value: 'all', label: 'All', count: apps.length },
-                                { value: 'running', label: 'Running', count: runningCount },
-                                { value: 'stopped', label: 'Stopped', count: apps.length - runningCount },
-                            ]}
-                        />
-                        <div className="wp-list__search">
-                            <Search size={15} aria-hidden="true" />
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                placeholder="Search services…"
-                                aria-label="Search services"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Bulk Actions Bar */}
-                    {selectedIds.size > 0 && (
-                        <div className="wp-list__bulkbar">
-                            <span className="wp-list__bulkcount">{selectedIds.size} selected</span>
-                            <div className="wp-list__bulkactions">
-                                <Button variant="outline" size="sm" onClick={() => setShowMoveDialog(true)} disabled={bulkLoading}>
-                                    <FolderKanban size={14} />
-                                    Move to project
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => handleBulkAction('restart')} disabled={bulkLoading}>
-                                    Restart All
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => handleBulkAction('stop')} disabled={bulkLoading}>
-                                    Stop All
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => handleBulkAction('start')} disabled={bulkLoading}>
-                                    Start All
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-                                    Clear
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {filteredApps.length === 0 ? (
-                        <EmptyState
-                            icon={Layers}
-                            title="No services found"
-                            description="Try adjusting your search or filter"
-                        />
-                    ) : (
-                        <div className="wp-list__card">
-                            <table className="sk-dtable">
-                                <thead>
-                                    <tr>
-                                        <th className="wp-list__ck">
-                                            <Checkbox
-                                                checked={filteredApps.length > 0 && filteredApps.every(a => selectedIds.has(a.id))}
-                                                onCheckedChange={(checked) => {
-                                                    setSelectedIds(checked ? new Set(filteredApps.map(a => a.id)) : new Set());
-                                                }}
-                                                aria-label="Select all services"
-                                            />
-                                        </th>
-                                        <th>Service</th>
-                                        <th>Project</th>
-                                        <th>Source</th>
-                                        <th>Domain</th>
-                                        <th>Status</th>
-                                        <th>Last Deploy</th>
-                                        <th style={{ width: 70 }} />
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredApps.map(app => {
-                                        const typeInfo = getServiceType(app.app_type);
-                                        const statusInfo = getStatusConfig(app.status);
-                                        const isRunning = app.status === 'running';
-                                        const isGithub = (app.deploy_repo_url || '').includes('github.com');
-                                        const primaryDomain = (app.domains?.find(d => d.is_primary) || app.domains?.[0])?.name || '';
-
-                                        return (
-                                            <tr
-                                                key={app.id}
-                                                className={`is-clickable ${selectedIds.has(app.id) ? 'is-selected' : ''}`}
-                                                onClick={() => {
-                                                    if (app.app_type === 'wordpress') {
-                                                        navigate(`/wordpress/${app.id}`);
-                                                    } else {
-                                                        navigate(`/services/${app.id}`);
-                                                    }
-                                                }}
-                                            >
-                                                <td className="wp-list__ck" onClick={(e) => e.stopPropagation()}>
-                                                    <Checkbox
-                                                        checked={selectedIds.has(app.id)}
-                                                        onCheckedChange={(checked) => {
-                                                            setSelectedIds(prev => {
-                                                                const next = new Set(prev);
-                                                                if (checked) next.add(app.id);
-                                                                else next.delete(app.id);
-                                                                return next;
-                                                            });
-                                                        }}
-                                                        aria-label={`Select ${app.name}`}
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <div className="sk-cell-name">
-                                                        <ServiceTile
-                                                            name={app.name}
-                                                            size={30}
-                                                            className="wp-list__tile"
-                                                            aria-hidden="true"
-                                                        />
-                                                        <span>
-                                                            <div>{app.name}</div>
-                                                            <div className="sk-cell-sub">{typeInfo.label}</div>
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    {app.project_name ? (
-                                                        <span className="services-page__project">
-                                                            <span className="services-page__project-name" title={app.project_name}>
-                                                                <FolderKanban size={12} aria-hidden="true" />
-                                                                {app.project_name}
-                                                            </span>
-                                                            {app.environment_name && (
-                                                                <EnvTag env={app.environment_name}>{app.environment_name}</EnvTag>
-                                                            )}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="services-page__unassigned">Unassigned</span>
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    {app.deploy_repo_url ? (
-                                                        <span className="services-page__src-badge" title={app.deploy_repo_url}>
-                                                            {isGithub ? <Github size={12} /> : <GitBranch size={12} />}
-                                                            {extractRepoName(app.deploy_repo_url)}
-                                                        </span>
-                                                    ) : app.source === 'manual' ? (
-                                                        <span className="services-page__src-badge services-page__src-badge--manual" title={app.root_path || ''}>
-                                                            <FolderOpen size={12} />
-                                                            Local
-                                                        </span>
-                                                    ) : app.source === 'upload' ? (
-                                                        <span className="services-page__src-badge services-page__src-badge--upload" title={app.upload_path || ''}>
-                                                            <FileArchive size={12} />
-                                                            Upload v{app.version || 1}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="wp-list__dash">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="sk-cell-mono">{primaryDomain || <span className="wp-list__dash">—</span>}</td>
-                                                <td><Pill kind={STATUS_PILL[app.status] || 'gray'}>{statusInfo.label}</Pill></td>
-                                                <td className="sk-cell-mono">
-                                                    {app.last_deploy_at ? formatRelativeTime(app.last_deploy_at) : <span className="wp-list__dash">—</span>}
-                                                </td>
-                                                <td onClick={(e) => e.stopPropagation()}>
-                                                    <div className="services-page__actions">
-                                                        {isRunning ? (
-                                                            <>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={(e) => handleAction(e, app.id, 'restart')}
-                                                                    disabled={actionLoading === `${app.id}-restart`}
-                                                                    title="Restart"
-                                                                >
-                                                                    <RotateCw size={14} />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={(e) => handleAction(e, app.id, 'stop')}
-                                                                    disabled={actionLoading === `${app.id}-stop`}
-                                                                    title="Stop"
-                                                                >
-                                                                    <Square size={14} />
-                                                                </Button>
-                                                            </>
-                                                        ) : (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={(e) => handleAction(e, app.id, 'start')}
-                                                                disabled={actionLoading === `${app.id}-start`}
-                                                                title="Start"
-                                                            >
-                                                                <Play size={14} />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-            )}
-
+        <ResourceListPage
+            className="services-page"
+            loading={loading}
+            loadingTitle="Loading services..."
+            totalCount={apps.length}
+            items={filteredApps}
+            columns={columns}
+            keyField="id"
+            onRowClick={(app) => navigate(app.app_type === 'wordpress' ? `/wordpress/${app.id}` : `/services/${app.id}`)}
+            rowClassName={(app) => (selectedIds.has(app.id) ? 'is-selected' : '')}
+            filters={[
+                { value: 'all', label: 'All', count: apps.length },
+                { value: 'running', label: 'Running', count: runningCount },
+                { value: 'stopped', label: 'Stopped', count: apps.length - runningCount },
+            ]}
+            activeFilter={statusFilter}
+            onFilterChange={setStatusFilter}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search services…"
+            selectedCount={selectedIds.size}
+            onClearSelection={() => setSelectedIds(new Set())}
+            bulkActions={
+                <>
+                    <Button variant="outline" size="sm" onClick={() => setShowMoveDialog(true)} disabled={bulkLoading}>
+                        <FolderKanban size={14} />
+                        Move to project
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleBulkAction('restart')} disabled={bulkLoading}>Restart All</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleBulkAction('stop')} disabled={bulkLoading}>Stop All</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleBulkAction('start')} disabled={bulkLoading}>Start All</Button>
+                </>
+            }
+            emptyIcon={Layers}
+            emptyTitle="No services found"
+            emptyDescription="Connect a repository or install a template to get started"
+            emptyAction={
+                <Button asChild>
+                    <Link to="/services/new">Create Service</Link>
+                </Button>
+            }
+            filteredEmptyIcon={Layers}
+            filteredEmptyTitle="No services found"
+            filteredEmptyDescription="Try adjusting your search or filter"
+        >
             <MoveToProjectDialog
                 open={showMoveDialog}
                 onOpenChange={setShowMoveDialog}
@@ -375,7 +344,7 @@ const Services = () => {
                     }
                 }}
             />
-        </div>
+        </ResourceListPage>
     );
 };
 
