@@ -19,7 +19,7 @@ const ACTION_OPTIONS = [
 
 const EXPRESSION_PLACEHOLDER = '(http.request.uri.path contains "/admin")';
 
-export default function WafPanel({ zoneId, isAdmin }) {
+export default function CloudflareWafPanel({ zoneId, isAdmin }) {
     const toast = useToast();
 
     const [loading, setLoading] = useState(true);

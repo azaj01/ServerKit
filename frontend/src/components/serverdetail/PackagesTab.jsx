@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
-import { ConfirmDialog } from '../ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +25,7 @@ const QUICK_PRESETS = [
 
 const PackagesTab = ({ serverId, serverStatus }) => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [installedRaw, setInstalledRaw] = useState('');
     const [manager, setManager] = useState('');
@@ -223,15 +222,6 @@ const PackagesTab = ({ serverId, serverStatus }) => {
                 title={job?.title}
                 onClose={() => setJob(null)}
                 onComplete={handleJobComplete}
-            />
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
             />
 
             <div className="server-packages__remove-tip text-muted-foreground">

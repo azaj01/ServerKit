@@ -8,9 +8,9 @@ import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { api } from '../services/api';
 import { MetricCard, Pill } from '@/components/ds';
 import { useToast } from '../contexts/ToastContext';
-import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -281,11 +281,7 @@ function FTPServer() {
     );
 
     if (loading) {
-        return (
-            <div className="page-loading">
-                <Spinner size="lg" />
-            </div>
-        );
+        return <EmptyState loading size="lg" title="Loading FTP server" />;
     }
 
     const activeServer = status?.active_server;
@@ -569,16 +565,7 @@ function FTPServer() {
             )}
 
             {/* Install Modal */}
-            {showInstallModal && (
-                <div className="modal-overlay" onClick={() => setShowInstallModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Install FTP Server</h2>
-                            <button className="btn btn-icon" onClick={() => setShowInstallModal(false)}>
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <div className="modal-body">
+            <Modal open={showInstallModal} onClose={() => setShowInstallModal(false)} title="Install FTP Server">
                             <div className="form-group">
                                 <Label>Select FTP Server</Label>
                                 <select
@@ -602,8 +589,7 @@ function FTPServer() {
                                     </p>
                                 )}
                             </div>
-                        </div>
-                        <div className="modal-footer">
+                        <div className="modal-actions">
                             <Button variant="outline" onClick={() => setShowInstallModal(false)}>
                                 Cancel
                             </Button>
@@ -614,21 +600,10 @@ function FTPServer() {
                                 {actionLoading ? 'Installing...' : 'Install'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Create User Modal */}
-            {showUserModal && (
-                <div className="modal-overlay" onClick={() => setShowUserModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create FTP User</h2>
-                            <button className="btn btn-icon" onClick={() => setShowUserModal(false)}>
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <div className="modal-body">
+            <Modal open={showUserModal} onClose={() => setShowUserModal(false)} title="Create FTP User">
                             <div className="form-group">
                                 <Label>Username *</Label>
                                 <Input
@@ -656,8 +631,7 @@ function FTPServer() {
                                     placeholder="/home/ftp/username"
                                 />
                             </div>
-                        </div>
-                        <div className="modal-footer">
+                        <div className="modal-actions">
                             <Button variant="outline" onClick={() => setShowUserModal(false)}>
                                 Cancel
                             </Button>
@@ -668,21 +642,10 @@ function FTPServer() {
                                 {actionLoading ? 'Creating...' : 'Create User'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Change Password Modal */}
-            {showPasswordModal && (
-                <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Change Password</h2>
-                            <button className="btn btn-icon" onClick={() => setShowPasswordModal(false)}>
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <div className="modal-body">
+            <Modal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} title="Change Password">
                             <p>Changing password for user: <strong>{passwordTarget}</strong></p>
                             <div className="form-group">
                                 <Label>New Password (leave empty to auto-generate)</Label>
@@ -693,8 +656,7 @@ function FTPServer() {
                                     placeholder="Auto-generated if empty"
                                 />
                             </div>
-                        </div>
-                        <div className="modal-footer">
+                        <div className="modal-actions">
                             <Button variant="outline" onClick={() => setShowPasswordModal(false)}>
                                 Cancel
                             </Button>
@@ -705,9 +667,7 @@ function FTPServer() {
                                 {actionLoading ? 'Changing...' : 'Change Password'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Confirm Dialog */}
             {confirmDialog && (

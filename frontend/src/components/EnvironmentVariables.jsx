@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import Modal from './Modal';
+import EmptyState from './EmptyState';
 
 const EnvironmentVariables = ({ appId }) => {
     const toast = useToast();
@@ -255,7 +256,7 @@ const EnvironmentVariables = ({ appId }) => {
         : envVars;
 
     if (loading) {
-        return <div className="loading">Loading environment variables...</div>;
+        return <EmptyState loading title="Loading environment variables..." />;
     }
 
     return (
@@ -371,7 +372,7 @@ const EnvironmentVariables = ({ appId }) => {
                         placeholder="Filter variables..."
                     />
                     {filter && (
-                        <button className="filter-clear" onClick={() => setFilter('')}>&times;</button>
+                        <button type="button" className="filter-clear" onClick={() => setFilter('')}>&times;</button>
                     )}
                 </div>
             )}
@@ -406,7 +407,7 @@ const EnvironmentVariables = ({ appId }) => {
                                     )}
                                 </span>
                                 <div className="env-item-actions">
-                                    <button
+                                    <button type="button"
                                         className="btn-icon"
                                         onClick={() => toggleShowValue(envVar.id)}
                                         title={showValues[envVar.id] ? 'Hide value' : 'Show value'}
@@ -423,7 +424,7 @@ const EnvironmentVariables = ({ appId }) => {
                                             </svg>
                                         )}
                                     </button>
-                                    <button
+                                    <button type="button"
                                         className="btn-icon"
                                         onClick={() => copyToClipboard(envVar.value)}
                                         title="Copy value"
@@ -433,7 +434,7 @@ const EnvironmentVariables = ({ appId }) => {
                                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                                         </svg>
                                     </button>
-                                    <button
+                                    <button type="button"
                                         className="btn-icon"
                                         onClick={() => startEditing(envVar)}
                                         title="Edit"
@@ -443,7 +444,7 @@ const EnvironmentVariables = ({ appId }) => {
                                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                                         </svg>
                                     </button>
-                                    <button
+                                    <button type="button"
                                         className="btn-icon"
                                         onClick={() => handleToggleSecret(envVar)}
                                         title={envVar.is_secret ? 'Mark as non-secret' : 'Mark as secret'}
@@ -460,7 +461,7 @@ const EnvironmentVariables = ({ appId }) => {
                                             </svg>
                                         )}
                                     </button>
-                                    <button
+                                    <button type="button"
                                         className="btn-icon btn-danger"
                                         onClick={() => handleDelete(envVar.key)}
                                         title="Delete"

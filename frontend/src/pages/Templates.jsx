@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
@@ -445,14 +446,14 @@ const Templates = () => {
                     {sortedTemplates.length} template{sortedTemplates.length !== 1 ? 's' : ''}
                 </span>
                 <div className="category-filters" aria-label="Template categories">
-                    <button
+                    <button type="button"
                         className={`category-btn ${!selectedCategory ? 'active' : ''}`}
                         onClick={() => setSelectedCategoryFilter(null)}
                     >
                         All
                     </button>
                     {visibleCategories.map(category => (
-                        <button
+                        <button type="button"
                             key={category}
                             className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
                             onClick={() => setSelectedCategoryFilter(category)}
@@ -461,7 +462,7 @@ const Templates = () => {
                         </button>
                     ))}
                     {categories.length > 10 && (
-                        <button
+                        <button type="button"
                             className="category-btn category-btn--more"
                             onClick={() => setShowAllCategories(prev => !prev)}
                         >
@@ -487,7 +488,7 @@ const Templates = () => {
                         <span className="filter-chip">
                             <Tag size={14} />
                             {selectedCategory}
-                            <button onClick={() => setSelectedCategoryFilter(null)}>
+                            <button type="button" onClick={() => setSelectedCategoryFilter(null)}>
                                 <X size={14} />
                             </button>
                         </span>
@@ -496,7 +497,7 @@ const Templates = () => {
                         <span className="filter-chip">
                             <Search size={14} />
                             &ldquo;{searchQuery}&rdquo;
-                            <button onClick={() => setSearchQueryFilter('')}>
+                            <button type="button" onClick={() => setSearchQueryFilter('')}>
                                 <X size={14} />
                             </button>
                         </span>
@@ -584,7 +585,7 @@ const Templates = () => {
                                     <span className="template-version">Version {selectedTemplate.version}</span>
                                 </div>
                             </div>
-                            <button className="modal-close" onClick={() => setSelectedTemplate(null)}>&times;</button>
+                            <button type="button" className="modal-close" onClick={() => setSelectedTemplate(null)}>&times;</button>
                         </div>
                         <div className="modal-body">
                             <p className="template-full-description">{selectedTemplate.description}</p>
@@ -854,14 +855,9 @@ const InstallModal = ({ template, onClose, onSuccess }) => {
     }
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Install {template.name}</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-                <form onSubmit={handleInstall}>
-                    <div className="modal-body">
+        <Modal open onClose={onClose} title={`Install ${template.name}`} size="lg">
+            <form onSubmit={handleInstall}>
+                <div className="modal-body">
                         {errors.length > 0 && (
                             <div className="alert alert-danger">
                                 <ul>
@@ -973,8 +969,7 @@ const InstallModal = ({ template, onClose, onSuccess }) => {
                         </Button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </Modal>
     );
 };
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Globe } from 'lucide-react';
 import ConfigPanel from '../ConfigPanel';
 import { Input } from '@/components/ui/input';

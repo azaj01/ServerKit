@@ -4,7 +4,6 @@ import { Database, Loader, CheckCircle, ArrowUpCircle, ShieldCheck } from 'lucid
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 // Revisions in this project are short descriptive slugs (e.g. 016_resource_grants),
 // so show them in full rather than truncating mid-word.
@@ -12,7 +11,7 @@ const short = (rev) => rev || '';
 
 const MigrationHistoryTab = () => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [revisions, setRevisions] = useState([]);
     const [status, setStatus] = useState(null);
@@ -222,17 +221,6 @@ const MigrationHistoryTab = () => {
                     </table>
                 </div>
             )}
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 };

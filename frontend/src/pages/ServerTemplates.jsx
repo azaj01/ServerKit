@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import PageLoader from '../components/PageLoader';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { LayoutTemplate } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -231,69 +232,63 @@ const ServerTemplates = () => {
             </Tabs>
 
             {/* Create Modal */}
-            {showCreateModal && (
-                <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create Template</h2>
-                            <button className="modal-close" onClick={() => setShowCreateModal(false)}>&times;</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="form-group">
-                                <label>Name</label>
-                                <Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                            </div>
-                            <div className="form-group">
-                                <label>Description</label>
-                                <Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} rows={2} />
-                            </div>
-                            <div className="form-group">
-                                <label>Category</label>
-                                <select className="form-select" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
-                                    {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>Packages (one per line)</label>
-                                <Textarea className="form-input--mono" value={form.packages} onChange={e => setForm({...form, packages: e.target.value})} rows={4} placeholder={"nginx\nphp-fpm\ncertbot"} />
-                            </div>
-                            <div className="form-group">
-                                <label className="checkbox-label">
-                                    <input type="checkbox" checked={form.auto_remediate} onChange={e => setForm({...form, auto_remediate: e.target.checked})} />
-                                    Auto-remediate drift
-                                </label>
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <Button variant="outline" onClick={() => setShowCreateModal(false)}>Cancel</Button>
-                            <Button onClick={handleCreate} disabled={!form.name}>Create</Button>
-                        </div>
-                    </div>
+            <Modal
+                open={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                title="Create Template"
+                footer={(
+                    <>
+                        <Button variant="outline" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+                        <Button onClick={handleCreate} disabled={!form.name}>Create</Button>
+                    </>
+                )}
+            >
+                <div className="form-group">
+                    <label>Name</label>
+                    <Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                 </div>
-            )}
+                <div className="form-group">
+                    <label>Description</label>
+                    <Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} rows={2} />
+                </div>
+                <div className="form-group">
+                    <label>Category</label>
+                    <select className="form-select" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
+                        {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Packages (one per line)</label>
+                    <Textarea className="form-input--mono" value={form.packages} onChange={e => setForm({...form, packages: e.target.value})} rows={4} placeholder={"nginx\nphp-fpm\ncertbot"} />
+                </div>
+                <div className="form-group">
+                    <label className="checkbox-label">
+                        <input type="checkbox" checked={form.auto_remediate} onChange={e => setForm({...form, auto_remediate: e.target.checked})} />
+                        Auto-remediate drift
+                    </label>
+                </div>
+            </Modal>
 
             {/* Assign Modal */}
-            {showAssignModal && selectedTemplate && (
-                <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Assign {selectedTemplate.name}</h2>
-                            <button className="modal-close" onClick={() => setShowAssignModal(false)}>&times;</button>
+            <Modal
+                open={Boolean(showAssignModal && selectedTemplate)}
+                onClose={() => setShowAssignModal(false)}
+                title={selectedTemplate ? `Assign ${selectedTemplate.name}` : 'Assign template'}
+            >
+                {selectedTemplate && (
+                    <>
+                        <p>Select a server to apply this template:</p>
+                        <div className="server-select-list">
+                            {servers.map(server => (
+                                <div key={server.id} className="server-select-item" onClick={() => handleAssign(selectedTemplate.id, server.id)}>
+                                    <span className={`status-dot status-dot--${server.status === 'online' ? 'success' : 'danger'}`} />
+                                    <span>{server.name}</span>
+                                </div>
+                            ))}
                         </div>
-                        <div className="modal-body">
-                            <p>Select a server to apply this template:</p>
-                            <div className="server-select-list">
-                                {servers.map(server => (
-                                    <div key={server.id} className="server-select-item" onClick={() => handleAssign(selectedTemplate.id, server.id)}>
-                                        <span className={`status-dot status-dot--${server.status === 'online' ? 'success' : 'danger'}`} />
-                                        <span>{server.name}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </>
+                )}
+            </Modal>
 
             {deleteConfirm && (
                 <ConfirmDialog

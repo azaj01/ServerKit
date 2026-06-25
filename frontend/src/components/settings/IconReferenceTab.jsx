@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     Github, FileText, HelpCircle, MessageSquare, Bug, Check, Download, CheckCircle,
     RefreshCw, ExternalLink, Star, X, Code, Search, Container, Globe, BarChart3,
@@ -104,7 +104,7 @@ const IconReferenceTab = () => {
                     <h3>{group}</h3>
                     <div className="icon-reference-grid">
                         {Object.entries(icons).map(([name, IconComp]) => (
-                            <button
+                            <button type="button"
                                 key={name}
                                 className={`icon-reference-item ${copiedIcon === name ? 'copied' : ''}`}
                                 onClick={() => handleCopyImport(name)}

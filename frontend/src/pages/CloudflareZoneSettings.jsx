@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Cloud, ShieldCheck, Lock, Gauge, Database, Wand2, Eraser, Flame, Zap, Network, HardDrive } from 'lucide-react';
 import { PageTopbar } from '@/components/ds';
-import WafPanel from '../components/cloudflare/WafPanel';
+import CloudflareWafPanel from '../components/cloudflare/CloudflareWafPanel';
 import WorkersPanel from '../components/cloudflare/WorkersPanel';
 import TunnelsPanel from '../components/cloudflare/TunnelsPanel';
 import StoragePanel from '../components/cloudflare/StoragePanel';
@@ -215,7 +215,7 @@ const CloudflareZoneSettings = () => {
 
                     <TabsContent value="waf">
                         <div className="cf-panel">
-                            <WafPanel zoneId={zoneId} isAdmin={isAdmin} />
+                            <CloudflareWafPanel zoneId={zoneId} isAdmin={isAdmin} />
                         </div>
                     </TabsContent>
 

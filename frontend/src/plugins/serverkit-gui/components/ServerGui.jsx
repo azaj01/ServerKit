@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import SyntheticDesktop from './SyntheticDesktop.jsx';
 
 const FRAME_INTERVAL_MS_DEFAULT = 700;
@@ -251,7 +251,7 @@ function ScreenshotView({ baseUrl, fetchJson, intervalMs, scale, quality }) {
 
     return (
         <div className="sk-gui__viewport">
-            <button
+            <button type="button"
                 className="sk-gui__viewport-btn"
                 onClick={() => setPaused(p => !p)}
             >

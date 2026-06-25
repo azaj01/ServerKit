@@ -5,10 +5,11 @@ import { useToast } from '../contexts/ToastContext';
 import { useResourceTier } from '../contexts/ResourceTierContext';
 import ResourceGate from '../components/ResourceGate';
 import Spinner from '../components/Spinner';
-import EmptyState from '../components/EmptyState';
-import { Globe, ChevronRight, Search } from 'lucide-react';
-import { Pill, SegControl, ServiceTile } from '@/components/ds';
+import ResourceListPage from '../components/layouts/ResourceListPage';
+import { Globe, ChevronRight } from 'lucide-react';
+import { Pill, ServiceTile } from '@/components/ds';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -195,9 +196,112 @@ function WordPress() {
         );
     }
 
+    const allTags = Array.from(new Set(sites.flatMap(s => s.tags || []))).sort();
+    const runningCount = sites.filter(s => s.status === 'running').length;
+    const q = siteSearch.trim().toLowerCase();
+    const siteLabel = site => site.name || site.application?.name || `Site ${site.id}`;
+    const shownSites = sites.filter(site => (
+        (statusFilter === 'all'
+            || (statusFilter === 'running' ? site.status === 'running' : site.status !== 'running'))
+        && (activeTag === null || (site.tags || []).includes(activeTag))
+        && (q === '' || [siteLabel(site), site.title, site.url, site.domain]
+            .some(v => v && String(v).toLowerCase().includes(q)))
+    ));
+    const allSelected = shownSites.length > 0 && shownSites.every(s => selectedIds.has(s.id));
+
+    const columns = [
+        {
+            key: '__select',
+            className: 'wp-list__ck',
+            cellClassName: 'wp-list__ck',
+            header: (
+                <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(checked) => setSelectedIds(checked ? new Set(shownSites.map(s => s.id)) : new Set())}
+                    aria-label="Select all sites"
+                />
+            ),
+            render: (site) => (
+                <div onClick={e => e.stopPropagation()}>
+                    <Checkbox
+                        checked={selectedIds.has(site.id)}
+                        onCheckedChange={(checked) => {
+                            setSelectedIds(prev => {
+                                const next = new Set(prev);
+                                if (checked) next.add(site.id);
+                                else next.delete(site.id);
+                                return next;
+                            });
+                        }}
+                        aria-label={`Select ${site.name || `site ${site.id}`}`}
+                    />
+                </div>
+            ),
+        },
+        {
+            key: 'name',
+            header: 'Site',
+            render: (site) => (
+                <div className="sk-cell-name">
+                    <ServiceTile name={siteLabel(site)} size={30} className="wp-list__tile" aria-hidden="true" />
+                    <span>
+                        <div>{siteLabel(site)}</div>
+                        {site.port && <div className="sk-cell-sub">:{site.port}</div>}
+                    </span>
+                </div>
+            ),
+        },
+        { key: 'environments', header: 'Environments', cellClassName: 'sk-cell-mono', render: (site) => (site.environment_count || 0) + 1 },
+        { key: 'version', header: 'Version', cellClassName: 'sk-cell-mono', render: (site) => `WP ${site.wp_version || '6.4'}` },
+        {
+            key: 'status',
+            header: 'Status',
+            render: (site) => (
+                <Pill kind={site.status === 'running' ? 'green' : 'gray'}>
+                    {site.status === 'running' ? 'Running' : 'Stopped'}
+                </Pill>
+            ),
+        },
+        {
+            key: 'tags',
+            header: 'Tags',
+            render: (site) => (
+                site.tags?.length
+                    ? site.tags.map(tag => <span key={tag} className="sk-tag">{tag}</span>)
+                    : <span className="wp-list__dash">—</span>
+            ),
+        },
+        {
+            key: '__links',
+            header: '',
+            width: 70,
+            render: (site) => (
+                site.url && site.status === 'running' ? (
+                    <div className="wp-list__links" onClick={e => e.stopPropagation()}>
+                        <a href={site.url} target="_blank" rel="noopener noreferrer" title="Open site" aria-label="Open site">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                        <a href={`${site.url}/wp-admin`} target="_blank" rel="noopener noreferrer" title="WP Admin" aria-label="WP Admin">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        </a>
+                    </div>
+                ) : (
+                    <ChevronRight size={16} className="wp-list__chev" />
+                )
+            ),
+        },
+    ];
+
     return (
-        <div className="sk-tabgroup__inner wordpress-page">
-            {createdCreds && (
+        <ResourceListPage
+            className="wordpress-page"
+            totalCount={sites.length}
+            items={shownSites}
+            columns={columns}
+            keyField="id"
+            onRowClick={(site) => navigate(`/wordpress/${site.id}`)}
+            rowClassName={(site) => (selectedIds.has(site.id) ? 'is-selected' : '')}
+            header={createdCreds && (
                 <div className="wp-creds-banner">
                     <div className="wp-creds-banner-text">
                         <strong>Save these admin credentials — they are shown only once.</strong>
@@ -207,207 +311,81 @@ function WordPress() {
                     <Button variant="ghost" onClick={() => setCreatedCreds(null)}>Dismiss</Button>
                 </div>
             )}
-
-            {sites.length === 0 ? (
-                <EmptyState
-                    size="lg"
-                    icon={Globe}
-                    title="No WordPress Sites"
-                    description="Create your first WordPress site powered by Docker. Each site gets its own isolated environment with MySQL."
-                    action={
-                        <Button onClick={() => setShowCreateModal(true)}>
-                            Create Site
-                        </Button>
-                    }
-                />
-            ) : (() => {
-                const allTags = Array.from(new Set(sites.flatMap(s => s.tags || []))).sort();
-                const runningCount = sites.filter(s => s.status === 'running').length;
-                const q = siteSearch.trim().toLowerCase();
-                const siteLabel = site => site.name || site.application?.name || `Site ${site.id}`;
-                const shownSites = sites.filter(site => (
-                    (statusFilter === 'all'
-                        || (statusFilter === 'running' ? site.status === 'running' : site.status !== 'running'))
-                    && (activeTag === null || (site.tags || []).includes(activeTag))
-                    && (q === '' || [siteLabel(site), site.title, site.url, site.domain]
-                        .some(v => v && String(v).toLowerCase().includes(q)))
-                ));
-                return (
-                    <div className="wp-list">
-                        <div className="wp-list__toolbar">
-                            <SegControl
-                                value={statusFilter}
-                                onChange={setStatusFilter}
-                                options={[
-                                    { value: 'all', label: 'All', count: sites.length },
-                                    { value: 'running', label: 'Running', count: runningCount },
-                                    { value: 'stopped', label: 'Stopped', count: sites.length - runningCount },
-                                ]}
-                            />
-                            <div className="wp-list__search">
-                                <Search size={15} aria-hidden="true" />
-                                <input
-                                    type="text"
-                                    value={siteSearch}
-                                    onChange={e => setSiteSearch(e.target.value)}
-                                    placeholder="Search sites…"
-                                    aria-label="Search sites"
-                                />
-                            </div>
-                            {allTags.length > 0 && (
-                                <div className="wp-tag-filter">
-                                    <button
-                                        className={`wp-tag-chip wp-tag-chip--filter ${activeTag === null ? 'is-active' : ''}`}
-                                        onClick={() => setActiveTag(null)}
-                                    >
-                                        All tags
-                                    </button>
-                                    {allTags.map(tag => (
-                                        <button
-                                            key={tag}
-                                            className={`wp-tag-chip wp-tag-chip--filter ${activeTag === tag ? 'is-active' : ''}`}
-                                            onClick={() => setActiveTag(tag)}
-                                        >
-                                            {tag}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {selectedIds.size > 0 && (
-                            <div className="wp-list__bulkbar">
-                                <span className="wp-list__bulkcount">{selectedIds.size} selected</span>
-                                <div className="wp-list__bulkactions">
-                                    <Button variant="outline" size="sm" disabled={bulkLoading}
-                                        onClick={() => bulkRun('Start', s => wordpressApi.unarchiveSite(s.id), s => s.status !== 'running')}>
-                                        Start
-                                    </Button>
-                                    <Button variant="outline" size="sm" disabled={bulkLoading}
-                                        onClick={() => bulkRun('Stop', s => wordpressApi.archiveSite(s.id), s => s.status === 'running')}>
-                                        Stop
-                                    </Button>
-                                    <Button variant="outline" size="sm" disabled={bulkLoading}
-                                        onClick={() => bulkRun('Update core', s => wordpressApi.updateCore(s.id), s => s.status === 'running')}>
-                                        Update
-                                    </Button>
-                                    <Button variant="outline" size="sm" disabled={bulkLoading}
-                                        onClick={() => bulkRun('Backup', s => wordpressApi.createSnapshot(s.id, { name: 'bulk-backup' }), s => s.status === 'running')}>
-                                        Backup
-                                    </Button>
-                                    <Button variant="outline" size="sm" disabled={bulkLoading}
-                                        onClick={() => bulkRun('Clear cache', s => wordpressApi.flushCache(s.id), s => s.status === 'running')}>
-                                        Clear cache
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-                                        Clear
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="wp-list__card">
-                            <table className="sk-dtable">
-                                <thead>
-                                    <tr>
-                                        <th className="wp-list__ck">
-                                            <Checkbox
-                                                checked={shownSites.length > 0 && shownSites.every(s => selectedIds.has(s.id))}
-                                                onCheckedChange={(checked) => {
-                                                    setSelectedIds(checked ? new Set(shownSites.map(s => s.id)) : new Set());
-                                                }}
-                                                aria-label="Select all sites"
-                                            />
-                                        </th>
-                                        <th>Site</th>
-                                        <th>Environments</th>
-                                        <th>Version</th>
-                                        <th>Status</th>
-                                        <th>Tags</th>
-                                        <th style={{ width: 70 }} />
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {shownSites.map(site => (
-                                        <tr
-                                            key={site.id}
-                                            className={`is-clickable ${selectedIds.has(site.id) ? 'is-selected' : ''}`}
-                                            onClick={() => navigate(`/wordpress/${site.id}`)}
-                                        >
-                                            <td className="wp-list__ck" onClick={e => e.stopPropagation()}>
-                                                <Checkbox
-                                                    checked={selectedIds.has(site.id)}
-                                                    onCheckedChange={(checked) => {
-                                                        setSelectedIds(prev => {
-                                                            const next = new Set(prev);
-                                                            if (checked) next.add(site.id);
-                                                            else next.delete(site.id);
-                                                            return next;
-                                                        });
-                                                    }}
-                                                    aria-label={`Select ${site.name || `site ${site.id}`}`}
-                                                />
-                                            </td>
-                                            <td>
-                                                <div className="sk-cell-name">
-                                                    <ServiceTile
-                                                        name={siteLabel(site)}
-                                                        size={30}
-                                                        className="wp-list__tile"
-                                                        aria-hidden="true"
-                                                    />
-                                                    <span>
-                                                        <div>{siteLabel(site)}</div>
-                                                        {site.port && <div className="sk-cell-sub">:{site.port}</div>}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="sk-cell-mono">{(site.environment_count || 0) + 1}</td>
-                                            <td className="sk-cell-mono">WP {site.wp_version || '6.4'}</td>
-                                            <td>
-                                                <Pill kind={site.status === 'running' ? 'green' : 'gray'}>
-                                                    {site.status === 'running' ? 'Running' : 'Stopped'}
-                                                </Pill>
-                                            </td>
-                                            <td>
-                                                {site.tags?.length
-                                                    ? site.tags.map(tag => <span key={tag} className="sk-tag">{tag}</span>)
-                                                    : <span className="wp-list__dash">—</span>}
-                                            </td>
-                                            <td>
-                                                {site.url && site.status === 'running' ? (
-                                                    <div className="wp-list__links" onClick={e => e.stopPropagation()}>
-                                                        <a href={site.url} target="_blank" rel="noopener noreferrer" title="Open site" aria-label="Open site">
-                                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                                                        </a>
-                                                        <a href={`${site.url}/wp-admin`} target="_blank" rel="noopener noreferrer" title="WP Admin" aria-label="WP Admin">
-                                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                                                        </a>
-                                                    </div>
-                                                ) : (
-                                                    <ChevronRight size={16} className="wp-list__chev" />
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                );
-            })()}
-
+            filters={[
+                { value: 'all', label: 'All', count: sites.length },
+                { value: 'running', label: 'Running', count: runningCount },
+                { value: 'stopped', label: 'Stopped', count: sites.length - runningCount },
+            ]}
+            activeFilter={statusFilter}
+            onFilterChange={setStatusFilter}
+            searchTerm={siteSearch}
+            onSearchChange={setSiteSearch}
+            searchPlaceholder="Search sites…"
+            toolbarExtra={allTags.length > 0 && (
+                <div className="wp-tag-filter">
+                    <button type="button"
+                        className={`wp-tag-chip wp-tag-chip--filter ${activeTag === null ? 'is-active' : ''}`}
+                        onClick={() => setActiveTag(null)}
+                    >
+                        All tags
+                    </button>
+                    {allTags.map(tag => (
+                        <button type="button"
+                            key={tag}
+                            className={`wp-tag-chip wp-tag-chip--filter ${activeTag === tag ? 'is-active' : ''}`}
+                            onClick={() => setActiveTag(tag)}
+                        >
+                            {tag}
+                        </button>
+                    ))}
+                </div>
+            )}
+            selectedCount={selectedIds.size}
+            onClearSelection={() => setSelectedIds(new Set())}
+            bulkActions={
+                <>
+                    <Button variant="outline" size="sm" disabled={bulkLoading}
+                        onClick={() => bulkRun('Start', s => wordpressApi.unarchiveSite(s.id), s => s.status !== 'running')}>
+                        Start
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={bulkLoading}
+                        onClick={() => bulkRun('Stop', s => wordpressApi.archiveSite(s.id), s => s.status === 'running')}>
+                        Stop
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={bulkLoading}
+                        onClick={() => bulkRun('Update core', s => wordpressApi.updateCore(s.id), s => s.status === 'running')}>
+                        Update
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={bulkLoading}
+                        onClick={() => bulkRun('Backup', s => wordpressApi.createSnapshot(s.id, { name: 'bulk-backup' }), s => s.status === 'running')}>
+                        Backup
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={bulkLoading}
+                        onClick={() => bulkRun('Clear cache', s => wordpressApi.flushCache(s.id), s => s.status === 'running')}>
+                        Clear cache
+                    </Button>
+                </>
+            }
+            emptyIcon={Globe}
+            emptyTitle="No WordPress Sites"
+            emptyDescription="Create your first WordPress site powered by Docker. Each site gets its own isolated environment with MySQL."
+            emptyAction={
+                <Button onClick={() => setShowCreateModal(true)}>
+                    Create Site
+                </Button>
+            }
+            filteredEmptyIcon={Globe}
+            filteredEmptyTitle="No sites found"
+            filteredEmptyDescription="Try adjusting your search or filter"
+        >
             {/* Import Site Modal */}
-            {showImportModal && (
-                <div className="modal-overlay" onClick={() => !importLoading && setShowImportModal(false)}>
-                    <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Import WordPress Site</h3>
-                            <button className="modal-close" onClick={() => !importLoading && setShowImportModal(false)}>
-                                &times;
-                            </button>
-                        </div>
-                        <div className="modal-body">
+            <Modal
+                open={showImportModal}
+                onClose={() => !importLoading && setShowImportModal(false)}
+                title="Import WordPress Site"
+                size="lg"
+            >
+                <div className="modal-body">
                             <div className="install-warning">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
                                 <div>
@@ -485,21 +463,16 @@ function WordPress() {
                                 {importLoading ? <><Spinner size="sm" /> Importing...</> : 'Import Site'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Create Site Modal */}
-            {showCreateModal && (
-                <div className="modal-overlay" onClick={() => !createLoading && setShowCreateModal(false)}>
-                    <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Create WordPress Site</h3>
-                            <button className="modal-close" onClick={() => !createLoading && setShowCreateModal(false)}>
-                                &times;
-                            </button>
-                        </div>
-                        <div className="modal-body">
+            <Modal
+                open={showCreateModal}
+                onClose={() => !createLoading && setShowCreateModal(false)}
+                title="Create WordPress Site"
+                size="lg"
+            >
+                <div className="modal-body">
                             <div className="install-warning">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
                                 <div>
@@ -605,10 +578,8 @@ function WordPress() {
                                 {createLoading ? <><Spinner size="sm" /> Creating...</> : 'Create Site'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            </Modal>
+        </ResourceListPage>
     );
 }
 

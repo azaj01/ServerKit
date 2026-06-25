@@ -1,4 +1,3 @@
-import React from 'react';
 import { Key } from 'lucide-react';
 
 const GoogleIcon = () => (

@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useService } from '../hooks/useService';
 import useTabParam from '../hooks/useTabParam';
 import { getTabsForType } from '../utils/serviceTypes';
@@ -17,8 +16,12 @@ import PackagesTab from '../components/service-detail/PackagesTab';
 import GunicornTab from '../components/service-detail/GunicornTab';
 import CommandsTab from '../components/service-detail/CommandsTab';
 import OverviewTab from '../components/service-detail/OverviewTab';
+// Container Ops / WAF / Build / Deploy (merged in from the retired
+// ApplicationDetail page in §1) now live under the Settings sub-nav, so they're
+// imported by SettingsTab rather than rendered as top-level tabs here.
+import PreviewList from '../components/previews/PreviewList';
 import EmptyState from '../components/EmptyState';
-import { Layers, FileArchive, RotateCcw, LayoutDashboard, History, ScrollText, Variable, Terminal, Activity, Package, Server, SquareTerminal, Settings } from 'lucide-react';
+import { Layers, FileArchive, RotateCcw, LayoutDashboard, History, ScrollText, Variable, Terminal, Activity, Package, Server, SquareTerminal, Settings, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Pill, ServiceTile, PageTopbar } from '@/components/ds';
 
@@ -43,7 +46,18 @@ const TAB_LABELS = {
     packages: 'Packages',
     gunicorn: 'Gunicorn',
     commands: 'Commands',
+    previews: 'Previews',
     settings: 'Settings',
+};
+
+// Tab slugs retired when Container Ops / WAF / Build / Deploy moved into the
+// Settings sub-nav — old links / bookmarks land on the right settings section
+// (Deploy folded into "Git & Deploy", so it redirects to settings/git).
+const RETIRED_TAB_REDIRECTS = {
+    ops: 'settings/ops',
+    waf: 'settings/waf',
+    build: 'settings/build',
+    deploy: 'settings/git',
 };
 
 // Per-tab glyph for the detail tab strip (matches the WordPress detail page).
@@ -57,14 +71,15 @@ const TAB_ICONS = {
     packages: Package,
     gunicorn: Server,
     commands: SquareTerminal,
+    previews: Eye,
     settings: Settings,
 };
 
 const ServiceDetail = () => {
-    const { id } = useParams();
+    const { id, tab: rawTab } = useParams();
     const navigate = useNavigate();
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
     const { service, deployConfig, loading, error, reload, performAction, deleteService } = useService(id);
     // Active tab lives in the URL (/services/:id/:tab) so it's shareable and
     // survives a refresh — same pattern as the WordPress detail page.
@@ -84,6 +99,12 @@ const ServiceDetail = () => {
             navigate(`/wordpress/${id}`, { replace: true });
         }
     }, [service, id, navigate]);
+
+    // Forward retired top tabs (ops/waf/build/deploy) to their new Settings home.
+    useEffect(() => {
+        const target = RETIRED_TAB_REDIRECTS[rawTab];
+        if (target) navigate(`/services/${id}/${target}`, { replace: true });
+    }, [rawTab, id, navigate]);
 
     // Load upload versions
     useEffect(() => {
@@ -261,7 +282,7 @@ const ServiceDetail = () => {
                         </Button>
                         {showDeployMenu && (
                             <div className="svc-detail__dropdown-menu">
-                                <button onClick={() => handleAction('restart')} disabled={actionLoading === 'restart'}>
+                                <button type="button" onClick={() => handleAction('restart')} disabled={actionLoading === 'restart'}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <polyline points="23 4 23 10 17 10"/>
                                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -269,7 +290,7 @@ const ServiceDetail = () => {
                                     Manual Deploy (Restart)
                                 </button>
                                 {isGitBased && deployConfig && (
-                                    <button onClick={handleDeployLatest} disabled={actionLoading === 'deploy-latest'}>
+                                    <button type="button" onClick={handleDeployLatest} disabled={actionLoading === 'deploy-latest'}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <circle cx="18" cy="18" r="3"/>
                                             <circle cx="6" cy="6" r="3"/>
@@ -320,7 +341,7 @@ const ServiceDetail = () => {
                         {showMoreMenu && (
                             <div className="svc-detail__dropdown-menu svc-detail__dropdown-menu--right">
                                 {service.isRunning && (
-                                    <button onClick={() => handleAction('stop')} disabled={actionLoading === 'stop'}>
+                                    <button type="button" onClick={() => handleAction('stop')} disabled={actionLoading === 'stop'}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                                             <rect x="6" y="6" width="12" height="12"/>
                                         </svg>
@@ -343,7 +364,7 @@ const ServiceDetail = () => {
                                     </a>
                                 )}
                                 <div className="svc-detail__dropdown-divider" />
-                                <button
+                                <button type="button"
                                     className="svc-detail__dropdown-danger"
                                     onClick={handleDelete}
                                     disabled={actionLoading === 'delete'}
@@ -441,7 +462,7 @@ const ServiceDetail = () => {
                         )}
                     </div>
                 ) : (
-                    <button className="svc-detail__connect-repo" onClick={() => navigate(`/services/${id}/settings/git`)}>
+                    <button type="button" className="svc-detail__connect-repo" onClick={() => navigate(`/services/${id}/settings/git`)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <circle cx="18" cy="18" r="3"/>
                             <circle cx="6" cy="6" r="3"/>
@@ -503,7 +524,7 @@ const ServiceDetail = () => {
                 {availableTabs.map(tab => {
                     const Icon = TAB_ICONS[tab];
                     return (
-                        <button
+                        <button type="button"
                             key={tab}
                             className={`app-detail-tab ${activeTab === tab ? 'active' : ''} ${tab === 'settings' ? 'app-detail-tab--end' : ''}`}
                             onClick={() => setActiveTab(tab)}
@@ -526,6 +547,7 @@ const ServiceDetail = () => {
                 {activeTab === 'packages' && service.isPython && <PackagesTab appId={service.id} />}
                 {activeTab === 'gunicorn' && service.isPython && <GunicornTab appId={service.id} />}
                 {activeTab === 'commands' && service.isPython && <CommandsTab appId={service.id} appType={service.app_type} />}
+                {activeTab === 'previews' && <PreviewList appId={service.id} />}
                 {activeTab === 'settings' && (
                     <SettingsTab
                         app={service}
@@ -537,17 +559,6 @@ const ServiceDetail = () => {
                 )}
             </div>
             </div>
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 };

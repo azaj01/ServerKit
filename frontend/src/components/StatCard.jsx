@@ -1,4 +1,3 @@
-import React from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stat strip — a compact, instrument-panel readout bar.

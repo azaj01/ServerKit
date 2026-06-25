@@ -75,12 +75,26 @@ class EmailProviderService:
 
     @classmethod
     def default_provider(cls):
-        """The active default provider, or the first active one, or None."""
-        row = EmailProviderConnection.query.filter_by(is_default=True, is_active=True).first()
+        """The provider the Notification Bus should send through: the active
+        default, else the first active one — both restricted to providers
+        flagged ``uses_notifications`` so relay-only rows are never picked (§6)."""
+        row = EmailProviderConnection.query.filter_by(
+            is_default=True, is_active=True, uses_notifications=True).first()
         if row:
             return row
-        return EmailProviderConnection.query.filter_by(is_active=True).order_by(
+        return EmailProviderConnection.query.filter_by(
+            is_active=True, uses_notifications=True).order_by(
             EmailProviderConnection.created_at.asc()
+        ).first()
+
+    @classmethod
+    def relay_provider(cls):
+        """The active SMTP connection that should drive the Postfix relay:
+        highest relay_priority first, then oldest. None if no relay is flagged."""
+        return EmailProviderConnection.query.filter_by(
+            uses_relay=True, is_active=True).order_by(
+            EmailProviderConnection.relay_priority.desc(),
+            EmailProviderConnection.created_at.asc(),
         ).first()
 
     @classmethod
@@ -106,6 +120,9 @@ class EmailProviderService:
         if make_default:
             EmailProviderConnection.query.update({EmailProviderConnection.is_default: False})
 
+        # Usage flags (§6). API providers cannot be a Postfix smarthost, so
+        # uses_relay is only honored for SMTP.
+        uses_relay = bool(data.get('uses_relay')) and provider == 'smtp'
         row = EmailProviderConnection(
             provider=provider,
             name=data.get('name') or spec['name'],
@@ -114,9 +131,31 @@ class EmailProviderService:
             from_name=(data.get('from_name') or 'ServerKit').strip(),
             is_default=make_default,
             is_active=data.get('is_active', True),
+            uses_notifications=bool(data.get('uses_notifications', True)),
+            uses_relay=uses_relay,
+            relay_priority=int(data.get('relay_priority') or 0),
             created_by=user_id,
         )
         db.session.add(row)
+        db.session.commit()
+        return row
+
+    @classmethod
+    def update_usage(cls, provider_id, fields):
+        """Toggle a provider's usage flags (§6): uses_notifications, uses_relay,
+        relay_priority. uses_relay is only honored for SMTP connections."""
+        row = cls.get_provider(provider_id)
+        if not row:
+            return None
+        if 'uses_notifications' in fields:
+            row.uses_notifications = bool(fields['uses_notifications'])
+        if 'uses_relay' in fields:
+            row.uses_relay = bool(fields['uses_relay']) and row.provider == 'smtp'
+        if 'relay_priority' in fields and fields['relay_priority'] is not None:
+            try:
+                row.relay_priority = int(fields['relay_priority'])
+            except (TypeError, ValueError):
+                pass
         db.session.commit()
         return row
 

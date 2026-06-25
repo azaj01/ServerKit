@@ -81,6 +81,47 @@ function buildCron(frequency, time, days) {
 }
 
 const ScheduleCard = ({ policy, remoteConfigured, onSave, saving }) => {
+    // All hooks run unconditionally, before any early return (Rules of Hooks).
+    // The form is only shown once a policy exists, so the seed values used when
+    // `policy` is null are throwaway and get re-seeded by the effect on load.
+    const initial = deriveFromCron(policy?.schedule_cron);
+
+    const [frequency, setFrequency] = useState(initial.frequency);
+    const [time, setTime] = useState(initial.time);
+    const [days, setDays] = useState(initial.days);
+    const [retentionCount, setRetentionCount] = useState(String(policy?.retention_count ?? ''));
+    const [retentionDays, setRetentionDays] = useState(String(policy?.retention_days ?? ''));
+    const [fullEvery, setFullEvery] = useState(String(policy?.full_every_n_days ?? ''));
+    const [compression, setCompression] = useState(policy?.compression ?? 'balanced');
+    const [remoteCopy, setRemoteCopy] = useState(!!policy?.remote_copy);
+
+    // Re-seed the form when the saved policy changes (e.g. external reload after
+    // a successful save). Keyed on the persisted values so it only fires when
+    // the source of truth actually moves, not on every render.
+    useEffect(() => {
+        if (!policy) return;
+        const next = deriveFromCron(policy.schedule_cron);
+        setFrequency(next.frequency);
+        setTime(next.time);
+        setDays(next.days);
+        setRetentionCount(String(policy.retention_count));
+        setRetentionDays(String(policy.retention_days));
+        setFullEvery(String(policy.full_every_n_days));
+        setCompression(policy.compression);
+        setRemoteCopy(!!policy.remote_copy);
+    }, [
+        policy,
+        policy?.schedule_cron,
+        policy?.retention_count,
+        policy?.retention_days,
+        policy?.full_every_n_days,
+        policy?.compression,
+        policy?.remote_copy,
+    ]);
+
+    const currentCron = useMemo(() => buildCron(frequency, time, days), [frequency, time, days]);
+
+    // Conditional render AFTER all hooks have run.
     if (!policy) {
         return (
             <div className="app-panel schedule-card">
@@ -94,41 +135,6 @@ const ScheduleCard = ({ policy, remoteConfigured, onSave, saving }) => {
             </div>
         );
     }
-
-    const initial = deriveFromCron(policy.schedule_cron);
-
-    const [frequency, setFrequency] = useState(initial.frequency);
-    const [time, setTime] = useState(initial.time);
-    const [days, setDays] = useState(initial.days);
-    const [retentionCount, setRetentionCount] = useState(String(policy.retention_count));
-    const [retentionDays, setRetentionDays] = useState(String(policy.retention_days));
-    const [fullEvery, setFullEvery] = useState(String(policy.full_every_n_days));
-    const [compression, setCompression] = useState(policy.compression);
-    const [remoteCopy, setRemoteCopy] = useState(!!policy.remote_copy);
-
-    // Re-seed the form when the saved policy changes (e.g. external reload after
-    // a successful save). Keyed on the persisted values so it only fires when
-    // the source of truth actually moves, not on every render.
-    useEffect(() => {
-        const next = deriveFromCron(policy.schedule_cron);
-        setFrequency(next.frequency);
-        setTime(next.time);
-        setDays(next.days);
-        setRetentionCount(String(policy.retention_count));
-        setRetentionDays(String(policy.retention_days));
-        setFullEvery(String(policy.full_every_n_days));
-        setCompression(policy.compression);
-        setRemoteCopy(!!policy.remote_copy);
-    }, [
-        policy.schedule_cron,
-        policy.retention_count,
-        policy.retention_days,
-        policy.full_every_n_days,
-        policy.compression,
-        policy.remote_copy,
-    ]);
-
-    const currentCron = useMemo(() => buildCron(frequency, time, days), [frequency, time, days]);
 
     const toggleDay = (i) => {
         setDays((prev) =>

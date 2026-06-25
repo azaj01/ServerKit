@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function MetricRow({ children, className = '' }) {
     return <div className={`metric-row ${className}`.trim()}>{children}</div>;

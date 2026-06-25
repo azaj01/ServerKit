@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { RotateCcw, X, Info } from 'lucide-react';
+import { RotateCcw, Info } from 'lucide-react';
 import api from '../../services/api';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -114,19 +115,8 @@ const ConfigDiffModal = ({ appId, snapId, against = 'previous', onClose, onResto
     }
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div
-                className="modal config-diff"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="modal-header">
-                    <h2>Configuration diff</h2>
-                    <button className="modal-close" onClick={onClose} aria-label="Close">
-                        <X size={18} />
-                    </button>
-                </div>
-
-                <div className="config-diff__body">
+        <Modal open onClose={onClose} title="Configuration diff" size="xl" className="config-diff">
+            <div className="config-diff__body">
                     {loading && <p className="config-diff__loading">Loading diff…</p>}
                     {error && <div className="alert alert-danger">{error}</div>}
 
@@ -142,7 +132,7 @@ const ConfigDiffModal = ({ appId, snapId, against = 'previous', onClose, onResto
                                         <p className="config-diff__summary">
                                             {meta.hasChanges && meta.summary
                                                 ? meta.summary
-                                                : 'No configuration changes vs the compared snapshot.'}
+                                                : 'No configuration changes vs the compared checkpoint.'}
                                         </p>
                                     </div>
                                 </div>
@@ -210,8 +200,7 @@ const ConfigDiffModal = ({ appId, snapId, against = 'previous', onClose, onResto
                         </>
                     )}
                 </div>
-            </div>
-        </div>
+        </Modal>
     );
 };
 

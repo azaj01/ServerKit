@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { BookOpen, Search, ExternalLink, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { PageTopbar } from '@/components/ds';

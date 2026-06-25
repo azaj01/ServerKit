@@ -259,7 +259,7 @@ export default function RemoteTerminal({ serverId, onClose }) {
                     {sessionId && <span className="session-id">{sessionId}</span>}
                 </div>
                 <div className="terminal-actions">
-                    <button
+                    <button type="button"
                         className="terminal-close-btn"
                         onClick={handleClose}
                         title="Close terminal"

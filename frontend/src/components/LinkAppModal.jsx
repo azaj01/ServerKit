@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Link2, GitBranch, AlertCircle, Check } from 'lucide-react';
 import api from '../services/api';
 import Modal from './Modal';
@@ -88,7 +88,7 @@ const LinkAppModal = ({ app, onClose, onLinked }) => {
                             Create another {app.app_type} app first, or ensure existing apps
                             are not already linked.
                         </p>
-                        <button className="btn btn-secondary" onClick={onClose}>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>
                             Close
                         </button>
                     </div>

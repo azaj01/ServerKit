@@ -50,7 +50,7 @@ const DEFAULT_POLICY = {
     disabled_rule_ids: [],
 };
 
-const WafPanel = ({ app, onChanged }) => {
+const AppWafPanel = ({ app, onChanged }) => {
     const toast = useToast();
 
     const [policy, setPolicy] = useState(DEFAULT_POLICY);
@@ -399,4 +399,4 @@ const WafPanel = ({ app, onChanged }) => {
     );
 };
 
-export default WafPanel;
+export default AppWafPanel;

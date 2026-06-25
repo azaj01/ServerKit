@@ -44,7 +44,7 @@ const WhiteLabelTab = () => {
                     <>
                         <div className="whitelabel-modes">
                             {WHITELABEL_MODES.map(({ id, label, icon: Icon, desc }) => (
-                                <button
+                                <button type="button"
                                     key={id}
                                     className={`whitelabel-mode${whiteLabel.mode === id ? ' active' : ''}`}
                                     onClick={() => setWhiteLabel({ mode: id })}

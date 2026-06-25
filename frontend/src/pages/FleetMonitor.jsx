@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import {
     Activity,

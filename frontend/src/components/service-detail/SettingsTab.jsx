@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
     SlidersHorizontal,
@@ -7,6 +7,9 @@ import {
     Globe,
     Lock,
     Shield,
+    ShieldCheck,
+    Boxes,
+    Hammer,
     Archive,
     CircleCheck,
     CircleX,
@@ -17,6 +20,11 @@ import { useToast } from '../../contexts/ToastContext';
 import { DangerZone } from '../DangerZone';
 import RepoConnectForm from '../git/RepoConnectForm';
 import ProtectionPanel from '../backups/ProtectionPanel';
+import ContainerOpsPanel from '../apps/ContainerOpsPanel';
+import AppWafPanel from '../apps/AppWafPanel';
+import BuildTab from '../appdetail/BuildTab';
+import DeployTab from '../appdetail/DeployTab';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,30 +34,52 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@
 // detail page's settings layout: an uppercase mono group label per section with
 // the existing setting panels on the right. Groups give it structure (and room
 // to grow) instead of one long flat stack.
-const SVC_SETTINGS_GROUPS = [
-    {
-        label: 'General',
-        items: [
-            // Renamed from plain "Environment" to avoid clashing with the
-            // top-level "Env Vars" tab that edits runtime environment variables.
-            { id: 'environment', label: 'Environment Type', icon: SlidersHorizontal },
-            { id: 'domain', label: 'Domain & SSL', icon: Shield },
-        ],
-    },
-    { label: 'Connections', items: [{ id: 'git', label: 'Git', icon: GitBranch }] },
-    { label: 'Data', items: [{ id: 'backups', label: 'Backups', icon: Archive }] },
-    { label: 'Advanced', items: [{ id: 'danger', label: 'Danger Zone', icon: AlertTriangle }] },
-];
+//
+// Built per-service so the type-gated sections relocated here from the old top
+// tab strip only appear where they apply: Container Ops (Docker only) and WAF
+// (Docker + Python, nginx-served). Build + Git & Deploy apply to every type.
+function buildSettingsGroups(app) {
+    const isDocker = app.isDocker ?? app.app_type === 'docker';
+    const isPython = app.isPython ?? ['flask', 'django'].includes(app.app_type);
 
-const SVC_SETTINGS_ITEMS = SVC_SETTINGS_GROUPS.flatMap((g) => g.items);
+    return [
+        {
+            label: 'General',
+            items: [
+                // Renamed from plain "Environment" to avoid clashing with the
+                // top-level "Env Vars" tab that edits runtime environment variables.
+                { id: 'environment', label: 'Environment Type', icon: SlidersHorizontal },
+                { id: 'domain', label: 'Domain & SSL', icon: Shield },
+                ...(isDocker ? [{ id: 'ops', label: 'Container Ops', icon: Boxes }] : []),
+            ],
+        },
+        {
+            // "Git & Deploy" merges the old Deploy tab into the repo connection,
+            // since both edited repo / branch / auto-deploy. Build sits beside it.
+            label: 'Deployment',
+            items: [
+                { id: 'git', label: 'Git & Deploy', icon: GitBranch },
+                { id: 'build', label: 'Build', icon: Hammer },
+            ],
+        },
+        ...((isDocker || isPython) ? [{
+            label: 'Security',
+            items: [{ id: 'waf', label: 'WAF', icon: ShieldCheck }],
+        }] : []),
+        { label: 'Data', items: [{ id: 'backups', label: 'Backups', icon: Archive }] },
+        { label: 'Advanced', items: [{ id: 'danger', label: 'Danger Zone', icon: AlertTriangle }] },
+    ];
+}
 
 const SettingsTab = ({ app, deployConfig, domains, primaryDomain, onUpdate }) => {
+    const settingsGroups = buildSettingsGroups(app);
+    const settingsItems = settingsGroups.flatMap((g) => g.items);
     const navigate = useNavigate();
     const toast = useToast();
     // Section lives in the URL (/services/:id/settings/:section) so it's
     // shareable and survives a refresh — same as the WordPress detail page.
     const { section: sectionParam } = useParams();
-    const section = SVC_SETTINGS_ITEMS.some((s) => s.id === sectionParam) ? sectionParam : 'environment';
+    const section = settingsItems.some((s) => s.id === sectionParam) ? sectionParam : 'environment';
     const setSection = (s) => navigate(`/services/${app.id}/settings/${s}`, { replace: true });
     const [deleting, setDeleting] = useState(false);
     const [environmentType, setEnvironmentType] = useState(app.environment_type || 'standalone');
@@ -154,7 +184,7 @@ const SettingsTab = ({ app, deployConfig, domains, primaryDomain, onUpdate }) =>
     return (
         <div className="svc-settings">
             <nav className="svc-settings__nav" aria-label="Service settings sections">
-                {SVC_SETTINGS_GROUPS.map(g => (
+                {settingsGroups.map(g => (
                     <div className="svc-settings__group" key={g.label}>
                         <div className="svc-settings__grouplabel">{g.label}</div>
                         {g.items.map(s => (
@@ -249,12 +279,24 @@ const SettingsTab = ({ app, deployConfig, domains, primaryDomain, onUpdate }) =>
                     </div>
                 )}
 
-                {/* Repository — the same shared RepoConnectForm the WordPress Git
-                    settings use (provider picker + URL fallback, connected summary
-                    with Disconnect), wired to the service deployment API. */}
+                {/* Container Ops (Docker only) — image updates, restart policy,
+                    resource limits, auto-sleep. Relocated from the old top tab. */}
+                {section === 'ops' && (
+                    <div className="svc-settings__section">
+                        <h3 className="svc-settings__section-title">Container Ops</h3>
+                        <ContainerOpsPanel app={app} onChanged={onUpdate} />
+                    </div>
+                )}
+
+                {/* Git & Deploy — the shared RepoConnectForm (provider picker + URL
+                    fallback, connected summary with Disconnect) owns the repo
+                    connection. Once a repo is linked, the embedded DeployTab adds
+                    the deploy pipeline (run actions, deploy scripts, history,
+                    config checkpoints) as a separated subsection — no second repo
+                    form, and nothing deploy-related shows before connecting. */}
                 {section === 'git' && (
                     <div className="svc-settings__section">
-                        <h3 className="svc-settings__section-title">Git</h3>
+                        <h3 className="svc-settings__section-title">Git &amp; Deploy</h3>
                         <RepoConnectForm
                             gitStatus={gitStatus}
                             onConnect={handleConnectRepo}
@@ -266,6 +308,29 @@ const SettingsTab = ({ app, deployConfig, domains, primaryDomain, onUpdate }) =>
                             submitLabel="Connect Repository"
                             idPrefix="svc"
                         />
+                        {deployConfig && (
+                            <div className="svc-settings__subsection">
+                                <h4 className="svc-settings__subsection-title">Deployment</h4>
+                                <DeployTab embedded appId={app.id} appPath={app.path} />
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Build — build method, Dockerfile / build pack, cache, timeouts,
+                    build logs. Relocated from the old top tab, beside Git & Deploy. */}
+                {section === 'build' && (
+                    <div className="svc-settings__section">
+                        <h3 className="svc-settings__section-title">Build</h3>
+                        <BuildTab appId={app.id} appPath={app.path} app={app} />
+                    </div>
+                )}
+
+                {/* WAF (Docker + Python) — per-app ModSecurity policy + matches. */}
+                {section === 'waf' && (
+                    <div className="svc-settings__section">
+                        <h3 className="svc-settings__section-title">WAF</h3>
+                        <AppWafPanel app={app} onChanged={onUpdate} />
                     </div>
                 )}
 
@@ -583,13 +648,13 @@ const DomainSslPanel = ({ app, domains, primaryDomain, onUpdate }) => {
                 </div>
             )}
 
-            {subdomainModal && (
-                <div className="modal-overlay" onClick={() => setSubdomainModal(null)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Give it a subdomain</h2>
-                            <button className="modal-close" onClick={() => setSubdomainModal(null)}>&times;</button>
-                        </div>
+            <Modal
+                open={!!subdomainModal}
+                onClose={() => setSubdomainModal(null)}
+                title="Give it a subdomain"
+            >
+                {subdomainModal && (
+                    <>
                         <div className="modal-body">
                             <p className="hint">
                                 Publish <strong>{app.name}</strong> at a managed subdomain of{' '}
@@ -620,9 +685,9 @@ const DomainSslPanel = ({ app, domains, primaryDomain, onUpdate }) => {
                                 {publishing ? 'Publishing…' : 'Publish'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
+                    </>
+                )}
+            </Modal>
         </div>
     );
 };

@@ -609,3 +609,422 @@
     color: $text-primary;
     outline: none;
 }
+
+// Default popover surface for `components/ui/popover.jsx` (roomy content
+// container — replicates the original shadcn `w-72 p-4` look).
+.ui-popover-panel {
+    z-index: $z-tooltip;
+    width: 18rem;
+    padding: $space-4;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    box-shadow: $shadow-md;
+    color: $text-primary;
+    outline: none;
+}
+
+// --------------------------------------------
+// DROPDOWN MENU (Radix)
+// --------------------------------------------
+.ui-dropdown-content,
+.ui-dropdown-sub-content {
+    z-index: $z-tooltip;
+    min-width: 8rem;
+    overflow: hidden;
+    padding: $space-1;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    box-shadow: $shadow-md;
+    color: $text-primary;
+}
+
+.ui-dropdown-sub-content {
+    box-shadow: $shadow-lg;
+}
+
+.ui-dropdown-item,
+.ui-dropdown-sub-trigger,
+.ui-dropdown-checkbox-item,
+.ui-dropdown-radio-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-1 + 2 $space-2; // 6px 8px
+    border-radius: $radius-sm;
+    font-size: $font-size-sm + 1;
+    color: $text-primary;
+    cursor: default;
+    user-select: none;
+    outline: none;
+    @include transition(background-color);
+
+    &:focus,
+    &[data-highlighted],
+    &[data-state='open'] {
+        background: $bg-hover;
+        color: $text-primary;
+    }
+
+    &[data-disabled] {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        pointer-events: none;
+    }
+}
+
+.ui-dropdown-checkbox-item,
+.ui-dropdown-radio-item {
+    padding-left: $space-8;
+    padding-right: $space-2;
+}
+
+.ui-dropdown-item-indicator {
+    position: absolute;
+    left: $space-2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+}
+
+.ui-dropdown-sub-trigger svg.ui-dropdown-chevron {
+    margin-left: auto;
+}
+
+.ui-dropdown-label {
+    padding: $space-1 + 2 $space-2;
+    font-size: $font-size-xs + 1;
+    font-weight: $font-weight-semibold;
+    color: $text-tertiary;
+
+    &--inset { padding-left: $space-8; }
+}
+
+.ui-dropdown-separator {
+    height: 1px;
+    margin: $space-1 -#{$space-1};
+    background: $border-subtle;
+}
+
+.ui-dropdown-shortcut {
+    margin-left: auto;
+    font-size: $font-size-xs + 1;
+    letter-spacing: 0.1em;
+    opacity: 0.6;
+}
+
+.ui-dropdown-inset { padding-left: $space-8; }
+
+// --------------------------------------------
+// COMMAND PALETTE (cmdk)
+// --------------------------------------------
+.ui-command {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: $radius-md;
+    background: $bg-elevated;
+    color: $text-primary;
+}
+
+.ui-command-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 0 $space-3;
+    border-bottom: 1px solid $border-default;
+}
+
+.ui-command-input-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: $text-tertiary;
+    opacity: 0.7;
+}
+
+.ui-command-input {
+    flex: 1;
+    width: 100%;
+    height: 44px;
+    padding: $space-3 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: $text-primary;
+    font-family: inherit;
+    font-size: $font-size-base;
+
+    &::placeholder { color: $text-tertiary; }
+
+    &:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+}
+
+.ui-command-list {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    @include custom-scrollbar();
+}
+
+.ui-command-empty {
+    padding: $space-6 0;
+    text-align: center;
+    font-size: $font-size-sm + 1;
+    color: $text-tertiary;
+}
+
+.ui-command-group {
+    overflow: hidden;
+    padding: $space-1;
+    color: $text-primary;
+
+    [cmdk-group-heading] {
+        padding: $space-1 + 2 $space-2;
+        font-size: $font-size-xs + 1;
+        font-weight: $font-weight-medium;
+        color: $text-tertiary;
+    }
+}
+
+.ui-command-separator {
+    height: 1px;
+    margin: 0 -#{$space-1};
+    background: $border-subtle;
+}
+
+.ui-command-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    padding: $space-1 + 2 $space-2;
+    border-radius: $radius-sm;
+    font-size: $font-size-sm + 1;
+    color: $text-primary;
+    cursor: default;
+    user-select: none;
+    outline: none;
+    @include transition(background-color);
+
+    &[data-selected='true'] {
+        background: $bg-hover;
+        color: $text-primary;
+    }
+
+    &[data-disabled='true'] {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        pointer-events: none;
+    }
+}
+
+.ui-command-shortcut {
+    margin-left: auto;
+    font-size: $font-size-xs + 1;
+    letter-spacing: 0.1em;
+    color: $text-tertiary;
+}
+
+// Command palette mounted inside a Dialog: drop the dialog's default padding
+// and gap so the command surface fills it edge-to-edge.
+.ui-command-dialog {
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+}
+
+// --------------------------------------------
+// SKELETON
+// --------------------------------------------
+.ui-skeleton {
+    border-radius: $radius-md;
+    background: $bg-secondary;
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+// --------------------------------------------
+// MODAL (components/Modal.jsx — built on the Dialog primitive)
+// --------------------------------------------
+.sk-modal {
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+    max-width: 32rem; // = md default
+    max-height: 90vh;
+
+    &--sm { max-width: 24rem; }
+    &--md { max-width: 32rem; }
+    &--lg { max-width: 42rem; }
+    &--xl { max-width: 56rem; }
+    &--2xl { max-width: 72rem; }
+}
+
+.sk-modal__header {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1 + 2;
+    padding: $space-4 $space-10 $space-4 $space-6; // right pad clears the close btn
+    border-bottom: 1px solid $border-subtle;
+}
+
+.sk-modal__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: $space-4 $space-6;
+    @include custom-scrollbar();
+}
+
+.sk-modal__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $space-2;
+    padding: $space-3 $space-6;
+    border-top: 1px solid $border-subtle;
+    background: $bg-card;
+}
+
+// --------------------------------------------
+// CONFIRM DIALOG (components/ConfirmDialog.jsx — built on AlertDialog)
+// --------------------------------------------
+.sk-confirm {
+    text-align: center;
+}
+
+.sk-confirm__head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $space-3;
+}
+
+.sk-confirm__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+
+    &--danger {
+        color: $danger;
+        background: fade($danger, 10%);
+        border-color: fade($danger, 20%);
+    }
+    &--warning {
+        color: $warning;
+        background: fade($warning, 10%);
+        border-color: fade($warning, 20%);
+    }
+    &--info {
+        color: $accent-primary;
+        background: fade($accent-primary-raw, 10%);
+        border-color: fade($accent-primary-raw, 20%);
+    }
+}
+
+.sk-confirm__body {
+    min-width: 0;
+}
+
+.sk-confirm__details {
+    margin: $space-1 + 2 0 0;
+    font-size: $font-size-sm + 1;
+    color: $text-tertiary;
+}
+
+.sk-confirm__confirm-field {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    width: 100%;
+    margin-top: $space-2;
+    text-align: left;
+}
+
+.sk-confirm__footer {
+    flex-direction: row;
+    justify-content: center;
+}
+
+// --------------------------------------------
+// ENTER / EXIT ANIMATIONS (replaces tailwindcss-animate utilities)
+// Radix sets data-state="open|closed" on overlays/content; these keyframes
+// give the same fade/zoom/slide polish without Tailwind.
+// --------------------------------------------
+@keyframes ui-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-modal-in {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes ui-modal-out {
+    from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    to { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+}
+@keyframes ui-pop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-pop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes ui-slide-out-right { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes ui-slide-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes ui-slide-out-left { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes ui-slide-in-top { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+@keyframes ui-slide-out-top { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+@keyframes ui-slide-in-bottom { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes ui-slide-out-bottom { from { transform: translateY(0); } to { transform: translateY(100%); } }
+
+.ui-dialog-overlay,
+.ui-sheet-overlay {
+    &[data-state='open'] { animation: ui-overlay-in 150ms ease; }
+    &[data-state='closed'] { animation: ui-overlay-out 130ms ease; }
+}
+
+.ui-dialog-content {
+    &[data-state='open'] { animation: ui-modal-in 160ms ease; }
+    &[data-state='closed'] { animation: ui-modal-out 140ms ease; }
+}
+
+.ui-popover-content,
+.ui-popover-panel,
+.ui-select-content,
+.ui-dropdown-content,
+.ui-dropdown-sub-content {
+    &[data-state='open'] { animation: ui-pop-in 120ms ease; }
+    &[data-state='closed'] { animation: ui-pop-out 100ms ease; }
+}
+
+.ui-sheet-content {
+    &--right[data-state='open'] { animation: ui-slide-in-right 200ms ease; }
+    &--right[data-state='closed'] { animation: ui-slide-out-right 180ms ease; }
+    &--left[data-state='open'] { animation: ui-slide-in-left 200ms ease; }
+    &--left[data-state='closed'] { animation: ui-slide-out-left 180ms ease; }
+    &--top[data-state='open'] { animation: ui-slide-in-top 200ms ease; }
+    &--top[data-state='closed'] { animation: ui-slide-out-top 180ms ease; }
+    &--bottom[data-state='open'] { animation: ui-slide-in-bottom 200ms ease; }
+    &--bottom[data-state='closed'] { animation: ui-slide-out-bottom 180ms ease; }
+}

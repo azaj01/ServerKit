@@ -1,4 +1,3 @@
-import React from 'react';
 import ConfigPanel from '../ConfigPanel';
 import { Terminal, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -41,14 +40,14 @@ const ScriptConfigPanel = ({ node, onChange, onClose, onDelete }) => {
             <div className="form-group">
                 <Label>Language</Label>
                 <div className="lang-toggle">
-                    <button
+                    <button type="button"
                         className={`lang-btn ${language === 'bash' ? 'active' : ''}`}
                         onClick={() => onChange({ ...data, language: 'bash' })}
                     >
                         <Terminal size={14} />
                         Bash
                     </button>
-                    <button
+                    <button type="button"
                         className={`lang-btn ${language === 'python' ? 'active' : ''}`}
                         onClick={() => onChange({ ...data, language: 'python' })}
                     >

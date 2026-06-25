@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Play, Clock } from 'lucide-react';
 import Spinner from '../Spinner';
 import Modal from '../Modal';
@@ -120,7 +120,7 @@ const WpCliTerminal = ({ environment, prodId, onClose, api }) => {
             {showHistory && history.length > 0 && (
                 <div className="wpcli-history">
                     {history.slice(0, 10).map((cmd, i) => (
-                        <button
+                        <button type="button"
                             key={i}
                             className="wpcli-history-item"
                             onClick={() => {

@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Server, Globe, Link, ExternalLink } from 'lucide-react';
 

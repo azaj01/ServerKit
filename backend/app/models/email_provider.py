@@ -29,6 +29,13 @@ class EmailProviderConnection(db.Model):
     is_default = db.Column(db.Boolean, default=False, index=True)
     is_active = db.Column(db.Boolean, default=True)
 
+    # Usage flags (§6 unification): one connection can power the Notification Bus
+    # and/or the Postfix outbound relay. API providers (SendGrid/Postmark/SES/
+    # Mailgun) can't be a Postfix smarthost, so only 'smtp' rows set uses_relay.
+    uses_notifications = db.Column(db.Boolean, default=True, nullable=False)
+    uses_relay = db.Column(db.Boolean, default=False, nullable=False)
+    relay_priority = db.Column(db.Integer, default=0, nullable=False)
+
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -59,6 +66,9 @@ class EmailProviderConnection(db.Model):
             'from_name': self.from_name,
             'is_default': self.is_default,
             'is_active': self.is_active,
+            'uses_notifications': self.uses_notifications,
+            'uses_relay': self.uses_relay,
+            'relay_priority': self.relay_priority,
             'configured_fields': sorted(creds.keys()),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_tested_at': self.last_tested_at.isoformat() if self.last_tested_at else None,

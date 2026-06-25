@@ -23,26 +23,26 @@ export default function ContextMenu({
             style={{ top: y, left: x }}
             onClick={(e) => e.stopPropagation()}
         >
-            <button onClick={() => { onOpen(entry); onClose(); }}>
+            <button type="button" onClick={() => { onOpen(entry); onClose(); }}>
                 {entry.is_dir ? <Folder size={14} /> : <Eye size={14} />}
                 {entry.is_dir ? 'Open' : 'Preview'}
             </button>
             {!entry.is_dir && (
-                <button onClick={() => { onDownload(entry); onClose(); }}>
+                <button type="button" onClick={() => { onDownload(entry); onClose(); }}>
                     <Download size={14} /> Download
                 </button>
             )}
-            <button onClick={() => { onRename(entry); onClose(); }}>
+            <button type="button" onClick={() => { onRename(entry); onClose(); }}>
                 <Edit3 size={14} /> Rename
             </button>
-            <button onClick={() => { onPermissions(entry); onClose(); }}>
+            <button type="button" onClick={() => { onPermissions(entry); onClose(); }}>
                 <Lock size={14} /> Permissions
             </button>
-            <button onClick={() => { onCopyPath(entry.path); onClose(); }}>
+            <button type="button" onClick={() => { onCopyPath(entry.path); onClose(); }}>
                 <Copy size={14} /> Copy path
             </button>
             <div className="context-menu-divider" />
-            <button className="danger" onClick={() => { onDelete(entry); onClose(); }}>
+            <button type="button" className="danger" onClick={() => { onDelete(entry); onClose(); }}>
                 <Trash2 size={14} /> Delete{multi ? ` ${selectionCount} items` : ''}
             </button>
         </div>

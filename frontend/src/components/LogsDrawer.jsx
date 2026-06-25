@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLogsDrawer } from '../contexts/LogsDrawerContext';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';

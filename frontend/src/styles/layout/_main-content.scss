@@ -199,46 +199,57 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: $space-5;
+    gap: $space-4;
     background: var(--surface);
 
-    &__stage {
-        position: relative;
-        width: 96px;
-        height: 96px;
+    // Branded tile holding the server glyph — same mark as the sidebar + favicon.
+    &__logo {
         display: flex;
         align-items: center;
         justify-content: center;
+        width: 76px;
+        height: 76px;
+        border-radius: 20px;
+        color: #fff;
+        background: linear-gradient(150deg, var(--accent-bright), var(--accent-hover));
+        box-shadow: 0 14px 34px -10px var(--accent-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+        animation: app-loader-breathe 2.6s ease-in-out infinite;
     }
 
-    &__logo {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 64px;
-        height: 64px;
-        border-radius: 16px;
-        background: var(--surface-2);
-        box-shadow: var(--shadow-md), 0 0 0 1px var(--border-soft);
-        animation: app-loader-pulse 2s ease-in-out infinite;
+    &__glyph {
+        width: 42px;
+        height: 42px;
+    }
 
-        svg {
-            width: 38px;
-            height: 38px;
+    // Status LEDs blink like a booting machine; the lower one is "online" green.
+    &__led {
+        animation: app-loader-blink 1.4s ease-in-out infinite;
+
+        &--2 {
+            stroke: var(--green);
+            animation-delay: 0.55s;
         }
     }
 
-    &__ring {
+    // Slim indeterminate bar replaces the old spinner.
+    &__bar {
+        position: relative;
+        width: 132px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--surface-3);
+        overflow: hidden;
+    }
+
+    &__bar-fill {
         position: absolute;
-        width: 96px;
-        height: 96px;
-        border-radius: 50%;
-        border: 2px solid transparent;
-        border-top-color: var(--accent-bright);
-        border-right-color: fade($accent-primary-raw, 30%);
-        animation: app-loader-spin 1.2s linear infinite;
+        top: 0;
+        left: 0;
+        width: 40%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, transparent, var(--accent-bright), transparent);
+        animation: app-loader-slide 1.3s ease-in-out infinite;
     }
 
     &__label {
@@ -249,12 +260,30 @@
     }
 }
 
-@keyframes app-loader-pulse {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.03); opacity: 0.85; }
+@keyframes app-loader-breathe {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-2px) scale(1.025); }
 }
 
-@keyframes app-loader-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+@keyframes app-loader-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+}
+
+@keyframes app-loader-slide {
+    0% { transform: translateX(-130%); }
+    100% { transform: translateX(330%); }
+}
+
+// Respect reduced-motion: hold everything still, keep the bar visible.
+@media (prefers-reduced-motion: reduce) {
+    .app-loader__logo,
+    .app-loader__led,
+    .app-loader__bar-fill {
+        animation: none;
+    }
+
+    .app-loader__bar-fill {
+        width: 100%;
+    }
 }

@@ -8,6 +8,7 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -543,73 +544,59 @@ const Domains = () => {
             </Drawer>
 
             {/* ── Add Domain Modal ───────────────────────────── */}
-            {showAddModal && (
-                <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Add Domain</h2>
-                            <button className="modal-close" onClick={() => setShowAddModal(false)}>×</button>
-                        </div>
-                        <form onSubmit={handleAddDomain}>
-                            <div className="form-group">
-                                <Label>Domain Name</Label>
-                                <Input type="text" placeholder="example.com" value={domainName} onChange={e => setDomainName(e.target.value)} required />
-                            </div>
-                            <div className="form-group">
-                                <Label>Application</Label>
-                                <Select value={selectedAppId} onValueChange={setSelectedAppId} required>
-                                    <SelectTrigger><SelectValue placeholder="Select an application" /></SelectTrigger>
-                                    <SelectContent>
-                                        {apps.map(app => (
-                                            <SelectItem key={app.id} value={String(app.id)}>{app.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="form-group">
-                                <label className="checkbox-label">
-                                    <Checkbox checked={isPrimary} onCheckedChange={setIsPrimary} />
-                                    Set as primary domain
-                                </label>
-                            </div>
-                            <div className="modal-actions">
-                                <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
-                                <Button type="submit" disabled={actionLoading}>{actionLoading ? 'Adding...' : 'Add Domain'}</Button>
-                            </div>
-                        </form>
+            <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add Domain">
+                <form onSubmit={handleAddDomain}>
+                    <div className="form-group">
+                        <Label>Domain Name</Label>
+                        <Input type="text" placeholder="example.com" value={domainName} onChange={e => setDomainName(e.target.value)} required />
                     </div>
-                </div>
-            )}
+                    <div className="form-group">
+                        <Label>Application</Label>
+                        <Select value={selectedAppId} onValueChange={setSelectedAppId} required>
+                            <SelectTrigger><SelectValue placeholder="Select an application" /></SelectTrigger>
+                            <SelectContent>
+                                {apps.map(app => (
+                                    <SelectItem key={app.id} value={String(app.id)}>{app.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="form-group">
+                        <label className="checkbox-label">
+                            <Checkbox checked={isPrimary} onCheckedChange={setIsPrimary} />
+                            Set as primary domain
+                        </label>
+                    </div>
+                    <div className="modal-actions">
+                        <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
+                        <Button type="submit" disabled={actionLoading}>{actionLoading ? 'Adding...' : 'Add Domain'}</Button>
+                    </div>
+                </form>
+            </Modal>
 
             {/* ── Enable SSL Modal ───────────────────────────── */}
-            {showSslModal && selectedDomain && (
-                <div className="modal-overlay" onClick={() => setShowSslModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Enable SSL Certificate</h2>
-                            <button className="modal-close" onClick={() => setShowSslModal(false)}>×</button>
+            <Modal open={showSslModal && Boolean(selectedDomain)} onClose={() => setShowSslModal(false)} title="Enable SSL Certificate">
+                {selectedDomain && (
+                    <form onSubmit={handleEnableSsl}>
+                        <div className="ssl-info-box">
+                            <ShieldCheck size={32} />
+                            <div>
+                                <h4>Free SSL from Let&apos;s Encrypt</h4>
+                                <p>A free SSL certificate will be obtained for <strong>{selectedDomain.name}</strong></p>
+                            </div>
                         </div>
-                        <form onSubmit={handleEnableSsl}>
-                            <div className="ssl-info-box">
-                                <ShieldCheck size={32} />
-                                <div>
-                                    <h4>Free SSL from Let&apos;s Encrypt</h4>
-                                    <p>A free SSL certificate will be obtained for <strong>{selectedDomain.name}</strong></p>
-                                </div>
-                            </div>
-                            <div className="form-group">
-                                <Label>Email Address</Label>
-                                <Input type="email" placeholder="admin@example.com" value={sslEmail} onChange={e => setSslEmail(e.target.value)} required />
-                                <p className="hint">Required for certificate expiration notifications</p>
-                            </div>
-                            <div className="modal-actions">
-                                <Button type="button" variant="outline" onClick={() => setShowSslModal(false)}>Cancel</Button>
-                                <Button type="submit" disabled={actionLoading}>{actionLoading ? 'Obtaining Certificate...' : 'Enable SSL'}</Button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                        <div className="form-group">
+                            <Label>Email Address</Label>
+                            <Input type="email" placeholder="admin@example.com" value={sslEmail} onChange={e => setSslEmail(e.target.value)} required />
+                            <p className="hint">Required for certificate expiration notifications</p>
+                        </div>
+                        <div className="modal-actions">
+                            <Button type="button" variant="outline" onClick={() => setShowSslModal(false)}>Cancel</Button>
+                            <Button type="submit" disabled={actionLoading}>{actionLoading ? 'Obtaining Certificate...' : 'Enable SSL'}</Button>
+                        </div>
+                    </form>
+                )}
+            </Modal>
         </div>
     );
 };

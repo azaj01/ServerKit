@@ -1,4 +1,3 @@
-import React from 'react';
 import { GitBranch, Link2, Unlink, ExternalLink, Server } from 'lucide-react';
 
 const LinkedAppsSection = ({
@@ -39,7 +38,7 @@ const LinkedAppsSection = ({
                     Environment Linking
                 </h3>
                 {!app.has_linked_app && (
-                    <button
+                    <button type="button"
                         className="btn btn-secondary btn-sm"
                         onClick={onLink}
                         disabled={loading}
@@ -88,14 +87,14 @@ const LinkedAppsSection = ({
                                     </div>
                                 </div>
                                 <div className="linked-app-actions">
-                                    <button
+                                    <button type="button"
                                         className="btn btn-secondary btn-sm btn-icon"
                                         onClick={() => onNavigate(linkedApp.id)}
                                         title="View app"
                                     >
                                         <ExternalLink size={14} />
                                     </button>
-                                    <button
+                                    <button type="button"
                                         className="btn btn-secondary btn-sm btn-icon"
                                         onClick={onUnlink}
                                         disabled={loading}
@@ -110,7 +109,7 @@ const LinkedAppsSection = ({
                 ) : app.environment_type !== 'standalone' ? (
                     <div className="linked-apps-empty">
                         <p>No linked apps. Link another app to share database resources.</p>
-                        <button
+                        <button type="button"
                             className="btn btn-secondary btn-sm"
                             onClick={onLink}
                             disabled={loading}

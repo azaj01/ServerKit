@@ -674,8 +674,166 @@ cleanup() {
 }
 
 # ---------------------------------------------------------------------------
+# All-Docker deployment (compose) detection + update path
+# ---------------------------------------------------------------------------
+# A ServerKit box runs in one of two shapes:
+#   * Hybrid (canonical): backend in a host venv under systemd `serverkit`,
+#     only the frontend in Docker. The blue/green + venv + systemd flow below
+#     targets this shape.
+#   * All-Docker: both backend AND frontend run as docker-compose services
+#     (container_name serverkit-backend / serverkit-frontend), no host venv.
+# Running the hybrid flow on an all-Docker box builds a useless host venv,
+# migrates the wrong (non-container) database, and stops a systemd unit that
+# never serves traffic — which is exactly the failure that ends in
+# "/opt/serverkit/venv/bin/activate: No such file or directory". Detect the
+# all-Docker shape and route it to a dedicated compose update instead.
+is_docker_deployment() {
+    [ -f "$INSTALL_DIR/docker-compose.yml" ] || return 1
+    # A usable host venv means this is the hybrid shape — take precedence.
+    [ -x "$INSTALL_DIR/venv/bin/python" ] && return 1
+    # The backend container is defined by the all-Docker compose project.
+    docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'serverkit-backend'
+}
+
+dc() {
+    if docker compose version &>/dev/null; then
+        ( cd "$INSTALL_DIR" && docker compose "$@" )
+    else
+        ( cd "$INSTALL_DIR" && docker-compose "$@" )
+    fi
+}
+
+backup_docker_db() {
+    mkdir -p "$BACKUP_DIR"
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would copy the SQLite DB out of the backend container"
+        return 0
+    fi
+    local backup_file
+    backup_file="$BACKUP_DIR/serverkit-pre-upgrade-$(date +%Y%m%d-%H%M%S).db"
+    # The live DB lives in the serverkit-data volume at /app/instance inside
+    # the container, not in the source tree.
+    if docker cp serverkit-backend:/app/instance/serverkit.db "$backup_file" 2>/dev/null; then
+        good "Database backed up to $backup_file"
+    else
+        warn "Could not copy DB from container — continuing (backend self-backs-up before migrating)"
+    fi
+}
+
+update_docker_compose() {
+    printf '\n  %s%sServerKit Updater — Docker deployment%s\n' "$BLD" "$PAPER" "$RST"
+    STARTED_AT=$(date +%s)
+    [ "$DRY_RUN" = "1" ] && warn "DRY RUN — no changes will be made"
+
+    command -v docker &>/dev/null || halt "docker is required but not installed"
+    command -v git &>/dev/null || halt "git is required but not installed"
+
+    # Resolve the git ref to update to (branch / release tag / main).
+    local ref="origin/main"
+    if [ -n "$TARGET_BRANCH" ]; then
+        ref="origin/$TARGET_BRANCH"
+    elif [ "$USE_RELEASE" = "1" ]; then
+        ref="${RELEASE_VERSION:-$(git -C "$INSTALL_DIR" tag -l 'v*' --sort=-v:refname | head -n1)}"
+        [ -n "$ref" ] || halt "Could not determine a release tag to update to"
+    fi
+
+    phase "Database Backup"
+    backup_docker_db
+
+    phase "Syncing Source"
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would git fetch and reset $INSTALL_DIR to $ref"
+    else
+        # The compose build context IS the live tree, so update it in place
+        # (no blue/green). Untracked .env, instance DB and frontend/dist are
+        # preserved across a hard reset.
+        git -C "$INSTALL_DIR" fetch --all --tags --prune 2>&1 | tail -n2 || halt "git fetch failed"
+        git -C "$INSTALL_DIR" reset --hard "$ref" 2>&1 | tail -n2 || halt "git reset to $ref failed"
+        chmod +x "$INSTALL_DIR/serverkit" "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
+        good "Source synced to $ref"
+    fi
+
+    # When the compose serves a host-built bundle (bind-mounted ./frontend/dist)
+    # the image's own assets are shadowed, so the bundle must be rebuilt on the
+    # host. Otherwise the frontend image carries its assets and needs no host build.
+    if grep -qE '\./frontend/dist[ :]' "$INSTALL_DIR/docker-compose.yml" 2>/dev/null; then
+        phase "Building Frontend"
+        if [ "$DRY_RUN" = "1" ]; then
+            info "[dry-run] would npm ci + npm run build in frontend/"
+        elif command -v npm &>/dev/null; then
+            ( cd "$INSTALL_DIR/frontend" && npm ci 2>&1 | tail -n3 && \
+              NODE_OPTIONS="--max-old-space-size=1024" npm run build 2>&1 | tail -n5 ) \
+              || halt "Frontend build failed"
+            good "Frontend assets rebuilt"
+        else
+            warn "npm not on host; relying on the frontend image build for assets"
+        fi
+    fi
+
+    phase "Building Images"
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would docker compose build"
+    else
+        # Build before recreating: running containers are untouched until
+        # 'up -d', so a failed build leaves the current version serving.
+        dc build 2>&1 | tail -n15 || halt "docker compose build failed — current version still running"
+        good "Images built"
+    fi
+
+    phase "Recreating Containers"
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would docker compose up -d (backend auto-migrates on boot)"
+    else
+        dc up -d 2>&1 | tail -n15 || halt "docker compose up -d failed"
+        # If the frontend serves a host-built bundle, restart it so nginx picks
+        # up freshly built assets even when its own image/config did not change.
+        if grep -qE '\./frontend/dist[ :]' "$INSTALL_DIR/docker-compose.yml" 2>/dev/null; then
+            dc restart frontend 2>&1 | tail -n3 || true
+        fi
+        good "Containers recreated"
+    fi
+
+    phase "Health Check"
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would wait for serverkit-backend to report healthy"
+    else
+        local waited=0 status=""
+        while [ "$waited" -lt 90 ]; do
+            status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' serverkit-backend 2>/dev/null || echo missing)"
+            [ "$status" = "healthy" ] && { good "Backend healthy"; break; }
+            [ "$status" = "none" ] && { good "Backend container running (no healthcheck defined)"; break; }
+            sleep 3
+            waited=$((waited + 3))
+        done
+        if [ "$status" != "healthy" ] && [ "$status" != "none" ]; then
+            warn "Backend did not report healthy within 90s (status: $status)"
+            warn "Inspect logs: cd $INSTALL_DIR && docker compose logs backend"
+        fi
+    fi
+
+    local new_version
+    new_version="$(cat "$INSTALL_DIR/VERSION" 2>/dev/null | tr -d '\n\r ' || echo unknown)"
+    curl -s "https://serverkit.ai/track/update?v=${new_version}" >/dev/null 2>&1 || true
+
+    printf '\n  %s%s✔  Update complete (Docker)%s   %s%s%s\n\n' \
+        "$BLD" "$HUE_OK" "$RST" "$FOG" "$(clock)" "$RST"
+    printf '  Version   %s\n' "$new_version"
+    printf '  Backend   %s\n' "$(docker inspect -f '{{.State.Status}}' serverkit-backend 2>/dev/null || echo unknown)"
+    printf '  Frontend  %s\n\n' "$(docker inspect -f '{{.State.Status}}' serverkit-frontend 2>/dev/null || echo unknown)"
+    printf '  %sCLI%s       serverkit status\n\n' "$BLD" "$RST"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+# All-Docker deployments don't use the host venv / systemd / blue-green flow —
+# route them to the compose path. This is what prevents the missing-venv crash.
+if is_docker_deployment; then
+    update_docker_compose
+    exit 0
+fi
+
 printf '\n  %s%sServerKit Updater%s\n' "$BLD" "$PAPER" "$RST"
 STARTED_AT=$(date +%s)
 

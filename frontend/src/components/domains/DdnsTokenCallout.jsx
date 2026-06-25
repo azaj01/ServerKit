@@ -16,7 +16,7 @@ export default function DdnsTokenCallout({ host, onDismiss }) {
                     Token for <strong>{host.hostname || host.record_name}</strong> — shown once. Save it now.
                 </span>
                 {onDismiss && (
-                    <button className="ddns-token-callout__close" onClick={onDismiss} aria-label="Dismiss">
+                    <button type="button" className="ddns-token-callout__close" onClick={onDismiss} aria-label="Dismiss">
                         &times;
                     </button>
                 )}

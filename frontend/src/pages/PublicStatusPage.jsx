@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api';
-import Spinner from '../components/Spinner';
+import EmptyState from '../components/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Activity, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 
@@ -61,7 +61,7 @@ function PublicStatusPage() {
     if (loading) {
         return (
             <main className="public-status-page">
-                <Spinner />
+                <EmptyState loading title="Loading status" />
             </main>
         );
     }

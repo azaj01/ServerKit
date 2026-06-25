@@ -4,6 +4,7 @@ import { SERVICE_TABS } from './services/serviceTabs';
 import { FILE_TABS } from './files/fileTabs';
 import { MONITOR_TABS } from './monitoring/monitorTabs';
 import { MARKET_TABS } from './marketplace/marketTabs';
+import { ORG_TABS } from './organization/organizationTabs';
 
 // Path prefixes for a tab group, used to keep the group's sidebar item lit
 // across all its tabs (e.g. Servers stays active on /fleet, /cloud, …).
@@ -34,36 +35,17 @@ export const SIDEBAR_ITEMS = [
     },
     {
         // "Organization" groups the cross-cutting features that structure work
-        // across a team/account — Projects, Shared Variables, and Workspaces —
-        // so they don't each clutter the top level. Renders as a collapsible
-        // group (Sidebar.renderNavItem handles item.subItems). matchPrefixes
-        // keeps the group lit on any of its sub-routes.
+        // across a team/account — Projects, Shared Variables, and Workspaces.
+        // Like every other group (Servers, Domains, …) it uses the top-bar tab
+        // layout, NOT a collapsible sidebar sub-menu: the sub-nav lives in the
+        // page's PageTopbar (ORG_TABS via TabGroupLayout). matchPrefixes keeps
+        // the single sidebar item lit across all three routes.
         id: 'organization',
         label: 'Organization',
         route: '/projects',
-        matchPrefixes: ['/projects', '/shared-variables', '/workspaces'],
+        matchPrefixes: groupPrefixes(ORG_TABS),
         category: 'overview',
         icon: '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/><path d="M9 18v.01"/>',
-        subItems: [
-            {
-                id: 'projects',
-                label: 'Projects',
-                route: '/projects',
-                icon: '<path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.7.9H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
-            },
-            {
-                id: 'shared-variables',
-                label: 'Shared Variables',
-                route: '/shared-variables',
-                icon: '<path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="2"/>'
-            },
-            {
-                id: 'workspaces',
-                label: 'Workspaces',
-                route: '/workspaces',
-                icon: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>'
-            }
-        ]
     },
     {
         // Redesign: Servers uses the top-bar layout (REDESIGN_MAP §6 decision 3).
@@ -107,7 +89,8 @@ export const SIDEBAR_ITEMS = [
     {
         // Redesign: WordPress uses the top-bar layout (REDESIGN_MAP §6 dec. 3).
         // Pipeline now lives in the page's top bar (PageTopbar WORDPRESS_TABS),
-        // not as a sidebar sub-item. Route /wordpress/projects is unchanged.
+        // not as a sidebar sub-item. The pipeline list is at /wordpress/pipelines
+        // (renamed from /wordpress/projects in §2; old URLs redirect).
         id: 'wordpress',
         label: 'WordPress',
         route: '/wordpress',
@@ -154,10 +137,11 @@ export const SIDEBAR_ITEMS = [
     },
     {
         // Redesign: Monitoring uses the top-bar layout (REDESIGN_MAP §6 dec. 3).
-        // Status Pages now lives in the page's top bar (PageTopbar MONITOR_TABS),
-        // not as a sidebar sub-item. Route /status-pages is unchanged.
+        // Observability group (§4): Monitoring / Events / Status Pages share the
+        // top bar (PageTopbar MONITOR_TABS). The sidebar entry lights for any of
+        // them via matchPrefixes. Events absorbed the old standalone Telemetry.
         id: 'monitoring',
-        label: 'Monitoring',
+        label: 'Observability',
         route: '/monitoring',
         matchPrefixes: groupPrefixes(MONITOR_TABS),
         category: 'operations',
@@ -206,13 +190,6 @@ export const SIDEBAR_ITEMS = [
         icon: '<path d="M4 17l6-6-6-6M12 19h8"/>'
     },
     {
-        id: 'telemetry',
-        label: 'Telemetry',
-        route: '/telemetry',
-        category: 'system',
-        icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
-    },
-    {
         id: 'jobs',
         label: 'Jobs',
         route: '/jobs',
@@ -230,11 +207,14 @@ export const SIDEBAR_ITEMS = [
         icon: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6v12"/><circle cx="13" cy="12" r="2.5"/><path d="M17 6v12"/>'
     },
     {
-        id: 'secrets',
-        label: 'Secrets & Webhooks',
-        route: '/secrets',
+        // Inbound webhook console. Secret storage ("Vaults") that used to share
+        // this page now lives under the Organization tab group (/vaults); only
+        // the receive/verify/forward half remains here on its own page.
+        id: 'webhooks',
+        label: 'Webhooks',
+        route: '/webhooks',
         category: 'system',
-        icon: '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><circle cx="12" cy="12" r="2"/><path d="M12 12v-6"/><path d="M16 12h3"/><path d="M8 12H5"/>'
+        icon: '<path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2"/><path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06"/><path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8"/>'
     },
     {
         // Redesign: Marketplace uses the top-bar layout (REDESIGN_MAP §6 dec. 3).
@@ -251,10 +231,10 @@ export const SIDEBAR_ITEMS = [
 
 // "Advanced" items are powerful but not part of the everyday core for a solo
 // dev / small team: the Marketplace, the internal job-queue console, and the
-// Secrets & Webhooks vault. They're hidden by the default ("Recommended") view
+// inbound-Webhooks console. They're hidden by the default ("Recommended") view
 // and every curated preset, but stay one click away via the "Full" view or
 // Customize Sidebar — and remain fully routable (deep links, command palette).
-export const ADVANCED_ITEM_IDS = ['marketplace', 'queue', 'secrets', 'telemetry'];
+export const ADVANCED_ITEM_IDS = ['marketplace', 'queue', 'webhooks'];
 
 // Preset profiles define which items are hidden (top-level only)
 export const SIDEBAR_PRESETS = {

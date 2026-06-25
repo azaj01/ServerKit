@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function DangerZone({ title, description, action, children, className = '' }) {
     if (children) {

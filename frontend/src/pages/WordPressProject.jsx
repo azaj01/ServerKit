@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Plus, ExternalLink, RefreshCw, GitBranch, Search, Shield, Activity, Settings, ArrowRight, RotateCcw } from 'lucide-react';
 import useTabParam from '../hooks/useTabParam';
@@ -20,6 +20,7 @@ import {
     BulkActionsBar,
 } from '../components/wordpress';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import Modal from '@/components/Modal';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
 import { FolderGit2 } from 'lucide-react';
@@ -39,7 +40,7 @@ const WordPressProject = () => {
 
     const [pipeline, setPipeline] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useTabParam(`/wordpress/projects/${id}`, VALID_TABS);
+    const [activeTab, setActiveTab] = useTabParam(`/wordpress/pipelines/${id}`, VALID_TABS);
     const [showCreateEnvModal, setShowCreateEnvModal] = useState(false);
     const [promoteModal, setPromoteModal] = useState(null);
     const [syncModal, setSyncModal] = useState(null);
@@ -404,9 +405,9 @@ const WordPressProject = () => {
         return (
             <EmptyState
                 icon={FolderGit2}
-                title="Project not found"
-                description="This WordPress project does not exist or has been removed."
-                action={<Button onClick={() => navigate('/wordpress/projects')}>Back to Projects</Button>}
+                title="Pipeline not found"
+                description="This WordPress pipeline does not exist or has been removed."
+                action={<Button onClick={() => navigate('/wordpress/pipelines')}>Back to Pipelines</Button>}
             />
         );
     }
@@ -420,7 +421,7 @@ const WordPressProject = () => {
             {/* Top Bar */}
             <div className="app-detail-topbar">
                 <div className="app-detail-breadcrumbs">
-                    <Link to="/wordpress/projects">Projects</Link>
+                    <Link to="/wordpress/pipelines">Pipelines</Link>
                     <span>/</span>
                     <span className="current">{projectName}</span>
                 </div>
@@ -857,14 +858,8 @@ const CreatePipelineEnvModal = ({ onClose, onCreate, productionDomain, existingT
     });
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Create Environment</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-
-                <form onSubmit={handleSubmit}>
+        <Modal open onClose={onClose} title="Create Environment">
+            <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <Label>Environment Type</Label>
                         <select name="type" value={formData.type} onChange={handleChange}>
@@ -1037,8 +1032,7 @@ const CreatePipelineEnvModal = ({ onClose, onCreate, productionDomain, existingT
                         </Button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </Modal>
     );
 };
 

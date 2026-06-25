@@ -5,7 +5,6 @@ import {
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
-import { ConfirmDialog } from '../ConfirmDialog';
 import EmptyState from '../EmptyState';
 import { Pill } from '../ds';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,7 @@ const DEFAULT_TEMPLATE = 'pr-{pr_number}.{app_domain}';
 
 const PreviewList = ({ appId }) => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [previews, setPreviews] = useState([]);
     const [settings, setSettings] = useState(null);
@@ -260,12 +259,6 @@ const PreviewList = ({ appId }) => {
                     ))}
                 </ul>
             )}
-
-            <ConfirmDialog
-                {...confirmState}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 };

@@ -9,6 +9,7 @@ import WorkspaceSwitcher from './WorkspaceSwitcher';
 import NotificationBell from './NotificationBell';
 import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems, applyWorkspaceNavPermissions } from './sidebarItems';
 import { useContributions } from '../plugins/contributions';
+import { sanitizeSvgInner } from '../utils/sanitizeSvg';
 
 const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {} }) => {
     const { user, logout, updateUser } = useAuth();
@@ -222,7 +223,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                     >
                         <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             aria-hidden="true" focusable="false"
-                            dangerouslySetInnerHTML={{ __html: item.icon }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeSvgInner(item.icon) }}
                         />
                         {item.label}
                     </NavLink>
@@ -246,7 +247,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                     >
                         <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             aria-hidden="true" focusable="false"
-                            dangerouslySetInnerHTML={{ __html: sub.icon }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeSvgInner(sub.icon) }}
                         />
                         {sub.label}
                     </NavLink>

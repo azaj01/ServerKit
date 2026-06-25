@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLockBodyScroll } from '@/hooks/useLockBodyScroll';
 import { X, Edit3, Download, EyeOff, Lock, Trash2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FileIcon from './FileIcon';
@@ -31,12 +31,7 @@ export default function PreviewDrawer({
 }) {
     // Lock body scroll only for the overlay drawer; the inline pane scrolls
     // within its own column and must not freeze the page.
-    useEffect(() => {
-        if (!file || inline) return;
-        const prev = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = prev; };
-    }, [file, inline]);
+    useLockBodyScroll(Boolean(file) && !inline);
 
     if (!file) return null;
 
@@ -57,7 +52,7 @@ export default function PreviewDrawer({
                         <h3>{file.name}</h3>
                         <p className="preview-drawer-path">{file.path}</p>
                     </div>
-                    <button className="preview-drawer-close" onClick={onClose} aria-label="Close">
+                    <button type="button" className="preview-drawer-close" onClick={onClose} aria-label="Close">
                         <X size={18} />
                     </button>
                 </header>
@@ -93,20 +88,20 @@ export default function PreviewDrawer({
 
                 <div className="preview-drawer-actions">
                     {!file.is_dir && (
-                        <button className="drawer-action-btn" onClick={() => onDownload(file)}>
+                        <button type="button" className="drawer-action-btn" onClick={() => onDownload(file)}>
                             <Download size={14} /> Download
                         </button>
                     )}
-                    <button className="drawer-action-btn" onClick={() => onCopyPath(file.path)}>
+                    <button type="button" className="drawer-action-btn" onClick={() => onCopyPath(file.path)}>
                         <Copy size={14} /> Copy path
                     </button>
-                    <button className="drawer-action-btn" onClick={() => onRename(file)}>
+                    <button type="button" className="drawer-action-btn" onClick={() => onRename(file)}>
                         <Edit3 size={14} /> Rename
                     </button>
-                    <button className="drawer-action-btn" onClick={() => onPermissions(file)}>
+                    <button type="button" className="drawer-action-btn" onClick={() => onPermissions(file)}>
                         <Lock size={14} /> Permissions
                     </button>
-                    <button className="drawer-action-btn danger" onClick={() => onDelete(file)}>
+                    <button type="button" className="drawer-action-btn danger" onClick={() => onDelete(file)}>
                         <Trash2 size={14} /> Delete
                     </button>
                 </div>

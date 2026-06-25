@@ -1,6 +1,8 @@
 import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 
+// Join class names. With Tailwind removed there are no conflicting utility
+// classes to dedupe, so plain clsx (truthy-aware join) is sufficient — we no
+// longer depend on tailwind-merge.
 export function cn(...inputs) {
-  return twMerge(clsx(inputs));
+  return clsx(inputs);
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';

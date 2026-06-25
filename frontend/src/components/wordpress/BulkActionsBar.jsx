@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Square, Play, RefreshCw, ArrowDownLeft, X } from 'lucide-react';
 import Spinner from '../Spinner';
 import { Button } from '@/components/ui/button';

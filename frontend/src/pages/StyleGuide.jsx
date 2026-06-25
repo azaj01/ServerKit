@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import { useLogsDrawer } from '../contexts/LogsDrawerContext';
 import {

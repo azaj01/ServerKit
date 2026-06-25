@@ -66,7 +66,7 @@ const SourceConnectionCallback = () => {
                 {error ? (
                     <>
                         <p className="auth-error">{error}</p>
-                        <button className="btn btn-primary" onClick={() => navigate('/settings/connections')}>
+                        <button type="button" className="btn btn-primary" onClick={() => navigate('/settings/connections')}>
                             Back to Connections
                         </button>
                     </>

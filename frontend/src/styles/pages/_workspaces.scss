@@ -5,7 +5,9 @@
 .workspaces-page {
 
     // Dense table list reuses the WordPress .wp-list + .sk-dtable primitives.
-    .wp-list { padding: $space-4; }
+    // Outer padding/centering comes from the enclosing .sk-tabgroup__inner
+    // (Organization tab group), so the list itself stays flush.
+    .wp-list { padding: 0; }
 
     // ── modals: mono eyebrow headings + soft separators ─────
     .modal-body {

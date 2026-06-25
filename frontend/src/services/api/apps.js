@@ -10,6 +10,17 @@ export async function getApps(options = {}) {
     return this.request('/apps', config);
 }
 
+// "Services" is the user-facing term for what the backend calls Applications
+// (§1 unification). These aliases let new code speak "services" while the
+// API client and backend model keep the canonical `apps`/`Application` names.
+export async function getServices(options = {}) {
+    return getApps.call(this, options);
+}
+
+export async function getService(id) {
+    return getApp.call(this, id);
+}
+
 // Reassign an application to a workspace (#33). Pass null to move it to Default.
 export async function setAppWorkspace(appId, workspaceId) {
     return this.request(`/apps/${appId}/workspace`, {

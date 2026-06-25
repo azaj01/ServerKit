@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import { Upload, Check, AlertTriangle, Clock, Database, Package, FolderArchive, HardDrive, Cloud, CloudOff, RefreshCw, Trash2, Plus, CheckCircle, XCircle, FileArchive, DollarSign, TrendingUp } from 'lucide-react';
 import api from '../services/api';
+import { formatBytes } from '@/utils/formatBytes';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { FormField, FormRow } from '../components/FormField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ const PROVIDER_LABELS = { local: 'Local only', s3: 'S3-Compatible', b2: 'Backbla
 
 const Backups = () => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
     const [backups, setBackups] = useState([]);
     const [stats, setStats] = useState(null);
     const [schedules, setSchedules] = useState([]);
@@ -358,18 +359,6 @@ const Backups = () => {
         });
     };
 
-    const formatSize = (bytes) => {
-        if (!bytes) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        let unitIndex = 0;
-        let size = bytes;
-        while (size >= 1024 && unitIndex < units.length - 1) {
-            size /= 1024;
-            unitIndex++;
-        }
-        return `${size.toFixed(1)} ${units[unitIndex]}`;
-    };
-
     const formatTimestamp = (timestamp) => {
         return new Date(timestamp).toLocaleString();
     };
@@ -429,7 +418,7 @@ const Backups = () => {
             {error && (
                 <div className="alert alert-danger">
                     {error}
-                    <button onClick={() => setError(null)} className="alert-close">&times;</button>
+                    <button type="button" onClick={() => setError(null)} className="alert-close">&times;</button>
                 </div>
             )}
 
@@ -514,7 +503,7 @@ const Backups = () => {
                                                 <span className={`bk-type bk-type--${backup.type}`}>{backup.type}</span>
                                             </td>
                                             <td>{backup.app_name || backup.name?.split('_')[0] || '—'}</td>
-                                            <td className="sk-cell-mono">{formatSize(backup.size)}</td>
+                                            <td className="sk-cell-mono">{formatBytes(backup.size, { defaultValue: '0 B' })}</td>
                                             <td>{getRemoteStatusPill(backup.remote_status)}</td>
                                             <td className="bk-when">{formatTimestamp(backup.timestamp)}</td>
                                             <td className="sk-cell-mono">{formatMoney(((backup.size || 0) / (1024 ** 3)) * (costSummary?.cost_rates?.local || 0))}</td>
@@ -985,15 +974,8 @@ const Backups = () => {
             )}
 
             {/* Create Backup Modal */}
-            {showBackupModal && (
-                <div className="modal-overlay" onClick={() => setShowBackupModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create Backup</h2>
-                            <button className="modal-close" onClick={() => setShowBackupModal(false)}>&times;</button>
-                        </div>
+            <Modal open={showBackupModal} onClose={() => setShowBackupModal(false)} title="Create Backup">
                         <form onSubmit={handleCreateBackup}>
-                            <div className="modal-body">
                                 <div className="form-group">
                                     <label>Backup Type</label>
                                     <select
@@ -1113,28 +1095,18 @@ const Backups = () => {
                                         </div>
                                     </>
                                 )}
-                            </div>
-                            <div className="modal-footer">
+                            <div className="modal-actions">
                                 <Button type="button" variant="outline" onClick={() => setShowBackupModal(false)}>
                                     Cancel
                                 </Button>
                                 <Button type="submit">Create Backup</Button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Add Schedule Modal */}
-            {showScheduleModal && (
-                <div className="modal-overlay" onClick={() => setShowScheduleModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Add Backup Schedule</h2>
-                            <button className="modal-close" onClick={() => setShowScheduleModal(false)}>&times;</button>
-                        </div>
+            <Modal open={showScheduleModal} onClose={() => setShowScheduleModal(false)} title="Add Backup Schedule">
                         <form onSubmit={handleAddSchedule}>
-                            <div className="modal-body">
                                 <div className="form-group">
                                     <label>Schedule Name</label>
                                     <Input
@@ -1204,27 +1176,18 @@ const Backups = () => {
                                         </label>
                                     </div>
                                 )}
-                            </div>
-                            <div className="modal-footer">
+                            <div className="modal-actions">
                                 <Button type="button" variant="outline" onClick={() => setShowScheduleModal(false)}>
                                     Cancel
                                 </Button>
                                 <Button type="submit">Add Schedule</Button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Restore Modal */}
-            {showRestoreModal && selectedBackup && (
-                <div className="modal-overlay" onClick={() => setShowRestoreModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Restore Backup</h2>
-                            <button className="modal-close" onClick={() => setShowRestoreModal(false)}>&times;</button>
-                        </div>
-                        <div className="modal-body">
+            <Modal open={showRestoreModal && !!selectedBackup} onClose={() => setShowRestoreModal(false)} title="Restore Backup">
+                        {selectedBackup && (<>
                             <div className="bk-restore-warn">
                                 <AlertTriangle size={18} />
                                 <span><b>Warning:</b> restoring this backup will overwrite existing data. This action cannot be undone.</span>
@@ -1244,11 +1207,11 @@ const Backups = () => {
                                 </div>
                                 <div className="sk-info-row">
                                     <span className="k">Size</span>
-                                    <span className="v">{formatSize(selectedBackup.size)}</span>
+                                    <span className="v">{formatBytes(selectedBackup.size, { defaultValue: '0 B' })}</span>
                                 </div>
                             </div>
-                        </div>
-                        <div className="modal-footer">
+                        </>)}
+                        <div className="modal-actions">
                             <Button variant="outline" onClick={() => setShowRestoreModal(false)}>
                                 Cancel
                             </Button>
@@ -1256,19 +1219,7 @@ const Backups = () => {
                                 Restore Backup
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
+            </Modal>
         </div>
     );
 };

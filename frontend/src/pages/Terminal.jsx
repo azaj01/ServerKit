@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import TargetPicker from '../components/TargetPicker';
 import RemoteTerminal from '../components/RemoteTerminal';
 import LogFileList from '../components/log-viewer/LogFileList';
 import LogToolbar from '../components/log-viewer/LogToolbar';
 import LogContent from '../components/log-viewer/LogContent';
 import { formatBytes, logKindFromPath } from '../components/log-viewer/logHelpers';
+import { formatBytes as formatMemory } from '@/utils/formatBytes';
 import { Pill, PageTopbar } from '../components/ds';
 import { Button } from '@/components/ui/button';
 import {
@@ -141,7 +141,7 @@ const REMOTE_LOG_SUPPORTED = new Set(['list', 'read']);
 
 const LogFilesTab = () => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [target, setTarget] = useState({ kind: 'local' });
     const isRemote = target.kind === 'agent';
@@ -366,7 +366,7 @@ const LogFilesTab = () => {
                 <div className="lv-error">
                     <AlertCircle size={14} />
                     <span>{error}</span>
-                    <button onClick={() => setError(null)}>&times;</button>
+                    <button type="button" onClick={() => setError(null)}>&times;</button>
                 </div>
             )}
 
@@ -428,17 +428,6 @@ const LogFilesTab = () => {
                     />
                 </div>
             </div>
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 };
@@ -664,14 +653,14 @@ const JournalTab = () => {
                                 placeholder="Type unit name…"
                             />
                         </div>
-                        <button className="lv-icon-btn" onClick={applyUnitInput} title="Apply unit filter">
+                        <button type="button" className="lv-icon-btn" onClick={applyUnitInput} title="Apply unit filter">
                             <Search size={13} />
                         </button>
                     </div>
 
                     <div className="lv-sidebar-body">
                         <div className="lv-group">
-                            <button
+                            <button type="button"
                                     className={`lv-file lv-file--compact ${!unit ? 'active' : ''}`}
                                     onClick={clearUnit}
                                 >
@@ -688,7 +677,7 @@ const JournalTab = () => {
                             </div>
                             <div className="lv-group-files">
                                 {filteredUnits.map(u => (
-                                    <button
+                                    <button type="button"
                                         key={u.id}
                                         className={`lv-file lv-file--compact ${unit === u.id ? 'active' : ''}}`}
                                         onClick={() => pickUnit(u.id)}
@@ -713,7 +702,7 @@ const JournalTab = () => {
                                 </div>
                                 <div className="lv-group-files">
                                     {PRIORITY_OPTIONS.map(opt => (
-                                        <button
+                                        <button type="button"
                                             key={opt.value}
                                             className={`lv-file lv-file--compact ${priority === opt.value ? 'active' : ''}`}
                                             onClick={() => { setPriority(opt.value); setTimeout(loadJournalLogs, 0); }}
@@ -791,7 +780,7 @@ function priorityColor(value) {
 
 const ProcessesTab = () => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [target, setTarget] = useState({ kind: 'local' });
     const isRemote = target.kind === 'agent';
@@ -965,7 +954,7 @@ const ProcessesTab = () => {
                         { id: 'stopped', label: 'Stopped', count: statusCounts.stopped },
                         { id: 'zombie', label: 'Zombie', count: statusCounts.zombie },
                     ].map(c => (
-                        <button
+                        <button type="button"
                             key={c.id}
                             className={`proc-chip ${statusFilter === c.id ? 'active' : ''}`}
                             onClick={() => setStatusFilter(c.id)}
@@ -986,7 +975,7 @@ const ProcessesTab = () => {
                             placeholder="Filter PID, name, command…"
                         />
                         {searchTerm && (
-                            <button className="lv-search-field-clear" onClick={() => setSearchTerm('')}>
+                            <button type="button" className="lv-search-field-clear" onClick={() => setSearchTerm('')}>
                                 <X size={11} />
                             </button>
                         )}
@@ -1001,7 +990,7 @@ const ProcessesTab = () => {
                         <option value={100}>Top 100</option>
                         <option value={250}>Top 250</option>
                     </select>
-                    <button
+                    <button type="button"
                         className={`lv-chip ${autoRefresh ? 'active' : ''}`}
                         onClick={() => setAutoRefresh(!autoRefresh)}
                         disabled={isRemote}
@@ -1021,7 +1010,7 @@ const ProcessesTab = () => {
                         <span className="lv-header-label is-indented">Users</span>
                     </div>
                     <div className="lv-sidebar-body">
-                        <button
+                        <button type="button"
                             className={`lv-file ${!userFilter ? 'active' : ''}`}
                             onClick={() => setUserFilter(null)}
                         >
@@ -1030,7 +1019,7 @@ const ProcessesTab = () => {
                             <span className="lv-file-size">{processes.length}</span>
                         </button>
                         {userGroups.map(([user, count]) => (
-                            <button
+                            <button type="button"
                                 key={user}
                                 className={`lv-file ${userFilter === user ? 'active' : ''}`}
                                 onClick={() => setUserFilter(user)}
@@ -1116,10 +1105,10 @@ const ProcessesTab = () => {
                                                     <Pill kind={processStatusKind(p.status)}>{p.status}</Pill>
                                                 </td>
                                                 <td className="proc-actions" onClick={(e) => e.stopPropagation()}>
-                                                    <button className="lv-icon-btn" onClick={() => handleKillProcess(p.pid)} title="Kill (SIGTERM)">
+                                                    <button type="button" className="lv-icon-btn" onClick={() => handleKillProcess(p.pid)} title="Kill (SIGTERM)">
                                                         <X size={13} />
                                                     </button>
-                                                    <button className="lv-icon-btn danger" onClick={() => handleKillProcess(p.pid, true)} title="Force kill (SIGKILL)">
+                                                    <button type="button" className="lv-icon-btn danger" onClick={() => handleKillProcess(p.pid, true)} title="Force kill (SIGKILL)">
                                                         <AlertTriangle size={13} />
                                                     </button>
                                                 </td>
@@ -1143,7 +1132,7 @@ const ProcessesTab = () => {
                                 <h3>{selectedProcess.name}</h3>
                                 <p className="preview-drawer-path">PID {selectedProcess.pid} · {selectedProcess.user}</p>
                             </div>
-                            <button className="preview-drawer-close" onClick={() => setSelectedProcess(null)}>
+                            <button type="button" className="preview-drawer-close" onClick={() => setSelectedProcess(null)}>
                                 <X size={18} />
                             </button>
                         </header>
@@ -1182,10 +1171,10 @@ const ProcessesTab = () => {
                             </div>
                         </div>
                         <div className="preview-drawer-actions">
-                            <button className="drawer-action-btn" onClick={() => handleKillProcess(selectedProcess.pid)}>
+                            <button type="button" className="drawer-action-btn" onClick={() => handleKillProcess(selectedProcess.pid)}>
                                 <X size={14} /> Kill (SIGTERM)
                             </button>
-                            <button className="drawer-action-btn danger" onClick={() => handleKillProcess(selectedProcess.pid, true)}>
+                            <button type="button" className="drawer-action-btn danger" onClick={() => handleKillProcess(selectedProcess.pid, true)}>
                                 <AlertTriangle size={14} /> Force kill (SIGKILL)
                             </button>
                         </div>
@@ -1200,17 +1189,6 @@ const ProcessesTab = () => {
                     </aside>
                 </>
             )}
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 };
@@ -1230,7 +1208,7 @@ const SVC_PILL_KIND = { running: 'green', failed: 'red', stopped: 'gray', other:
 
 const ServicesTab = () => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [target, setTarget] = useState({ kind: 'local' });
     const isRemote = target.kind === 'agent';
@@ -1386,7 +1364,7 @@ const ServicesTab = () => {
                         <span className="lv-stat-label">Total</span>
                         <span className="lv-stat-value">{services.length}</span>
                     </span>
-                    <button
+                    <button type="button"
                         className="lv-icon-btn"
                         onClick={loadServices}
                         title="Refresh"
@@ -1404,7 +1382,7 @@ const ServicesTab = () => {
                         { id: 'failed', label: 'Failed', count: counts.failed },
                         { id: 'stopped', label: 'Stopped', count: counts.stopped },
                     ].map(c => (
-                        <button
+                        <button type="button"
                             key={c.id}
                             className={`proc-chip ${statusFilter === c.id ? 'active' : ''}`}
                             onClick={() => setStatusFilter(c.id)}
@@ -1424,7 +1402,7 @@ const ServicesTab = () => {
                         placeholder="Filter services…"
                     />
                     {searchTerm && (
-                        <button className="lv-search-field-clear" onClick={() => setSearchTerm('')}>
+                        <button type="button" className="lv-search-field-clear" onClick={() => setSearchTerm('')}>
                             <X size={11} />
                         </button>
                     )}
@@ -1474,14 +1452,14 @@ const ServicesTab = () => {
                                 <div className="svc-card-actions" onClick={(e) => e.stopPropagation()}>
                                     {isRunning ? (
                                         <>
-                                            <button
+                                            <button type="button"
                                                 className="svc-action-btn"
                                                 onClick={() => handleAction(service.name, 'restart')}
                                                 disabled={actionLoading === `${service.name}-restart`}
                                             >
                                                 <RotateCw size={12} /> Restart
                                             </button>
-                                            <button
+                                            <button type="button"
                                                 className="svc-action-btn"
                                                 onClick={() => handleAction(service.name, 'stop')}
                                                 disabled={actionLoading === `${service.name}-stop`}
@@ -1490,7 +1468,7 @@ const ServicesTab = () => {
                                             </button>
                                         </>
                                     ) : (
-                                        <button
+                                        <button type="button"
                                             className={`svc-action-btn primary ${isFailed ? 'danger' : ''}`}
                                             onClick={() => handleAction(service.name, 'start')}
                                             disabled={actionLoading === `${service.name}-start`}
@@ -1498,7 +1476,7 @@ const ServicesTab = () => {
                                             <Play size={12} /> Start
                                         </button>
                                     )}
-                                    <button
+                                    <button type="button"
                                         className="svc-action-btn ghost"
                                         onClick={() => openServiceDrawer(service)}
                                     >
@@ -1523,7 +1501,7 @@ const ServicesTab = () => {
                                     {selectedService.description || `journalctl -u ${selectedService.name}`}
                                 </p>
                             </div>
-                            <button className="preview-drawer-close" onClick={closeServiceDrawer}>
+                            <button type="button" className="preview-drawer-close" onClick={closeServiceDrawer}>
                                 <X size={18} />
                             </button>
                         </header>
@@ -1550,14 +1528,14 @@ const ServicesTab = () => {
                         <div className="preview-drawer-actions">
                             {statusKind(selectedService.status) === 'running' ? (
                                 <>
-                                    <button
+                                    <button type="button"
                                         className="drawer-action-btn"
                                         onClick={() => handleAction(selectedService.name, 'restart')}
                                         disabled={actionLoading === `${selectedService.name}-restart`}
                                     >
                                         <RotateCw size={14} /> Restart
                                     </button>
-                                    <button
+                                    <button type="button"
                                         className="drawer-action-btn"
                                         onClick={() => handleAction(selectedService.name, 'stop')}
                                         disabled={actionLoading === `${selectedService.name}-stop`}
@@ -1566,7 +1544,7 @@ const ServicesTab = () => {
                                     </button>
                                 </>
                             ) : (
-                                <button
+                                <button type="button"
                                     className="drawer-action-btn"
                                     onClick={() => handleAction(selectedService.name, 'start')}
                                     disabled={actionLoading === `${selectedService.name}-start`}
@@ -1625,32 +1603,9 @@ const ServicesTab = () => {
                     </aside>
                 </>
             )}
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 };
-
-// Helper functions
-function formatMemory(bytes) {
-    if (!bytes) return '-';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let i = 0;
-    while (bytes >= 1024 && i < units.length - 1) {
-        bytes /= 1024;
-        i++;
-    }
-    return `${bytes.toFixed(1)} ${units[i]}`;
-}
 
 // Map a process status onto a ds Pill tone.
 function processStatusKind(status) {

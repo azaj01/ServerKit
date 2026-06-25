@@ -125,35 +125,36 @@ export async function installCertbot() {
     return this.request('/ssl/install-certbot', { method: 'POST' });
 }
 
-// Advanced SSL endpoints
+// Advanced SSL endpoints — unified under the one /ssl surface (§5). The old
+// /ssl/advanced/* paths still resolve (deprecated alias).
 export async function getSSLProfiles() {
-    return this.request('/ssl/advanced/profiles');
+    return this.request('/ssl/profiles');
 }
 
 export async function issueWildcardCert(domain, dnsProvider, credentials) {
-    return this.request('/ssl/advanced/wildcard', {
+    return this.request('/ssl/wildcard', {
         method: 'POST', body: { domain, dns_provider: dnsProvider, credentials }
     });
 }
 
 export async function issueSANCert(domains) {
-    return this.request('/ssl/advanced/san', {
+    return this.request('/ssl/san', {
         method: 'POST', body: { domains }
     });
 }
 
 export async function uploadCustomCert(domain, certificate, privateKey, chain) {
-    return this.request('/ssl/advanced/upload', {
+    return this.request('/ssl/upload', {
         method: 'POST', body: { domain, certificate, private_key: privateKey, chain }
     });
 }
 
 export async function getSSLHealth(domain) {
-    return this.request(`/ssl/advanced/health/${domain}`);
+    return this.request(`/ssl/health/${domain}`);
 }
 
 export async function getSSLExpiryAlerts(days = 30) {
-    return this.request(`/ssl/advanced/expiry-alerts?days=${days}`);
+    return this.request(`/ssl/expiry-alerts?days=${days}`);
 }
 
 // Security (ClamAV, File Integrity) endpoints

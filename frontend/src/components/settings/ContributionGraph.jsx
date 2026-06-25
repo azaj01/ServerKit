@@ -1,4 +1,3 @@
-import React from 'react';
 
 const ContributionGraph = ({ data, title, username }) => {
     if (!data || data.length === 0) return null;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, Area, AreaChart
@@ -155,7 +155,7 @@ const MetricsGraph = ({ compact = false, timezone, serverId }) => {
                     </div>
                     <div className="period-selector">
                         {periods.map(p => (
-                            <button
+                            <button type="button"
                                 key={p}
                                 className={`period-btn ${period === p ? 'active' : ''}`}
                                 onClick={() => setPeriod(p)}
@@ -213,19 +213,19 @@ const MetricsGraph = ({ compact = false, timezone, serverId }) => {
                     <span>Real-time Performance</span>
                 </div>
                 <div className="metrics-filter-legend">
-                    <button
+                    <button type="button"
                         className={`filter-btn cpu ${visibleMetrics.cpu ? 'active' : ''}`}
                         onClick={() => toggleMetric('cpu')}
                     >
                         CPU
                     </button>
-                    <button
+                    <button type="button"
                         className={`filter-btn memory ${visibleMetrics.memory ? 'active' : ''}`}
                         onClick={() => toggleMetric('memory')}
                     >
                         RAM
                     </button>
-                    <button
+                    <button type="button"
                         className={`filter-btn disk ${visibleMetrics.disk ? 'active' : ''}`}
                         onClick={() => toggleMetric('disk')}
                     >
@@ -234,7 +234,7 @@ const MetricsGraph = ({ compact = false, timezone, serverId }) => {
                 </div>
                 <div className="period-selector">
                     {periods.map(p => (
-                        <button
+                        <button type="button"
                             key={p}
                             className={`period-btn ${period === p ? 'active' : ''}`}
                             onClick={() => setPeriod(p)}

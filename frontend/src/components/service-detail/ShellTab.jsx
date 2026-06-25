@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../../services/api';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
+import EmptyState from '../EmptyState';
 
 const ShellTab = ({ appId, appName }) => {
     const [containers, setContainers] = useState([]);
@@ -65,7 +66,7 @@ const ShellTab = ({ appId, appName }) => {
     }
 
     if (loading) {
-        return <div className="loading">Loading containers...</div>;
+        return <EmptyState loading title="Loading containers..." />;
     }
 
     if (containers.length === 0) {

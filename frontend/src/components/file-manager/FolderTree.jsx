@@ -14,7 +14,7 @@ function TreeNode({ node, level, expanded, treeCache, treeLoading, currentPath, 
                 style={{ paddingLeft: 6 + level * 14 }}
                 onClick={() => onNavigate(node.path)}
             >
-                <button
+                <button type="button"
                     className="tree-chevron"
                     onClick={(e) => { e.stopPropagation(); onToggle(node.path); }}
                     aria-label={isExpanded ? 'Collapse' : 'Expand'}

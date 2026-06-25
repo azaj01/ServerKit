@@ -33,7 +33,7 @@ function FileCard({
             }}
             onContextMenu={(e) => onContext(e, entry)}
         >
-            <button
+            <button type="button"
                 className="file-card-check"
                 onClick={(e) => {
                     e.stopPropagation();

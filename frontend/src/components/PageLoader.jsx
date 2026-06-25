@@ -1,14 +1,13 @@
-import React from 'react';
-import { Spinner } from './Spinner';
+import EmptyState from './EmptyState';
 
 /**
  * Full-page loader for tab-group pages.
- * Centers a spinner inside the standard tab-group inner area.
+ * Shows a skeleton placeholder inside the standard tab-group inner area.
  */
 export function PageLoader({ className = '' }) {
     return (
         <div className={`sk-tabgroup__inner ${className}`.trim()}>
-            <Spinner />
+            <EmptyState loading title="Loading" />
         </div>
     );
 }

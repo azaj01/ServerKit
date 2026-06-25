@@ -810,6 +810,25 @@ h3.svc-eyebrow {
         text-transform: uppercase;
         color: var(--text-faint);
     }
+
+    // A divided sub-block within a section — e.g. the Deployment pipeline under
+    // the Git connect form in "Git & Deploy". Mirrors the .svc-give-subdomain
+    // divider so stacked panels read as distinct steps rather than one slab.
+    &__subsection {
+        margin-top: $space-5;
+        padding-top: $space-5;
+        border-top: 1px solid var(--border-soft);
+    }
+
+    &__subsection-title {
+        margin: 0 0 $space-3;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+    }
 }
 
 // Icon-only button (global utility consumed by several other components)

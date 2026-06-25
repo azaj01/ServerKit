@@ -1,19 +1,13 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Download, RotateCcw, Trash2, GitCommit, Tag } from 'lucide-react';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { formatBytes } from '@/utils/formatBytes';
+import EmptyState from '../EmptyState';
 
 const SnapshotTable = ({ snapshots, onRestore, onDelete, loading = false }) => {
     const [actionLoading, setActionLoading] = useState({});
     const [confirmRestore, setConfirmRestore] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
-
-    function formatBytes(bytes) {
-        if (!bytes || bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    }
 
     function formatDate(dateString) {
         if (!dateString) return '-';
@@ -41,7 +35,7 @@ const SnapshotTable = ({ snapshots, onRestore, onDelete, loading = false }) => {
     }
 
     if (loading) {
-        return <div className="loading">Loading snapshots...</div>;
+        return <EmptyState loading title="Loading snapshots..." />;
     }
 
     if (!snapshots || snapshots.length === 0) {
@@ -105,7 +99,7 @@ const SnapshotTable = ({ snapshots, onRestore, onDelete, loading = false }) => {
                                 )}
                             </td>
                             <td className="wp-cell-actions">
-                                <button
+                                <button type="button"
                                     className="wp-row-action"
                                     title="Restore"
                                     onClick={() => setConfirmRestore(snapshot)}
@@ -113,7 +107,7 @@ const SnapshotTable = ({ snapshots, onRestore, onDelete, loading = false }) => {
                                 >
                                     <RotateCcw size={14} />
                                 </button>
-                                <button
+                                <button type="button"
                                     className="wp-row-action wp-row-action--danger"
                                     title="Delete"
                                     onClick={() => setConfirmDelete(snapshot)}

@@ -3,15 +3,7 @@ import { Archive, Trash2, RefreshCw } from 'lucide-react';
 import api from '../../services/api';
 import EmptyState from '../EmptyState';
 import { useConfirm } from '../../hooks/useConfirm';
-import { ConfirmDialog } from '../ConfirmDialog';
-
-function formatBytes(bytes) {
-    if (!bytes) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+import { formatBytes } from '@/utils/formatBytes';
 
 const FILTERS = [
     { id: 'all', label: 'All' },
@@ -20,7 +12,7 @@ const FILTERS = [
 ];
 
 export default function BackupsTab() {
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
     const [backups, setBackups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
@@ -91,7 +83,7 @@ export default function BackupsTab() {
                                         <span className={`dbx-engine-tag is-${b.type}`}>{b.type === 'mysql' ? 'MySQL' : 'PostgreSQL'}</span>
                                     </td>
                                     <td className="dbx-mono">{b.filename}</td>
-                                    <td className="dbx-mono">{formatBytes(b.size)}</td>
+                                    <td className="dbx-mono">{formatBytes(b.size, { decimals: 2, defaultValue: '0 B' })}</td>
                                     <td className="dbx-mono">{new Date(b.created_at).toLocaleString()}</td>
                                     <td className="dbx-grid-actions">
                                         <button type="button" className="dbx-icon-btn is-danger" onClick={() => remove(b.filename)} aria-label={`Delete ${b.filename}`}>
@@ -104,17 +96,6 @@ export default function BackupsTab() {
                     </table>
                 )}
             </div>
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 }

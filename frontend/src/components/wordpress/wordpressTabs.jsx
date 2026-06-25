@@ -7,5 +7,5 @@ import { Globe, GitBranch } from 'lucide-react';
 // here for simplicity — the pipeline page shows an empty state when unused.)
 export const WORDPRESS_TABS = [
     { to: '/wordpress', label: 'WordPress', end: true, icon: <Globe size={15} /> },
-    { to: '/wordpress/projects', label: 'Pipeline', icon: <GitBranch size={15} /> },
+    { to: '/wordpress/pipelines', label: 'Pipeline', icon: <GitBranch size={15} /> },
 ];

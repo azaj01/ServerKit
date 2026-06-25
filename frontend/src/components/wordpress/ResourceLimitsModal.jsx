@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { HardDrive, AlertTriangle } from 'lucide-react';
 import Spinner from '../Spinner';
 import Modal from '../Modal';

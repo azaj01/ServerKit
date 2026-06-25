@@ -116,6 +116,10 @@ def create_app(config_name=None):
     from app.api.tunnels import tunnels_bp
     from app.api.private_urls import private_urls_bp
     app.register_blueprint(apps_bp, url_prefix='/api/v1/apps')
+    # "Services" is the user-facing term for Applications (§1 unification).
+    # Mount the same blueprint under /api/v1/services as a true alias so the
+    # canonical `apps` routes and any `services` callers resolve identically.
+    app.register_blueprint(apps_bp, url_prefix='/api/v1/services', name='services')
     app.register_blueprint(domains_bp, url_prefix='/api/v1/domains')
     app.register_blueprint(private_urls_bp, url_prefix='/api/v1/apps')
 
@@ -142,6 +146,10 @@ def create_app(config_name=None):
     app.register_blueprint(wordpress_bp, url_prefix='/api/v1/wordpress')
     app.register_blueprint(wordpress_sites_bp, url_prefix='/api/v1/wordpress')
     app.register_blueprint(environment_pipeline_bp, url_prefix='/api/v1/wordpress/projects')
+    # "WordPress Projects" was renamed to "Pipelines" (§2 unification). Mount the
+    # same blueprint under /wordpress/pipelines as a true alias so both URL
+    # spaces resolve identically during the deprecation window.
+    app.register_blueprint(environment_pipeline_bp, url_prefix='/api/v1/wordpress/pipelines', name='environment_pipeline_pipelines')
 
     # Register blueprints - Python
     from app.api.python import python_bp
@@ -206,8 +214,15 @@ def create_app(config_name=None):
     # Register blueprints - Builds & Deployments
     from app.api.builds import builds_bp
     from app.api.deployment_jobs import deployment_jobs_bp
+    from app.api.deployments import deployments_bp
     app.register_blueprint(builds_bp, url_prefix='/api/v1/builds')
     app.register_blueprint(deployment_jobs_bp, url_prefix='/api/v1/deployment-jobs')
+    # §3 unification: one /api/v1/deployments surface. Federated history/detail
+    # live in deployments_bp; the canonical execution records (DeploymentJob)
+    # are also mounted here under /deployments/jobs (alias of /deployment-jobs).
+    app.register_blueprint(deployments_bp, url_prefix='/api/v1/deployments')
+    app.register_blueprint(deployment_jobs_bp, url_prefix='/api/v1/deployments/jobs',
+                           name='deployment_jobs_unified')
 
     # Register blueprints - Templates
     from app.api.templates import templates_bp
@@ -328,8 +343,13 @@ def create_app(config_name=None):
     app.register_blueprint(workspaces_bp, url_prefix='/api/v1/workspaces')
 
     # Register blueprints - Advanced SSL
+    # §5 unification: one SSL surface. The advanced cert operations (wildcard,
+    # SAN, custom upload, profiles, health, expiry alerts) mount under the same
+    # /api/v1/ssl prefix as the basic certbot routes (no path collisions). The
+    # original /api/v1/ssl/advanced prefix is kept as a deprecated alias.
     from app.api.advanced_ssl import advanced_ssl_bp
     app.register_blueprint(advanced_ssl_bp, url_prefix='/api/v1/ssl/advanced')
+    app.register_blueprint(advanced_ssl_bp, url_prefix='/api/v1/ssl', name='advanced_ssl_unified')
 
     # Register blueprints - DNS Zones
     from app.api.dns_zones import dns_zones_bp
@@ -399,6 +419,19 @@ def create_app(config_name=None):
     from app.api.telemetry import telemetry_bp
     app.register_blueprint(telemetry_bp, url_prefix='/api/v1/telemetry')
 
+    # §4 unification: one observability namespace. The monitoring / metrics /
+    # telemetry / uptime / fleet / status-page read surfaces are re-mounted under
+    # /api/v1/observability/<domain> as true aliases (same blueprints, distinct
+    # names) so callers have a single front door. The original prefixes remain,
+    # and the PUBLIC status page route (/api/v1/status/public/<slug>) is
+    # unchanged — its canonical mount is untouched.
+    app.register_blueprint(monitoring_bp, url_prefix='/api/v1/observability/monitoring', name='obs_monitoring')
+    app.register_blueprint(metrics_bp, url_prefix='/api/v1/observability/metrics', name='obs_metrics')
+    app.register_blueprint(telemetry_bp, url_prefix='/api/v1/observability/events', name='obs_events')
+    app.register_blueprint(uptime_bp, url_prefix='/api/v1/observability/uptime', name='obs_uptime')
+    app.register_blueprint(fleet_monitor_bp, url_prefix='/api/v1/observability/fleet', name='obs_fleet')
+    app.register_blueprint(status_pages_bp, url_prefix='/api/v1/observability/status-pages', name='obs_status_pages')
+
     # Register blueprints - Agent Pairing (RustDesk-style short-code flow)
     from app.api.pairing import pairing_bp
     app.register_blueprint(pairing_bp, url_prefix='/api/v1/pairing')
@@ -432,6 +465,15 @@ def create_app(config_name=None):
             # connection store (idempotent), so every zone resolves creds the same way.
             from app.services.dns_zone_service import DNSZoneService
             n_zones = DNSZoneService.link_legacy_zones()
+            # Fold a legacy single-row email relay config into the unified
+            # EmailProviderConnection table (§6); idempotent, best-effort.
+            try:
+                from app.services.email_relay_service import EmailRelayService
+                EmailRelayService.migrate_legacy_config()
+            except Exception as _relay_exc:  # never block boot on this
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    f'Email relay legacy migration skipped: {_relay_exc}')
             if n_dns or n_store or n_cloud or n_settings or n_zones:
                 import logging as _logging
                 _logging.getLogger(__name__).info(

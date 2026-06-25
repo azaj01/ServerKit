@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Globe, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,92 +46,85 @@ export default function AttachDomainModal({ site, onClose, onChanged }) {
     const rec = result?.dns?.record;
 
     return (
-        <div className="modal-overlay" onClick={() => !attaching && onClose()}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2><Globe size={18} /> Add Custom Domain</h2>
-                    <button className="modal-close" onClick={() => !attaching && onClose()}>&times;</button>
-                </div>
+        <Modal open onClose={() => !attaching && onClose()} title={<><Globe size={18} /> Add Custom Domain</>}>
+            {!result ? (
+                <form onSubmit={handleAttach}>
+                    <div className="wp-url-swap">
+                        <div className="wp-url-swap__warning">
+                            <AlertTriangle size={18} aria-hidden="true" />
+                            <span>
+                                Points a domain you own at this site. If a connected DNS provider
+                                manages it, the A record is created automatically — otherwise
+                                you&apos;ll get the exact record to add. The site URL is then
+                                migrated to the domain (serialization-safe).
+                            </span>
+                        </div>
 
-                {!result ? (
-                    <form onSubmit={handleAttach}>
-                        <div className="wp-url-swap">
-                            <div className="wp-url-swap__warning">
-                                <AlertTriangle size={18} aria-hidden="true" />
-                                <span>
-                                    Points a domain you own at this site. If a connected DNS provider
-                                    manages it, the A record is created automatically — otherwise
-                                    you&apos;ll get the exact record to add. The site URL is then
-                                    migrated to the domain (serialization-safe).
-                                </span>
+                        <div className="form-group">
+                            <Label htmlFor="wp-domain">Domain</Label>
+                            <Input
+                                id="wp-domain"
+                                type="text"
+                                value={domain}
+                                onChange={(e) => setDomain(e.target.value)}
+                                placeholder="example.com"
+                                disabled={attaching}
+                                autoFocus
+                            />
+                            <span className="form-hint">A domain or subdomain you control, without http://</span>
+                        </div>
+
+                        <label className="wp-url-swap__keep">
+                            <Switch checked={issueSsl} onCheckedChange={setIssueSsl} disabled={attaching} />
+                            <span>
+                                Set up HTTPS now
+                                <small>Requests a Let&apos;s Encrypt certificate. Needs DNS to already resolve to this server.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div className="modal-actions">
+                        <Button type="button" variant="outline" onClick={onClose} disabled={attaching}>Cancel</Button>
+                        <Button type="submit" disabled={!valid || attaching}>
+                            {attaching ? 'Attaching…' : 'Attach Domain'}
+                        </Button>
+                    </div>
+                </form>
+            ) : (
+                <>
+                    <div className="wp-url-swap">
+                        <div className="wp-url-swap__result">
+                            <CheckCircle2 size={18} aria-hidden="true" />
+                            <span>Site is now at <code>{result.url}</code></span>
+                        </div>
+
+                        {result.dns?.created ? (
+                            <div className="form-hint">
+                                DNS A record created automatically via {result.dns.provider}
+                                {result.dns.zone ? ` (zone ${result.dns.zone})` : ''}.
                             </div>
-
-                            <div className="form-group">
-                                <Label htmlFor="wp-domain">Domain</Label>
-                                <Input
-                                    id="wp-domain"
-                                    type="text"
-                                    value={domain}
-                                    onChange={(e) => setDomain(e.target.value)}
-                                    placeholder="example.com"
-                                    disabled={attaching}
-                                    autoFocus
-                                />
-                                <span className="form-hint">A domain or subdomain you control, without http://</span>
+                        ) : (
+                            <div className="wp-url-swap__dns-manual">
+                                <strong>Add this DNS record to finish:</strong>
+                                {rec?.value ? (
+                                    <code className="wp-url-swap__record">
+                                        {rec.type}&nbsp;&nbsp;{rec.name}&nbsp;→&nbsp;{rec.value}
+                                    </code>
+                                ) : (
+                                    <div className="form-hint">{result.dns?.message}</div>
+                                )}
                             </div>
+                        )}
 
-                            <label className="wp-url-swap__keep">
-                                <Switch checked={issueSsl} onCheckedChange={setIssueSsl} disabled={attaching} />
-                                <span>
-                                    Set up HTTPS now
-                                    <small>Requests a Let&apos;s Encrypt certificate. Needs DNS to already resolve to this server.</small>
-                                </span>
-                            </label>
-                        </div>
-
-                        <div className="modal-actions">
-                            <Button type="button" variant="outline" onClick={onClose} disabled={attaching}>Cancel</Button>
-                            <Button type="submit" disabled={!valid || attaching}>
-                                {attaching ? 'Attaching…' : 'Attach Domain'}
-                            </Button>
-                        </div>
-                    </form>
-                ) : (
-                    <>
-                        <div className="wp-url-swap">
-                            <div className="wp-url-swap__result">
-                                <CheckCircle2 size={18} aria-hidden="true" />
-                                <span>Site is now at <code>{result.url}</code></span>
-                            </div>
-
-                            {result.dns?.created ? (
-                                <div className="form-hint">
-                                    DNS A record created automatically via {result.dns.provider}
-                                    {result.dns.zone ? ` (zone ${result.dns.zone})` : ''}.
-                                </div>
-                            ) : (
-                                <div className="wp-url-swap__dns-manual">
-                                    <strong>Add this DNS record to finish:</strong>
-                                    {rec?.value ? (
-                                        <code className="wp-url-swap__record">
-                                            {rec.type}&nbsp;&nbsp;{rec.name}&nbsp;→&nbsp;{rec.value}
-                                        </code>
-                                    ) : (
-                                        <div className="form-hint">{result.dns?.message}</div>
-                                    )}
-                                </div>
-                            )}
-
-                            {result.warning && (
-                                <div className="wp-url-swap__preview-error">{result.warning}</div>
-                            )}
-                        </div>
-                        <div className="modal-actions">
-                            <Button type="button" onClick={onClose}>Done</Button>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
+                        {result.warning && (
+                            <div className="wp-url-swap__preview-error">{result.warning}</div>
+                        )}
+                    </div>
+                    <div className="modal-actions">
+                        <Button type="button" onClick={onClose}>Done</Button>
+                    </div>
+                </>
+            )}
+        </Modal>
     );
 }

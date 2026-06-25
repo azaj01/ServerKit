@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Globe, AlertTriangle, ArrowRight } from 'lucide-react';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,89 +64,83 @@ export default function ChangeUrlModal({ site, onClose, onChanged }) {
     }
 
     return (
-        <div className="modal-overlay" onClick={() => !applying && onClose()}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2><Globe size={18} /> Change Site URL</h2>
-                    <button className="modal-close" onClick={() => !applying && onClose()}>&times;</button>
+        <Modal open onClose={() => !applying && onClose()} title={<><Globe size={18} /> Change Site URL</>} size="lg">
+            <form onSubmit={handleApply}>
+                <div className="wp-url-swap">
+                    <div className="wp-url-swap__warning">
+                        <AlertTriangle size={18} aria-hidden="true" />
+                        <span>
+                            This rewrites every reference to the site URL across the database
+                            (posts, options, serialized data) with a serialization-safe
+                            search-replace. A database backup is taken first and restored
+                            automatically if anything fails.
+                        </span>
+                    </div>
+
+                    <div className="wp-url-swap__fromto">
+                        <code>{currentUrl || '—'}</code>
+                        <ArrowRight size={15} aria-hidden="true" />
+                        <code className={dirty ? 'is-new' : ''}>{target || '—'}</code>
+                    </div>
+
+                    <div className="form-group">
+                        <Label htmlFor="wp-new-url">New URL</Label>
+                        <Input
+                            id="wp-new-url"
+                            type="text"
+                            value={newUrl}
+                            onChange={(e) => setNewUrl(e.target.value)}
+                            placeholder="https://example.com"
+                            disabled={applying}
+                            autoFocus
+                        />
+                        <span className="form-hint">
+                            Include http:// or https://. Point this hostname&apos;s DNS at the server first.
+                        </span>
+                    </div>
+
+                    <label className="wp-url-swap__keep">
+                        <Switch checked={keepOld} onCheckedChange={setKeepOld} disabled={applying} />
+                        <span>
+                            Keep the old address working
+                            <small>The previous host keeps resolving; WordPress 301-redirects it to the new URL.</small>
+                        </span>
+                    </label>
+
+                    {dirty && (
+                        <div className="wp-url-swap__preview">
+                            {previewing && <span className="form-hint">Previewing changes…</span>}
+                            {!previewing && preview?.success && (
+                                <>
+                                    <div className="wp-url-swap__preview-total">
+                                        {preview.total} database replacement{preview.total === 1 ? '' : 's'} will be made
+                                    </div>
+                                    <ul className="wp-url-swap__preview-pairs">
+                                        {preview.pairs.map((p, i) => (
+                                            <li key={i}>
+                                                <code>{p.search}</code>
+                                                <ArrowRight size={12} aria-hidden="true" />
+                                                <code>{p.replace}</code>
+                                                <span className="wp-url-swap__count">{p.replacements}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </>
+                            )}
+                            {!previewing && preview && !preview.success && (
+                                <div className="wp-url-swap__preview-error">{preview.error}</div>
+                            )}
+                        </div>
+                    )}
                 </div>
-                <form onSubmit={handleApply}>
-                    <div className="wp-url-swap">
-                        <div className="wp-url-swap__warning">
-                            <AlertTriangle size={18} aria-hidden="true" />
-                            <span>
-                                This rewrites every reference to the site URL across the database
-                                (posts, options, serialized data) with a serialization-safe
-                                search-replace. A database backup is taken first and restored
-                                automatically if anything fails.
-                            </span>
-                        </div>
 
-                        <div className="wp-url-swap__fromto">
-                            <code>{currentUrl || '—'}</code>
-                            <ArrowRight size={15} aria-hidden="true" />
-                            <code className={dirty ? 'is-new' : ''}>{target || '—'}</code>
-                        </div>
-
-                        <div className="form-group">
-                            <Label htmlFor="wp-new-url">New URL</Label>
-                            <Input
-                                id="wp-new-url"
-                                type="text"
-                                value={newUrl}
-                                onChange={(e) => setNewUrl(e.target.value)}
-                                placeholder="https://example.com"
-                                disabled={applying}
-                                autoFocus
-                            />
-                            <span className="form-hint">
-                                Include http:// or https://. Point this hostname&apos;s DNS at the server first.
-                            </span>
-                        </div>
-
-                        <label className="wp-url-swap__keep">
-                            <Switch checked={keepOld} onCheckedChange={setKeepOld} disabled={applying} />
-                            <span>
-                                Keep the old address working
-                                <small>The previous host keeps resolving; WordPress 301-redirects it to the new URL.</small>
-                            </span>
-                        </label>
-
-                        {dirty && (
-                            <div className="wp-url-swap__preview">
-                                {previewing && <span className="form-hint">Previewing changes…</span>}
-                                {!previewing && preview?.success && (
-                                    <>
-                                        <div className="wp-url-swap__preview-total">
-                                            {preview.total} database replacement{preview.total === 1 ? '' : 's'} will be made
-                                        </div>
-                                        <ul className="wp-url-swap__preview-pairs">
-                                            {preview.pairs.map((p, i) => (
-                                                <li key={i}>
-                                                    <code>{p.search}</code>
-                                                    <ArrowRight size={12} aria-hidden="true" />
-                                                    <code>{p.replace}</code>
-                                                    <span className="wp-url-swap__count">{p.replacements}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                )}
-                                {!previewing && preview && !preview.success && (
-                                    <div className="wp-url-swap__preview-error">{preview.error}</div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="modal-actions">
-                        <Button type="button" variant="outline" onClick={onClose} disabled={applying}>Cancel</Button>
-                        <Button type="submit" disabled={!dirty || applying}>
-                            {applying ? 'Changing…' : 'Change URL'}
-                        </Button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                <div className="modal-actions">
+                    <Button type="button" variant="outline" onClick={onClose} disabled={applying}>Cancel</Button>
+                    <Button type="submit" disabled={!dirty || applying}>
+                        {applying ? 'Changing…' : 'Change URL'}
+                    </Button>
+                </div>
+            </form>
+        </Modal>
     );
 }

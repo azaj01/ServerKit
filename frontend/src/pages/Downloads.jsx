@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { Button } from '@/components/ui/button';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
@@ -164,7 +164,7 @@ function Downloads() {
             {error && (
                 <div className="alert alert-error">
                     <p>{error}</p>
-                    <button onClick={fetchVersionInfo}>Try Again</button>
+                    <button type="button" onClick={fetchVersionInfo}>Try Again</button>
                 </div>
             )}
 
@@ -251,7 +251,7 @@ function Downloads() {
                                     <pre>
                                         <code>{platforms[0].command}</code>
                                     </pre>
-                                    <button
+                                    <button type="button"
                                         className="copy-btn"
                                         onClick={() => copyToClipboard(platforms[0].command, 'linux')}
                                         title="Copy to clipboard"
@@ -270,7 +270,7 @@ function Downloads() {
                                     <pre>
                                         <code>{platforms[2].command}</code>
                                     </pre>
-                                    <button
+                                    <button type="button"
                                         className="copy-btn"
                                         onClick={() => copyToClipboard(platforms[2].command, 'windows')}
                                         title="Copy to clipboard"

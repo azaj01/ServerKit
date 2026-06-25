@@ -7,9 +7,11 @@ import LogsDrawer from '../components/LogsDrawer';
 import { LogsDrawerProvider } from '../contexts/LogsDrawerContext';
 import { AIProvider } from '../contexts/AIContext';
 import AIAssistant from '../components/ai/AIAssistant';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 import PluginLoader from '../plugins/PluginLoader';
 import { refreshContributions, useContributions } from '../plugins/contributions';
 import useMediaQuery from '../hooks/useMediaQuery';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import api from '../services/api';
 import SystemNotices from '../components/SystemNotices';
 
@@ -64,12 +66,7 @@ const DashboardLayout = () => {
     }, [isMobile]);
 
     // Lock body scroll behind the drawer while it's open on mobile.
-    useEffect(() => {
-        if (!(isMobile && navOpen)) return undefined;
-        const previous = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = previous; };
-    }, [isMobile, navOpen]);
+    useLockBodyScroll(isMobile && navOpen);
 
     // Load plugin contributions once we're authenticated. Subscribers
     // (Sidebar, CommandPalette, ExtensionRoutes, PageTitleUpdater) all
@@ -81,6 +78,7 @@ const DashboardLayout = () => {
     return (
         <LogsDrawerProvider>
             <AIProvider>
+            <ConfirmProvider>
             <div className="dashboard-layout">
                 <MobileTopBar navOpen={navOpen} onToggle={() => setNavOpen(prev => !prev)} />
                 <Sidebar
@@ -104,6 +102,7 @@ const DashboardLayout = () => {
                 <AIAssistant />
                 <PluginLoader api={api} />
             </div>
+            </ConfirmProvider>
             </AIProvider>
         </LogsDrawerProvider>
     );

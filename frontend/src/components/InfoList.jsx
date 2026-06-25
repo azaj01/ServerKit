@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function InfoList({ children, className = '', style }) {
     return <div className={`info-list ${className}`.trim()} style={style}>{children}</div>;

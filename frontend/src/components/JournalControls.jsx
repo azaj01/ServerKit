@@ -1,4 +1,3 @@
-import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
@@ -45,7 +44,7 @@ export function JournalControls({
                     {showQuickUnits && quickUnits.length > 0 && (
                         <div className="quick-units">
                             {quickUnits.map(u => (
-                                <button
+                                <button type="button"
                                     key={u}
                                     className={`unit-chip ${unit === u ? 'active' : ''}`}
                                     onClick={() => onUnitChange?.(unit === u ? '' : u)}

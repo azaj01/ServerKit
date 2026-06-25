@@ -66,6 +66,37 @@ class DockerService:
 
     # ==================== CONTAINER MANAGEMENT ====================
 
+    # ServerKit's own infrastructure containers run the panel itself, so their
+    # lifecycle must never be controllable from the Docker page — stopping,
+    # restarting or removing one would take ServerKit offline. Matched as a
+    # substring (case-insensitive) so both compose project names and the bare
+    # service names ('serverkit-backend', 'serverkit_frontend', ...) are caught.
+    PROTECTED_CONTAINER_NAMES = (
+        'serverkit-frontend', 'serverkit_frontend',
+        'serverkit-backend', 'serverkit_backend',
+        'serverkit',
+    )
+
+    @staticmethod
+    def is_protected_name(name):
+        """True if a container name belongs to ServerKit's own infrastructure."""
+        if not name:
+            return False
+        normalized = str(name).lower().replace('/', '')
+        return any(p in normalized for p in DockerService.PROTECTED_CONTAINER_NAMES)
+
+    @staticmethod
+    def is_protected_container(container_id):
+        """Resolve a container id/name to its real name and check protection.
+
+        Accepts either an id or a name. Uses `docker inspect`, whose top-level
+        ``Name`` key is the canonical name (e.g. ``/serverkit-backend``).
+        """
+        container = DockerService.get_container(container_id)
+        name = (container or {}).get('Name', '') if container else ''
+        # Fall back to the id itself when the user passed a name directly.
+        return DockerService.is_protected_name(name) or DockerService.is_protected_name(container_id)
+
     @staticmethod
     def list_containers(all_containers=True):
         """List Docker containers."""
@@ -82,15 +113,19 @@ class DockerService:
             for line in result.stdout.strip().split('\n'):
                 if line:
                     container = json.loads(line)
+                    name = container.get('Names')
                     containers.append({
                         'id': container.get('ID'),
-                        'name': container.get('Names'),
+                        'name': name,
                         'image': container.get('Image'),
                         'status': container.get('Status'),
                         'state': container.get('State'),
                         'ports': container.get('Ports'),
                         'created': container.get('CreatedAt'),
                         'size': container.get('Size'),
+                        # Flag ServerKit's own containers so the UI can hide
+                        # lifecycle controls; the API rejects them regardless.
+                        'protected': DockerService.is_protected_name(name),
                     })
             return containers
         except Exception as e:

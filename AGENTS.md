@@ -101,6 +101,50 @@ ServerKit deploys on Linux (bare metal, VPS, or Docker). Development may happen 
 - One logical change per commit
 - Minimal, focused diffs — don't silently refactor surrounding code
 - Branch naming: `feature/`, `fix/`, `docs/`, `refactor/` prefixes
+- **Pre-commit hook**: a shared git hook (`.githooks/pre-commit`) lints staged
+  frontend JS/JSX and blocks the commit on ESLint **errors** (warnings allowed;
+  backend/SCSS-only commits are skipped). Enable once per clone:
+  `git config core.hooksPath .githooks` (or `sh frontend/setup-hooks.sh`). Keep
+  the repo at **0 ESLint errors**.
+
+## Styling Standard
+
+**SCSS only.** ServerKit standardizes on its internal SCSS design system. Do not
+add Tailwind utility classes, CSS-in-JS, or new inline styles.
+
+- **Forbidden**: Tailwind utility strings (`flex gap-3 px-4`, `text-sm`,
+  `bg-card`, `border-border`, `rounded-full`, etc.), `tailwindcss`/`tailwind-merge`
+  imports, and CSS-in-JS. Inline `style={{ ... }}` is allowed **only** for true
+  dynamic values (a width computed from a prop, chart dimensions).
+- **Class namespaces**:
+  - `.sk-*` — redesign "infra console" design-system primitives.
+  - Legacy BEM (`.page-container`, `.card`, `.modal-*`, `.form-*`,
+    `.empty-state__title`) — allowed during migration; deprecate gradually.
+  - No utility-class strings.
+- **Shared primitives** (reuse before rewrite):
+  - Buttons — `styles/components/_buttons.scss` (`.btn`, `.btn-primary`,
+    `.btn-danger`, `.btn-ghost`, `.btn-sm`, `.btn-icon`).
+  - Cards — `styles/components/_cards.scss` (`.card`, `.card-header`,
+    `.stat-strip`).
+  - Modals — `styles/components/_modals.scss` (`.modal-overlay`, `.modal`,
+    `.modal-lg`, `.modal-header`, `.modal-body`, `.modal-actions`).
+  - Forms — `styles/components/_forms.scss` (`.form-group`, `.form-field`,
+    `.form-row`, `.error-message`); prefer the `FormField` component.
+  - Tables — `.sk-dtable` in `styles/components/_design-system.scss`; prefer the
+    `components/ds/DataTable.jsx` primitive.
+  - Pills/badges — `.sk-pill`, `.sk-state`, `.sk-tag`.
+  - Tokens — `styles/_variables.scss`, `styles/_theme-variables.scss`.
+- **Shared utilities** (reuse before rewrite):
+  - `utils/formatBytes.js` — byte/size formatting (no local `formatBytes`/
+    `formatSize`/`formatMemory`).
+  - `utils/time.js` — `timeAgo` (compact) and `formatRelativeTime` (verbose).
+  - `utils/clipboard.js` + `hooks/useClipboard.js` — copy-to-clipboard with
+    toast feedback (no raw `navigator.clipboard.writeText` call sites).
+- **Fonts**: `IBM Plex Sans` / `IBM Plex Mono` (the established SCSS stack).
+
+**Migration status**: Tailwind removal is in progress (see
+`docs/plans/FRONTEND_UX_TAILWIND_CLEANUP_PLAN.md`). Do not introduce new Tailwind
+usage; convert any you touch to the SCSS equivalents above.
 
 ## Adding a New Feature (Full Stack)
 

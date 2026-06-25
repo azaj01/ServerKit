@@ -7,7 +7,6 @@ import {
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import EmptyState from '../components/EmptyState';
-import Spinner from '../components/Spinner';
 import Modal from '../components/Modal';
 import { Pill } from '@/components/ds';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
@@ -223,9 +222,7 @@ const RemoteAccess = ({ serverId }) => {
             </div>
 
             {loading ? (
-                <div className="ra-loading">
-                    <Spinner />
-                </div>
+                <EmptyState loading title="Loading tunnels" />
             ) : visibleTunnels.length === 0 ? (
                 <EmptyState
                     icon={Network}

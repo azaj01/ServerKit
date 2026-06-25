@@ -4,7 +4,6 @@ import { PageTopbar } from '@/components/ds';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import EmptyState from '../components/EmptyState';
-import Spinner from '../components/Spinner';
 import { Button } from '@/components/ui/button';
 
 function clampPercent(value) {
@@ -143,7 +142,7 @@ const GpuMonitor = () => {
             />
 
             {loading ? (
-                <div className="gpu-page__loading"><Spinner /></div>
+                <EmptyState loading title="Loading GPU data" />
             ) : !data?.available ? (
                 <EmptyState
                     icon={Cpu}

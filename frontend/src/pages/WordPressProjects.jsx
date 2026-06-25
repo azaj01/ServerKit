@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, Plus, GitBranch, Layers } from 'lucide-react';
 import wordpressApi from '../services/wordpress';
@@ -19,7 +19,7 @@ const WordPressProjects = () => {
     async function loadProjects() {
         setLoading(true);
         try {
-            const data = await wordpressApi.getProjects();
+            const data = await wordpressApi.getPipelines();
             setProjects(data.projects || []);
         } catch (err) {
             console.error('Failed to load projects:', err);
@@ -30,7 +30,7 @@ const WordPressProjects = () => {
     }
 
     if (loading) {
-        return <EmptyState loading size="lg" title="Loading WordPress projects" />;
+        return <EmptyState loading size="lg" title="Loading WordPress pipelines" />;
     }
 
     return (
@@ -39,8 +39,8 @@ const WordPressProjects = () => {
                 <EmptyState
                     size="lg"
                     icon={Layers}
-                    title="No WordPress Projects"
-                    description="WordPress projects with environment pipelines appear here. Create a WordPress site with environments enabled to get started."
+                    title="No WordPress Pipelines"
+                    description="WordPress sites with environment pipelines appear here. Create a WordPress site with environments enabled to get started."
                 />
             ) : (
                 <div className="wp-projects-grid">
@@ -48,7 +48,7 @@ const WordPressProjects = () => {
                         <ProjectCard
                             key={project.id}
                             project={project}
-                            onClick={() => navigate(`/wordpress/projects/${project.id}`)}
+                            onClick={() => navigate(`/wordpress/pipelines/${project.id}`)}
                         />
                     ))}
                 </div>

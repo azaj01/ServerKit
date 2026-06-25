@@ -4,9 +4,9 @@ import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
-import Spinner from '../components/Spinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { Pill, ServiceTile, PageTopbar } from '@/components/ds';
 import { Button } from '@/components/ui/button';
 import {
@@ -180,7 +180,7 @@ const WorkspaceDetail = () => {
         } catch (err) { toast.error(err.message); }
     };
 
-    if (loading) return <div className="page-container workspaces-page ws-detail"><Spinner /></div>;
+    if (loading) return <div className="page-container workspaces-page ws-detail"><EmptyState loading title="Loading workspace" /></div>;
 
     if (!ws) {
         return (
@@ -312,50 +312,48 @@ const WorkspaceDetail = () => {
                 </div>
             </div>
 
-            {sharingApp && (
-                <div className="modal-overlay" onClick={() => setSharingApp(null)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Sharing: {sharingApp.name}</h2>
-                            <button className="modal-close" onClick={() => setSharingApp(null)}>&times;</button>
-                        </div>
-                        <div className="modal-body">
-                            <p className="form-hint">Grant a user access to this application without transferring ownership.</p>
-                            <div className="ws-rows">
-                                {grants.length === 0 && <p className="form-hint">Not shared with anyone yet.</p>}
-                                {grants.map(g => (
-                                    <div key={g.id} className="ws-row">
-                                        <ServiceTile name={g.username || g.email || '?'} size={28} className="ws-row__av" />
-                                        <div className="ws-row__id">
-                                            <strong>{g.username || g.email}</strong>
-                                            <span className="sk-tag">{g.role}</span>
-                                        </div>
-                                        <Button size="sm" variant="destructive" onClick={() => handleRevoke(g.id)}>Revoke</Button>
+            <Modal
+                open={Boolean(sharingApp)}
+                onClose={() => setSharingApp(null)}
+                title={sharingApp ? `Sharing: ${sharingApp.name}` : 'Sharing'}
+            >
+                {sharingApp && (
+                    <>
+                        <p className="form-hint">Grant a user access to this application without transferring ownership.</p>
+                        <div className="ws-rows">
+                            {grants.length === 0 && <p className="form-hint">Not shared with anyone yet.</p>}
+                            {grants.map(g => (
+                                <div key={g.id} className="ws-row">
+                                    <ServiceTile name={g.username || g.email || '?'} size={28} className="ws-row__av" />
+                                    <div className="ws-row__id">
+                                        <strong>{g.username || g.email}</strong>
+                                        <span className="sk-tag">{g.role}</span>
                                     </div>
-                                ))}
-                            </div>
-                            <hr />
-                            <h4>Grant Access</h4>
-                            <div className="form-group">
-                                <label>Role for new grants</label>
-                                <select value={grantRole} onChange={e => setGrantRole(e.target.value)}>
-                                    <option value="editor">Editor · view + operate</option>
-                                    <option value="viewer">Viewer · read-only</option>
-                                </select>
-                            </div>
-                            <div className="ws-pick">
-                                {allUsers.filter(u => u.id !== sharingApp.user_id && !grants.find(g => g.user_id === u.id)).map(u => (
-                                    <div key={u.id} className="ws-pick__item" onClick={() => handleGrant(u.id)}>
-                                        <ServiceTile name={u.username || u.email || '?'} size={24} className="ws-row__av" />
-                                        <span className="ws-pick__name">{u.username || u.email}</span>
-                                        <span className="ws-pick__plus">+</span>
-                                    </div>
-                                ))}
-                            </div>
+                                    <Button size="sm" variant="destructive" onClick={() => handleRevoke(g.id)}>Revoke</Button>
+                                </div>
+                            ))}
                         </div>
-                    </div>
-                </div>
-            )}
+                        <hr />
+                        <h4>Grant Access</h4>
+                        <div className="form-group">
+                            <label>Role for new grants</label>
+                            <select value={grantRole} onChange={e => setGrantRole(e.target.value)}>
+                                <option value="editor">Editor · view + operate</option>
+                                <option value="viewer">Viewer · read-only</option>
+                            </select>
+                        </div>
+                        <div className="ws-pick">
+                            {allUsers.filter(u => u.id !== sharingApp.user_id && !grants.find(g => g.user_id === u.id)).map(u => (
+                                <div key={u.id} className="ws-pick__item" onClick={() => handleGrant(u.id)}>
+                                    <ServiceTile name={u.username || u.email || '?'} size={24} className="ws-row__av" />
+                                    <span className="ws-pick__name">{u.username || u.email}</span>
+                                    <span className="ws-pick__plus">+</span>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                )}
+            </Modal>
 
             {deleteConfirm && (
                 <ConfirmDialog

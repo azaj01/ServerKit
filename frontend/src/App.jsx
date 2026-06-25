@@ -13,7 +13,6 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Setup from './pages/Setup';
-import ApplicationDetail from './pages/ApplicationDetail';
 import Docker from './pages/Docker';
 import Databases from './pages/Databases';
 import Domains from './pages/Domains';
@@ -45,6 +44,7 @@ import { MARKET_TABS } from './components/marketplace/marketTabs';
 import { WORDPRESS_TABS } from './components/wordpress/wordpressTabs';
 import { BACKUP_TABS } from './components/backups/backupTabs';
 import { SECURITY_TABS } from './components/security/securityTabs';
+import { ORG_TABS } from './components/organization/organizationTabs';
 import Downloads from './pages/Downloads';
 import WordPress from './pages/WordPress';
 import WordPressDetail from './pages/WordPressDetail';
@@ -68,7 +68,8 @@ import StatusPages from './pages/StatusPages';
 import PublicStatusPage from './pages/PublicStatusPage';
 import CloudProvision from './pages/CloudProvision';
 import Marketplace from './pages/Marketplace';
-import SecretsWebhooks from './pages/SecretsWebhooks';
+import Vaults from './pages/Vaults';
+import Webhooks from './pages/Webhooks';
 import StyleGuide from './pages/StyleGuide';
 import AppMap from './pages/AppMap';
 import Documentation from './pages/Documentation';
@@ -94,9 +95,8 @@ const PAGE_TITLES = {
     '/projects': 'Projects',
     '/shared-variables': 'Shared Variables',
     '/fleet-proxy': 'Fleet Proxy',
-    '/apps': 'Applications',
     '/wordpress': 'WordPress Sites',
-    '/wordpress/projects': 'WordPress Projects',
+    '/wordpress/pipelines': 'WordPress Pipelines',
     '/templates': 'Templates',
     '/deployments': 'Deployment Activity',
     '/workflow': 'Workflow Builder',
@@ -108,6 +108,7 @@ const PAGE_TITLES = {
     '/downloads': 'Downloads',
     '/files': 'File Manager',
     '/ftp': 'FTP Server',
+    '/observability': 'Observability',
     '/monitoring': 'Monitoring',
     '/backups': 'Backups',
     '/cron': 'Cron Jobs',
@@ -135,8 +136,8 @@ const PAGE_TITLES = {
     '/status-pages': 'Status Pages',
     '/cloud': 'Cloud Provisioning',
     '/marketplace': 'Marketplace',
-    '/secrets': 'Secrets & Webhooks',
-    '/secrets/:tab': 'Secrets & Webhooks',
+    '/vaults': 'Vaults',
+    '/webhooks': 'Webhooks',
     '/style-guide': 'Style Guide',
     '/app-map': 'App Map',
     '/documentation': 'Documentation',
@@ -148,6 +149,23 @@ const PAGE_TITLES = {
     '/telemetry': 'Telemetry',
     '/jobs': 'Jobs',
 };
+
+// /apps/* is the legacy URL space for what is now "Services" (§1 unification).
+// The list route already redirects; this preserves deep links to a single app
+// (and its active tab) by forwarding to the matching /services/* path.
+function LegacyAppRedirect() {
+    const { id, tab } = useParams();
+    const suffix = [id, tab].filter(Boolean).join('/');
+    return <Navigate to={`/services/${suffix}`} replace />;
+}
+
+// "WordPress Projects" was renamed to "Pipelines" (§2 unification) to end the
+// collision with generic /projects. Forward old deep links to the new space.
+function LegacyWpPipelineRedirect() {
+    const { id, tab } = useParams();
+    const suffix = [id, tab].filter(Boolean).join('/');
+    return <Navigate to={`/wordpress/pipelines/${suffix}`} replace />;
+}
 
 function PageTitleUpdater() {
     const location = useLocation();
@@ -179,9 +197,8 @@ function PageTitleUpdater() {
                 } else if (pluginTitles && pluginTitles[basePath]) {
                     title = pluginTitles[basePath];
                 } else if (path.startsWith('/services/')) title = 'Service Details';
-                else if (path.startsWith('/apps/')) title = 'Application Details';
                 else if (path.startsWith('/servers/')) title = 'Server Details';
-                else if (path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
+                else if (path.startsWith('/wordpress/pipelines/') || path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
                 else if (path.startsWith('/wordpress/')) title = 'WordPress Site';
                 else title = 'ServerKit';
             }
@@ -320,14 +337,18 @@ function AppRoutes() {
                     so the Settings left-nav is shareable and survives a refresh. */}
                 <Route path="services/:id/:tab/:section" element={<ServiceDetail />} />
                 <Route path="apps" element={<Navigate to="/services" replace />} />
-                <Route path="apps/:id" element={<ApplicationDetail />} />
-                <Route path="apps/:id/:tab" element={<ApplicationDetail />} />
+                <Route path="apps/:id" element={<LegacyAppRedirect />} />
+                <Route path="apps/:id/:tab" element={<LegacyAppRedirect />} />
                 <Route element={<TabGroupLayout tabs={WORDPRESS_TABS} />}>
                     <Route path="wordpress" element={<WordPress />} />
-                    <Route path="wordpress/projects" element={<WordPressProjects />} />
+                    <Route path="wordpress/pipelines" element={<WordPressProjects />} />
                 </Route>
-                <Route path="wordpress/projects/:id" element={<WordPressProject />} />
-                <Route path="wordpress/projects/:id/:tab" element={<WordPressProject />} />
+                <Route path="wordpress/pipelines/:id" element={<WordPressProject />} />
+                <Route path="wordpress/pipelines/:id/:tab" element={<WordPressProject />} />
+                {/* Legacy "WordPress Projects" URLs → Pipelines (§2). */}
+                <Route path="wordpress/projects" element={<Navigate to="/wordpress/pipelines" replace />} />
+                <Route path="wordpress/projects/:id" element={<LegacyWpPipelineRedirect />} />
+                <Route path="wordpress/projects/:id/:tab" element={<LegacyWpPipelineRedirect />} />
                 <Route path="wordpress/:id" element={<WordPressDetail />} />
                 <Route path="wordpress/:id/:tab" element={<WordPressDetail />} />
                 {/* Settings sub-section in the URL (e.g. .../settings/git) so the
@@ -362,11 +383,17 @@ function AppRoutes() {
                 <Route path="servers/:id" element={<ServerDetail />} />
                 <Route path="servers/:id/:tab" element={<ServerDetail />} />
                 <Route path="agent-plugins" element={<Navigate to="/marketplace" replace />} />
-                <Route path="projects" element={<Projects />} />
+                {/* Organization tab group — Projects / Shared Variables /
+                    Workspaces share one PageTopbar + tabs (ORG_TABS) instead of
+                    a collapsible sidebar sub-menu. Detail routes stay outside. */}
+                <Route element={<TabGroupLayout tabs={ORG_TABS} />}>
+                    <Route path="projects" element={<Projects />} />
+                    <Route path="shared-variables" element={<SharedVariables />} />
+                    <Route path="vaults" element={<Vaults />} />
+                    <Route path="workspaces" element={<Workspaces />} />
+                </Route>
                 <Route path="projects/:id" element={<ProjectDetail />} />
                 <Route path="projects/:id/:tab" element={<ProjectDetail />} />
-                <Route path="shared-variables" element={<SharedVariables />} />
-                <Route path="workspaces" element={<Workspaces />} />
                 <Route path="workspaces/:id" element={<WorkspaceDetail />} />
                 <Route path="workspaces/:id/:tab" element={<WorkspaceDetail />} />
                 <Route path="workspaces/:id/:tab/:section" element={<WorkspaceDetail />} />
@@ -387,11 +414,15 @@ function AppRoutes() {
                     <Route path="ftp" element={<FTPServer />} />
                     <Route path="ftp/:tab" element={<FTPServer />} />
                 </Route>
+                {/* Observability tab group (§4): Monitoring / Events / Status
+                    Pages share one PageTopbar. /observability lands on Monitoring. */}
                 <Route element={<TabGroupLayout tabs={MONITOR_TABS} />}>
                     <Route path="monitoring" element={<Monitoring />} />
                     <Route path="monitoring/:tab" element={<Monitoring />} />
+                    <Route path="telemetry" element={<Telemetry />} />
                     <Route path="status-pages" element={<StatusPages />} />
                 </Route>
+                <Route path="observability" element={<Navigate to="/monitoring" replace />} />
                 <Route path="gpu" element={<GpuMonitor />} />
                 <Route element={<TabGroupLayout tabs={BACKUP_TABS} />}>
                     <Route path="backups" element={<Backups />} />
@@ -407,13 +438,17 @@ function AppRoutes() {
                 <Route path="terminal" element={<Terminal />} />
                 <Route path="terminal/terminal" element={<Navigate to="/terminal/shell" replace />} />
                 <Route path="terminal/:tab" element={<Terminal />} />
-                <Route path="secrets" element={<SecretsWebhooks />} />
-                <Route path="secrets/:tab" element={<SecretsWebhooks />} />
+                <Route path="webhooks" element={<Webhooks />} />
+                {/* Retired "Secrets & Webhooks" page: Vaults moved into the
+                    Organization tab group (/vaults), Webhooks got its own page.
+                    Redirect old links/bookmarks to their new homes. */}
+                <Route path="secrets/webhooks" element={<Navigate to="/webhooks" replace />} />
+                <Route path="secrets" element={<Navigate to="/vaults" replace />} />
+                <Route path="secrets/:tab" element={<Navigate to="/vaults" replace />} />
                 <Route path="queue" element={<QueueOperations />} />
                 <Route path="queue/:groupSlug/:queueSlug" element={<QueueDetail />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="admin/notifications" element={<DeliveryLog />} />
-                <Route path="telemetry" element={<Telemetry />} />
                 <Route path="jobs" element={<Jobs />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />

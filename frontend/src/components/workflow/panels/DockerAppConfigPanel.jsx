@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Server, Globe, Link, ExternalLink, Play, Square, RotateCw } from 'lucide-react';
 import ConfigPanel from '../ConfigPanel';
 import api from '../../../services/api';

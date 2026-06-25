@@ -16,8 +16,8 @@ import {
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,7 +46,7 @@ const POLL_INTERVAL = 3000;
 
 const QueueOperations = () => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [loading, setLoading] = useState(true);
     const [groups, setGroups] = useState([]);
@@ -504,15 +504,8 @@ const QueueOperations = () => {
             </div>
 
             {/* Create Group Modal */}
-            {showGroupModal && (
-                <div className="modal-overlay" onClick={() => setShowGroupModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create Queue Group</h2>
-                            <button className="modal-close" onClick={() => setShowGroupModal(false)}>&times;</button>
-                        </div>
+            <Modal open={showGroupModal} onClose={() => setShowGroupModal(false)} title="Create Queue Group">
                         <form onSubmit={handleCreateGroup}>
-                            <div className="modal-body">
                                 <div className="form-group">
                                     <Label htmlFor="group-name">Name</Label>
                                     <Input id="group-name" value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} required />
@@ -521,26 +514,16 @@ const QueueOperations = () => {
                                     <Label htmlFor="group-description">Description</Label>
                                     <Input id="group-description" value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} />
                                 </div>
-                            </div>
-                            <div className="modal-footer">
+                            <div className="modal-actions">
                                 <Button type="button" variant="outline" onClick={() => setShowGroupModal(false)}>Cancel</Button>
                                 <Button type="submit">Create Group</Button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Create Queue Modal */}
-            {showQueueModal && (
-                <div className="modal-overlay" onClick={() => setShowQueueModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create Queue</h2>
-                            <button className="modal-close" onClick={() => setShowQueueModal(false)}>&times;</button>
-                        </div>
+            <Modal open={showQueueModal} onClose={() => setShowQueueModal(false)} title="Create Queue">
                         <form onSubmit={handleCreateQueue}>
-                            <div className="modal-body">
                                 <div className="form-group">
                                     <Label htmlFor="queue-group">Group</Label>
                                     <select
@@ -566,26 +549,17 @@ const QueueOperations = () => {
                                     <Label htmlFor="queue-config">Config (JSON)</Label>
                                     <Textarea id="queue-config" value={queueForm.config} onChange={(e) => setQueueForm({ ...queueForm, config: e.target.value })} rows={4} />
                                 </div>
-                            </div>
-                            <div className="modal-footer">
+                            <div className="modal-actions">
                                 <Button type="button" variant="outline" onClick={() => setShowQueueModal(false)}>Cancel</Button>
                                 <Button type="submit">Create Queue</Button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Send Message Modal */}
-            {sendTarget && (
-                <div className="modal-overlay" onClick={() => setSendTarget(null)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Send Message</h2>
-                            <button className="modal-close" onClick={() => setSendTarget(null)}>&times;</button>
-                        </div>
+            <Modal open={!!sendTarget} onClose={() => setSendTarget(null)} title="Send Message">
+                        {sendTarget && (
                         <form onSubmit={handleSendMessage}>
-                            <div className="modal-body">
                                 <div className="queue-send-destination">
                                     <div>
                                         <Label>Group</Label>
@@ -616,26 +590,13 @@ const QueueOperations = () => {
                                         <Input id="delay_ms" type="number" value={sendForm.delay_ms} onChange={(e) => setSendForm({ ...sendForm, delay_ms: e.target.value })} />
                                     </div>
                                 </div>
-                            </div>
-                            <div className="modal-footer">
+                            <div className="modal-actions">
                                 <Button type="button" variant="outline" onClick={() => setSendTarget(null)}>Cancel</Button>
                                 <Button type="submit"><Send size={14} className="mr-2" /> Send Message</Button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
+                        )}
+            </Modal>
         </div>
     );
 };

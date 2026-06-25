@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function ProgressBar({ percent = 0, color, className = '' }) {
     const clamped = Math.max(0, Math.min(100, Number(percent) || 0));

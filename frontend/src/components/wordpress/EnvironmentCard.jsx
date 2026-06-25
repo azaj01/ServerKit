@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ExternalLink, RefreshCw, Trash2, GitBranch, Clock, AlertTriangle, Calendar, FileText } from 'lucide-react';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Pill, EnvTag } from '../ds';
@@ -150,7 +150,7 @@ const EnvironmentCard = ({ environment, productionUrl, onSync, onDelete, onViewL
             </div>
 
             <div className="wp-env-footer">
-                <button
+                <button type="button"
                     className="btn btn-ghost btn-sm"
                     onClick={handleVisit}
                     disabled={!environment.url}
@@ -161,7 +161,7 @@ const EnvironmentCard = ({ environment, productionUrl, onSync, onDelete, onViewL
 
                 {!isProduction && (
                     <>
-                        <button
+                        <button type="button"
                             className="btn btn-ghost btn-sm"
                             onClick={() => setShowSyncConfirm(true)}
                             disabled={syncing || !productionUrl}
@@ -171,7 +171,7 @@ const EnvironmentCard = ({ environment, productionUrl, onSync, onDelete, onViewL
                             {syncing ? 'Syncing...' : 'Sync'}
                         </button>
                         {onViewLogs && (
-                            <button
+                            <button type="button"
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => onViewLogs?.(environment.id)}
                                 title="View sync logs"
@@ -180,7 +180,7 @@ const EnvironmentCard = ({ environment, productionUrl, onSync, onDelete, onViewL
                                 Logs
                             </button>
                         )}
-                        <button
+                        <button type="button"
                             className="btn btn-ghost btn-sm btn-danger"
                             onClick={() => setShowDeleteConfirm(true)}
                             disabled={deleting}

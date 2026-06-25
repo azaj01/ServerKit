@@ -57,7 +57,7 @@ export default function LogFileList({ files, selectedPath, onSelect, onRefresh, 
                         placeholder="Filter log files…"
                     />
                 </div>
-                <button
+                <button type="button"
                     className="lv-icon-btn"
                     onClick={onRefresh}
                     disabled={loading}
@@ -83,7 +83,7 @@ export default function LogFileList({ files, selectedPath, onSelect, onRefresh, 
                         const isCollapsed = collapsed.has(group.id);
                         return (
                             <div key={group.id} className="lv-group">
-                                <button
+                                <button type="button"
                                     className="lv-group-header"
                                     onClick={() => toggleGroup(group.id)}
                                 >
@@ -98,7 +98,7 @@ export default function LogFileList({ files, selectedPath, onSelect, onRefresh, 
                                             const kind = logKindFromPath(log.path || log.name);
                                             const isActive = selectedPath === log.path;
                                             return (
-                                                <button
+                                                <button type="button"
                                                     key={log.path}
                                                     className={`lv-file ${isActive ? 'active' : ''}`}
                                                     onClick={() => onSelect(log)}

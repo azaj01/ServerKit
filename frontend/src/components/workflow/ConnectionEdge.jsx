@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@xyflow/react';
 import { X } from 'lucide-react';
 import { connectionLabels, getConnectionType } from '../../utils/connectionRules';
@@ -74,7 +74,7 @@ const ConnectionEdge = ({
                 >
                     <span className="edge-label-text">{label}</span>
                     {selected && data?.onDelete && (
-                        <button
+                        <button type="button"
                             className="edge-delete-btn"
                             onClick={(e) => {
                                 e.stopPropagation();

@@ -5,9 +5,9 @@ import {
     Trash2, DatabaseBackup, Copy, FileCode2, Lock,
 } from 'lucide-react';
 import api from '../services/api';
+import { formatBytes } from '@/utils/formatBytes';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import SourceTree from '../components/databases/SourceTree';
 import ConsoleTab from '../components/databases/ConsoleTab';
@@ -20,14 +20,6 @@ import {
 import { listTables, connKey, connLabel, quoteIdent, ENGINE_META } from '../components/databases/dbAdapter';
 
 const SIDEBAR_KEY = 'serverkit-dbx-sidebar';
-
-function formatBytes(bytes) {
-    if (!bytes) return null;
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
 
 function engineState(engine, status) {
     if (engine !== 'mysql' && engine !== 'postgresql') return 'available';
@@ -42,7 +34,7 @@ function dbNode(engine, conn, label, size, idOverride) {
     return {
         id: idOverride || `${engine}:db:${label}`,
         kind: 'database', engine, label, expandable: true, conn,
-        sizeText: formatBytes(size),
+        sizeText: size ? formatBytes(size) : null,
     };
 }
 
@@ -69,7 +61,7 @@ function TabIcon({ tab }) {
 
 export default function Databases() {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [status, setStatus] = useState(null);
     const [statusLoading, setStatusLoading] = useState(true);
@@ -624,16 +616,6 @@ export default function Databases() {
             {modal?.type === 'mysql-user' && <CreateMySQLUserModal databases={modal.databases} onClose={() => setModal(null)} onCreated={onModalCreated} />}
             {modal?.type === 'pg-user' && <CreatePostgreSQLUserModal databases={modal.databases} onClose={() => setModal(null)} onCreated={onModalCreated} />}
 
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 }

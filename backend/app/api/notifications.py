@@ -403,6 +403,18 @@ def test_email_provider(provider_id):
     return jsonify(result), 200 if result.get('success') else 400
 
 
+@notifications_bp.route('/admin/email-providers/<int:provider_id>', methods=['PUT'])
+@jwt_required()
+@admin_required
+def update_email_provider(provider_id):
+    """Update a provider's usage flags (uses_notifications / uses_relay /
+    relay_priority) — §6 unification. uses_relay applies only to SMTP."""
+    row = EmailProviderService.update_usage(provider_id, request.get_json() or {})
+    if row is None:
+        return jsonify({'error': 'Provider not found'}), 404
+    return jsonify({'success': True, 'provider': row.to_dict()}), 200
+
+
 @notifications_bp.route('/admin/email-providers/<int:provider_id>/default', methods=['POST'])
 @jwt_required()
 @admin_required

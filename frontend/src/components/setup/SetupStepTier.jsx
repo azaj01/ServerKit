@@ -1,4 +1,3 @@
-import React from 'react';
 import { useResourceTier } from '../../contexts/ResourceTierContext';
 import { Check, X, AlertTriangle, Loader } from 'lucide-react';
 
@@ -117,7 +116,7 @@ const SetupStepTier = ({ useCases, onComplete }) => {
             </div>
 
             <div className="wizard-nav" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
-                <button className="btn-wizard-next" onClick={onComplete}>
+                <button type="button" className="btn-wizard-next" onClick={onComplete}>
                     Continue
                 </button>
             </div>

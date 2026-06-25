@@ -11,8 +11,12 @@ const AIAssistant = () => {
     const { isAuthenticated } = useAuth();
     const { isOpen, toggle, isStreaming, unread, pageContext } = useServerkitAI();
 
-    // Alt+A toggles the assistant (ignored while typing in a field).
+    // Alt+A toggles the assistant (ignored while typing in a field). Users who
+    // find the global shortcut intrusive can disable it by setting
+    // localStorage 'sk_ai_shortcut' to 'off'; the bubble's title/aria-label
+    // keeps the binding discoverable for everyone else.
     useEffect(() => {
+        if (localStorage.getItem('sk_ai_shortcut') === 'off') return undefined;
         const onKeyDown = (e) => {
             if (!e.altKey || (e.key !== 'a' && e.key !== 'A')) return;
             const t = document.activeElement;

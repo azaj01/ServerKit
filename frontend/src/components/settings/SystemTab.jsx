@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { InfoList, InfoItem } from '../InfoList';
@@ -6,17 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-
-function formatBytes(bytes) {
-    if (!bytes) return '-';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    while (bytes >= 1024 && i < units.length - 1) {
-        bytes /= 1024;
-        i++;
-    }
-    return `${bytes.toFixed(1)} ${units[i]}`;
-}
+import { formatBytes } from '@/utils/formatBytes';
+import EmptyState from '../EmptyState';
 
 function formatUptime(seconds) {
     if (!seconds) return '-';
@@ -156,7 +147,7 @@ const SystemTab = () => {
     }
 
     if (loading) {
-        return <div className="loading">Loading system information...</div>;
+        return <EmptyState loading title="Loading system information..." />;
     }
 
     return (
@@ -274,7 +265,7 @@ const SystemTab = () => {
                     </div>
                 )}
                 {domainLoading ? (
-                    <div className="loading">Loading domain settings...</div>
+                    <EmptyState loading title="Loading domain settings..." />
                 ) : (
                     <>
                         {detectedDomain?.detected_domain && (

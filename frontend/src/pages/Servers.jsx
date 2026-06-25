@@ -15,6 +15,7 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/ds';
@@ -930,7 +931,7 @@ Install-ServerKitAgent -Server "${window.location.origin}" -Token "${registratio
                                 : 'Connect an existing agent or set up a brand-new machine.'}
                         </p>
                     </div>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
+                    <button type="button" className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
                 {step === 1 && (
@@ -1152,13 +1153,7 @@ const ManageGroupsModal = ({ groups, onClose, onUpdated }) => {
     }
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Manage Server Groups</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
-                </div>
-
+        <Modal open onClose={onClose} title="Manage Server Groups">
                 <form onSubmit={handleCreateGroup} className="group-form">
                     <Input
                         type="text"
@@ -1197,14 +1192,14 @@ const ManageGroupsModal = ({ groups, onClose, onUpdated }) => {
                                         </span>
                                         <span className="group-count">{group.server_count || 0} servers</span>
                                         <div className="group-actions">
-                                            <button
+                                            <button type="button"
                                                 className="btn-icon"
                                                 onClick={() => setEditingGroup(group.id)}
                                                 title="Edit"
                                             >
                                                 <EditIcon />
                                             </button>
-                                            <button
+                                            <button type="button"
                                                 className="btn-icon danger"
                                                 onClick={() => handleDeleteGroup(group.id)}
                                                 title="Delete"
@@ -1222,8 +1217,7 @@ const ManageGroupsModal = ({ groups, onClose, onUpdated }) => {
                 <div className="modal-actions">
                     <Button onClick={onClose}>Done</Button>
                 </div>
-            </div>
-        </div>
+        </Modal>
     );
 };
 

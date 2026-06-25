@@ -114,11 +114,28 @@ def start_container(container_id):
     return jsonify(result), 200 if result['success'] else 400
 
 
+def _reject_if_protected(container_id):
+    """Return a 403 response if the container is ServerKit's own, else None.
+
+    Stopping/restarting/removing the panel's own containers would take
+    ServerKit offline, so these lifecycle actions are blocked outright.
+    """
+    if DockerService.is_protected_container(container_id):
+        return jsonify({
+            'error': 'This is a ServerKit system container and cannot be '
+                     'controlled from here. Managing it would take the panel offline.'
+        }), 403
+    return None
+
+
 @docker_bp.route('/containers/<container_id>/stop', methods=['POST'])
 @jwt_required()
 @admin_required
 def stop_container(container_id):
     """Stop a container."""
+    blocked = _reject_if_protected(container_id)
+    if blocked:
+        return blocked
     data = request.get_json() or {}
     timeout = data.get('timeout', 10)
     result = DockerService.stop_container(container_id, timeout)
@@ -130,27 +147,23 @@ def stop_container(container_id):
 @admin_required
 def restart_container(container_id):
     """Restart a container."""
+    blocked = _reject_if_protected(container_id)
+    if blocked:
+        return blocked
     data = request.get_json() or {}
     timeout = data.get('timeout', 10)
     result = DockerService.restart_container(container_id, timeout)
     return jsonify(result), 200 if result['success'] else 400
 
 
-PROTECTED_CONTAINERS = ['serverkit-frontend', 'serverkit_frontend', 'serverkit']
-
 @docker_bp.route('/containers/<container_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
 def remove_container(container_id):
     """Remove a container."""
-    # Protect ServerKit containers from deletion
-    container = DockerService.get_container(container_id)
-    if container:
-        container_name = container.get('name', '').lower().replace('/', '')
-        if any(protected in container_name for protected in PROTECTED_CONTAINERS):
-            return jsonify({
-                'error': 'Cannot delete ServerKit system container. This container is required for the panel to function.'
-            }), 403
+    blocked = _reject_if_protected(container_id)
+    if blocked:
+        return blocked
 
     data = request.get_json() or {}
     force = data.get('force', False)
@@ -485,7 +498,7 @@ def docker_cleanup():
                 parts = line.split(' ', 1)
                 if len(parts) == 2:
                     container_id, name = parts
-                    if any(p in name.lower() for p in PROTECTED_CONTAINERS):
+                    if DockerService.is_protected_name(name):
                         protected_ids.add(container_id)
     except Exception:
         pass

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     ExternalLink, Play, Square, RefreshCw, ArrowRight,
     ArrowDownLeft, Lock, Unlock, FileText, Trash2, MoreVertical,
@@ -10,6 +10,7 @@ import { HealthDot } from './HealthStatusPanel';
 import DiskUsageBar from './DiskUsageBar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { formatRelativeTime } from '@/utils/time';
 
 const PipelineView = ({
     pipeline,
@@ -289,20 +290,6 @@ const PipelineCard = ({
     const envType = env.environment_type || (isProduction ? 'production' : 'development');
     const domain = env.application?.domains?.[0] || env.url || '';
 
-    function formatRelativeTime(dateString) {
-        if (!dateString) return null;
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffDays = Math.floor(diffMs / 86400000);
-        const diffHours = Math.floor(diffMs / 3600000);
-
-        if (diffHours < 1) return 'Just now';
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
-    }
-
     return (
         <div className={`pipeline-card ${isProduction ? 'production' : ''} ${env.is_locked ? 'locked' : ''}`}>
             <div className="pipeline-card-header">
@@ -334,48 +321,48 @@ const PipelineCard = ({
                         <div className="pipeline-card-menu" onMouseLeave={() => setShowMenu(false)}>
                             {isRunning ? (
                                 <>
-                                    <button onClick={() => { onStop?.(env); setShowMenu(false); }}>
+                                    <button type="button" onClick={() => { onStop?.(env); setShowMenu(false); }}>
                                         <Square size={12} /> Stop
                                     </button>
-                                    <button onClick={() => { onRestart?.(env); setShowMenu(false); }}>
+                                    <button type="button" onClick={() => { onRestart?.(env); setShowMenu(false); }}>
                                         <RefreshCw size={12} /> Restart
                                     </button>
                                 </>
                             ) : (
-                                <button onClick={() => { onStart?.(env); setShowMenu(false); }}>
+                                <button type="button" onClick={() => { onStart?.(env); setShowMenu(false); }}>
                                     <Play size={12} /> Start
                                 </button>
                             )}
-                            <button onClick={() => { onViewLogs?.(env); setShowMenu(false); }}>
+                            <button type="button" onClick={() => { onViewLogs?.(env); setShowMenu(false); }}>
                                 <FileText size={12} /> Logs
                             </button>
                             <div className="pipeline-card-menu-divider" />
-                            <button onClick={() => { onResourceLimits?.(env); setShowMenu(false); }}>
+                            <button type="button" onClick={() => { onResourceLimits?.(env); setShowMenu(false); }}>
                                 <Cpu size={12} /> Resources
                             </button>
-                            <button onClick={() => { onBasicAuth?.(env); setShowMenu(false); }}>
+                            <button type="button" onClick={() => { onBasicAuth?.(env); setShowMenu(false); }}>
                                 <Shield size={12} /> Basic Auth
                             </button>
-                            <button onClick={() => { onWpCli?.(env); setShowMenu(false); }}>
+                            <button type="button" onClick={() => { onWpCli?.(env); setShowMenu(false); }}>
                                 <Terminal size={12} /> WP-CLI
                             </button>
                             {!isProduction && onAutoSync && (
-                                <button onClick={() => { onAutoSync?.(env); setShowMenu(false); }}>
+                                <button type="button" onClick={() => { onAutoSync?.(env); setShowMenu(false); }}>
                                     <Clock size={12} /> Auto-Sync
                                 </button>
                             )}
                             <div className="pipeline-card-menu-divider" />
                             {env.is_locked ? (
-                                <button onClick={() => { onUnlock?.(env); setShowMenu(false); }}>
+                                <button type="button" onClick={() => { onUnlock?.(env); setShowMenu(false); }}>
                                     <Unlock size={12} /> Unlock
                                 </button>
                             ) : (
-                                <button onClick={() => { onLock?.(env); setShowMenu(false); }}>
+                                <button type="button" onClick={() => { onLock?.(env); setShowMenu(false); }}>
                                     <Lock size={12} /> Lock
                                 </button>
                             )}
                             {!isProduction && (
-                                <button className="danger" onClick={() => { onDelete?.(env); setShowMenu(false); }}>
+                                <button type="button" className="danger" onClick={() => { onDelete?.(env); setShowMenu(false); }}>
                                     <Trash2 size={12} /> Delete
                                 </button>
                             )}
@@ -440,7 +427,7 @@ const PipelineCard = ({
 const PipelineArrow = ({ label, direction, disabled, onClick }) => {
     return (
         <div className={`pipeline-arrow ${disabled ? 'disabled' : ''}`}>
-            <button
+            <button type="button"
                 className="pipeline-arrow-btn"
                 onClick={onClick}
                 disabled={disabled}
@@ -475,19 +462,6 @@ const MultidevCard = ({
     const isRunning = env.status === 'running' || env.application?.status === 'running';
     const domain = env.application?.domains?.[0] || env.url || '';
 
-    function formatRelativeTime(dateString) {
-        if (!dateString) return null;
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffDays = Math.floor(diffMs / 86400000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        if (diffHours < 1) return 'Just now';
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
-    }
-
     const promoteTarget = devEnv || stagingEnv || production;
 
     return (
@@ -515,34 +489,34 @@ const MultidevCard = ({
                         <div className="pipeline-card-menu" onMouseLeave={() => setShowMenu(false)}>
                             {isRunning ? (
                                 <>
-                                    <button onClick={() => { onStop?.(env); setShowMenu(false); }}>
+                                    <button type="button" onClick={() => { onStop?.(env); setShowMenu(false); }}>
                                         <Square size={12} /> Stop
                                     </button>
-                                    <button onClick={() => { onRestart?.(env); setShowMenu(false); }}>
+                                    <button type="button" onClick={() => { onRestart?.(env); setShowMenu(false); }}>
                                         <RefreshCw size={12} /> Restart
                                     </button>
                                 </>
                             ) : (
-                                <button onClick={() => { onStart?.(env); setShowMenu(false); }}>
+                                <button type="button" onClick={() => { onStart?.(env); setShowMenu(false); }}>
                                     <Play size={12} /> Start
                                 </button>
                             )}
-                            <button onClick={() => { onSync?.(env); setShowMenu(false); }}>
+                            <button type="button" onClick={() => { onSync?.(env); setShowMenu(false); }}>
                                 <ArrowDownLeft size={12} /> Sync from Prod
                             </button>
-                            <button onClick={() => { onViewLogs?.(env); setShowMenu(false); }}>
+                            <button type="button" onClick={() => { onViewLogs?.(env); setShowMenu(false); }}>
                                 <FileText size={12} /> Logs
                             </button>
                             {env.is_locked ? (
-                                <button onClick={() => { onUnlock?.(env); setShowMenu(false); }}>
+                                <button type="button" onClick={() => { onUnlock?.(env); setShowMenu(false); }}>
                                     <Unlock size={12} /> Unlock
                                 </button>
                             ) : (
-                                <button onClick={() => { onLock?.(env); setShowMenu(false); }}>
+                                <button type="button" onClick={() => { onLock?.(env); setShowMenu(false); }}>
                                     <Lock size={12} /> Lock
                                 </button>
                             )}
-                            <button className="danger" onClick={() => { onDelete?.(env); setShowMenu(false); }}>
+                            <button type="button" className="danger" onClick={() => { onDelete?.(env); setShowMenu(false); }}>
                                 <Trash2 size={12} /> Delete
                             </button>
                         </div>

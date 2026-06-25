@@ -24,6 +24,17 @@ class DeploymentJob(db.Model):
     requested_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     trigger = db.Column(db.String(30), default='manual')
 
+    # Links to the release ledgers (§3 unification): the DeploymentJob is the
+    # canonical execution record; Deployment / GitDeployment remain the
+    # version/release ledgers it produces. All nullable — a template-install job
+    # has none of these set.
+    deployment_id = db.Column(db.Integer, db.ForeignKey('deployments.id'), nullable=True, index=True)
+    git_deployment_id = db.Column(db.Integer, db.ForeignKey('git_deployments.id'), nullable=True, index=True)
+    webhook_id = db.Column(db.Integer, db.ForeignKey('git_webhooks.id'), nullable=True, index=True)
+    commit_hash = db.Column(db.String(40), nullable=True)
+    image_tag = db.Column(db.String(255), nullable=True)
+    container_id = db.Column(db.String(100), nullable=True)
+
     # Execution progress
     total_steps = db.Column(db.Integer, default=0)
     current_step = db.Column(db.Integer, default=0)
@@ -96,6 +107,12 @@ class DeploymentJob(db.Model):
             'app_name': self.app.name if self.app else None,
             'requested_by': self.requested_by,
             'trigger': self.trigger,
+            'deployment_id': self.deployment_id,
+            'git_deployment_id': self.git_deployment_id,
+            'webhook_id': self.webhook_id,
+            'commit_hash': self.commit_hash,
+            'image_tag': self.image_tag,
+            'container_id': self.container_id,
             'total_steps': self.total_steps,
             'current_step': self.current_step,
             'current_step_name': self.current_step_name,

@@ -62,7 +62,7 @@ const DeploymentTimeline = ({ appId }) => {
         return (
             <div className="deploy-timeline deploy-timeline--empty">
                 <Clock size={20} />
-                <p>No configuration snapshots yet. One is captured before each deployment.</p>
+                <p>No config checkpoints yet. One is captured before each deployment.</p>
             </div>
         );
     }

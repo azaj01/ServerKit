@@ -45,7 +45,11 @@ export default [
           message: 'Use the shared Button component (or IconButton for icon-only actions).',
         },
         {
-          selector: 'JSXOpeningElement[name.name="div"] > JSXAttribute[name.name="className"] > Literal[value=/\\bcard\\b/]',
+          // Match the legacy card family (.card, .card-header, .card-body, …) as a
+          // LEADING class token — not unrelated compounds like `settings-card`,
+          // `sk-spec-card`, or `wp-site-card-skeleton`, which the old `\bcard\b`
+          // pattern flagged as false positives.
+          selector: 'JSXOpeningElement[name.name="div"] > JSXAttribute[name.name="className"] > Literal[value=/(^|\\s)card(\\s|$|-)/]',
           message: 'Use the shared Card component instead of the legacy .card class.',
         },
       ],

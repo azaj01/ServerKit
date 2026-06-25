@@ -1498,6 +1498,36 @@
     }
 }
 
+// "System container" markers shown in place of lifecycle controls for
+// ServerKit's own containers — read-only, never interactive.
+.dx-row-protected {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 $space-2;
+    border: 1px dashed $border-default;
+    border-radius: $radius-sm;
+    color: $text-tertiary;
+    font-size: $font-size-xs;
+    white-space: nowrap;
+    cursor: default;
+}
+
+.dx-action-protected {
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: $space-2;
+    padding: 0 $space-3;
+    border: 1px dashed $border-default;
+    border-radius: $radius-sm;
+    color: $text-tertiary;
+    font-size: $font-size-xs;
+    white-space: nowrap;
+    cursor: default;
+}
+
 .dx-inspector {
     display: flex;
     flex-direction: column;

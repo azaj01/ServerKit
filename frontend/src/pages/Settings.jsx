@@ -21,7 +21,7 @@ import AISettingsTab from '../components/settings/AISettingsTab';
 import AboutTab from '../components/settings/AboutTab';
 import { Activity, Code, Database, Layers, Link2, PaintBucket, Sparkles, Settings as SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PageTopbar } from '@/components/ds';
+import { PageTopbar, SegControl } from '@/components/ds';
 import { useNavigate } from 'react-router-dom';
 
 const VALID_TABS = ['profile', 'security', 'connections', 'appearance', 'sidebar', 'whitelabel', 'notifications', 'system', 'users', 'activity', 'site', 'sso', 'api', 'ai', 'migrations', 'developer', 'about'];
@@ -57,26 +57,16 @@ const Settings = () => {
             <div className="settings-layout">
                 <nav className="settings-nav">
                     {isAdmin && (
-                        <div className="settings-nav-groups" role="tablist" aria-label="Settings section">
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={activeGroup === 'account'}
-                                className={`settings-nav-group ${activeGroup === 'account' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('profile')}
-                            >
-                                My Account
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={activeGroup === 'admin'}
-                                className={`settings-nav-group ${activeGroup === 'admin' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('users')}
-                            >
-                                Admin
-                            </button>
-                        </div>
+                        <SegControl
+                            className="settings-nav-groups"
+                            aria-label="Settings section"
+                            options={[
+                                { value: 'account', label: 'My Account' },
+                                { value: 'admin', label: 'Admin' },
+                            ]}
+                            value={activeGroup}
+                            onChange={(group) => setActiveTab(group === 'admin' ? 'users' : 'profile')}
+                        />
                     )}
                     {activeGroup === 'account' && (
                         <>

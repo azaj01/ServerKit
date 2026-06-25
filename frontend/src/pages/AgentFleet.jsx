@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import {
     Shield,

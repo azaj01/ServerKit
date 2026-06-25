@@ -3,7 +3,6 @@ import { RefreshCw, ArrowUpCircle, Moon, Sun, Gauge as GaugeIcon } from 'lucide-
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
-import { ConfirmDialog } from '../ConfirmDialog';
 import { Pill } from '../ds';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +34,7 @@ function formatStatusLabel(status) {
 // ============================================================
 const ImageUpdateSection = ({ app, onChanged }) => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
     const [info, setInfo] = useState(app.image_update || null);
     const [checking, setChecking] = useState(false);
     const [applying, setApplying] = useState(false);
@@ -152,17 +151,6 @@ const ImageUpdateSection = ({ app, onChanged }) => {
                     )}
                 </div>
             </div>
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
         </div>
     );
 };

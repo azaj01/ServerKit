@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Trash2, Clock, Layers, GitBranch, Loader } from 'lucide-react';
 import api from '../../services/api';
 import Modal from '../Modal';

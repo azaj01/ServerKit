@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import api from '../../services/api';
 import { Button } from '@/components/ui/button';
 import { Pill, ScoreGauge } from '@/components/ds';

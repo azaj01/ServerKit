@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { GitCommit, Rocket, Copy, CheckCircle, ExternalLink } from 'lucide-react';
 import Modal from '../Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { detectProvider } from '../git/GitProviders';
+import EmptyState from '../EmptyState';
 
 // Build a web URL to a commit on the host from the clone URL + sha so the log is
 // clickable. Handles https + scp-style ssh remotes and Bitbucket's /commits path.
@@ -62,7 +63,7 @@ const CommitList = ({ commits, currentCommit, onDeploy, onCreateDev, loading = f
     }
 
     if (loading) {
-        return <div className="loading">Loading commits...</div>;
+        return <EmptyState loading title="Loading commits..." />;
     }
 
     if (!commits || commits.length === 0) {

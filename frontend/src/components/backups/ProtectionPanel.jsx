@@ -9,7 +9,6 @@ import { History, RefreshCw, Loader2, List, CalendarDays, X } from 'lucide-react
 import api from '@/services/api';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfirm } from '@/hooks/useConfirm';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 
 import ProtectionStatusCard from './ProtectionStatusCard';
@@ -30,7 +29,7 @@ function sameLocalDay(iso, date) {
 export default function ProtectionPanel({ targetType, targetId, targetName, showMaintenanceModeOption = false }) {
     const toast = useToast();
     const navigate = useNavigate();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
 
     const [view, setView] = useState(null);   // policy view payload
     const [runs, setRuns] = useState([]);
@@ -265,17 +264,6 @@ export default function ProtectionPanel({ targetType, targetId, targetName, show
                 targetName={targetName}
                 targetType={targetType}
                 showMaintenanceModeOption={showMaintenanceModeOption}
-            />
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
             />
         </div>
     );

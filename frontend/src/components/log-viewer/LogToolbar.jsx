@@ -23,7 +23,7 @@ export default function LogToolbar({
                         onKeyDown={(e) => e.key === 'Enter' && onSearchSubmit()}
                     />
                     {searchPattern && (
-                        <button className="lv-search-field-clear" onClick={onSearchClear} title="Clear">
+                        <button type="button" className="lv-search-field-clear" onClick={onSearchClear} title="Clear">
                             <X size={11} />
                         </button>
                     )}
@@ -41,7 +41,7 @@ export default function LogToolbar({
             </div>
 
             <div className="lv-toolbar-right">
-                <button
+                <button type="button"
                     className={`lv-chip ${autoRefresh ? 'active' : ''}`}
                     onClick={onAutoRefreshToggle}
                     disabled={!canAct}
@@ -50,21 +50,21 @@ export default function LogToolbar({
                     <span className={`lv-pulse ${autoRefresh ? 'on' : ''}`} />
                     <span>Live</span>
                 </button>
-                <button
+                <button type="button"
                     className={`lv-icon-btn ${showLineNumbers ? 'active' : ''}`}
                     onClick={onToggleLineNumbers}
                     title="Toggle line numbers"
                 >
                     <Hash size={13} />
                 </button>
-                <button
+                <button type="button"
                     className={`lv-icon-btn ${wrapLines ? 'active' : ''}`}
                     onClick={onToggleWrap}
                     title="Toggle word wrap"
                 >
                     <WrapText size={13} />
                 </button>
-                <button
+                <button type="button"
                     className="lv-icon-btn"
                     onClick={onScrollToBottom}
                     disabled={!canAct}
@@ -72,7 +72,7 @@ export default function LogToolbar({
                 >
                     <ArrowDownToLine size={13} />
                 </button>
-                <button
+                <button type="button"
                     className="lv-icon-btn"
                     onClick={onRefresh}
                     disabled={!canAct}
@@ -80,7 +80,7 @@ export default function LogToolbar({
                 >
                     <RefreshCw size={13} />
                 </button>
-                <button
+                <button type="button"
                     className="lv-icon-btn"
                     onClick={onDownload}
                     disabled={!canAct}
@@ -88,7 +88,7 @@ export default function LogToolbar({
                 >
                     <Download size={13} />
                 </button>
-                <button
+                <button type="button"
                     className="lv-icon-btn danger"
                     onClick={onClear}
                     disabled={!canAct}
@@ -96,7 +96,7 @@ export default function LogToolbar({
                 >
                     <Trash2 size={13} />
                 </button>
-                <button
+                <button type="button"
                     className="lv-icon-btn"
                     onClick={onToggleFullscreen}
                     title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}

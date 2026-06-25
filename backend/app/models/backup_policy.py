@@ -1,7 +1,14 @@
+import json
 from datetime import datetime
 from decimal import Decimal
 
 from app import db
+
+# Every data-protection target the unified policy system can back up (§8).
+# 'application' and 'wordpress_site' are the original targets; 'database',
+# 'files', and 'server' were folded in from the legacy BackupService so a
+# single BackupPolicy/BackupRun system covers all data-protection backups.
+VALID_TARGET_TYPES = ('application', 'wordpress_site', 'database', 'files', 'server')
 
 
 def _num(value):
@@ -28,8 +35,15 @@ class BackupPolicy(db.Model):
     __tablename__ = 'backup_policies'
 
     id = db.Column(db.Integer, primary_key=True)
-    target_type = db.Column(db.String(40), nullable=False, index=True)  # 'wordpress_site' | 'application'
+    target_type = db.Column(db.String(40), nullable=False, index=True)  # see VALID_TARGET_TYPES
     target_id = db.Column(db.Integer, nullable=False, index=True)
+    # Optional finer target classification, e.g. the engine for a 'database'
+    # target ('mysql' | 'postgresql' | 'mongodb') or 'pathlist' for 'files'.
+    target_subtype = db.Column(db.String(40), nullable=True)
+    # Per-target details that aren't a first-class column: for 'database' the
+    # connection descriptor (db_type/db_name/user/host); for 'files' the path
+    # list; for 'server' the scope. JSON object, never secrets in plaintext.
+    target_meta_json = db.Column(db.Text, default='{}', nullable=True)
     enabled = db.Column(db.Boolean, default=False, nullable=False)
 
     # Schedule (cron expression fired by the unified scheduler)
@@ -71,11 +85,26 @@ class BackupPolicy(db.Model):
 
     __table_args__ = (db.UniqueConstraint('target_type', 'target_id', name='uq_backup_policy_target'),)
 
+    def get_target_meta(self):
+        """Parsed target_meta_json (always a dict)."""
+        if not self.target_meta_json:
+            return {}
+        try:
+            data = json.loads(self.target_meta_json)
+            return data if isinstance(data, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+    def set_target_meta(self, value):
+        self.target_meta_json = json.dumps(value or {})
+
     def to_dict(self):
         return {
             'id': self.id,
             'target_type': self.target_type,
             'target_id': self.target_id,
+            'target_subtype': self.target_subtype,
+            'target_meta': self.get_target_meta(),
             'enabled': self.enabled,
             'schedule_cron': self.schedule_cron,
             'retention_count': self.retention_count,

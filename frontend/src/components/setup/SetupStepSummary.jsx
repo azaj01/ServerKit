@@ -1,4 +1,3 @@
-import React from 'react';
 import { useResourceTier } from '../../contexts/ResourceTierContext';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -119,7 +118,7 @@ const SetupStepSummary = ({ accountInfo, useCases, onFinish }) => {
             </div>
 
             <div className="wizard-nav" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
-                <button className="btn-wizard-next" onClick={onFinish}>
+                <button type="button" className="btn-wizard-next" onClick={onFinish}>
                     Go to Dashboard
                 </button>
             </div>

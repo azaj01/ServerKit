@@ -1,4 +1,3 @@
-import React from 'react';
 import ConfigPanel from '../ConfigPanel';
 import { Bell, MessageSquare, Mail, Slack, Send, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,7 +43,7 @@ const NotificationConfigPanel = ({ node, onChange, onClose, onDelete }) => {
                 <Label>Channel</Label>
                 <div className="channel-grid">
                     {channels.map(({ id, icon: Icon, label: chLabel }) => (
-                        <button
+                        <button type="button"
                             key={id}
                             className={`channel-btn ${channel === id ? 'active' : ''}`}
                             onClick={() => onChange({ ...data, channel: id })}

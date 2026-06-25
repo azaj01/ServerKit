@@ -31,7 +31,7 @@ function FileRow({
             onContextMenu={(e) => onContext(e, entry)}
         >
             <span className="col-check" onClick={(e) => e.stopPropagation()}>
-                <button
+                <button type="button"
                     className="checkbox-btn"
                     onClick={(e) => onToggleSelect(entry, { ...e, ctrlKey: true })}
                     aria-label={selected ? 'Deselect' : 'Select'}
@@ -54,17 +54,17 @@ function FileRow({
             <span className="col-owner">{entry.owner}</span>
             <span className="col-actions" onClick={(e) => e.stopPropagation()}>
                 {!entry.is_dir && (
-                    <button className="row-action" onClick={() => onDownload(entry)} title="Download">
+                    <button type="button" className="row-action" onClick={() => onDownload(entry)} title="Download">
                         <Download size={14} />
                     </button>
                 )}
-                <button className="row-action" onClick={() => onRename(entry)} title="Rename">
+                <button type="button" className="row-action" onClick={() => onRename(entry)} title="Rename">
                     <Edit3 size={14} />
                 </button>
-                <button className="row-action" onClick={() => onPermissions(entry)} title="Permissions">
+                <button type="button" className="row-action" onClick={() => onPermissions(entry)} title="Permissions">
                     <Lock size={14} />
                 </button>
-                <button className="row-action danger" onClick={() => onDelete(entry)} title="Delete">
+                <button type="button" className="row-action danger" onClick={() => onDelete(entry)} title="Delete">
                     <Trash2 size={14} />
                 </button>
             </span>

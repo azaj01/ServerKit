@@ -62,7 +62,7 @@ const ProtectionStatusCard = ({
     const statusPill = <Pill kind={kind}>{label}</Pill>;
 
     const subtitle = enabled
-        ? 'Snapshots run on the configured schedule.'
+        ? 'Backups run on the configured schedule.'
         : 'Turn on to back up this site automatically.';
 
     // Inline status line (and, for the failed state, a deep-link to Jobs).

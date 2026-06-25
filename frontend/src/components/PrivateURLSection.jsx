@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 
@@ -136,7 +136,7 @@ const PrivateURLSection = ({ app, onUpdate }) => {
                             <code className="url-value">{privateUrl}</code>
                         </div>
                         <div className="url-actions">
-                            <button
+                            <button type="button"
                                 className="btn btn-secondary btn-sm"
                                 onClick={copyToClipboard}
                                 title="Copy to clipboard"
@@ -147,7 +147,7 @@ const PrivateURLSection = ({ app, onUpdate }) => {
                                 </svg>
                                 Copy
                             </button>
-                            <button
+                            <button type="button"
                                 className="btn btn-secondary btn-sm"
                                 onClick={handleRegenerate}
                                 disabled={loading}
@@ -197,7 +197,7 @@ const PrivateURLSection = ({ app, onUpdate }) => {
                             </button>
                         </form>
                     ) : (
-                        <button
+                        <button type="button"
                             className="btn-link"
                             onClick={() => setEditMode(true)}
                         >
@@ -206,7 +206,7 @@ const PrivateURLSection = ({ app, onUpdate }) => {
                     )}
 
                     <div className="private-url-footer">
-                        <button
+                        <button type="button"
                             className="btn btn-danger btn-sm"
                             onClick={handleDisable}
                             disabled={loading}

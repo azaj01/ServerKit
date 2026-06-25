@@ -46,7 +46,13 @@ export function renderMarkdownToHtml(src) {
     text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     text = text.replace(
         /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-        (_m, label, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`,
+        (_m, label, url) => {
+            // The surrounding text is already HTML-escaped, but `"` is not, and a
+            // crafted URL could otherwise break out of the href attribute. Encode
+            // quotes so the value stays contained.
+            const safeUrl = url.replace(/"/g, '%22').replace(/'/g, '%27');
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+        },
     );
 
     // 5) Paragraphs + line breaks.

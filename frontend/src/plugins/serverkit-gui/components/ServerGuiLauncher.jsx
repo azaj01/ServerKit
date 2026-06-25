@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ServerGui from './ServerGui.jsx';
 
@@ -27,7 +27,7 @@ export default function ServerGuiLauncher({ api }) {
 
     return (
         <>
-            <button
+            <button type="button"
                 className="sk-gui-launcher"
                 onClick={() => setOpen(true)}
                 title="Open desktop view"
@@ -41,7 +41,7 @@ export default function ServerGuiLauncher({ api }) {
                     <div className="sk-gui-modal__inner" onClick={e => e.stopPropagation()}>
                         <header className="sk-gui-modal__header">
                             <h3>Desktop view</h3>
-                            <button
+                            <button type="button"
                                 className="sk-gui-modal__close"
                                 onClick={() => setOpen(false)}
                                 aria-label="Close"

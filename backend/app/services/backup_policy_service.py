@@ -49,13 +49,35 @@ class BackupPolicyService:
             target_type=target_type, target_id=int(target_id)
         ).first()
 
+    @staticmethod
+    def validate_target_type(target_type):
+        """Reject unknown target types (maps to HTTP 400)."""
+        from app.models.backup_policy import VALID_TARGET_TYPES
+        if target_type not in VALID_TARGET_TYPES:
+            raise BackupPolicyError(
+                f"target_type must be one of {VALID_TARGET_TYPES}, got {target_type!r}"
+            )
+
     @classmethod
-    def get_or_create_policy(cls, target_type, target_id):
+    def get_or_create_policy(cls, target_type, target_id, target_subtype=None, target_meta=None):
         from app.models.backup_policy import BackupPolicy
+        cls.validate_target_type(target_type)
         policy = cls.get_policy(target_type, target_id)
         if policy:
+            # Refresh target descriptors for non-resource targets (database/files)
+            # whose connection/path details can change between calls.
+            if target_subtype is not None:
+                policy.target_subtype = target_subtype
+            if target_meta is not None:
+                policy.set_target_meta(target_meta)
+            if target_subtype is not None or target_meta is not None:
+                db.session.commit()
             return policy
         policy = BackupPolicy(target_type=target_type, target_id=int(target_id))
+        if target_subtype is not None:
+            policy.target_subtype = target_subtype
+        if target_meta is not None:
+            policy.set_target_meta(target_meta)
         db.session.add(policy)
         db.session.commit()
         cls.ensure_scheduled_job(policy)
@@ -180,7 +202,8 @@ class BackupPolicyService:
     def _resolve_target(cls, policy):
         """Return a dict describing the live target, or raise if missing.
 
-        keys: name, root_path, target_type, site (wp only), app, db_config (wp).
+        keys: name, root_path, target_type, site (wp only), app, plus
+        db_config (database) / file_paths (files) for the non-resource targets.
         """
         if policy.target_type == 'wordpress_site':
             from app.models.wordpress_site import WordPressSite
@@ -194,6 +217,38 @@ class BackupPolicyService:
                 'name': app.name, 'root_path': app.root_path,
                 'target_type': 'wordpress_site', 'site': site, 'app': app,
             }
+
+        if policy.target_type == 'database':
+            meta = policy.get_target_meta()
+            db_name = meta.get('db_name')
+            if not db_name:
+                raise BackupPolicyError('Database target is missing db_name')
+            return {
+                'name': db_name, 'root_path': None,
+                'target_type': 'database', 'site': None, 'app': None,
+                'db_config': {
+                    'db_type': policy.target_subtype or meta.get('db_type') or 'mysql',
+                    'db_name': db_name,
+                    'user': meta.get('user'),
+                    'password': meta.get('password'),
+                    'host': meta.get('host', 'localhost'),
+                },
+            }
+
+        if policy.target_type == 'files':
+            meta = policy.get_target_meta()
+            file_paths = meta.get('paths') or []
+            if not file_paths:
+                raise BackupPolicyError('Files target has no paths configured')
+            return {
+                'name': meta.get('label') or f'files-{policy.target_id}',
+                'root_path': None, 'target_type': 'files',
+                'site': None, 'app': None, 'file_paths': list(file_paths),
+            }
+
+        if policy.target_type == 'server':
+            raise BackupPolicyError('Whole-server backups are not yet implemented')
+
         # application
         from app.models.application import Application
         app = Application.query.get(policy.target_id)
@@ -278,6 +333,42 @@ class BackupPolicyService:
                 'kind': 'full', 'compression': 'gzip', 'incremental': False,
                 'backup_name': result.get('backup_name'), 'includes': ['files', 'database'],
                 'primary_archive': os.path.join(storage_path, 'files.tar.gz'),
+            })
+            return storage_path, size, meta
+
+        if target['target_type'] == 'database':
+            from app.services.backup_service import BackupService
+            cfg = target['db_config']
+            result = BackupService.backup_database(
+                db_type=cfg['db_type'], db_name=cfg['db_name'],
+                user=cfg.get('user'), password=cfg.get('password'),
+                host=cfg.get('host', 'localhost'),
+            )
+            if not result.get('success'):
+                raise BackupPolicyError(result.get('error') or 'Database backup failed')
+            backup = result.get('backup') or {}
+            storage_path = backup.get('path')
+            size = backup.get('size') or cls._path_size(storage_path)
+            meta.update({
+                'kind': 'full', 'compression': 'gzip', 'incremental': False,
+                'includes': ['database'], 'backup_name': backup.get('name'),
+                'primary_archive': storage_path,
+                'db_type': cfg['db_type'], 'db_name': cfg['db_name'],
+            })
+            return storage_path, size, meta
+
+        if target['target_type'] == 'files':
+            from app.services.backup_service import BackupService
+            result = BackupService.backup_files(target['file_paths'], target['name'])
+            if not result.get('success'):
+                raise BackupPolicyError(result.get('error') or 'File backup failed')
+            backup = result.get('backup') or {}
+            storage_path = result.get('path') or backup.get('path')
+            size = backup.get('size') or cls._path_size(storage_path)
+            meta.update({
+                'kind': 'full', 'compression': 'gzip', 'incremental': False,
+                'includes': ['files'], 'backup_name': backup.get('name'),
+                'primary_archive': storage_path, 'paths': target['file_paths'],
             })
             return storage_path, size, meta
 
@@ -567,6 +658,10 @@ class BackupPolicyService:
 
             if target['target_type'] == 'wordpress_site':
                 cls._restore_wordpress(target, run, scope, payload)
+            elif target['target_type'] == 'database':
+                cls._restore_database(target, run)
+            elif target['target_type'] == 'files':
+                cls._restore_files(target, run, payload)
             else:
                 cls._restore_application(policy, target, run, scope)
 
@@ -636,6 +731,41 @@ class BackupPolicyService:
         result = WordPressService.restore_backup(backup_name, root)
         if not result.get('success'):
             raise BackupPolicyError(result.get('error') or 'Restore failed')
+
+    @classmethod
+    def _restore_database(cls, target, run):
+        """Restore a standalone database from its dump (mysql/postgres/etc.)."""
+        from app.services.backup_service import BackupService
+        cfg = target['db_config']
+        backup_path = (run.get_metadata() or {}).get('primary_archive') or run.storage_path
+        if not backup_path or not os.path.exists(backup_path):
+            raise BackupPolicyError('Backup archive not found')
+        result = BackupService.restore_database(
+            backup_path=backup_path, db_type=cfg['db_type'], db_name=cfg['db_name'],
+            user=cfg.get('user'), password=cfg.get('password'),
+            host=cfg.get('host', 'localhost'),
+        )
+        if not result.get('success'):
+            raise BackupPolicyError(result.get('error') or 'Database restore failed')
+
+    @classmethod
+    def _restore_files(cls, target, run, payload):
+        """Extract a files backup. Restores into an explicit ``restore_path``
+        (from options) or a safe ``restores/`` staging dir — never blindly over
+        the originals, since a path-list archive only preserves basenames."""
+        import tarfile
+        from app.services.backup_service import BackupService
+        backup_path = (run.get_metadata() or {}).get('primary_archive') or run.storage_path
+        if not backup_path or not os.path.exists(backup_path):
+            raise BackupPolicyError('Backup archive not found')
+        dest = (payload or {}).get('restore_path')
+        if not dest:
+            dest = os.path.join(BackupService.BACKUP_BASE_DIR, 'restores',
+                                f'files-{run.id}')
+        os.makedirs(dest, exist_ok=True)
+        with tarfile.open(backup_path, 'r:gz') as tar:
+            tar.extractall(dest, filter='data')
+        return {'restore_path': dest}
 
     @classmethod
     def _chain_archives(cls, policy, run):

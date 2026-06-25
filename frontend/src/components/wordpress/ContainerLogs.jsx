@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Terminal, X, Download } from 'lucide-react';
 import wordpressApi from '../../services/wordpress';
 import { Button } from '@/components/ui/button';

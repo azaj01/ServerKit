@@ -9,7 +9,7 @@ const SharedVariables = () => {
     const workspaceId = localStorage.getItem('active_workspace_id') || 'default';
 
     return (
-        <div className="page-container shared-variables-page">
+        <div className="sk-tabgroup__inner shared-variables-page">
             <SharedVariableGroups scopeType="workspace" scopeId={workspaceId} />
         </div>
     );

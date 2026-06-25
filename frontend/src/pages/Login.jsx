@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -258,7 +258,7 @@ const Login = () => {
                 {ssoProviders && ssoProviders.length > 0 && (
                     <div className="sso-providers">
                         {ssoProviders.map(p => (
-                            <button
+                            <button type="button"
                                 key={p.id}
                                 className={`btn-sso btn-sso--${p.id}`}
                                 onClick={() => handleSSOLogin(p.id)}

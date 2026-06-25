@@ -12,11 +12,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
 
+// Styling lives in styles/components/_ui.scss (.sk-confirm*).
 const iconMap = { danger: AlertTriangle, warning: AlertCircle, info: Info };
-const iconColor = { danger: 'text-destructive', warning: 'text-yellow-400', info: 'text-blue-400' };
-const iconBg = { danger: 'bg-destructive/10', warning: 'bg-yellow-500/10', info: 'bg-blue-500/10' };
 
 export function ConfirmDialog({
   isOpen,
@@ -38,32 +36,23 @@ export function ConfirmDialog({
   const Icon = iconMap[variant] || AlertTriangle;
   const isConfirmDisabled = requireConfirmation && inputValue !== requireConfirmation;
 
-    return (
-      <AlertDialog open={isOpen} onOpenChange={(v) => !v && onCancel()}>
-      <AlertDialogContent className="sm:max-w-xl">
-        <AlertDialogHeader className="items-center text-center sm:text-center">
-          <div className="flex flex-col items-center gap-3">
-            <div
-              className={cn(
-                'flex size-12 shrink-0 items-center justify-center rounded-full border',
-                iconBg[variant] || iconBg.danger,
-                iconColor[variant] || 'text-destructive',
-                variant === 'danger' && 'border-destructive/20',
-                variant === 'warning' && 'border-yellow-500/20',
-                variant === 'info' && 'border-blue-500/20'
-              )}
-            >
+  return (
+    <AlertDialog open={isOpen} onOpenChange={(v) => !v && onCancel()}>
+      <AlertDialogContent className="sk-confirm">
+        <AlertDialogHeader>
+          <div className="sk-confirm__head">
+            <div className={`sk-confirm__icon sk-confirm__icon--${variant}`}>
               <Icon size={24} />
             </div>
-            <div className="min-w-0">
+            <div className="sk-confirm__body">
               <AlertDialogTitle>{title}</AlertDialogTitle>
-              {message && <AlertDialogDescription className="mt-1.5">{message}</AlertDialogDescription>}
-              {details && <p className="text-sm text-muted-foreground mt-1.5">{details}</p>}
+              {message && <AlertDialogDescription>{message}</AlertDialogDescription>}
+              {details && <p className="sk-confirm__details">{details}</p>}
             </div>
           </div>
           {requireConfirmation && (
-            <div className="space-y-2 mt-2 w-full text-left">
-              <Label className="text-muted-foreground">
+            <div className="sk-confirm__confirm-field">
+              <Label>
                 Type <strong className="text-foreground">{requireConfirmation}</strong> to confirm:
               </Label>
               <Input
@@ -76,12 +65,12 @@ export function ConfirmDialog({
             </div>
           )}
         </AlertDialogHeader>
-        <AlertDialogFooter className="sm:justify-center">
+        <AlertDialogFooter className="sk-confirm__footer">
           <AlertDialogCancel onClick={onCancel}>{cancelText}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isConfirmDisabled}
-            className={cn(variant !== 'danger' && 'bg-primary hover:bg-primary/90')}
+            variant={variant === 'danger' ? 'destructive' : 'primary'}
           >
             {confirmText}
           </AlertDialogAction>

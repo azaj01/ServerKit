@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import {
     Table,
@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import EmptyState from '../EmptyState';
-import { Spinner } from '../Spinner';
 
 /**
  * Declarative data table built on top of the shadcn/ui Table primitives.
@@ -82,11 +81,7 @@ export function DataTable({
     };
 
     if (loading) {
-        return (
-            <div className="sk-dtable__loading">
-                <Spinner />
-            </div>
-        );
+        return <EmptyState loading title="Loading" />;
     }
 
     if (!loading && data.length === 0) {

@@ -2023,3 +2023,113 @@ def delete_app_backup(app_id, run_id):
     except BackupPolicyError as e:
         return jsonify({'error': str(e)}), 400
     return jsonify({'success': True})
+
+
+# --------------------------------------------------------------------------- #
+# WordPress reachable through the generic application surface (§7 unification).
+# A WordPress site is a 1:1 extension of an Application (WordPressSite.
+# application_id); the WordPressSite record — not app_type — is the source of
+# truth (see wordpress.py:_is_wp_app). These additive routes expose the WP
+# linkage and its DB snapshots under /apps/:id without changing app_type, so the
+# docker-compose code paths that key on app_type=='docker' keep working.
+# --------------------------------------------------------------------------- #
+
+def _wp_site_for_app(app):
+    from app.models.wordpress_site import WordPressSite
+    return WordPressSite.query.filter_by(application_id=app.id).first()
+
+
+@apps_bp.route('/<int:app_id>/wordpress', methods=['GET'])
+@jwt_required()
+def app_wordpress_info(app_id):
+    """Whether this app is a WordPress site, and the linked site id. Lets the
+    generic Services surface discover the WordPress extension."""
+    app, err = _load_app_for_backup(app_id)
+    if err:
+        return err
+    site = _wp_site_for_app(app)
+    if not site:
+        return jsonify({'is_wordpress': False, 'site_id': None}), 200
+    return jsonify({
+        'is_wordpress': True,
+        'site_id': site.id,
+        'environment_type': site.environment_type,
+        'is_production': site.is_production,
+        'wp_version': site.wp_version,
+    }), 200
+
+
+@apps_bp.route('/<int:app_id>/db-snapshots', methods=['GET'])
+@jwt_required()
+def list_app_db_snapshots(app_id):
+    """List the WordPress DB snapshots for an app (unified app-id surface)."""
+    app, err = _load_app_for_backup(app_id)
+    if err:
+        return err
+    from app.models.wordpress_site import DatabaseSnapshot
+    site = _wp_site_for_app(app)
+    if not site:
+        return jsonify({'error': 'This application is not a WordPress site'}), 400
+    snaps = (DatabaseSnapshot.query.filter_by(site_id=site.id)
+             .order_by(DatabaseSnapshot.created_at.desc()).all())
+    return jsonify({'snapshots': [s.to_dict() for s in snaps], 'total': len(snaps)}), 200
+
+
+@apps_bp.route('/<int:app_id>/db-snapshots', methods=['POST'])
+@jwt_required()
+def create_app_db_snapshot(app_id):
+    """Create a WordPress DB snapshot for an app."""
+    app, err = _load_app_for_backup(app_id, edit=True)
+    if err:
+        return err
+    from app.models.wordpress_site import DatabaseSnapshot
+    from app.services.db_sync_service import DatabaseSyncService
+    from app.services.wordpress_env_service import WordPressEnvService
+    site = _wp_site_for_app(app)
+    if not site:
+        return jsonify({'error': 'This application is not a WordPress site'}), 400
+    data = request.get_json() or {}
+    result = DatabaseSyncService.create_snapshot(
+        db_name=site.db_name,
+        name=data.get('name', f'{app.name}_{site.id}'),
+        tag=data.get('tag'),
+        commit_sha=site.last_deploy_commit,
+        host=site.db_host, user=site.db_user,
+        password=WordPressEnvService._get_db_password(site),
+        exclude_tables=data.get('exclude_tables', []),
+    )
+    if not result.get('success'):
+        return jsonify(result), 500
+    snap_meta = result['snapshot']
+    snapshot = DatabaseSnapshot(
+        site_id=site.id, name=snap_meta['name'], tag=data.get('tag'),
+        file_path=snap_meta['file_path'], size_bytes=snap_meta['size_bytes'],
+        compressed=snap_meta['compressed'], commit_sha=site.last_deploy_commit,
+        tables_included=json.dumps(snap_meta.get('tables', [])),
+        row_count=snap_meta.get('row_count', 0), status='completed',
+    )
+    db.session.add(snapshot)
+    db.session.commit()
+    DatabaseSyncService.upload_snapshot_offsite(snapshot.file_path)
+    return jsonify({'success': True, 'snapshot': snapshot.to_dict()}), 201
+
+
+@apps_bp.route('/<int:app_id>/db-snapshots/<int:snapshot_id>', methods=['DELETE'])
+@jwt_required()
+def delete_app_db_snapshot(app_id, snapshot_id):
+    """Delete a WordPress DB snapshot for an app."""
+    app, err = _load_app_for_backup(app_id, edit=True)
+    if err:
+        return err
+    from app.models.wordpress_site import DatabaseSnapshot
+    from app.services.db_sync_service import DatabaseSyncService
+    site = _wp_site_for_app(app)
+    if not site:
+        return jsonify({'error': 'This application is not a WordPress site'}), 400
+    snapshot = DatabaseSnapshot.query.filter_by(id=snapshot_id, site_id=site.id).first()
+    if not snapshot:
+        return jsonify({'error': 'Snapshot not found'}), 404
+    DatabaseSyncService.delete_snapshot(snapshot.file_path)
+    db.session.delete(snapshot)
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'Snapshot deleted'}), 200

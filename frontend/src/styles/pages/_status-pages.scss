@@ -504,34 +504,36 @@
         }
     }
 
-    // ── modal forms (surface chrome is global; add eyebrow labels) ──
-    .status-modal {
-        max-width: 640px;
+}
 
-        .form-group label {
-            font-family: var(--mono);
-            font-size: 10px;
-            font-weight: $font-weight-semibold;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--text-faint);
-        }
-
-        .form-help {
-            font-family: var(--mono);
-            font-size: 11px;
-            color: var(--text-faint);
-        }
+// Status-page modal chrome. Hoisted OUT of .status-pages-page: the shared Modal
+// renders through a portal on <body>, so page-scoped rules would never reach it.
+// Surface chrome comes from .sk-modal; these only add the eyebrow form labels
+// and the two-column grid.
+.status-modal {
+    .form-group label {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
     }
 
-    .status-modal-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: $space-4;
+    .form-help {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-faint);
+    }
+}
 
-        @media (max-width: 640px) {
-            grid-template-columns: 1fr;
-        }
+.status-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $space-4;
+
+    @media (max-width: 640px) {
+        grid-template-columns: 1fr;
     }
 }
 

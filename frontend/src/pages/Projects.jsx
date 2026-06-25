@@ -4,7 +4,7 @@ import { FolderKanban, Plus, Layers, Boxes } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import EmptyState from '../components/EmptyState';
-import { PageTopbar } from '@/components/ds';
+import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,19 +41,14 @@ const Projects = () => {
         loadProjects();
     }, [loadProjects]);
 
-    return (
-        <div className="projects-page">
-            <PageTopbar
-                icon={<FolderKanban size={20} />}
-                title="Projects"
-                meta={projects.length ? `${projects.length} project${projects.length === 1 ? '' : 's'}` : null}
-                actions={
-                    <Button onClick={() => setShowCreate(true)}>
-                        <Plus size={16} /> New Project
-                    </Button>
-                }
-            />
+    useTopbarActions(() => (
+        <Button onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> New Project
+        </Button>
+    ), []);
 
+    return (
+        <div className="sk-tabgroup__inner projects-page">
             <div className="projects-page__body">
                 {loading ? (
                     <EmptyState loading title="Loading projects" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import EmptyState from '../EmptyState';
 
 const NotificationsTab = () => {
     const { isAdmin, user } = useAuth();
@@ -137,7 +138,7 @@ const NotificationsTab = () => {
     }
 
     if (loading) {
-        return <div className="loading">Loading notification settings...</div>;
+        return <EmptyState loading title="Loading notification settings..." />;
     }
 
     const userPrefsUI = (
@@ -374,7 +375,7 @@ const NotificationsTab = () => {
             )}
 
             <div className="notification-tabs">
-                <button
+                <button type="button"
                     className={`notification-tab ${activeSection === 'personal' ? 'active' : ''}`}
                     onClick={() => setActiveSection('personal')}
                 >
@@ -385,7 +386,7 @@ const NotificationsTab = () => {
                     My Preferences
                 </button>
                 {isAdmin && (
-                    <button
+                    <button type="button"
                         className={`notification-tab ${activeSection === 'admin' ? 'active' : ''}`}
                         onClick={() => setActiveSection('admin')}
                     >

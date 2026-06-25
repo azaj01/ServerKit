@@ -4,25 +4,18 @@ import { Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 
+// Styling lives in styles/components/_ui.scss (.ui-command-*).
+
 const Command = React.forwardRef(({ className, ...props }, ref) => (
-  <CommandPrimitive
-    ref={ref}
-    className={cn(
-      'flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground',
-      className
-    )}
-    {...props}
-  />
+  <CommandPrimitive ref={ref} className={cn('ui-command', className)} {...props} />
 ));
 Command.displayName = CommandPrimitive.displayName;
 
 function CommandDialog({ children, ...props }) {
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden p-0 shadow-lg">
-        <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:size-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:size-5">
-          {children}
-        </Command>
+      <DialogContent className="ui-command-dialog">
+        <Command>{children}</Command>
       </DialogContent>
     </Dialog>
   );
@@ -30,16 +23,11 @@ function CommandDialog({ children, ...props }) {
 
 const CommandInput = React.forwardRef(({ className, ...props }, ref) => (
   /* eslint-disable-next-line react/no-unknown-property */
-  <div className="flex items-center border-b border-border px-3" cmdk-input-wrapper="">
-    <Search className="mr-2 size-4 shrink-0 opacity-50" />
+  <div className="ui-command-input-wrapper" cmdk-input-wrapper="">
+    <Search className="ui-command-input-icon" />
     <CommandPrimitive.Input
       ref={ref}
-      className={cn(
-        'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none',
-        'placeholder:text-muted-foreground text-foreground',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        className
-      )}
+      className={cn('ui-command-input', className)}
       {...props}
     />
   </div>
@@ -47,62 +35,32 @@ const CommandInput = React.forwardRef(({ className, ...props }, ref) => (
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 
 const CommandList = React.forwardRef(({ className, ...props }, ref) => (
-  <CommandPrimitive.List
-    ref={ref}
-    className={cn('max-h-[300px] overflow-y-auto overflow-x-hidden', className)}
-    {...props}
-  />
+  <CommandPrimitive.List ref={ref} className={cn('ui-command-list', className)} {...props} />
 ));
 CommandList.displayName = CommandPrimitive.List.displayName;
 
 const CommandEmpty = React.forwardRef((props, ref) => (
-  <CommandPrimitive.Empty
-    ref={ref}
-    className="py-6 text-center text-sm text-muted-foreground"
-    {...props}
-  />
+  <CommandPrimitive.Empty ref={ref} className="ui-command-empty" {...props} />
 ));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
 const CommandGroup = React.forwardRef(({ className, ...props }, ref) => (
-  <CommandPrimitive.Group
-    ref={ref}
-    className={cn(
-      'overflow-hidden p-1 text-foreground',
-      '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground',
-      className
-    )}
-    {...props}
-  />
+  <CommandPrimitive.Group ref={ref} className={cn('ui-command-group', className)} {...props} />
 ));
 CommandGroup.displayName = CommandPrimitive.Group.displayName;
 
 const CommandSeparator = React.forwardRef(({ className, ...props }, ref) => (
-  <CommandPrimitive.Separator
-    ref={ref}
-    className={cn('-mx-1 h-px bg-border', className)}
-    {...props}
-  />
+  <CommandPrimitive.Separator ref={ref} className={cn('ui-command-separator', className)} {...props} />
 ));
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 
 const CommandItem = React.forwardRef(({ className, ...props }, ref) => (
-  <CommandPrimitive.Item
-    ref={ref}
-    className={cn(
-      'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none',
-      'data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
-      'data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground',
-      '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
-      className
-    )}
-    {...props}
-  />
+  <CommandPrimitive.Item ref={ref} className={cn('ui-command-item', className)} {...props} />
 ));
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 
 const CommandShortcut = ({ className, ...props }) => (
-  <span className={cn('ml-auto text-xs tracking-widest text-muted-foreground', className)} {...props} />
+  <span className={cn('ui-command-shortcut', className)} {...props} />
 );
 CommandShortcut.displayName = 'CommandShortcut';
 

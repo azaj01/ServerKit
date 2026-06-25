@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import PageLoader from '../components/PageLoader';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -563,168 +564,164 @@ const StatusPages = () => {
                 )}
             </div>
 
-            {showCreatePage && (
-                <div className="modal-overlay" onClick={() => setShowCreatePage(false)}>
-                    <div className="modal status-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create Status Page</h2>
-                            <button className="modal-close" onClick={() => setShowCreatePage(false)}>&times;</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="form-group">
-                                <label>Name</label>
-                                <Input value={pageForm.name} onChange={(e) => handlePageNameChange(e.target.value)} autoFocus />
-                            </div>
-                            <div className="form-group">
-                                <label>Slug</label>
-                                <Input
-                                    value={pageForm.slug}
-                                    onChange={(e) => setPageForm({ ...pageForm, slug: normalizeSlug(e.target.value) })}
-                                    placeholder="my-services"
-                                />
-                                <span className="form-help">/status/{pageForm.slug || 'my-services'}</span>
-                            </div>
-                            <div className="form-group">
-                                <label>Description</label>
-                                <Textarea
-                                    value={pageForm.description}
-                                    onChange={(e) => setPageForm({ ...pageForm, description: e.target.value })}
-                                    rows={3}
-                                />
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <Button variant="outline" onClick={() => setShowCreatePage(false)}>Cancel</Button>
-                            <Button onClick={handleCreatePage} disabled={!pageForm.name.trim() || !pageForm.slug.trim()}>
-                                Create
-                            </Button>
-                        </div>
-                    </div>
+            <Modal
+                open={showCreatePage}
+                onClose={() => setShowCreatePage(false)}
+                title="Create Status Page"
+                size="lg"
+                className="status-modal"
+                footer={(
+                    <>
+                        <Button variant="outline" onClick={() => setShowCreatePage(false)}>Cancel</Button>
+                        <Button onClick={handleCreatePage} disabled={!pageForm.name.trim() || !pageForm.slug.trim()}>
+                            Create
+                        </Button>
+                    </>
+                )}
+            >
+                <div className="form-group">
+                    <label>Name</label>
+                    <Input value={pageForm.name} onChange={(e) => handlePageNameChange(e.target.value)} autoFocus />
                 </div>
-            )}
+                <div className="form-group">
+                    <label>Slug</label>
+                    <Input
+                        value={pageForm.slug}
+                        onChange={(e) => setPageForm({ ...pageForm, slug: normalizeSlug(e.target.value) })}
+                        placeholder="my-services"
+                    />
+                    <span className="form-help">/status/{pageForm.slug || 'my-services'}</span>
+                </div>
+                <div className="form-group">
+                    <label>Description</label>
+                    <Textarea
+                        value={pageForm.description}
+                        onChange={(e) => setPageForm({ ...pageForm, description: e.target.value })}
+                        rows={3}
+                    />
+                </div>
+            </Modal>
 
-            {showCreateComponent && (
-                <div className="modal-overlay" onClick={() => setShowCreateComponent(false)}>
-                    <div className="modal status-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Add Component</h2>
-                            <button className="modal-close" onClick={() => setShowCreateComponent(false)}>&times;</button>
-                        </div>
-                        <div className="modal-body status-modal-grid">
-                            <div className="form-group">
-                                <label>Name</label>
-                                <Input value={compForm.name} onChange={(e) => setCompForm({ ...compForm, name: e.target.value })} autoFocus />
-                            </div>
-                            <div className="form-group">
-                                <label>Group</label>
-                                <Input value={compForm.group} onChange={(e) => setCompForm({ ...compForm, group: e.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label>Check Type</label>
-                                <select
-                                    className="form-select"
-                                    value={compForm.check_type}
-                                    onChange={(e) => setCompForm({ ...compForm, check_type: e.target.value })}
-                                >
-                                    <option value="http">HTTP</option>
-                                    <option value="tcp">TCP</option>
-                                    <option value="dns">DNS</option>
-                                    <option value="ping">Ping</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>Target</label>
-                                <Input
-                                    value={compForm.check_target}
-                                    onChange={(e) => setCompForm({ ...compForm, check_target: e.target.value })}
-                                    placeholder={CHECK_TARGET_PLACEHOLDERS[compForm.check_type]}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Interval</label>
-                                <Input
-                                    type="number"
-                                    min="30"
-                                    value={compForm.check_interval}
-                                    onChange={(e) => setCompForm({ ...compForm, check_interval: parseInt(e.target.value, 10) || 60 })}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Timeout</label>
-                                <Input
-                                    type="number"
-                                    min="1"
-                                    value={compForm.check_timeout}
-                                    onChange={(e) => setCompForm({ ...compForm, check_timeout: parseInt(e.target.value, 10) || 10 })}
-                                />
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <Button variant="outline" onClick={() => setShowCreateComponent(false)}>Cancel</Button>
-                            <Button onClick={handleCreateComponent} disabled={!compForm.name.trim() || !compForm.check_target.trim()}>
-                                Add Component
-                            </Button>
-                        </div>
+            <Modal
+                open={showCreateComponent}
+                onClose={() => setShowCreateComponent(false)}
+                title="Add Component"
+                size="lg"
+                className="status-modal"
+                footer={(
+                    <>
+                        <Button variant="outline" onClick={() => setShowCreateComponent(false)}>Cancel</Button>
+                        <Button onClick={handleCreateComponent} disabled={!compForm.name.trim() || !compForm.check_target.trim()}>
+                            Add Component
+                        </Button>
+                    </>
+                )}
+            >
+                <div className="status-modal-grid">
+                    <div className="form-group">
+                        <label>Name</label>
+                        <Input value={compForm.name} onChange={(e) => setCompForm({ ...compForm, name: e.target.value })} autoFocus />
+                    </div>
+                    <div className="form-group">
+                        <label>Group</label>
+                        <Input value={compForm.group} onChange={(e) => setCompForm({ ...compForm, group: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                        <label>Check Type</label>
+                        <select
+                            className="form-select"
+                            value={compForm.check_type}
+                            onChange={(e) => setCompForm({ ...compForm, check_type: e.target.value })}
+                        >
+                            <option value="http">HTTP</option>
+                            <option value="tcp">TCP</option>
+                            <option value="dns">DNS</option>
+                            <option value="ping">Ping</option>
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label>Target</label>
+                        <Input
+                            value={compForm.check_target}
+                            onChange={(e) => setCompForm({ ...compForm, check_target: e.target.value })}
+                            placeholder={CHECK_TARGET_PLACEHOLDERS[compForm.check_type]}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Interval</label>
+                        <Input
+                            type="number"
+                            min="30"
+                            value={compForm.check_interval}
+                            onChange={(e) => setCompForm({ ...compForm, check_interval: parseInt(e.target.value, 10) || 60 })}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Timeout</label>
+                        <Input
+                            type="number"
+                            min="1"
+                            value={compForm.check_timeout}
+                            onChange={(e) => setCompForm({ ...compForm, check_timeout: parseInt(e.target.value, 10) || 10 })}
+                        />
                     </div>
                 </div>
-            )}
+            </Modal>
 
-            {showCreateIncident && (
-                <div className="modal-overlay" onClick={() => setShowCreateIncident(false)}>
-                    <div className="modal status-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create Incident</h2>
-                            <button className="modal-close" onClick={() => setShowCreateIncident(false)}>&times;</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="form-group">
-                                <label>Title</label>
-                                <Input value={incidentForm.title} onChange={(e) => setIncidentForm({ ...incidentForm, title: e.target.value })} autoFocus />
-                            </div>
-                            <div className="status-modal-grid">
-                                <div className="form-group">
-                                    <label>Status</label>
-                                    <select
-                                        className="form-select"
-                                        value={incidentForm.status}
-                                        onChange={(e) => setIncidentForm({ ...incidentForm, status: e.target.value })}
-                                    >
-                                        {INCIDENT_STATUS.filter((status) => status.value !== 'resolved').map((status) => (
-                                            <option key={status.value} value={status.value}>{status.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Impact</label>
-                                    <select
-                                        className="form-select"
-                                        value={incidentForm.impact}
-                                        onChange={(e) => setIncidentForm({ ...incidentForm, impact: e.target.value })}
-                                    >
-                                        {IMPACT_OPTIONS.map((impact) => (
-                                            <option key={impact.value} value={impact.value}>{impact.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="form-group">
-                                <label>Description</label>
-                                <Textarea
-                                    value={incidentForm.body}
-                                    onChange={(e) => setIncidentForm({ ...incidentForm, body: e.target.value })}
-                                    rows={4}
-                                />
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <Button variant="outline" onClick={() => setShowCreateIncident(false)}>Cancel</Button>
-                            <Button onClick={handleCreateIncident} disabled={!incidentForm.title.trim()}>
-                                Create Incident
-                            </Button>
-                        </div>
+            <Modal
+                open={showCreateIncident}
+                onClose={() => setShowCreateIncident(false)}
+                title="Create Incident"
+                size="lg"
+                className="status-modal"
+                footer={(
+                    <>
+                        <Button variant="outline" onClick={() => setShowCreateIncident(false)}>Cancel</Button>
+                        <Button onClick={handleCreateIncident} disabled={!incidentForm.title.trim()}>
+                            Create Incident
+                        </Button>
+                    </>
+                )}
+            >
+                <div className="form-group">
+                    <label>Title</label>
+                    <Input value={incidentForm.title} onChange={(e) => setIncidentForm({ ...incidentForm, title: e.target.value })} autoFocus />
+                </div>
+                <div className="status-modal-grid">
+                    <div className="form-group">
+                        <label>Status</label>
+                        <select
+                            className="form-select"
+                            value={incidentForm.status}
+                            onChange={(e) => setIncidentForm({ ...incidentForm, status: e.target.value })}
+                        >
+                            {INCIDENT_STATUS.filter((status) => status.value !== 'resolved').map((status) => (
+                                <option key={status.value} value={status.value}>{status.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label>Impact</label>
+                        <select
+                            className="form-select"
+                            value={incidentForm.impact}
+                            onChange={(e) => setIncidentForm({ ...incidentForm, impact: e.target.value })}
+                        >
+                            {IMPACT_OPTIONS.map((impact) => (
+                                <option key={impact.value} value={impact.value}>{impact.label}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
-            )}
+                <div className="form-group">
+                    <label>Description</label>
+                    <Textarea
+                        value={incidentForm.body}
+                        onChange={(e) => setIncidentForm({ ...incidentForm, body: e.target.value })}
+                        rows={4}
+                    />
+                </div>
+            </Modal>
 
             <ConfirmDialog
                 isOpen={Boolean(deleteConfirm)}

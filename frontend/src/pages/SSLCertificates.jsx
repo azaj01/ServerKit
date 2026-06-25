@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
     ShieldCheck, ShieldOff, RefreshCw, Plus, Trash2,
     Lock, Clock, Globe, CheckCircle, AlertTriangle,
-    Settings, Download
+    Settings, Download, Upload
 } from 'lucide-react';
 import api from '../services/api';
+import Modal from '@/components/Modal';
 import { Pill } from '@/components/ds';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 import EmptyState from '../components/EmptyState';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const SSLCertificates = () => {
     const toast = useToast();
-    const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+    const { confirm } = useConfirm();
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
@@ -27,12 +27,24 @@ const SSLCertificates = () => {
 
     // Modal states
     const [showObtainModal, setShowObtainModal] = useState(false);
+    const [showUploadModal, setShowUploadModal] = useState(false);
 
-    // Form states
+    // Form states — Obtain (HTTP-01 or wildcard DNS-01)
     const [domains, setDomains] = useState('');
     const [email, setEmail] = useState('');
     const [useNginx, setUseNginx] = useState(true);
     const [webrootPath, setWebrootPath] = useState('');
+    const [wildcard, setWildcard] = useState(false);
+    const [dnsProvider, setDnsProvider] = useState('cloudflare');
+    const [dnsToken, setDnsToken] = useState('');
+    const [awsAccessKey, setAwsAccessKey] = useState('');
+    const [awsSecretKey, setAwsSecretKey] = useState('');
+
+    // Form states — Upload custom certificate
+    const [uploadDomain, setUploadDomain] = useState('');
+    const [uploadCert, setUploadCert] = useState('');
+    const [uploadKey, setUploadKey] = useState('');
+    const [uploadChain, setUploadChain] = useState('');
 
     useEffect(() => {
         loadData();
@@ -53,26 +65,63 @@ const SSLCertificates = () => {
     async function handleObtainCertificate(e) {
         e.preventDefault();
         const domainList = domains.split(',').map(d => d.trim()).filter(Boolean);
-        if (domainList.length === 0 || !email) return;
+        if (domainList.length === 0) return;
 
         try {
             setActionLoading(true);
-            const data = { domains: domainList, email, use_nginx: useNginx };
-            if (!useNginx && webrootPath) {
-                data.webroot_path = webrootPath;
+            let result;
+            if (wildcard) {
+                // Wildcard certs need DNS-01 validation via a DNS provider.
+                const credentials = dnsProvider === 'cloudflare'
+                    ? { dns_cloudflare_api_token: dnsToken }
+                    : { aws_access_key_id: awsAccessKey, aws_secret_access_key: awsSecretKey };
+                result = await api.issueWildcardCert(domainList[0], dnsProvider, credentials);
+            } else {
+                if (!email) return;
+                const data = { domains: domainList, email, use_nginx: useNginx };
+                if (!useNginx && webrootPath) data.webroot_path = webrootPath;
+                result = await api.obtainCertificate(data);
             }
-            const result = await api.obtainCertificate(data);
             if (result.success) {
-                toast.success('Certificate obtained successfully');
+                toast.success(wildcard ? 'Wildcard certificate issued' : 'Certificate obtained successfully');
                 setShowObtainModal(false);
                 setDomains('');
                 setEmail('');
+                setDnsToken('');
+                setAwsAccessKey('');
+                setAwsSecretKey('');
+                setWildcard(false);
                 loadData();
             } else {
                 toast.error(result.error || 'Failed to obtain certificate');
             }
         } catch (err) {
             toast.error(err.message || 'Failed to obtain certificate');
+        } finally {
+            setActionLoading(false);
+        }
+    }
+
+    async function handleUploadCertificate(e) {
+        e.preventDefault();
+        if (!uploadDomain || !uploadCert || !uploadKey) return;
+        try {
+            setActionLoading(true);
+            const result = await api.uploadCustomCert(uploadDomain.trim(), uploadCert, uploadKey, uploadChain || null);
+            // upload returns the saved cert paths (no `success` envelope).
+            if (result && (result.cert_path || result.success)) {
+                toast.success(`Certificate uploaded for ${uploadDomain}`);
+                setShowUploadModal(false);
+                setUploadDomain('');
+                setUploadCert('');
+                setUploadKey('');
+                setUploadChain('');
+                loadData();
+            } else {
+                toast.error(result?.error || 'Failed to upload certificate');
+            }
+        } catch (err) {
+            toast.error(err.message || 'Failed to upload certificate');
         } finally {
             setActionLoading(false);
         }
@@ -191,6 +240,10 @@ const SSLCertificates = () => {
             <Button variant="outline" size="sm" onClick={loadData}>
                 <RefreshCw size={15} />
                 Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowUploadModal(true)}>
+                <Upload size={15} />
+                Upload
             </Button>
             <Button size="sm" onClick={() => setShowObtainModal(true)} disabled={!certbotInstalled}>
                 <Plus size={15} />
@@ -371,13 +424,7 @@ const SSLCertificates = () => {
             )}
 
             {/* Obtain Certificate Modal */}
-            {showObtainModal && (
-                <div className="modal-overlay" onClick={() => setShowObtainModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Obtain SSL Certificate</h2>
-                            <button className="modal-close" onClick={() => setShowObtainModal(false)}>×</button>
-                        </div>
+            <Modal open={showObtainModal} onClose={() => setShowObtainModal(false)} title="Obtain SSL Certificate">
                         <form onSubmit={handleObtainCertificate}>
                             <div className="ssl-info-box">
                                 <ShieldCheck size={32} />
@@ -387,48 +434,110 @@ const SSLCertificates = () => {
                                 </div>
                             </div>
                             <div className="form-group">
-                                <Label>Domains</Label>
+                                <label className="checkbox-label">
+                                    <Checkbox
+                                        checked={wildcard}
+                                        onCheckedChange={setWildcard}
+                                    />
+                                    Wildcard certificate (DNS-01 validation)
+                                </label>
+                                <p className="hint">Issues <code>domain</code> + <code>*.domain</code> via your DNS provider.</p>
+                            </div>
+                            <div className="form-group">
+                                <Label>{wildcard ? 'Base Domain' : 'Domains'}</Label>
                                 <Input
                                     type="text"
-                                    placeholder="example.com, www.example.com"
+                                    placeholder={wildcard ? 'example.com' : 'example.com, www.example.com'}
                                     value={domains}
                                     onChange={e => setDomains(e.target.value)}
                                     required
                                 />
-                                <p className="hint">Comma-separated list of domains</p>
+                                <p className="hint">{wildcard ? 'A single base domain for the wildcard cert' : 'Comma-separated list of domains'}</p>
                             </div>
-                            <div className="form-group">
-                                <Label>Email Address</Label>
-                                <Input
-                                    type="email"
-                                    placeholder="admin@example.com"
-                                    value={email}
-                                    onChange={e => setEmail(e.target.value)}
-                                    required
-                                />
-                                <p className="hint">For certificate expiration notifications</p>
-                            </div>
-                            <div className="form-group">
-                                <label className="checkbox-label">
-                                    <Checkbox
-                                        checked={useNginx}
-                                        onCheckedChange={setUseNginx}
-                                    />
-                                    Use Nginx plugin (recommended)
-                                </label>
-                            </div>
-                            {!useNginx && (
-                                <div className="form-group">
-                                    <Label>Webroot Path</Label>
-                                    <Input
-                                        type="text"
-                                        placeholder="/var/www/html"
-                                        value={webrootPath}
-                                        onChange={e => setWebrootPath(e.target.value)}
-                                        required={!useNginx}
-                                    />
-                                    <p className="hint">Document root for HTTP validation</p>
-                                </div>
+                            {!wildcard && (
+                                <>
+                                    <div className="form-group">
+                                        <Label>Email Address</Label>
+                                        <Input
+                                            type="email"
+                                            placeholder="admin@example.com"
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            required={!wildcard}
+                                        />
+                                        <p className="hint">For certificate expiration notifications</p>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="checkbox-label">
+                                            <Checkbox
+                                                checked={useNginx}
+                                                onCheckedChange={setUseNginx}
+                                            />
+                                            Use Nginx plugin (recommended)
+                                        </label>
+                                    </div>
+                                    {!useNginx && (
+                                        <div className="form-group">
+                                            <Label>Webroot Path</Label>
+                                            <Input
+                                                type="text"
+                                                placeholder="/var/www/html"
+                                                value={webrootPath}
+                                                onChange={e => setWebrootPath(e.target.value)}
+                                                required={!useNginx}
+                                            />
+                                            <p className="hint">Document root for HTTP validation</p>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                            {wildcard && (
+                                <>
+                                    <div className="form-group">
+                                        <Label>DNS Provider</Label>
+                                        <select
+                                            className="ui-select"
+                                            value={dnsProvider}
+                                            onChange={e => setDnsProvider(e.target.value)}
+                                        >
+                                            <option value="cloudflare">Cloudflare</option>
+                                            <option value="route53">AWS Route 53</option>
+                                        </select>
+                                    </div>
+                                    {dnsProvider === 'cloudflare' ? (
+                                        <div className="form-group">
+                                            <Label>Cloudflare API Token</Label>
+                                            <Input
+                                                type="password"
+                                                placeholder="API token with DNS edit rights"
+                                                value={dnsToken}
+                                                onChange={e => setDnsToken(e.target.value)}
+                                                required={wildcard}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="form-group">
+                                                <Label>AWS Access Key ID</Label>
+                                                <Input
+                                                    type="text"
+                                                    value={awsAccessKey}
+                                                    onChange={e => setAwsAccessKey(e.target.value)}
+                                                    required={wildcard}
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <Label>AWS Secret Access Key</Label>
+                                                <Input
+                                                    type="password"
+                                                    value={awsSecretKey}
+                                                    onChange={e => setAwsSecretKey(e.target.value)}
+                                                    required={wildcard}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                </>
                             )}
                             <div className="modal-actions">
                                 <Button
@@ -446,19 +555,70 @@ const SSLCertificates = () => {
                                 </Button>
                             </div>
                         </form>
+            </Modal>
+
+            {/* Upload Custom Certificate Modal */}
+            <Modal open={showUploadModal} onClose={() => setShowUploadModal(false)} title="Upload Custom Certificate">
+                <form onSubmit={handleUploadCertificate}>
+                    <div className="ssl-info-box">
+                        <Upload size={32} />
+                        <div>
+                            <h4>Bring your own certificate</h4>
+                            <p>Paste a PEM certificate, private key, and (optional) chain issued elsewhere.</p>
+                        </div>
                     </div>
-                </div>
-            )}
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                title={confirmState.title}
-                message={confirmState.message}
-                confirmText={confirmState.confirmText}
-                cancelText={confirmState.cancelText}
-                variant={confirmState.variant}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-            />
+                    <div className="form-group">
+                        <Label>Domain</Label>
+                        <Input
+                            type="text"
+                            placeholder="example.com"
+                            value={uploadDomain}
+                            onChange={e => setUploadDomain(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="form-group">
+                        <Label>Certificate (PEM)</Label>
+                        <textarea
+                            className="ui-textarea ssl-pem-input"
+                            rows={5}
+                            placeholder="-----BEGIN CERTIFICATE-----"
+                            value={uploadCert}
+                            onChange={e => setUploadCert(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="form-group">
+                        <Label>Private Key (PEM)</Label>
+                        <textarea
+                            className="ui-textarea ssl-pem-input"
+                            rows={5}
+                            placeholder="-----BEGIN PRIVATE KEY-----"
+                            value={uploadKey}
+                            onChange={e => setUploadKey(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="form-group">
+                        <Label>Chain (PEM, optional)</Label>
+                        <textarea
+                            className="ui-textarea ssl-pem-input"
+                            rows={4}
+                            placeholder="-----BEGIN CERTIFICATE----- (intermediate chain)"
+                            value={uploadChain}
+                            onChange={e => setUploadChain(e.target.value)}
+                        />
+                    </div>
+                    <div className="modal-actions">
+                        <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={actionLoading}>
+                            {actionLoading ? 'Uploading...' : 'Upload Certificate'}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 };

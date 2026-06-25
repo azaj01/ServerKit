@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import {
     Github, FileText, HelpCircle, MessageSquare, Bug, Check, Download, CheckCircle,
@@ -80,7 +80,7 @@ const AboutTab = () => {
                     ) : updateInfo.error ? (
                         <div className="update-status error">
                             <span>{updateInfo.error}</span>
-                            <button className="btn-link" onClick={checkForUpdate}>Retry</button>
+                            <button type="button" className="btn-link" onClick={checkForUpdate}>Retry</button>
                         </div>
                     ) : updateInfo.update_available ? (
                         <div className="update-status available">
@@ -106,7 +106,7 @@ const AboutTab = () => {
 
             {showStarPrompt && (
                 <div className="star-prompt-card">
-                    <button className="dismiss-btn" onClick={dismissStarPrompt} title="Dismiss">
+                    <button type="button" className="dismiss-btn" onClick={dismissStarPrompt} title="Dismiss">
                         <X size={16} />
                     </button>
                     <div className="star-icon">

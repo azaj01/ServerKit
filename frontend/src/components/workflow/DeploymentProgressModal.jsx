@@ -1,4 +1,3 @@
-import React from 'react';
 import { Loader, CheckCircle, XCircle, Server, Database, Globe, Box, ExternalLink } from 'lucide-react';
 import Modal from '../Modal';
 import { Button } from '@/components/ui/button';

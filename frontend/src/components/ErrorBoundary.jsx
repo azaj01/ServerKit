@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { Component } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 // Class-based Error Boundary for catching React errors
@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component {
                     <p className="error-boundary-message">
                         {this.state.error?.message || 'An unexpected error occurred'}
                     </p>
-                    <button className="btn btn-primary" onClick={this.handleRetry}>
+                    <button type="button" className="btn btn-primary" onClick={this.handleRetry}>
                         <RefreshCw size={14} />
                         Try Again
                     </button>
@@ -61,7 +61,7 @@ export function ErrorState({
                 <AlertTriangle size={16} />
                 <span>{errorMessage}</span>
                 {onRetry && (
-                    <button className="btn btn-ghost btn-sm" onClick={onRetry}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={onRetry}>
                         <RefreshCw size={14} /> Retry
                     </button>
                 )}
@@ -77,7 +77,7 @@ export function ErrorState({
             <h3 className="error-state-title">{title}</h3>
             <p className="error-state-message">{errorMessage}</p>
             {onRetry && (
-                <button className="btn btn-primary" onClick={onRetry}>
+                <button type="button" className="btn btn-primary" onClick={onRetry}>
                     <RefreshCw size={14} />
                     Try Again
                 </button>

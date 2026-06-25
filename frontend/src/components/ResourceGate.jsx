@@ -1,4 +1,3 @@
-import React from 'react';
 import { AlertTriangle, Cpu, HardDrive, Server, ArrowUpCircle } from 'lucide-react';
 import { useResourceTier } from '../contexts/ResourceTierContext';
 

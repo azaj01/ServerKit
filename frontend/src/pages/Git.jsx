@@ -2,14 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import useTabParam from '../hooks/useTabParam';
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
-import Spinner from '../components/Spinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { DangerZone } from '../components/DangerZone';
 import EmptyState from '../components/EmptyState';
+import Modal from '@/components/Modal';
 import { Pill, MetricCard, PageTopbar, SegControl, Drawer } from '../components/ds';
 import {
     AlertCircle, FolderGit2, Webhook, Rocket, Server, Globe, Terminal, Tag,
-    X, GitBranch, RefreshCw, Plus, ExternalLink, Lock, Trash2, ChevronRight,
+    GitBranch, RefreshCw, Plus, ExternalLink, Lock, Trash2, ChevronRight,
     Clock, AlertTriangle, Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -655,7 +655,7 @@ function Git({ basePath = '/git' }) {
                 />
             );
         }
-        if (reposLoading) return <div className="loading-state"><Spinner /></div>;
+        if (reposLoading) return <EmptyState loading title="Loading repositories" />;
         if (repositories.length === 0) {
             return (
                 <EmptyState
@@ -770,7 +770,7 @@ function Git({ basePath = '/git' }) {
     );
 
     const renderWebhooks = () => {
-        if (webhooksLoading) return <div className="loading-state"><Spinner /></div>;
+        if (webhooksLoading) return <EmptyState loading title="Loading webhooks" />;
         if (webhooks.length === 0) {
             return (
                 <EmptyState
@@ -847,7 +847,7 @@ function Git({ basePath = '/git' }) {
     };
 
     const renderDeployments = () => {
-        if (deploymentsLoading) return <div className="loading-state"><Spinner /></div>;
+        if (deploymentsLoading) return <EmptyState loading title="Loading deployments" />;
         if (deployments.length === 0) {
             return (
                 <EmptyState
@@ -1021,7 +1021,7 @@ function Git({ basePath = '/git' }) {
             <div className="page-container--full-bleed sk-tabgroup git-page domains-page">
                 <div className="sk-tabgroup__content">
                     <div className="sk-tabgroup__inner">
-                        <div className="page-loading"><Spinner size="lg" /></div>
+                        <EmptyState loading size="lg" title="Loading Git" />
                     </div>
                 </div>
             </div>
@@ -1037,7 +1037,7 @@ function Git({ basePath = '/git' }) {
             {pageError && (
                 <div className="error-banner">
                     {pageError}
-                    <button onClick={() => setPageError('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+                    <button type="button" onClick={() => setPageError('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
                 </div>
             )}
 
@@ -1131,9 +1131,9 @@ function Git({ basePath = '/git' }) {
                             <div className="files-browser">
                                 {currentPath && (
                                     <div className="breadcrumb">
-                                        <button onClick={() => navigateToPath('')}>{selectedRepo.name}</button>
+                                        <button type="button" onClick={() => navigateToPath('')}>{selectedRepo.name}</button>
                                         {currentPath.split('/').map((part, i, arr) => (
-                                            <span key={i}><span className="separator">/</span><button onClick={() => navigateToPath(arr.slice(0, i + 1).join('/'))}>{part}</button></span>
+                                            <span key={i}><span className="separator">/</span><button type="button" onClick={() => navigateToPath(arr.slice(0, i + 1).join('/'))}>{part}</button></span>
                                         ))}
                                     </div>
                                 )}
@@ -1354,14 +1354,7 @@ function Git({ basePath = '/git' }) {
             </Drawer>
 
             {/* Install Modal */}
-            {showInstallModal && (
-                <div className="modal-overlay" onClick={() => setShowInstallModal(false)}>
-                    <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Install Git Server</h2>
-                            <button className="btn btn-icon" onClick={() => setShowInstallModal(false)}><X size={18} /></button>
-                        </div>
-                        <div className="modal-body">
+            <Modal open={showInstallModal} onClose={() => setShowInstallModal(false)} title="Install Git Server" size="lg">
                             <div className="install-warning">
                                 <AlertTriangle size={20} />
                                 <div>
@@ -1384,26 +1377,16 @@ function Git({ basePath = '/git' }) {
                                 <Label>Admin Password (leave empty to auto-generate)</Label>
                                 <Input type="password" value={installForm.adminPassword} onChange={(e) => setInstallForm({ ...installForm, adminPassword: e.target.value })} placeholder="Auto-generate secure password" />
                             </div>
-                        </div>
-                        <div className="modal-footer">
+                        <div className="modal-actions">
                             <Button variant="outline" onClick={() => setShowInstallModal(false)}>Cancel</Button>
                             <Button onClick={handleInstall} disabled={actionLoading || !installForm.adminEmail}>
                                 {actionLoading ? 'Installing...' : 'Install Git Server'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Webhook Modal */}
-            {showWebhookModal && (
-                <div className="modal-overlay" onClick={() => setShowWebhookModal(false)}>
-                    <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Add Webhook</h2>
-                            <button className="btn btn-icon" onClick={() => setShowWebhookModal(false)}><X size={18} /></button>
-                        </div>
-                        <div className="modal-body">
+            <Modal open={showWebhookModal} onClose={() => setShowWebhookModal(false)} title="Add Webhook" size="lg">
                             <div className="form-group">
                                 <Label>Name <span className="required">*</span></Label>
                                 <Input type="text" value={webhookForm.name} onChange={(e) => setWebhookForm({ ...webhookForm, name: e.target.value })} placeholder="My GitHub Repo" />
@@ -1480,26 +1463,16 @@ function Git({ basePath = '/git' }) {
                                     </>
                                 )}
                             </div>
-                        </div>
-                        <div className="modal-footer">
+                        <div className="modal-actions">
                             <Button variant="outline" onClick={() => setShowWebhookModal(false)}>Cancel</Button>
                             <Button onClick={handleCreateWebhook} disabled={actionLoading || !webhookForm.name || !webhookForm.sourceRepoUrl}>
                                 {actionLoading ? 'Creating...' : 'Create Webhook'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Webhook Secret Modal */}
-            {webhookSecret && (
-                <div className="modal-overlay" onClick={() => setWebhookSecret(null)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Webhook Secret</h2>
-                            <button className="btn btn-icon" onClick={() => setWebhookSecret(null)}><X size={18} /></button>
-                        </div>
-                        <div className="modal-body">
+            <Modal open={!!webhookSecret} onClose={() => setWebhookSecret(null)} title="Webhook Secret">
                             <div className="secret-warning">
                                 <AlertTriangle size={20} />
                                 <span>Save this secret! It will not be shown again.</span>
@@ -1509,23 +1482,19 @@ function Git({ basePath = '/git' }) {
                                 <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(webhookSecret); toast.success('Secret copied'); }}>Copy</Button>
                             </div>
                             <p className="text-muted">Use this secret when configuring the webhook in your repository settings.</p>
-                        </div>
-                        <div className="modal-footer">
+                        <div className="modal-actions">
                             <Button onClick={() => setWebhookSecret(null)}>I&apos;ve Saved It</Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {/* Deployment Logs Modal */}
-            {showDeploymentLogs && selectedDeployment && (
-                <div className="modal-overlay" onClick={() => setShowDeploymentLogs(false)}>
-                    <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Deployment v{selectedDeployment.version} Logs</h2>
-                            <button className="btn btn-icon" onClick={() => setShowDeploymentLogs(false)}><X size={18} /></button>
-                        </div>
-                        <div className="modal-body">
+            <Modal
+                open={showDeploymentLogs && !!selectedDeployment}
+                onClose={() => setShowDeploymentLogs(false)}
+                title={selectedDeployment ? `Deployment v${selectedDeployment.version} Logs` : ''}
+                size="xl"
+            >
+                        {selectedDeployment && (<>
                             <div className="deployment-summary">
                                 <div className="summary-item"><span className="label">Status:</span><Pill kind={getStatusColor(selectedDeployment.status)}>{selectedDeployment.status}</Pill></div>
                                 {selectedDeployment.commit_sha && <div className="summary-item"><span className="label">Commit:</span><code className="git-hash">{selectedDeployment.commit_sha.slice(0, 7)}</code></div>}
@@ -1538,13 +1507,11 @@ function Git({ basePath = '/git' }) {
                             {selectedDeployment.deploy_output && <div className="log-section"><h4>Deployment Output</h4><pre className="log-output">{selectedDeployment.deploy_output}</pre></div>}
                             {selectedDeployment.post_script_output && <div className="log-section"><h4>Post-deployment Script Output</h4><pre className="log-output">{selectedDeployment.post_script_output}</pre></div>}
                             {!selectedDeployment.pre_script_output && !selectedDeployment.deploy_output && !selectedDeployment.post_script_output && <div className="no-logs"><p>No deployment logs available.</p></div>}
-                        </div>
-                        <div className="modal-footer">
+                        </>)}
+                        <div className="modal-actions">
                             <Button variant="outline" onClick={() => setShowDeploymentLogs(false)}>Close</Button>
                         </div>
-                    </div>
-                </div>
-            )}
+            </Modal>
 
             {confirmDialog && (
                 <ConfirmDialog

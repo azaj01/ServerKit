@@ -30,7 +30,7 @@ const AppearanceTab = () => {
                 <h3>Theme</h3>
                 <p>Select your preferred color scheme</p>
                 <div className="theme-options">
-                    <button
+                    <button type="button"
                         className={`theme-option ${theme === 'dark' ? 'active' : ''}`}
                         onClick={() => setTheme('dark')}
                     >
@@ -43,7 +43,7 @@ const AppearanceTab = () => {
                         </div>
                         <span>Dark</span>
                     </button>
-                    <button
+                    <button type="button"
                         className={`theme-option ${theme === 'light' ? 'active' : ''}`}
                         onClick={() => setTheme('light')}
                     >
@@ -56,7 +56,7 @@ const AppearanceTab = () => {
                         </div>
                         <span>Light</span>
                     </button>
-                    <button
+                    <button type="button"
                         className={`theme-option ${theme === 'system' ? 'active' : ''}`}
                         onClick={() => setTheme('system')}
                     >
@@ -77,7 +77,7 @@ const AppearanceTab = () => {
                 <p>Choose the primary accent color used across the interface</p>
                 <div className="accent-presets">
                     {ACCENT_PRESETS.map(({ label, color }) => (
-                        <button
+                        <button type="button"
                             key={color}
                             className={`accent-preset${accentColor === color ? ' active' : ''}`}
                             onClick={() => setAccentColor(color)}
@@ -115,7 +115,7 @@ const AppearanceTab = () => {
                                 <span className="widget-item__label">{widget.label}</span>
                             </div>
                             <div className="widget-item__controls">
-                                <button
+                                <button type="button"
                                     className="widget-move-btn"
                                     onClick={() => moveWidget(widget.id, 'up')}
                                     disabled={idx === 0}
@@ -123,7 +123,7 @@ const AppearanceTab = () => {
                                 >
                                     <ChevronUp size={14} />
                                 </button>
-                                <button
+                                <button type="button"
                                     className="widget-move-btn"
                                     onClick={() => moveWidget(widget.id, 'down')}
                                     disabled={idx === widgets.length - 1}

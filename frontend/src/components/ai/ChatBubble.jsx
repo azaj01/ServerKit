@@ -13,6 +13,8 @@ const ChatBubble = ({ open, unread, streaming, raised, onToggle }) => (
         ].filter(Boolean).join(' ')}
         onClick={onToggle}
         aria-label={open ? 'Close assistant (Alt+A)' : 'Open assistant (Alt+A)'}
+        title={open ? 'Close assistant (Alt+A)' : 'Open assistant (Alt+A)'}
+        aria-keyshortcuts="Alt+A"
         aria-expanded={open}
         aria-controls="sk-ai-drawer"
     >

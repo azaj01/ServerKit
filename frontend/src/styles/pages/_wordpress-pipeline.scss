@@ -885,7 +885,7 @@
 
     input[type="radio"] {
         margin-top: 4px;
-        accent-color: var(--color-primary, #3b82f6);
+        accent-color: var(--accent-primary, #3b82f6);
     }
 }
 
@@ -1544,7 +1544,7 @@
 
 .pipeline-card-checkbox {
     margin-right: $space-1;
-    accent-color: var(--color-primary, #3b82f6);
+    accent-color: var(--accent-primary, #3b82f6);
 }
 
 .pipeline-card-menu-divider {
@@ -1702,7 +1702,7 @@
     padding: 0;
 
     &.active {
-        background: var(--color-primary, #3b82f6);
+        background: var(--accent-primary, #3b82f6);
     }
 }
 

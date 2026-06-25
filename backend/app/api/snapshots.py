@@ -36,7 +36,11 @@ def _get_snapshot_or_404(app_id, snap_id):
     return snap, None
 
 
+# "Config Checkpoint" is the user-facing name for a deployment config snapshot
+# (§8 decision: rename in the UI; keep /snapshots working). Every route below is
+# also reachable under /config-checkpoints so the API matches the new wording.
 @snapshots_bp.route('/<int:app_id>/snapshots', methods=['GET'])
+@snapshots_bp.route('/<int:app_id>/config-checkpoints', methods=['GET'])
 @jwt_required()
 def list_snapshots(app_id):
     """List config snapshots for an app, newest first."""
@@ -62,6 +66,7 @@ def list_snapshots(app_id):
 
 
 @snapshots_bp.route('/<int:app_id>/snapshots/<int:snap_id>', methods=['GET'])
+@snapshots_bp.route('/<int:app_id>/config-checkpoints/<int:snap_id>', methods=['GET'])
 @jwt_required()
 def get_snapshot(app_id, snap_id):
     """Fetch a single snapshot, including its resolved config."""
@@ -75,6 +80,7 @@ def get_snapshot(app_id, snap_id):
 
 
 @snapshots_bp.route('/<int:app_id>/snapshots/<int:snap_id>/diff', methods=['GET'])
+@snapshots_bp.route('/<int:app_id>/config-checkpoints/<int:snap_id>/diff', methods=['GET'])
 @jwt_required()
 def diff_snapshot(app_id, snap_id):
     """Diff a snapshot against another (default: the previous snapshot).
@@ -123,6 +129,7 @@ def diff_snapshot(app_id, snap_id):
 
 
 @snapshots_bp.route('/<int:app_id>/snapshots/<int:snap_id>/restore', methods=['POST'])
+@snapshots_bp.route('/<int:app_id>/config-checkpoints/<int:snap_id>/restore', methods=['POST'])
 @jwt_required()
 @developer_required
 def restore_snapshot(app_id, snap_id):

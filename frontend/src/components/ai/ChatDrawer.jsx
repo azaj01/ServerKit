@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useServerkitAI } from '../../contexts/AIContext';
 import useMediaQuery from '../../hooks/useMediaQuery';
+import { useLockBodyScroll } from '../../hooks/useLockBodyScroll';
 import useFocusTrap from '../../hooks/ai/useFocusTrap';
 import DrawerHeader from './DrawerHeader';
 import ContextChip from './ContextChip';
@@ -27,12 +28,7 @@ const ChatDrawer = () => {
     useFocusTrap(panelRef, { active: true, onEscape: close });
 
     // Lock body scroll on mobile (full-screen sheet).
-    useEffect(() => {
-        if (!isMobile) return undefined;
-        const prev = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = prev; };
-    }, [isMobile]);
+    useLockBodyScroll(isMobile);
 
     const startResize = useCallback((e) => {
         if (isMobile) return;
