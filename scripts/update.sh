@@ -525,11 +525,14 @@ refresh_config() {
         return 0
     fi
 
-    # Recover panel domain from live nginx config.
+    # Recover panel domain from live nginx config. The trailing `|| true` keeps a
+    # no-match/missing-file grep (exit 1/2) from tripping `set -euo pipefail` and
+    # silently killing the updater before the atomic switch — HTTP-only boxes have
+    # no serverkit.conf, so this grep finds nothing.
     local prior_panel_domain=""
     prior_panel_domain=$(grep -oE '/etc/letsencrypt/live/[^/]+/' \
         /etc/nginx/sites-available/serverkit.conf 2>/dev/null | head -n1 | \
-        sed -E 's|.*/live/([^/]+)/|\1|')
+        sed -E 's|.*/live/([^/]+)/|\1|' || true)
     [ "$prior_panel_domain" = "YOUR_DOMAIN" ] && prior_panel_domain=""
 
     if [ -f "$target/nginx/sites-available/serverkit.conf" ]; then
