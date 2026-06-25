@@ -161,5 +161,46 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# T6 — self-update bootstrap skips cleanly under each opt-out, and never
+# re-execs (would replace this test process) when there is nothing to do.
+# --------------------------------------------------------------------------
+self_update_skips() {
+    # Each guard runs in a subshell with set -e; a clean return keeps the test
+    # process alive, and any stray `exec` would visibly break the harness.
+    ( set -Eeuo pipefail; SERVERKIT_UPDATER_REEXECED=1; DRY_RUN=0; maybe_reexec_latest_updater ) &&
+    ( set -Eeuo pipefail; SERVERKIT_NO_SELF_UPDATE=1;  DRY_RUN=0; maybe_reexec_latest_updater ) &&
+    ( set -Eeuo pipefail; DRY_RUN=1;                              maybe_reexec_latest_updater ) &&
+    ( set -Eeuo pipefail; DRY_RUN=0; SERVERKIT_OFFLINE_TARBALL=/x; maybe_reexec_latest_updater )
+}
+if self_update_skips >/dev/null 2>&1; then
+    ok "self-update no-ops under re-exec/opt-out/dry-run/offline guards"
+else
+    bad "self-update guard returned non-zero (would block or loop the updater)"
+fi
+
+# --------------------------------------------------------------------------
+# T7 — the run lock refuses a second concurrent update.
+# --------------------------------------------------------------------------
+if command -v flock >/dev/null 2>&1; then
+    lock="$WORK/update.lock"
+    ( flock -n 9 || exit 1; sleep 3 ) 9>"$lock" &   # hold the lock
+    held=$!
+    sleep 0.3
+    if ( set -Eeuo pipefail; LOCK_FILE="$lock"; DRY_RUN=0; acquire_update_lock ) >/dev/null 2>&1; then
+        bad "acquire_update_lock should refuse while the lock is held"
+    else
+        ok "acquire_update_lock refuses a concurrent run while locked"
+    fi
+    kill "$held" 2>/dev/null || true; wait "$held" 2>/dev/null || true
+    if ( set -Eeuo pipefail; LOCK_FILE="$WORK/free.lock"; DRY_RUN=0; acquire_update_lock ) >/dev/null 2>&1; then
+        ok "acquire_update_lock succeeds when the lock is free"
+    else
+        bad "acquire_update_lock failed on a free lock"
+    fi
+else
+    skip "run-lock test — flock unavailable here (runs on Linux CI)"
+fi
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]

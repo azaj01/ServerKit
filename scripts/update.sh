@@ -22,6 +22,9 @@ TARGET_BRANCH=""
 USE_RELEASE="${INSTALL_FROM_RELEASE:-0}"
 RELEASE_VERSION="${SERVERKIT_VERSION:-}"
 
+# Captured before parsing so the self-update re-exec can forward them verbatim.
+ORIG_ARGS=("$@")
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run|-n)
@@ -85,6 +88,7 @@ VENV_DIR="${SERVERKIT_VENV_DIR:-$INSTALL_DIR/venv}"
 BACKUP_DIR="/var/backups/serverkit"
 LOG_DIR="/var/log/serverkit"
 CONFIG_DIR="${SERVERKIT_CONFIG_DIR:-/etc/serverkit}"
+LOCK_FILE="${SERVERKIT_LOCK_FILE:-/var/lock/serverkit-update.lock}"
 
 # System integration dirs — overridable so the config-refresh logic can be
 # exercised against fixtures in tests instead of the host's real /etc.
@@ -164,6 +168,59 @@ report_failure() {
     printf '     %sexit %s · line %s · %s%s\n' "$FOG" "$rc" "$line" "$cmd" "$RST" >&2
     [ -n "$UPDATE_LOG" ] && \
         printf '     %sfull log: %s%s\n' "$FOG" "$UPDATE_LOG" "$RST" >&2
+}
+
+# ---------------------------------------------------------------------------
+# Self-updating bootstrap + run lock
+# ---------------------------------------------------------------------------
+# The updater that runs is whatever is installed on the box — so a *stale*
+# update.sh (one predating a bug fix or a new deployment shape) fails in ways
+# the current code already handles, and it can't fix itself. This is the exact
+# trap that left a box stuck: an old updater died before it could install the
+# fixed one. Before doing any work, fetch the newest update.sh for the target
+# ref and re-exec into it. From this version on, "just run serverkit update"
+# is reliable no matter how old the box is.
+SELF_PATH="${BASH_SOURCE[0]}"
+maybe_reexec_latest_updater() {
+    [ -n "${SERVERKIT_UPDATER_REEXECED:-}" ] && return 0    # already the latest
+    [ "${SERVERKIT_NO_SELF_UPDATE:-0}" = "1" ] && return 0  # opt-out / tests
+    [ "$DRY_RUN" = "1" ] && return 0
+    [ -n "$SERVERKIT_OFFLINE_TARBALL" ] && return 0         # offline: nothing to fetch
+    command -v curl &>/dev/null || return 0
+
+    local ref="main"
+    [ -n "$TARGET_BRANCH" ] && ref="$TARGET_BRANCH"
+    [ "$USE_RELEASE" = "1" ] && [ -n "$RELEASE_VERSION" ] && ref="$RELEASE_VERSION"
+
+    local url tmp
+    url="https://raw.githubusercontent.com/${GITHUB_REPO}/${ref}/scripts/update.sh"
+    tmp="$(mktemp)"
+    if ! curl -fsSL --max-time 20 "$url" -o "$tmp" 2>/dev/null || [ ! -s "$tmp" ]; then
+        rm -f "$tmp"; return 0                               # fetch failed → use local
+    fi
+    # Swap only if it genuinely differs AND is valid bash (never re-exec into a
+    # truncated/corrupt download).
+    if ! cmp -s "$tmp" "$SELF_PATH" && bash -n "$tmp" 2>/dev/null; then
+        info "Refreshing the updater itself from ${ref}..."
+        chmod +x "$tmp" 2>/dev/null || true
+        SERVERKIT_UPDATER_REEXECED=1 exec bash "$tmp" "${ORIG_ARGS[@]}"
+    fi
+    rm -f "$tmp"
+}
+
+# Stop two concurrent updates clobbering each other (e.g. both cloning into the
+# same blue/green slot, or racing docker compose). The lock auto-releases when
+# the script exits, since the fd closes.
+acquire_update_lock() {
+    [ "$DRY_RUN" = "1" ] && return 0
+    command -v flock &>/dev/null || return 0
+    mkdir -p "$(dirname "$LOCK_FILE")" 2>/dev/null || true
+    # Brace-group so a failed open (unwritable path) is caught here instead of
+    # the redirection error aborting the whole script — then just skip locking.
+    { exec 9>"$LOCK_FILE"; } 2>/dev/null || return 0
+    if ! flock -n 9; then
+        halt "Another 'serverkit update' is already running (lock: $LOCK_FILE)."
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -960,6 +1017,8 @@ update_docker_compose() {
 # execution falls through to the run below.
 [ "${BASH_SOURCE[0]}" = "${0}" ] || return 0
 
+maybe_reexec_latest_updater   # may exec into the newest updater and not return
+acquire_update_lock
 init_logging
 # L5 — turn any unguarded failure (in the main flow OR a helper, thanks to -E)
 # into a labelled report instead of a silent drop back to the prompt.
