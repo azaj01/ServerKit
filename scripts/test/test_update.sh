@@ -259,5 +259,84 @@ fi
 rm -f "$STUB_BIN/flask"
 
 # --------------------------------------------------------------------------
+# T11 — zero-downtime regression: reload_nginx_graceful must RELOAD a running
+# nginx and must NEVER stop it. Host nginx fronts every managed app, so a stop
+# during a panel update used to black out unrelated sites. A recording systemctl
+# stub (PATH-prepended ahead of the global stub) captures every invocation.
+# --------------------------------------------------------------------------
+t="$WORK/t11"; mkdir -p "$t/bin"
+CALL_LOG="$t/calls.log"; : > "$CALL_LOG"
+cat > "$t/bin/systemctl" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$CALL_LOG"
+exit 0                       # is-active --quiet nginx → running
+EOF
+cat > "$t/bin/nginx" <<EOF
+#!/usr/bin/env bash
+printf 'nginx %s\n' "\$*" >> "$CALL_LOG"
+exit 0                       # nginx -t passes
+EOF
+chmod +x "$t/bin"/*
+if (
+    set -Eeuo pipefail
+    export PATH="$t/bin:$PATH"
+    DRY_RUN=0
+    reload_nginx_graceful
+) >/dev/null 2>&1; then
+    if grep -q 'reload nginx' "$CALL_LOG" && ! grep -q 'stop nginx' "$CALL_LOG"; then
+        ok "reload_nginx_graceful reloads a running nginx and never stops it (zero-downtime)"
+    else
+        bad "reload_nginx_graceful must reload (not stop) nginx; saw: $(tr '\n' ';' < "$CALL_LOG")"
+    fi
+else
+    bad "reload_nginx_graceful returned non-zero against a healthy running nginx"
+fi
+
+# --------------------------------------------------------------------------
+# T12 — when nginx is NOT running, reload_nginx_graceful starts it (instead of
+# reloading a dead service) and still never issues a stop. The is-active gate
+# reports inactive on its first probe, then active so wait_for_service returns
+# immediately (keeps the test sub-second).
+# --------------------------------------------------------------------------
+t="$WORK/t12"; mkdir -p "$t/bin"
+CALL_LOG="$t/calls.log"; : > "$CALL_LOG"; : > "$t/probe"
+cat > "$t/bin/systemctl" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$CALL_LOG"
+if [ "\$*" = "is-active --quiet nginx" ]; then
+    n=\$(cat "$t/probe" 2>/dev/null || echo 0); echo \$((n + 1)) > "$t/probe"
+    [ "\$n" -ge 1 ] && exit 0 || exit 1      # 1st probe: down → start branch; then up
+fi
+exit 0
+EOF
+chmod +x "$t/bin"/*
+if (
+    set -Eeuo pipefail
+    export PATH="$t/bin:$PATH"
+    DRY_RUN=0
+    reload_nginx_graceful
+) >/dev/null 2>&1; then
+    if grep -q 'start nginx' "$CALL_LOG" && ! grep -q 'stop nginx' "$CALL_LOG" \
+       && ! grep -q 'reload nginx' "$CALL_LOG"; then
+        ok "reload_nginx_graceful starts a stopped nginx (never reloads a dead unit, never stops)"
+    else
+        bad "reload_nginx_graceful should start (not reload/stop) a dead nginx; saw: $(tr '\n' ';' < "$CALL_LOG")"
+    fi
+else
+    bad "reload_nginx_graceful returned non-zero while starting a stopped nginx"
+fi
+
+# --------------------------------------------------------------------------
+# T13 — guard against the old behaviour creeping back: the update.sh source must
+# not contain a literal `systemctl stop nginx`. The forward and rollback paths
+# both route nginx through reload_nginx_graceful now.
+# --------------------------------------------------------------------------
+if grep -nq 'systemctl stop nginx' "$UPDATE_SH"; then
+    bad "update.sh still contains 'systemctl stop nginx' — apps would black out on update"
+else
+    ok "update.sh never stops nginx (no 'systemctl stop nginx' anywhere)"
+fi
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]

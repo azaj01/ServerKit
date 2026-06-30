@@ -329,6 +329,38 @@ wait_for_service() {
     return 1
 }
 
+# Apply the (possibly refreshed) nginx config WITHOUT dropping traffic.
+#
+# Host nginx is the front door for every managed app — it reverse-proxies their
+# containers via /etc/nginx/serverkit-locations/*.conf. Stopping it (the old
+# behaviour) blacked out every hosted site for the whole switch window, so a
+# panel update became an outage for unrelated apps. `nginx -s reload` keeps the
+# listening sockets and in-flight connections alive while swapping config, so
+# apps never blink. The updater only ever changes the *config* (refresh_config),
+# never anything nginx serves from the blue/green slot, so a reload is all that
+# is ever needed. If nginx happens to be down, start it instead.
+reload_nginx_graceful() {
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would reload nginx (graceful, zero-downtime)"
+        return 0
+    fi
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        # Validate before reloading: a bad config would otherwise leave nginx
+        # running the OLD config (reload is rejected) — non-fatal, but warn loudly.
+        if nginx -t >/dev/null 2>&1; then
+            systemctl reload nginx 2>/dev/null \
+                || run_or_dry systemctl reload nginx \
+                || warn "nginx reload failed — apps keep serving the previous config"
+        else
+            warn "nginx config test failed — skipping reload (apps keep serving the previous config)"
+        fi
+    else
+        warn "nginx was not running — starting it"
+        run_or_dry systemctl start nginx
+        wait_for_service nginx active 15 || warn "nginx did not report active within 15 seconds"
+    fi
+}
+
 # Resolve the currently active real directory behind the symlink.
 active_real_dir() {
     if [ -L "$INSTALL_DIR" ]; then
@@ -834,10 +866,11 @@ rollback() {
         halt "Cannot roll back: previous installation directory not available"
     fi
 
+    # Same zero-downtime discipline as the forward path: cycle only the backend,
+    # never stop nginx (it fronts every hosted app), and reload its config after
+    # the slot is switched back.
     systemctl stop "$BACKEND_SERVICE" 2>/dev/null || true
     wait_for_service "$BACKEND_SERVICE" inactive 30 || true
-    systemctl stop nginx 2>/dev/null || true
-    wait_for_service nginx inactive 15 || true
 
     atomic_switch "$PREVIOUS_DIR"
 
@@ -845,9 +878,7 @@ rollback() {
     systemctl start "$BACKEND_SERVICE" 2>/dev/null || true
     wait_for_service "$BACKEND_SERVICE" active 30 || true
     cd "$INSTALL_DIR" && docker compose up -d --force-recreate frontend 2>&1 | tail -5
-    docker compose up -d backend 2>&1 | tail -5
-    systemctl start nginx 2>/dev/null || true
-    wait_for_service nginx active 15 || true
+    reload_nginx_graceful
 
     # Confirm the restored version actually answers — a rollback that itself
     # comes up unhealthy is a far worse state to leave the operator guessing in.
@@ -1331,11 +1362,14 @@ fi
 refresh_config "$NEXT_DIR"
 
 # Stop services.
+#
+# nginx is deliberately NOT stopped: it fronts every managed app, so taking it
+# down would black out unrelated sites for the whole switch. Only the panel
+# backend is cycled (a brief panel-API gap that never touches hosted apps), and
+# nginx picks up any refreshed config via a graceful reload after the switch.
 phase "Stopping Services"
 run_or_dry systemctl stop "$BACKEND_SERVICE"
 wait_for_service "$BACKEND_SERVICE" inactive 30 || warn "Backend did not stop within 30 seconds"
-run_or_dry systemctl stop nginx
-wait_for_service nginx inactive 15 || warn "nginx did not stop within 15 seconds"
 
 # Record the currently active directory before switching.
 PREVIOUS_DIR="$(active_real_dir)"
@@ -1348,9 +1382,8 @@ phase "Starting Services"
 run_or_dry systemctl start "$BACKEND_SERVICE"
 wait_for_service "$BACKEND_SERVICE" active 30 || warn "Backend did not report active within 30 seconds"
 run_in_dir "$INSTALL_DIR" docker compose up -d --force-recreate frontend
-run_in_dir "$INSTALL_DIR" docker compose up -d backend
-run_or_dry systemctl start nginx
-wait_for_service nginx active 15 || warn "nginx did not report active within 15 seconds"
+# Graceful, zero-downtime config swap — never a stop/start (see reload_nginx_graceful).
+reload_nginx_graceful
 good "Services started"
 
 # Health check.
