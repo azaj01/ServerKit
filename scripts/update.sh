@@ -95,6 +95,9 @@ LOCK_FILE="${SERVERKIT_LOCK_FILE:-/var/lock/serverkit-update.lock}"
 NGINX_DIR="${SERVERKIT_NGINX_DIR:-/etc/nginx}"
 LETSENCRYPT_DIR="${SERVERKIT_LETSENCRYPT_DIR:-/etc/letsencrypt}"
 SYSTEMD_DIR="${SERVERKIT_SYSTEMD_DIR:-/etc/systemd/system}"
+# Per-app nginx location snippets — one proxy_pass to each managed app's
+# container. The updater probes these to prove apps stayed up across the switch.
+APP_LOCATIONS_DIR="${SERVERKIT_APP_LOCATIONS_DIR:-/etc/nginx/serverkit-locations}"
 
 GITHUB_REPO="${GITHUB_REPO:-jhd3197/ServerKit}"
 SERVERKIT_OFFLINE_TARBALL="${SERVERKIT_OFFLINE_TARBALL:-}"
@@ -378,6 +381,73 @@ selinux_label_dist() {
     elif command -v chcon &>/dev/null; then
         chcon -R -t httpd_sys_content_t "$dist" 2>/dev/null || true
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Managed-app uptime verification
+# ---------------------------------------------------------------------------
+# The whole point of the reload-not-stop discipline is that hosted apps never go
+# down when the panel updates. These helpers turn that promise into something the
+# updater actually checks: snapshot which app upstreams are reachable before the
+# switch, re-probe after the reload, and shout if any app that WAS serving has
+# stopped answering.
+
+# Discover the upstreams (host:port) host nginx reverse-proxies for managed apps
+# by scanning the per-app location snippets. One unique "host:port" per line.
+discover_app_upstreams() {
+    [ -d "$APP_LOCATIONS_DIR" ] || return 0
+    grep -rhoE 'proxy_pass[[:space:]]+https?://127\.0\.0\.1:[0-9]+' "$APP_LOCATIONS_DIR" 2>/dev/null \
+        | grep -oE '127\.0\.0\.1:[0-9]+' | sort -u
+}
+
+# Probe each upstream on stdin; emit "host:port up" / "host:port down". "up" means
+# the app container answered at all (ANY HTTP status — a 4xx/5xx app is still
+# reachable; a refused/timed-out connection is not), which is exactly what nginx
+# needs to keep fronting it.
+probe_app_upstreams() {
+    local up
+    while IFS= read -r up; do
+        [ -n "$up" ] || continue
+        if curl -s -o /dev/null --max-time 4 "http://$up/" 2>/dev/null; then
+            printf '%s up\n' "$up"
+        else
+            printf '%s down\n' "$up"
+        fi
+    done
+}
+
+# A reachability snapshot for every fronted app: "host:port state" lines.
+snapshot_app_reachability() {
+    [ "$DRY_RUN" = "1" ] && return 0
+    discover_app_upstreams | probe_app_upstreams
+}
+
+# Compare a pre-update snapshot with a post-update one. Warn for any app that was
+# reachable before and is not now (the update disrupted a workload). Non-zero if
+# any regression is found; an app that was already down before the update is not
+# counted against us.
+report_app_uptime_regressions() {
+    local before="$1" after="$2" regressed=0 total=0 line up state
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        up="${line% *}"; state="${line##* }"
+        total=$((total + 1))
+        [ "$state" = "up" ] || continue
+        if printf '%s\n' "$after" | grep -qx "$up down"; then
+            warn "App upstream $up was reachable before the update but is DOWN now"
+            regressed=$((regressed + 1))
+        fi
+    done <<EOF
+$before
+EOF
+    if [ "$total" -eq 0 ]; then
+        info "No managed apps fronted by nginx — nothing to verify"
+    elif [ "$regressed" -eq 0 ]; then
+        good "All $total managed app(s) stayed reachable across the update"
+    else
+        warn "$regressed of $total managed app(s) went down across the update"
+    fi
+    [ "$regressed" -eq 0 ]
 }
 
 # Resolve the currently active real directory behind the symlink.
@@ -1400,6 +1470,11 @@ refresh_config "$NEXT_DIR"
 # down would black out unrelated sites for the whole switch. Only the panel
 # backend is cycled (a brief panel-API gap that never touches hosted apps), and
 # nginx picks up any refreshed config via a graceful reload after the switch.
+#
+# First snapshot which hosted apps are reachable through nginx right now, so we
+# can prove afterwards that the update did not knock any of them offline.
+APP_BASELINE="$(snapshot_app_reachability)"
+
 phase "Stopping Services"
 run_or_dry systemctl stop "$BACKEND_SERVICE"
 wait_for_service "$BACKEND_SERVICE" inactive 30 || warn "Backend did not stop within 30 seconds"
@@ -1426,6 +1501,17 @@ good "Services started"
 
 # Health check.
 health_check
+
+# Verify the panel update did not take any hosted app down. Compare the
+# pre-switch reachability snapshot with a fresh probe now that nginx has
+# reloaded. Best-effort: a regression is reported loudly but does not fail the
+# (already-healthy) update — the operator decides what to do about an app that
+# was likely already unhealthy.
+if [ "$DRY_RUN" = "0" ]; then
+    phase "Verifying App Uptime"
+    APP_AFTER="$(snapshot_app_reachability)"
+    report_app_uptime_regressions "$APP_BASELINE" "$APP_AFTER" || true
+fi
 
 # Keep the firewall in sync (idempotent, best-effort).
 ensure_firewall || true

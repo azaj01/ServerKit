@@ -379,5 +379,38 @@ for f in serverkit.conf serverkit-insecure.conf; do
 done
 
 # --------------------------------------------------------------------------
+# T16 — app-uptime verification: discover_app_upstreams must extract the unique
+# set of app container upstreams from the per-app nginx location snippets (this
+# is the list the updater probes to prove apps stayed up).
+# --------------------------------------------------------------------------
+t="$WORK/t16"; mkdir -p "$t/loc"
+printf 'location /app1 { proxy_pass http://127.0.0.1:8001; }\n' > "$t/loc/app1.conf"
+printf 'location /app2  { proxy_pass http://127.0.0.1:8002/; }\nlocation /app2b { proxy_pass http://127.0.0.1:8001; }\n' > "$t/loc/app2.conf"
+res="$( set -Eeuo pipefail; APP_LOCATIONS_DIR="$t/loc"; discover_app_upstreams | tr '\n' ',' )"
+if [ "$res" = "127.0.0.1:8001,127.0.0.1:8002," ]; then
+    ok "discover_app_upstreams extracts the unique app upstreams from location snippets"
+else
+    bad "discover_app_upstreams returned [$res], expected the two unique upstreams"
+fi
+
+# --------------------------------------------------------------------------
+# T17 — report_app_uptime_regressions flags an app that was reachable before the
+# update and is not after (and ignores one that was already down), returning
+# non-zero so the operator is warned; the clean case returns success.
+# --------------------------------------------------------------------------
+before=$'127.0.0.1:8001 up\n127.0.0.1:8002 up\n127.0.0.1:8003 down'
+after=$'127.0.0.1:8001 up\n127.0.0.1:8002 down\n127.0.0.1:8003 down'
+if ( set -Eeuo pipefail; report_app_uptime_regressions "$before" "$after" ) >/dev/null 2>&1; then
+    bad "report_app_uptime_regressions should flag the app that went up->down"
+else
+    ok "report_app_uptime_regressions flags an app that went down across the update"
+fi
+if ( set -Eeuo pipefail; report_app_uptime_regressions "$before" "$before" ) >/dev/null 2>&1; then
+    ok "report_app_uptime_regressions passes when every app that was up is still up"
+else
+    bad "report_app_uptime_regressions should pass when nothing regressed"
+fi
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]
