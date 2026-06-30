@@ -338,5 +338,46 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# T14 — the panel frontend is served statically from $INSTALL_DIR/frontend/dist.
+# refresh_config must repoint the shipped `root` (default /opt/serverkit) at a
+# customised SERVERKIT_DIR, or a custom install dir would 404 the whole panel
+# after an upgrade.
+# --------------------------------------------------------------------------
+t="$WORK/t14"
+mkdir -p "$t/nginx/sites-available" "$t/nginx/sites-enabled" "$t/target/nginx/sites-available"
+printf 'http {\n}\n' > "$t/nginx/nginx.conf"
+printf 'server {\n  root /opt/serverkit/frontend/dist;\n  location / { try_files $uri /index.html; }\n}\n' \
+    > "$t/target/nginx/sites-available/serverkit-insecure.conf"
+(
+    set -Eeuo pipefail
+    NGINX_DIR="$t/nginx"; LETSENCRYPT_DIR="$t/le"; SYSTEMD_DIR="$t/sysd"; CONFIG_DIR="$t/cfg"; DRY_RUN=0
+    INSTALL_DIR="$WORK/opt/serverkit"     # non-default → substitution must fire
+    refresh_config "$t/target"
+) >/dev/null 2>&1
+installed="$t/nginx/sites-available/serverkit-insecure.conf"
+if grep -q "root $WORK/opt/serverkit/frontend/dist;" "$installed" \
+   && ! grep -q "root /opt/serverkit/frontend/dist;" "$installed"; then
+    ok "refresh_config repoints the static-frontend root at a custom SERVERKIT_DIR"
+else
+    bad "refresh_config did not rewrite the frontend dist root: $(grep -n root "$installed" | tr '\n' ';')"
+fi
+
+# --------------------------------------------------------------------------
+# T15 — the shipped nginx sites serve the SPA statically (host nginx, no
+# container): each must carry a frontend/dist root + a try_files SPA fallback
+# and must NOT proxy the retired frontend container on :3847.
+# --------------------------------------------------------------------------
+SK_ROOT="$SCRIPT_DIR/../.."
+for f in serverkit.conf serverkit-insecure.conf; do
+    cfg="$SK_ROOT/nginx/sites-available/$f"
+    if grep -q 'frontend/dist' "$cfg" && grep -q 'try_files' "$cfg" \
+       && ! grep -q '127.0.0.1:3847' "$cfg"; then
+        ok "$f serves the SPA statically (dist root + try_files, no :3847 proxy)"
+    else
+        bad "$f is not a clean static-serve config (still proxying :3847?)"
+    fi
+done
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]

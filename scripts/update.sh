@@ -361,6 +361,25 @@ reload_nginx_graceful() {
     fi
 }
 
+# Label a slot's SPA bundle for SELinux-enforcing hosts so nginx can read the
+# static panel assets it now serves (see install.sh selinux_label_frontend_dist).
+# Best-effort and a no-op on permissive/disabled boxes or where the tools are
+# absent. Takes the slot's real path (blue/green resolves through a symlink).
+selinux_label_dist() {
+    local dir="$1"
+    [ "$DRY_RUN" = "1" ] && return 0
+    command -v selinuxenabled &>/dev/null && selinuxenabled 2>/dev/null || return 0
+    local dist="${dir}/frontend/dist"
+    [ -d "$dist" ] || return 0
+    if command -v semanage &>/dev/null && command -v restorecon &>/dev/null; then
+        semanage fcontext -a -t httpd_sys_content_t "${dist}(/.*)?" 2>/dev/null \
+            || semanage fcontext -m -t httpd_sys_content_t "${dist}(/.*)?" 2>/dev/null || true
+        restorecon -R "$dist" 2>/dev/null || true
+    elif command -v chcon &>/dev/null; then
+        chcon -R -t httpd_sys_content_t "$dist" 2>/dev/null || true
+    fi
+}
+
 # Resolve the currently active real directory behind the symlink.
 active_real_dir() {
     if [ -L "$INSTALL_DIR" ]; then
@@ -768,6 +787,19 @@ refresh_config() {
         cp "$target/nginx/sites-available/serverkit-insecure.conf" "$NGINX_DIR/sites-available/"
     fi
 
+    # The panel frontend is served statically by host nginx from
+    # $INSTALL_DIR/frontend/dist (the /opt/serverkit symlink). The shipped config
+    # roots at the default /opt/serverkit; re-point it when SERVERKIT_DIR differs,
+    # exactly as install.sh does, so a custom install dir survives upgrades.
+    if [ "$INSTALL_DIR" != "/opt/serverkit" ]; then
+        local conf
+        for conf in serverkit.conf serverkit-insecure.conf; do
+            [ -f "$NGINX_DIR/sites-available/$conf" ] && \
+                sed -i "s|/opt/serverkit/frontend/dist|$INSTALL_DIR/frontend/dist|g" \
+                    "$NGINX_DIR/sites-available/$conf"
+        done
+    fi
+
     # TLS floor — prefer a reversible conf.d snippet when nginx.conf doesn't
     # already declare these (a second declaration in the same http{} context is a
     # "duplicate ssl_protocols" error); otherwise rewrite in place. Mirrors
@@ -877,7 +909,8 @@ rollback() {
     systemctl daemon-reload
     systemctl start "$BACKEND_SERVICE" 2>/dev/null || true
     wait_for_service "$BACKEND_SERVICE" active 30 || true
-    cd "$INSTALL_DIR" && docker compose up -d --force-recreate frontend 2>&1 | tail -5
+    # Frontend is static (served from the restored slot); just re-label + reload.
+    selinux_label_dist "$PREVIOUS_DIR"
     reload_nginx_graceful
 
     # Confirm the restored version actually answers — a rollback that itself
@@ -1378,10 +1411,15 @@ PREVIOUS_DIR="$(active_real_dir)"
 atomic_switch "$NEXT_DIR"
 
 # Start services.
+#
+# The frontend is now static files under the switched-in slot's frontend/dist,
+# served directly by host nginx (no container to recreate). The atomic switch
+# already swapped the served assets; nginx only needs a graceful config reload.
 phase "Starting Services"
 run_or_dry systemctl start "$BACKEND_SERVICE"
 wait_for_service "$BACKEND_SERVICE" active 30 || warn "Backend did not report active within 30 seconds"
-run_in_dir "$INSTALL_DIR" docker compose up -d --force-recreate frontend
+# Re-label the now-active slot's bundle for SELinux hosts before nginx serves it.
+selinux_label_dist "$NEXT_DIR"
 # Graceful, zero-downtime config swap — never a stop/start (see reload_nginx_graceful).
 reload_nginx_graceful
 good "Services started"

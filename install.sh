@@ -891,16 +891,25 @@ configure_nginx() {
     cp "$INSTALL_DIR/nginx/sites-available/serverkit-insecure.conf" /etc/nginx/sites-available/
     cp "$INSTALL_DIR/nginx/sites-available/example.conf.template" /etc/nginx/sites-available/
 
+    # The panel frontend is served as static files by host nginx (no container).
+    # The shipped config roots at the default /opt/serverkit; point it at the real
+    # install dir when SERVERKIT_DIR was customised.
+    apply_frontend_root /etc/nginx/sites-available/serverkit.conf \
+                        /etc/nginx/sites-available/serverkit-insecure.conf
+
     # Decide whether we can use HTTPS. SSL is best-effort: if certbot fails or
     # no domain is given, we fall back to plain HTTP rather than forcing the
     # user to fix DNS/certs before they can use ServerKit.
     choose_ssl_mode
     install_nginx_config_for_mode
 
-    # SELinux: let nginx make upstream connections to the app containers.
+    # SELinux: let nginx make upstream connections to the app containers AND read
+    # the SPA bundle it now serves from $INSTALL_DIR (default /opt, which is not
+    # httpd_sys_content_t by default — without this nginx 403s every panel asset).
     if { [ "$OS_FAMILY" = "fedora" ] || [ "$OS_FAMILY" = "rhel" ]; } && command -v setsebool &>/dev/null; then
         setsebool -P httpd_can_network_connect 1 2>/dev/null || true
     fi
+    selinux_label_frontend_dist
 
     good "Nginx configured ($SSL_MODE)."
 }
@@ -963,6 +972,36 @@ install_nginx_config_for_mode() {
     # Persist the domain so update.sh can re-apply the cert path on upgrades
     # without depending on the (commented-out) .env public URL.
     [ -n "$PANEL_DOMAIN" ] && printf '%s\n' "$PANEL_DOMAIN" > /etc/serverkit/panel-domain
+}
+
+# Point the static-frontend `root` at the real install dir. The shipped nginx
+# config defaults to /opt/serverkit; only a customised SERVERKIT_DIR needs the
+# rewrite. update.sh's refresh_config carries the same logic across upgrades.
+apply_frontend_root() {
+    [ "$INSTALL_DIR" = "/opt/serverkit" ] && return 0
+    local f
+    for f in "$@"; do
+        [ -f "$f" ] && sed -i "s|/opt/serverkit/frontend/dist|$INSTALL_DIR/frontend/dist|g" "$f"
+    done
+}
+
+# Label the SPA bundle so SELinux-enforcing hosts (Fedora/RHEL) let nginx read
+# it. /opt is not httpd_sys_content_t by default, so without this every panel
+# asset 403s. Label the *real* slot path (blue/green resolves through a symlink).
+# Best-effort: a permissive/disabled box, or one without the tools, just no-ops.
+selinux_label_frontend_dist() {
+    command -v selinuxenabled &>/dev/null && selinuxenabled 2>/dev/null || return 0
+    local real dist
+    real="$(readlink -f "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
+    dist="${real}/frontend/dist"
+    [ -d "$dist" ] || return 0
+    if command -v semanage &>/dev/null && command -v restorecon &>/dev/null; then
+        semanage fcontext -a -t httpd_sys_content_t "${dist}(/.*)?" 2>/dev/null \
+            || semanage fcontext -m -t httpd_sys_content_t "${dist}(/.*)?" 2>/dev/null || true
+        restorecon -R "$dist" 2>/dev/null || true
+    elif command -v chcon &>/dev/null; then
+        chcon -R -t httpd_sys_content_t "$dist" 2>/dev/null || true
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1088,20 +1127,11 @@ sync_templates() {
 launch_services() {
     phase "Starting Services"
 
-    step "Pruning stale Docker networks..."
-    docker network prune -f 2>/dev/null || true
-    docker container prune -f 2>/dev/null || true
-
-    step "Building the frontend container..."
-    cd "$INSTALL_DIR"
-    docker compose build 2>&1 | tail -5
-
     step "Starting the backend..."
     systemctl start serverkit
 
-    step "Starting the frontend container..."
-    docker compose up -d 2>&1 | tail -5
-
+    # The frontend is static files served by host nginx (built into
+    # frontend/dist by build_frontend) — no container to build or start.
     step "Starting nginx..."
     systemctl start nginx
     good "Services started."
