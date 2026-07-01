@@ -289,6 +289,14 @@ fork → rama de funcionalidad → commit → push → pull request
 
 ---
 
+## 🔭 Proyectos Relacionados
+
+**[Faro](https://github.com/jhd3197/faro)** — Un cliente de escritorio moderno para SFTP, FTP, SSH y almacenamiento compatible con S3, del mismo autor. Guarda un servidor una vez y luego explora sus archivos en una vista de doble panel y abre una terminal sobre la misma sesión SSH — además de transferencias con arrastrar y soltar, sincronización de directorios en un sentido y edición in situ. Incluso tiene un **Agent Bridge** que permite a Claude Code (o cualquier agente MCP) ejecutar comandos en un servidor a través de tu sesión autenticada, con aprobación por comando y sin compartir credenciales.
+
+> ServerKit gestiona tus servidores desde el navegador; Faro es el compañero de escritorio para transferencias de archivos, shells y trabajo puntual en todos tus servidores. [Descarga una versión →](https://github.com/jhd3197/faro/releases/latest)
+
+---
+
 ## 💬 Comunidad
 
 [![Discord](https://img.shields.io/badge/Discord-Únete-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/ZKk6tkCQfG)
