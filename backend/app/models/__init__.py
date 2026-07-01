@@ -31,6 +31,7 @@ from app.models.source_connection import SourceConnection
 from app.models.registrar_connection import RegistrarConnection
 from app.models.container_registry import ContainerRegistry
 from app.models.app_volume import AppVolume
+from app.models.managed_database import ManagedDatabase
 from app.models.api_key import ApiKey
 from app.models.api_usage import ApiUsageLog, ApiUsageSummary
 from app.models.event_subscription import EventSubscription, EventDelivery
@@ -74,7 +75,7 @@ __all__ = [
     'WordPressCustomPlugin', 'WordPressSitePlugin',
     'EnvironmentActivity', 'PromotionJob', 'SanitizationProfile',
     'EmailDomain', 'EmailAccount', 'EmailAlias', 'EmailForwardingRule', 'DNSProviderConfig', 'EmailRelayConfig',
-    'OAuthIdentity', 'SourceConnection', 'RegistrarConnection', 'ContainerRegistry', 'AppVolume', 'ApiKey', 'ApiUsageLog', 'ApiUsageSummary',
+    'OAuthIdentity', 'SourceConnection', 'RegistrarConnection', 'ContainerRegistry', 'AppVolume', 'ManagedDatabase', 'ApiKey', 'ApiUsageLog', 'ApiUsageSummary',
     'EventSubscription', 'EventDelivery', 'Invitation',
     'ServerAlertThreshold', 'MetricAlert',
     'AgentPlugin', 'AgentPluginInstall',

@@ -1,11 +1,35 @@
+import logging
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import User, Application
 from app.services.database_service import DatabaseService
+from app.services.managed_database_service import ManagedDatabaseService
 from app.middleware.rbac import admin_required
 from app.services.resource_grant_service import ResourceGrantService
 
+logger = logging.getLogger(__name__)
+
 databases_bp = Blueprint('databases', __name__)
+
+
+def _persist_provisioned(engine, name, result, data):
+    """Track a just-provisioned database as a managed resource. Best-effort and
+    additive — a persistence failure never fails the provisioning that succeeded."""
+    try:
+        from app.services.workspace_service import WorkspaceService
+        user = User.query.get(get_jwt_identity())
+        ws_id = WorkspaceService.resolve_workspace_id(
+            user, request.headers.get('X-Workspace-Id') or request.args.get('workspace_id'))
+        ManagedDatabaseService.record_provisioned(
+            engine, name,
+            admin_username=result.get('user'),
+            admin_secret=result.get('password'),
+            owner_application_id=(data or {}).get('application_id'),
+            workspace_id=ws_id,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning('Failed to track provisioned database %s/%s: %s', engine, name, exc)
 
 
 # ==================== STATUS ====================
@@ -69,6 +93,8 @@ def create_mysql_database():
             )
             result['user'] = data['name']
             result['password'] = password
+
+        _persist_provisioned('mysql', data['name'], result, data)
 
     return jsonify(result), 201 if result['success'] else 400
 
@@ -270,6 +296,8 @@ def create_pg_database():
             DatabaseService.pg_grant_privileges(data['name'], data['name'], 'ALL')
             result['user'] = data['name']
             result['password'] = password
+
+        _persist_provisioned('postgresql', data['name'], result, data)
 
     return jsonify(result), 201 if result['success'] else 400
 
@@ -744,6 +772,151 @@ def execute_docker_query(container, database):
     )
 
     return jsonify(result), 200 if result['success'] else 400
+
+
+# ==================== MANAGED DATABASES ====================
+# Durable tracking beside the live introspection above. Listing is available to
+# any authenticated user; mutations + credential reveal are admin-only.
+
+def _workspace_id():
+    from app.services.workspace_service import WorkspaceService
+    user = User.query.get(get_jwt_identity())
+    return WorkspaceService.resolve_workspace_id(
+        user, request.headers.get('X-Workspace-Id') or request.args.get('workspace_id'))
+
+
+@databases_bp.route('/managed', methods=['GET'])
+@jwt_required()
+def list_managed_databases():
+    """List tracked databases (credentials masked)."""
+    rows = ManagedDatabaseService.list(workspace_id=_workspace_id())
+    return jsonify({'databases': [r.to_dict() for r in rows]}), 200
+
+
+@databases_bp.route('/managed', methods=['POST'])
+@jwt_required()
+@admin_required
+def create_managed_database():
+    """Provision a new database (mysql|postgresql) AND track it as managed."""
+    data = request.get_json() or {}
+    engine = (data.get('engine') or '').strip().lower()
+    name = data.get('name')
+    if not name:
+        return jsonify({'error': 'name is required'}), 400
+    if engine not in ('mysql', 'postgresql'):
+        return jsonify({'error': 'engine must be mysql or postgresql'}), 400
+
+    if engine == 'mysql':
+        result = DatabaseService.mysql_create_database(
+            name, data.get('charset', 'utf8mb4'),
+            data.get('collation', 'utf8mb4_unicode_ci'), data.get('root_password'))
+        if result.get('success') and data.get('create_user'):
+            password = data.get('user_password') or DatabaseService.generate_password()
+            DatabaseService.mysql_create_user(name, password, data.get('host', 'localhost'), data.get('root_password'))
+            DatabaseService.mysql_grant_privileges(name, name, 'ALL', data.get('host', 'localhost'), data.get('root_password'))
+            result['user'] = name
+            result['password'] = password
+    else:
+        result = DatabaseService.pg_create_database(name, data.get('owner'), data.get('encoding', 'UTF8'))
+        if result.get('success') and data.get('create_user'):
+            password = data.get('user_password') or DatabaseService.generate_password()
+            DatabaseService.pg_create_user(name, password)
+            DatabaseService.pg_grant_privileges(name, name, 'ALL')
+            result['user'] = name
+            result['password'] = password
+
+    if not result.get('success'):
+        return jsonify(result), 400
+
+    managed = ManagedDatabaseService.record_provisioned(
+        engine, name,
+        admin_username=result.get('user'),
+        admin_secret=result.get('password'),
+        owner_application_id=data.get('application_id'),
+        workspace_id=_workspace_id(),
+    )
+    return jsonify({'database': managed.to_dict()}), 201
+
+
+@databases_bp.route('/managed/adopt', methods=['POST'])
+@jwt_required()
+@admin_required
+def adopt_managed_database():
+    """Track a live-discovered database that isn't tracked yet."""
+    data = request.get_json() or {}
+    engine = (data.get('engine') or '').strip().lower()
+    name = data.get('name')
+    if not name or engine not in ('mysql', 'postgresql', 'mongodb'):
+        return jsonify({'error': 'engine (mysql|postgresql|mongodb) and name are required'}), 400
+    managed = ManagedDatabaseService.adopt(
+        engine, data.get('host', 'localhost'), name,
+        port=data.get('port'),
+        host_kind=data.get('host_kind', 'host'),
+        container_ref=data.get('container_ref'),
+        admin_username=data.get('admin_username'),
+        admin_secret=data.get('admin_secret'),
+        owner_application_id=data.get('application_id'),
+        workspace_id=_workspace_id(),
+    )
+    return jsonify({'database': managed.to_dict()}), 201
+
+
+@databases_bp.route('/managed/<int:managed_id>', methods=['GET'])
+@jwt_required()
+def get_managed_database(managed_id):
+    """Detail + a best-effort live-sync state (does the DB still exist?)."""
+    managed = ManagedDatabaseService.get(managed_id)
+    if not managed:
+        return jsonify({'error': 'Managed database not found'}), 404
+    data = managed.to_dict()
+    data['sync'] = ManagedDatabaseService.sync_state(managed)
+    return jsonify({'database': data}), 200
+
+
+@databases_bp.route('/managed/<int:managed_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_managed_database(managed_id):
+    """Untrack a managed database (optional ``?drop=true`` to also DROP it)."""
+    managed = ManagedDatabaseService.get(managed_id)
+    if not managed:
+        return jsonify({'error': 'Managed database not found'}), 404
+    drop = str(request.args.get('drop', '')).lower() in ('1', 'true', 'yes')
+    ManagedDatabaseService.delete(managed, drop=drop)
+    return jsonify({'success': True, 'dropped': drop}), 200
+
+
+@databases_bp.route('/managed/<int:managed_id>/connection-uri', methods=['POST'])
+@jwt_required()
+@admin_required
+def reveal_managed_connection_uri(managed_id):
+    """Reveal the real connection string (audited)."""
+    from app.models.audit_log import AuditLog
+    from app.services.audit_service import AuditService
+    managed = ManagedDatabaseService.get(managed_id)
+    if not managed:
+        return jsonify({'error': 'Managed database not found'}), 404
+    uri = ManagedDatabaseService.build_connection_uri(managed, reveal=True)
+    AuditService.log(
+        action=getattr(AuditLog, 'ACTION_SECRET_REVEALED', 'secret.revealed'),
+        user_id=get_jwt_identity(),
+        target_type='managed_database', target_id=managed.id,
+        details={'engine': managed.engine, 'name': managed.name},
+    )
+    return jsonify({'connection_uri': uri}), 200
+
+
+@databases_bp.route('/managed/<int:managed_id>/protect', methods=['POST'])
+@jwt_required()
+@admin_required
+def protect_managed_database(managed_id):
+    """Create/refresh a BackupPolicy for a managed database (real FK target)."""
+    managed = ManagedDatabaseService.get(managed_id)
+    if not managed:
+        return jsonify({'error': 'Managed database not found'}), 404
+    data = request.get_json() or {}
+    policy = ManagedDatabaseService.protect(managed, fields=data.get('policy'))
+    return jsonify({'policy': policy.to_dict()}), 201
 
 
 # ==================== UTILITY ====================

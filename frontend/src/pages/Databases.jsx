@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     PanelLeftClose, PanelLeftOpen, Search, X, RefreshCw, Plus, Terminal,
     Archive, Database, Table2, Server, ChevronDown,
-    Trash2, DatabaseBackup, Copy, FileCode2, Lock,
+    Trash2, DatabaseBackup, Copy, FileCode2, Lock, BookMarked,
 } from 'lucide-react';
 import api from '../services/api';
+import Modal from '@/components/Modal';
+import ManagedDatabasesPanel from '../components/databases/ManagedDatabasesPanel';
 import { formatBytes } from '@/utils/formatBytes';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
@@ -80,6 +82,7 @@ export default function Databases() {
     const [filter, setFilter] = useState('');
     const [ctxMenu, setCtxMenu] = useState(null);
     const [showNewMenu, setShowNewMenu] = useState(false);
+    const [showManaged, setShowManaged] = useState(false);
     const [modal, setModal] = useState(null); // { type, databases }
     const newMenuRef = useRef(null);
     const didAutoExpand = useRef(false);
@@ -443,6 +446,9 @@ export default function Databases() {
                             </div>
                         )}
                     </div>
+                    <button type="button" className="dbx-chip" onClick={() => setShowManaged(true)}>
+                        <BookMarked size={14} aria-hidden="true" /> Managed
+                    </button>
                     <button type="button" className="dbx-chip" onClick={openBackups}>
                         <Archive size={14} aria-hidden="true" /> Backups
                     </button>
@@ -615,6 +621,10 @@ export default function Databases() {
             {modal?.type === 'pg-db' && <CreatePostgreSQLDatabaseModal onClose={() => setModal(null)} onCreated={onModalCreated} />}
             {modal?.type === 'mysql-user' && <CreateMySQLUserModal databases={modal.databases} onClose={() => setModal(null)} onCreated={onModalCreated} />}
             {modal?.type === 'pg-user' && <CreatePostgreSQLUserModal databases={modal.databases} onClose={() => setModal(null)} onCreated={onModalCreated} />}
+
+            <Modal open={showManaged} onClose={() => setShowManaged(false)} title="Managed databases" size="lg">
+                <ManagedDatabasesPanel />
+            </Modal>
 
         </div>
     );

@@ -20,6 +20,13 @@ awaiting a stable release:
 
 ### Added
 
+- **Managed databases** — the databases ServerKit provisions are now tracked as
+  first-class resources (beside the existing live explorer): durable rows for
+  backups and connection strings. A managed database backs a `BackupPolicy` by a
+  real foreign key (not an untethered descriptor), one-click "Protect" creates
+  that policy, and a real connection URI can be revealed/copied (audited, secret
+  Fernet-encrypted at rest). Adopt an existing database to start tracking it. API
+  under `/api/v1/databases/managed`. Not a DBaaS — no pooling/replicas/scaling.
 - **Per-app managed volumes** — first-class, tracked persistent storage for a
   service. Attach a named Docker volume at a chosen container path under
   Settings → Storage; it survives redeploys and is visible with live

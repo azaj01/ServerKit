@@ -230,3 +230,35 @@ export async function applyMigrations() {
 export async function getMigrationHistory() {
     return this.request('/migrations/history');
 }
+
+// Managed databases — durable tracking beside the live introspection. Secrets
+// are never returned (has_secret); the connection URI is revealed only via an
+// explicit, audited action.
+export async function getManagedDatabases() {
+    return this.request('/databases/managed');
+}
+
+export async function getManagedDatabase(id) {
+    return this.request(`/databases/managed/${id}`);
+}
+
+export async function createManagedDatabase(data) {
+    return this.request('/databases/managed', { method: 'POST', body: data });
+}
+
+export async function adoptManagedDatabase(data) {
+    return this.request('/databases/managed/adopt', { method: 'POST', body: data });
+}
+
+export async function deleteManagedDatabase(id, { drop = false } = {}) {
+    const q = drop ? '?drop=true' : '';
+    return this.request(`/databases/managed/${id}${q}`, { method: 'DELETE' });
+}
+
+export async function revealManagedConnectionUri(id) {
+    return this.request(`/databases/managed/${id}/connection-uri`, { method: 'POST' });
+}
+
+export async function protectManagedDatabase(id, policy = null) {
+    return this.request(`/databases/managed/${id}/protect`, { method: 'POST', body: { policy } });
+}
