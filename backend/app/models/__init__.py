@@ -10,6 +10,7 @@ from app.models.environment import Environment
 from app.models.shared_resource import ResourceTag, SharedVariableGroup, SharedVariable, SharedVariableGroupAttachment
 from app.models.application_preview import ApplicationPreview, ApplicationPreviewSettings
 from app.models.proxy_stack import ProxyStack
+from app.models.site_base_domain import SiteBaseDomain
 from app.models.deployment_job import DeploymentJob, DeploymentJobLog
 from app.models.system_settings import SystemSettings
 from app.models.audit_log import AuditLog
@@ -20,6 +21,7 @@ from app.models.server import Server, ServerGroup, ServerMetrics, ServerCommand,
 from app.models.server_onboarding_log import ServerOnboardingLog
 from app.models.security_alert import SecurityAlert
 from app.models.wordpress_site import WordPressSite, DatabaseSnapshot, SyncJob, WordPressVulnerability
+from app.models.wordpress_custom_plugin import WordPressCustomPlugin, WordPressSitePlugin
 from app.models.environment_activity import EnvironmentActivity
 from app.models.promotion_job import PromotionJob
 from app.models.sanitization_profile import SanitizationProfile
@@ -27,6 +29,9 @@ from app.models.email import EmailDomain, EmailAccount, EmailAlias, EmailForward
 from app.models.oauth_identity import OAuthIdentity
 from app.models.source_connection import SourceConnection
 from app.models.registrar_connection import RegistrarConnection
+from app.models.container_registry import ContainerRegistry
+from app.models.app_volume import AppVolume
+from app.models.managed_database import ManagedDatabase
 from app.models.api_key import ApiKey
 from app.models.api_usage import ApiUsageLog, ApiUsageSummary
 from app.models.event_subscription import EventSubscription, EventDelivery
@@ -67,9 +72,10 @@ __all__ = [
     'MetricsHistory', 'Workflow', 'WorkflowExecution', 'WorkflowLog', 'GitWebhook', 'WebhookLog', 'GitDeployment',
     'Server', 'ServerGroup', 'ServerMetrics', 'ServerCommand', 'AgentSession', 'AgentVersion', 'AgentRollout', 'ServerOnboardingLog', 'SecurityAlert',
     'WordPressSite', 'DatabaseSnapshot', 'SyncJob', 'WordPressVulnerability',
+    'WordPressCustomPlugin', 'WordPressSitePlugin',
     'EnvironmentActivity', 'PromotionJob', 'SanitizationProfile',
     'EmailDomain', 'EmailAccount', 'EmailAlias', 'EmailForwardingRule', 'DNSProviderConfig', 'EmailRelayConfig',
-    'OAuthIdentity', 'SourceConnection', 'RegistrarConnection', 'ApiKey', 'ApiUsageLog', 'ApiUsageSummary',
+    'OAuthIdentity', 'SourceConnection', 'RegistrarConnection', 'ContainerRegistry', 'AppVolume', 'ManagedDatabase', 'ApiKey', 'ApiUsageLog', 'ApiUsageSummary',
     'EventSubscription', 'EventDelivery', 'Invitation',
     'ServerAlertThreshold', 'MetricAlert',
     'AgentPlugin', 'AgentPluginInstall',
@@ -99,4 +105,5 @@ __all__ = [
     'ResourceTag', 'SharedVariableGroup', 'SharedVariable', 'SharedVariableGroupAttachment',
     'ApplicationPreview', 'ApplicationPreviewSettings',
     'ProxyStack',
+    'SiteBaseDomain',
 ]

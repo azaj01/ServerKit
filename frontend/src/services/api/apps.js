@@ -99,6 +99,25 @@ export async function deleteApp(id) {
     });
 }
 
+// Per-app managed volumes — first-class persistent storage that survives
+// redeploys. Listing joins live Docker state (present/mountpoint/size).
+export async function getAppVolumes(id) {
+    return this.request(`/apps/${id}/volumes`);
+}
+
+export async function attachAppVolume(id, data) {
+    return this.request(`/apps/${id}/volumes`, { method: 'POST', body: data });
+}
+
+export async function detachAppVolume(id, volumeId, { wipe = false } = {}) {
+    const q = wipe ? '?wipe=true' : '';
+    return this.request(`/apps/${id}/volumes/${volumeId}${q}`, { method: 'DELETE' });
+}
+
+export async function convertAppBindMount(id, data) {
+    return this.request(`/apps/${id}/volumes/convert`, { method: 'POST', body: data });
+}
+
 export async function startApp(id) {
     return this.request(`/apps/${id}/start`, { method: 'POST' });
 }

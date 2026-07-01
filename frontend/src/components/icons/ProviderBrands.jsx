@@ -8,7 +8,7 @@
 // the color with no inline styles.
 import {
     SiGithub, SiGitlab, SiBitbucket, SiCloudflare, SiDigitalocean,
-    SiHetzner, SiVultr, SiAkamai, SiGodaddy, SiNamecheap, SiBackblaze,
+    SiHetzner, SiVultr, SiAkamai, SiGodaddy, SiNamecheap, SiBackblaze, SiDocker,
 } from 'react-icons/si';
 import { FaAws } from 'react-icons/fa';
 import { Mail, HardDrive, Plug } from 'lucide-react';
@@ -30,6 +30,7 @@ const PROVIDER_ICONS = {
     godaddy: SiGodaddy,
     godaddy_dns: SiGodaddy,
     namecheap: SiNamecheap,
+    container_registry: SiDocker,
     smtp: Mail,
     s3: HardDrive,
     b2: SiBackblaze,

@@ -1001,3 +1001,72 @@ $dbx-sqlite: #3d8fd1;
         .dbx-spin { animation: none; }
     }
 }
+
+// ============================================
+// MANAGED DATABASES (modal panel)
+// ============================================
+.managed-db {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-md;
+
+    &__head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: $spacing-md;
+    }
+
+    &__hint {
+        font-size: 13px;
+        color: var(--text-dim);
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    &__empty {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text-faint);
+        padding: $spacing-lg 0;
+    }
+
+    &__list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: $spacing-md;
+        padding: $space-3 0;
+        border-top: 1px solid var(--border-soft);
+
+        &:first-child { border-top: none; }
+    }
+
+    &__info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    &__meta {
+        font-family: $font-mono, monospace;
+        font-size: 12px;
+        color: var(--text-faint);
+        word-break: break-all;
+    }
+
+    &__actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}

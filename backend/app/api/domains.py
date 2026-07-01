@@ -216,28 +216,50 @@ def create_domain():
     return jsonify(response), 201
 
 
+@domains_bp.route('/base-domains', methods=['GET'])
+@jwt_required()
+def list_base_domains():
+    """The base domains a new site can be published under, for the create-flow
+    picker. Returns the registry (default first) or, on a legacy single-base
+    install, the one configured base. ``default`` names the pre-selected base."""
+    from app.services.site_domain_service import SiteDomainService
+    from app.services.site_base_domain_service import SiteBaseDomainService
+    rows = SiteBaseDomainService.list_rows()
+    if rows:
+        bases = [{'domain': r.domain, 'is_default': r.is_default,
+                  'https_enabled': r.https_enabled, 'dns_mode': r.dns_mode} for r in rows]
+    else:
+        base = SiteDomainService.base_domain()
+        bases = ([{'domain': base, 'is_default': True,
+                   'https_enabled': SiteDomainService.https_enabled(),
+                   'dns_mode': SiteDomainService.dns_mode()}] if base else [])
+    default = next((b['domain'] for b in bases if b['is_default']), None)
+    return jsonify({'base_domains': bases, 'default': default}), 200
+
+
 @domains_bp.route('/suggest-subdomain', methods=['GET'])
 @jwt_required()
 def suggest_subdomain():
     """Suggest a managed-sites subdomain (<slug>.<base>) for an app, so the UI can
-    prefill the 'give this a subdomain' action."""
+    prefill the 'give this a subdomain' action. Honours an optional ``base``."""
     from app.services.site_domain_service import SiteDomainService
     app_id = request.args.get('application_id', type=int)
     app = Application.query.get(app_id) if app_id else None
-    base = SiteDomainService.base_domain()
+    base = SiteDomainService.resolve_base(request.args.get('base'))
     if not base:
         return jsonify({'base_domain': None, 'suggestion': None,
                         'dns_mode': SiteDomainService.dns_mode()}), 200
     slug = SiteDomainService.slugify(app.name) if app else 'site'
     return jsonify({'base_domain': base, 'suggestion': f'{slug}.{base}',
-                    'dns_mode': SiteDomainService.dns_mode()}), 200
+                    'dns_mode': SiteDomainService.dns_mode(base)}), 200
 
 
 @domains_bp.route('/give-subdomain', methods=['POST'])
 @jwt_required()
 def give_subdomain():
-    """Publish an app at <label>.<base_domain> in one click — Domain row + nginx
-    vhost + (per-site mode) an auto-created A record."""
+    """Publish an app at <label>.<base> in one click — Domain row + nginx vhost +
+    (per-site mode) an auto-created A record. Accepts an optional ``base`` to
+    publish under a specific registered base domain."""
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     data = request.get_json() or {}
@@ -248,7 +270,7 @@ def give_subdomain():
         return jsonify({'error': 'Access denied'}), 403
 
     from app.services.site_domain_service import SiteDomainService
-    result = SiteDomainService.give_subdomain(app, label=data.get('label'))
+    result = SiteDomainService.give_subdomain(app, label=data.get('label'), base=data.get('base'))
     return jsonify(result), 200 if result.get('success') else 400
 
 

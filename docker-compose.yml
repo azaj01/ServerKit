@@ -1,19 +1,20 @@
 # ============================================
-# ServerKit Docker Compose  (canonical deployment)
+# ServerKit Docker Compose  (optional legacy frontend container)
 # ============================================
-# ServerKit's backend manages the HOST it runs on — it creates app directories
-# under /var/serverkit/apps, drives the host Docker daemon (one container per
-# managed app), reloads nginx, and runs systemctl/firewall/PHP-FPM. A backend
-# *inside* a container cannot do any of that, so the backend runs directly on
-# the host (via systemd `serverkit.service`, installed by install.sh) and this
-# compose file builds and serves ONLY the frontend.
+# ServerKit runs FULLY OFF DOCKER for the panel itself:
+#   - the backend runs on the host via systemd `serverkit.service`, and
+#   - the React frontend is served as static files directly by the host nginx
+#     from frontend/dist (built by install.sh) — NO container.
+# This keeps a ServerKit update from ever touching the workloads: managed apps
+# are the only things in Docker, and host nginx (which fronts them) is never
+# stopped, only gracefully reloaded.
 #
-# The frontend's nginx proxies /api and /socket.io to the host backend through
-# the special `backend:host-gateway` alias (see frontend/nginx.conf), so the
-# `backend` upstream resolves to the host regardless of the bridge network.
+# The `frontend` service below is retained ONLY as an opt-in escape hatch for
+# anyone who specifically wants the panel UI in a container. It sits behind the
+# `legacy-frontend` profile, so the default `docker compose up -d` starts
+# NOTHING. To use it, also repoint nginx `location /` back at 127.0.0.1:3847:
 #
-#   Install (sets up the host backend + this frontend): ./serverkit install
-#   Frontend only:  docker compose up -d --build
+#   docker compose --profile legacy-frontend up -d --build
 #
 # Want a quick, throwaway demo with NO host management? Use the single-container
 # image built from ./Dockerfile instead — it bundles both tiers but, as its
@@ -22,6 +23,7 @@
 
 services:
   frontend:
+    profiles: ["legacy-frontend"]
     build:
       context: ./frontend
       dockerfile: Dockerfile

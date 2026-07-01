@@ -3277,6 +3277,28 @@
 
         &:hover { opacity: 0.85; }
         &:disabled { opacity: 0.55; cursor: default; }
+
+        // Library-backed update uses the accent tone to distinguish it from the
+        // generic wp.org update flag.
+        &--library {
+            color: var(--accent);
+            background: var(--accent-bg, rgba(99, 102, 241, 0.12));
+        }
+    }
+
+    // "Managed" badge on plugins tracked by the global plugin library.
+    .wp-managed-pill {
+        display: inline-block;
+        margin-left: 7px;
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--accent);
+        background: var(--accent-bg, rgba(99, 102, 241, 0.12));
+        padding: 1px 6px;
+        border-radius: 4px;
+        vertical-align: middle;
     }
 
     .wp-theme-grid {

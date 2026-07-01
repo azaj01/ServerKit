@@ -289,6 +289,14 @@ Fork → 创建功能分支 → 提交代码 → 推送 → 发起 Pull Request
 
 ---
 
+## 🔭 相关项目
+
+**[Faro](https://github.com/jhd3197/faro)** — 同一作者打造的现代桌面客户端，支持 SFTP、FTP、SSH 和兼容 S3 的存储。保存一次服务器后，即可在双面板视图中浏览其文件，并在同一 SSH 会话上打开终端 — 还支持拖放传输、单向目录同步以及原地编辑。它甚至内置 **Agent Bridge**，让 Claude Code（或任何 MCP 智能体）通过你已认证的会话在服务器上执行命令，逐条命令审批，且无需共享凭据。
+
+> ServerKit 在浏览器中管理你的服务器；Faro 则是桌面端的得力搭档，用于动手进行文件传输、终端操作以及跨服务器的临时任务。[获取构建版本 →](https://github.com/jhd3197/faro/releases/latest)
+
+---
+
 ## 💬 社区
 
 [![Discord](https://img.shields.io/badge/Discord-加入我们-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/ZKk6tkCQfG)

@@ -32,6 +32,7 @@ export default function ConnectionsHub() {
     const [relayConfig, setRelayConfig] = useState(null);
     const [registrarConnections, setRegistrarConnections] = useState([]);
     const [registrarDomains, setRegistrarDomains] = useState([]);
+    const [containerRegistries, setContainerRegistries] = useState([]);
     const [allConnections, setAllConnections] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modalProvider, setModalProvider] = useState(null);
@@ -39,7 +40,7 @@ export default function ConnectionsHub() {
 
     const loadData = useCallback(async () => {
         try {
-            const [ghStatus, glStatus, bbStatus, dns, cloudP, storage, relay, regConns, regDomains, allConns] = await Promise.all([
+            const [ghStatus, glStatus, bbStatus, dns, cloudP, storage, relay, regConns, regDomains, registries, allConns] = await Promise.all([
                 api.getGithubSourceStatus().catch(() => null),
                 api.getGitlabSourceStatus().catch(() => null),
                 api.getBitbucketSourceStatus().catch(() => null),
@@ -49,6 +50,7 @@ export default function ConnectionsHub() {
                 api.getEmailRelay().catch(() => null),
                 api.getRegistrarConnections().then((d) => d.connections || []).catch(() => []),
                 api.getRegistrarDomains().then((d) => d.domains || []).catch(() => []),
+                api.getContainerRegistries().then((d) => d.registries || []).catch(() => []),
                 api.getAllConnections().then((d) => d.connections || []).catch(() => []),
             ]);
             setSourceStatus({ github: ghStatus, gitlab: glStatus, bitbucket: bbStatus });
@@ -58,6 +60,7 @@ export default function ConnectionsHub() {
             setRelayConfig(relay);
             setRegistrarConnections(regConns);
             setRegistrarDomains(regDomains);
+            setContainerRegistries(registries);
             setAllConnections(allConns);
             if (isAdmin) {
                 const [ghCfg, glCfg, bbCfg] = await Promise.all([
@@ -281,6 +284,44 @@ export default function ConnectionsHub() {
         }
     }, [toast]);
 
+    // ── Container registries ──
+    const onAddRegistry = useCallback(async (payload) => {
+        try {
+            await api.addContainerRegistry(payload);
+            toast.success(`${payload.name || 'Registry'} connected`);
+            await loadData();
+            return true;
+        } catch (err) {
+            toast.error(err.message || 'Failed to add registry');
+            return false;
+        }
+    }, [toast, loadData]);
+
+    const onRemoveRegistry = useCallback(async (id) => {
+        if (!window.confirm('Remove this container registry? Apps that pull from it will lose access.')) return false;
+        try {
+            await api.deleteContainerRegistry(id);
+            toast.success('Registry removed');
+            await loadData();
+            return true;
+        } catch (err) {
+            toast.error(err.message || 'Failed to remove registry');
+            return false;
+        }
+    }, [toast, loadData]);
+
+    const onTestRegistry = useCallback(async (id) => {
+        try {
+            const res = await api.testContainerRegistry(id);
+            if (res && res.success) toast.success(res.message || 'Login works');
+            else toast.error((res && res.error) || 'Login failed');
+            return res;
+        } catch (err) {
+            toast.error(err.message || 'Login failed');
+            return null;
+        }
+    }, [toast]);
+
     // ── Per-provider card summaries ──
     const summaries = useMemo(() => {
         const out = {};
@@ -333,6 +374,15 @@ export default function ConnectionsHub() {
                         manageHref, manageLabel: 'Domains',
                     }
                     : { connected: false, statusLabel: 'Not connected', statusTone: 'neutral', scopes: [] };
+            } else if (provider.kind === 'registry') {
+                const list = containerRegistries;
+                out[provider.id] = list.length
+                    ? {
+                        connected: true, statusLabel: list.length === 1 ? 'Connected' : `${list.length} connected`, statusTone: 'ok',
+                        subtitle: list.map((r) => r.name).join(', '),
+                        scopes: [], manageHref, manageLabel: 'New service',
+                    }
+                    : { connected: false, statusLabel: 'Not connected', statusTone: 'neutral', scopes: [] };
             } else if (provider.kind === 'storage') {
                 const active = storageConfig?.provider === provider.storageProvider;
                 const sub = storageConfig?.[provider.storageProvider];
@@ -357,7 +407,7 @@ export default function ConnectionsHub() {
             }
         }
         return out;
-    }, [sourceStatus, cloudProviders, dnsProviders, registrarConnections, registrarDomains, storageConfig, relayConfig]);
+    }, [sourceStatus, cloudProviders, dnsProviders, registrarConnections, registrarDomains, containerRegistries, storageConfig, relayConfig]);
 
     function handleManage(provider) {
         setModalProvider(provider);
@@ -428,6 +478,7 @@ export default function ConnectionsHub() {
                 cloudProviders={cloudProviders}
                 storageConfig={storageConfig}
                 registrarConnections={registrarConnections}
+                containerRegistries={containerRegistries}
                 onConnectSource={onConnectSource}
                 onDisconnectSource={onDisconnectSource}
                 onSaveSourceConfig={onSaveSourceConfig}
@@ -441,6 +492,9 @@ export default function ConnectionsHub() {
                 onAddRegistrar={onAddRegistrar}
                 onRemoveRegistrar={onRemoveRegistrar}
                 onTestRegistrar={onTestRegistrar}
+                onAddRegistry={onAddRegistry}
+                onRemoveRegistry={onRemoveRegistry}
+                onTestRegistry={onTestRegistry}
                 relayConfig={relayConfig}
                 onSaveRelay={onSaveRelay}
                 onTestRelay={onTestRelay}

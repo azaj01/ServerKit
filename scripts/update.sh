@@ -95,6 +95,9 @@ LOCK_FILE="${SERVERKIT_LOCK_FILE:-/var/lock/serverkit-update.lock}"
 NGINX_DIR="${SERVERKIT_NGINX_DIR:-/etc/nginx}"
 LETSENCRYPT_DIR="${SERVERKIT_LETSENCRYPT_DIR:-/etc/letsencrypt}"
 SYSTEMD_DIR="${SERVERKIT_SYSTEMD_DIR:-/etc/systemd/system}"
+# Per-app nginx location snippets — one proxy_pass to each managed app's
+# container. The updater probes these to prove apps stayed up across the switch.
+APP_LOCATIONS_DIR="${SERVERKIT_APP_LOCATIONS_DIR:-/etc/nginx/serverkit-locations}"
 
 GITHUB_REPO="${GITHUB_REPO:-jhd3197/ServerKit}"
 SERVERKIT_OFFLINE_TARBALL="${SERVERKIT_OFFLINE_TARBALL:-}"
@@ -327,6 +330,124 @@ wait_for_service() {
         waited=$((waited + 1))
     done
     return 1
+}
+
+# Apply the (possibly refreshed) nginx config WITHOUT dropping traffic.
+#
+# Host nginx is the front door for every managed app — it reverse-proxies their
+# containers via /etc/nginx/serverkit-locations/*.conf. Stopping it (the old
+# behaviour) blacked out every hosted site for the whole switch window, so a
+# panel update became an outage for unrelated apps. `nginx -s reload` keeps the
+# listening sockets and in-flight connections alive while swapping config, so
+# apps never blink. The updater only ever changes the *config* (refresh_config),
+# never anything nginx serves from the blue/green slot, so a reload is all that
+# is ever needed. If nginx happens to be down, start it instead.
+reload_nginx_graceful() {
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would reload nginx (graceful, zero-downtime)"
+        return 0
+    fi
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        # Validate before reloading: a bad config would otherwise leave nginx
+        # running the OLD config (reload is rejected) — non-fatal, but warn loudly.
+        if nginx -t >/dev/null 2>&1; then
+            systemctl reload nginx 2>/dev/null \
+                || run_or_dry systemctl reload nginx \
+                || warn "nginx reload failed — apps keep serving the previous config"
+        else
+            warn "nginx config test failed — skipping reload (apps keep serving the previous config)"
+        fi
+    else
+        warn "nginx was not running — starting it"
+        run_or_dry systemctl start nginx
+        wait_for_service nginx active 15 || warn "nginx did not report active within 15 seconds"
+    fi
+}
+
+# Label a slot's SPA bundle for SELinux-enforcing hosts so nginx can read the
+# static panel assets it now serves (see install.sh selinux_label_frontend_dist).
+# Best-effort and a no-op on permissive/disabled boxes or where the tools are
+# absent. Takes the slot's real path (blue/green resolves through a symlink).
+selinux_label_dist() {
+    local dir="$1"
+    [ "$DRY_RUN" = "1" ] && return 0
+    command -v selinuxenabled &>/dev/null && selinuxenabled 2>/dev/null || return 0
+    local dist="${dir}/frontend/dist"
+    [ -d "$dist" ] || return 0
+    if command -v semanage &>/dev/null && command -v restorecon &>/dev/null; then
+        semanage fcontext -a -t httpd_sys_content_t "${dist}(/.*)?" 2>/dev/null \
+            || semanage fcontext -m -t httpd_sys_content_t "${dist}(/.*)?" 2>/dev/null || true
+        restorecon -R "$dist" 2>/dev/null || true
+    elif command -v chcon &>/dev/null; then
+        chcon -R -t httpd_sys_content_t "$dist" 2>/dev/null || true
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Managed-app uptime verification
+# ---------------------------------------------------------------------------
+# The whole point of the reload-not-stop discipline is that hosted apps never go
+# down when the panel updates. These helpers turn that promise into something the
+# updater actually checks: snapshot which app upstreams are reachable before the
+# switch, re-probe after the reload, and shout if any app that WAS serving has
+# stopped answering.
+
+# Discover the upstreams (host:port) host nginx reverse-proxies for managed apps
+# by scanning the per-app location snippets. One unique "host:port" per line.
+discover_app_upstreams() {
+    [ -d "$APP_LOCATIONS_DIR" ] || return 0
+    grep -rhoE 'proxy_pass[[:space:]]+https?://127\.0\.0\.1:[0-9]+' "$APP_LOCATIONS_DIR" 2>/dev/null \
+        | grep -oE '127\.0\.0\.1:[0-9]+' | sort -u
+}
+
+# Probe each upstream on stdin; emit "host:port up" / "host:port down". "up" means
+# the app container answered at all (ANY HTTP status — a 4xx/5xx app is still
+# reachable; a refused/timed-out connection is not), which is exactly what nginx
+# needs to keep fronting it.
+probe_app_upstreams() {
+    local up
+    while IFS= read -r up; do
+        [ -n "$up" ] || continue
+        if curl -s -o /dev/null --max-time 4 "http://$up/" 2>/dev/null; then
+            printf '%s up\n' "$up"
+        else
+            printf '%s down\n' "$up"
+        fi
+    done
+}
+
+# A reachability snapshot for every fronted app: "host:port state" lines.
+snapshot_app_reachability() {
+    [ "$DRY_RUN" = "1" ] && return 0
+    discover_app_upstreams | probe_app_upstreams
+}
+
+# Compare a pre-update snapshot with a post-update one. Warn for any app that was
+# reachable before and is not now (the update disrupted a workload). Non-zero if
+# any regression is found; an app that was already down before the update is not
+# counted against us.
+report_app_uptime_regressions() {
+    local before="$1" after="$2" regressed=0 total=0 line up state
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        up="${line% *}"; state="${line##* }"
+        total=$((total + 1))
+        [ "$state" = "up" ] || continue
+        if printf '%s\n' "$after" | grep -qx "$up down"; then
+            warn "App upstream $up was reachable before the update but is DOWN now"
+            regressed=$((regressed + 1))
+        fi
+    done <<EOF
+$before
+EOF
+    if [ "$total" -eq 0 ]; then
+        info "No managed apps fronted by nginx — nothing to verify"
+    elif [ "$regressed" -eq 0 ]; then
+        good "All $total managed app(s) stayed reachable across the update"
+    else
+        warn "$regressed of $total managed app(s) went down across the update"
+    fi
+    [ "$regressed" -eq 0 ]
 }
 
 # Resolve the currently active real directory behind the symlink.
@@ -736,6 +857,19 @@ refresh_config() {
         cp "$target/nginx/sites-available/serverkit-insecure.conf" "$NGINX_DIR/sites-available/"
     fi
 
+    # The panel frontend is served statically by host nginx from
+    # $INSTALL_DIR/frontend/dist (the /opt/serverkit symlink). The shipped config
+    # roots at the default /opt/serverkit; re-point it when SERVERKIT_DIR differs,
+    # exactly as install.sh does, so a custom install dir survives upgrades.
+    if [ "$INSTALL_DIR" != "/opt/serverkit" ]; then
+        local conf
+        for conf in serverkit.conf serverkit-insecure.conf; do
+            [ -f "$NGINX_DIR/sites-available/$conf" ] && \
+                sed -i "s|/opt/serverkit/frontend/dist|$INSTALL_DIR/frontend/dist|g" \
+                    "$NGINX_DIR/sites-available/$conf"
+        done
+    fi
+
     # TLS floor — prefer a reversible conf.d snippet when nginx.conf doesn't
     # already declare these (a second declaration in the same http{} context is a
     # "duplicate ssl_protocols" error); otherwise rewrite in place. Mirrors
@@ -834,20 +968,20 @@ rollback() {
         halt "Cannot roll back: previous installation directory not available"
     fi
 
+    # Same zero-downtime discipline as the forward path: cycle only the backend,
+    # never stop nginx (it fronts every hosted app), and reload its config after
+    # the slot is switched back.
     systemctl stop "$BACKEND_SERVICE" 2>/dev/null || true
     wait_for_service "$BACKEND_SERVICE" inactive 30 || true
-    systemctl stop nginx 2>/dev/null || true
-    wait_for_service nginx inactive 15 || true
 
     atomic_switch "$PREVIOUS_DIR"
 
     systemctl daemon-reload
     systemctl start "$BACKEND_SERVICE" 2>/dev/null || true
     wait_for_service "$BACKEND_SERVICE" active 30 || true
-    cd "$INSTALL_DIR" && docker compose up -d --force-recreate frontend 2>&1 | tail -5
-    docker compose up -d backend 2>&1 | tail -5
-    systemctl start nginx 2>/dev/null || true
-    wait_for_service nginx active 15 || true
+    # Frontend is static (served from the restored slot); just re-label + reload.
+    selinux_label_dist "$PREVIOUS_DIR"
+    reload_nginx_graceful
 
     # Confirm the restored version actually answers — a rollback that itself
     # comes up unhealthy is a far worse state to leave the operator guessing in.
@@ -1331,11 +1465,19 @@ fi
 refresh_config "$NEXT_DIR"
 
 # Stop services.
+#
+# nginx is deliberately NOT stopped: it fronts every managed app, so taking it
+# down would black out unrelated sites for the whole switch. Only the panel
+# backend is cycled (a brief panel-API gap that never touches hosted apps), and
+# nginx picks up any refreshed config via a graceful reload after the switch.
+#
+# First snapshot which hosted apps are reachable through nginx right now, so we
+# can prove afterwards that the update did not knock any of them offline.
+APP_BASELINE="$(snapshot_app_reachability)"
+
 phase "Stopping Services"
 run_or_dry systemctl stop "$BACKEND_SERVICE"
 wait_for_service "$BACKEND_SERVICE" inactive 30 || warn "Backend did not stop within 30 seconds"
-run_or_dry systemctl stop nginx
-wait_for_service nginx inactive 15 || warn "nginx did not stop within 15 seconds"
 
 # Record the currently active directory before switching.
 PREVIOUS_DIR="$(active_real_dir)"
@@ -1344,17 +1486,32 @@ PREVIOUS_DIR="$(active_real_dir)"
 atomic_switch "$NEXT_DIR"
 
 # Start services.
+#
+# The frontend is now static files under the switched-in slot's frontend/dist,
+# served directly by host nginx (no container to recreate). The atomic switch
+# already swapped the served assets; nginx only needs a graceful config reload.
 phase "Starting Services"
 run_or_dry systemctl start "$BACKEND_SERVICE"
 wait_for_service "$BACKEND_SERVICE" active 30 || warn "Backend did not report active within 30 seconds"
-run_in_dir "$INSTALL_DIR" docker compose up -d --force-recreate frontend
-run_in_dir "$INSTALL_DIR" docker compose up -d backend
-run_or_dry systemctl start nginx
-wait_for_service nginx active 15 || warn "nginx did not report active within 15 seconds"
+# Re-label the now-active slot's bundle for SELinux hosts before nginx serves it.
+selinux_label_dist "$NEXT_DIR"
+# Graceful, zero-downtime config swap — never a stop/start (see reload_nginx_graceful).
+reload_nginx_graceful
 good "Services started"
 
 # Health check.
 health_check
+
+# Verify the panel update did not take any hosted app down. Compare the
+# pre-switch reachability snapshot with a fresh probe now that nginx has
+# reloaded. Best-effort: a regression is reported loudly but does not fail the
+# (already-healthy) update — the operator decides what to do about an app that
+# was likely already unhealthy.
+if [ "$DRY_RUN" = "0" ]; then
+    phase "Verifying App Uptime"
+    APP_AFTER="$(snapshot_app_reachability)"
+    report_app_uptime_regressions "$APP_BASELINE" "$APP_AFTER" || true
+fi
 
 # Keep the firewall in sync (idempotent, best-effort).
 ensure_firewall || true

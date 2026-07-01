@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import {
     CheckCircle2, ExternalLink, KeyRound, Link2, Mail, PlugZap, Server, Globe,
-    HardDrive, ShieldCheck, ShieldAlert, Trash2, Activity, ChevronDown,
+    HardDrive, ShieldCheck, ShieldAlert, Trash2, Activity, ChevronDown, Boxes,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -21,17 +21,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProviderBrandIcon } from '../../icons/ProviderBrands';
-import { deriveScope } from './providerCatalog';
+import { deriveScope, REGISTRY_PROVIDERS } from './providerCatalog';
 import DnsActivity from './DnsActivity';
 
 export default function ConnectProviderModal({
     provider, open, onOpenChange, isAdmin,
-    sourceStatus, sourceConfig, dnsProviders, cloudProviders, storageConfig, registrarConnections, relayConfig,
+    sourceStatus, sourceConfig, dnsProviders, cloudProviders, storageConfig, registrarConnections, containerRegistries, relayConfig,
     onConnectSource, onDisconnectSource, onSaveSourceConfig,
     onAddDns, onRemoveDns, onTestDns,
     onAddCloud, onRemoveCloud,
     onSaveStorage, onTestStorage,
     onAddRegistrar, onRemoveRegistrar, onTestRegistrar,
+    onAddRegistry, onRemoveRegistry, onTestRegistry,
     onSaveRelay, onTestRelay, onDisableRelay,
 }) {
     if (!provider) return null;
@@ -88,6 +89,14 @@ export default function ConnectProviderModal({
                             key={provider.id} provider={provider} isAdmin={isAdmin}
                             connections={(registrarConnections || []).filter((c) => c.provider === provider.provider)}
                             onAdd={onAddRegistrar} onRemove={onRemoveRegistrar} onTest={onTestRegistrar}
+                        />
+                    )}
+
+                    {provider.kind === 'registry' && (
+                        <RegistryBody
+                            key={provider.id} provider={provider} isAdmin={isAdmin}
+                            registries={containerRegistries || []}
+                            onAdd={onAddRegistry} onRemove={onRemoveRegistry} onTest={onTestRegistry}
                         />
                     )}
 
@@ -566,6 +575,127 @@ function RegistrarBody({ provider, isAdmin, connections, onAdd, onRemove, onTest
                             <ExternalLink size={13} /> Where do I get this?
                         </a>
                     )}
+                    <div className="conn-form__actions">
+                        <Button type="submit" size="sm" disabled={busy || !canAdd}>{busy ? 'Connecting…' : 'Connect'}</Button>
+                    </div>
+                </form>
+            )}
+        </>
+    );
+}
+
+// ── Container registries: GHCR / Docker Hub / GitLab / ECR / generic ──
+// One card holds every registry; a provider selector presets the login host.
+function RegistryBody({ isAdmin, registries, onAdd, onRemove, onTest }) {
+    const [providerId, setProviderId] = useState(REGISTRY_PROVIDERS[0].id);
+    const preset = REGISTRY_PROVIDERS.find((p) => p.id === providerId) || REGISTRY_PROVIDERS[0];
+    const [form, setForm] = useState({ name: '', registry_url: REGISTRY_PROVIDERS[0].url, username: '', secret: '' });
+    const [busy, setBusy] = useState(false);
+
+    function pickProvider(id) {
+        const p = REGISTRY_PROVIDERS.find((x) => x.id === id) || REGISTRY_PROVIDERS[0];
+        setProviderId(id);
+        // Preset (or lock) the host to the provider's default.
+        setForm((f) => ({ ...f, registry_url: p.url }));
+    }
+
+    // ECR authenticates with AWS keys, no username; every other provider needs one.
+    const needsUsername = providerId !== 'ecr';
+    const canAdd = Boolean(form.name.trim() && form.secret.trim() && (!needsUsername || form.username.trim()));
+
+    async function withBusy(fn) { setBusy(true); try { return await fn(); } finally { setBusy(false); } }
+    async function add(e) {
+        e.preventDefault();
+        const payload = {
+            name: form.name.trim(),
+            provider: providerId,
+            registry_url: (form.registry_url || preset.url || '').trim(),
+            username: form.username.trim(),
+            secret: form.secret,
+        };
+        const ok = await withBusy(() => onAdd(payload));
+        if (ok) setForm({ name: '', registry_url: preset.url, username: '', secret: '' });
+    }
+
+    return (
+        <>
+            {registries.length > 0 && (
+                <div className="conn-list">
+                    {registries.map((r) => (
+                        <div key={r.id} className="conn-list__row">
+                            <div className="conn-list__info">
+                                <strong>{r.name}</strong>
+                                <span className="conn-list__key">{r.login_host}{r.username ? ` · ${r.username}` : ''}</span>
+                            </div>
+                            <span className="conn-pill conn-pill--neutral" title="Registry provider">{r.provider}</span>
+                            {isAdmin && (
+                                <div className="conn-list__actions">
+                                    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => withBusy(() => onTest(r.id))}>Test</Button>
+                                    <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => withBusy(() => onRemove(r.id))} aria-label={`Remove ${r.name}`}><Trash2 size={15} /></Button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <p className="conn-modal__note">
+                <Boxes size={15} /> Attach a registry to a service on the <Link className="conn-modal__link" to="/services/new">New Service →</Link> page to deploy its private images.
+            </p>
+
+            {!isAdmin ? (
+                <p className="conn-modal__note"><ShieldCheck size={15} /> Only administrators can add registries.</p>
+            ) : (
+                <form className="conn-form" onSubmit={add}>
+                    <div className="conn-form__heading">{registries.length > 0 ? 'Add another registry' : 'Connect a registry'}</div>
+
+                    <div className="conn-presets" role="radiogroup" aria-label="Registry provider">
+                        {REGISTRY_PROVIDERS.map((p) => (
+                            <button
+                                type="button"
+                                key={p.id}
+                                className={`conn-presets__opt${providerId === p.id ? ' is-active' : ''}`}
+                                onClick={() => pickProvider(p.id)}
+                                role="radio"
+                                aria-checked={providerId === p.id}
+                            >
+                                {p.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="conn-form__grid">
+                        <div className="form-group">
+                            <Label htmlFor="reg-name">Connection name</Label>
+                            <Input id="reg-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={`${preset.name} (team)`} />
+                        </div>
+                        <div className="form-group">
+                            <Label htmlFor="reg-url">Registry host</Label>
+                            <Input
+                                id="reg-url"
+                                value={form.registry_url}
+                                onChange={(e) => setForm((f) => ({ ...f, registry_url: e.target.value }))}
+                                placeholder={preset.id === 'dockerhub' ? 'index.docker.io (Docker Hub)' : 'registry.example.com'}
+                                disabled={preset.urlLocked}
+                                autoComplete="off"
+                            />
+                        </div>
+                        {needsUsername && (
+                            <div className="form-group">
+                                <Label htmlFor="reg-username">Username</Label>
+                                <Input id="reg-username" value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} placeholder={preset.usernameHint} autoComplete="off" />
+                            </div>
+                        )}
+                        <div className={`form-group${needsUsername ? '' : ' conn-form__wide'}`}>
+                            <Label htmlFor="reg-secret">{providerId === 'ecr' ? 'AWS credentials' : 'Password / token'}</Label>
+                            <Input id="reg-secret" type="password" value={form.secret} onChange={(e) => setForm((f) => ({ ...f, secret: e.target.value }))} placeholder={preset.secretHint} autoComplete="off" />
+                        </div>
+                    </div>
+
+                    <a className="conn-form__doc" href="https://docs.docker.com/engine/reference/commandline/login/" target="_blank" rel="noreferrer">
+                        <ExternalLink size={13} /> How registry login works
+                    </a>
+
                     <div className="conn-form__actions">
                         <Button type="submit" size="sm" disabled={busy || !canAdd}>{busy ? 'Connecting…' : 'Connect'}</Button>
                     </div>

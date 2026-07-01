@@ -55,10 +55,37 @@ export async function getSitesHttpsStatus() {
     return this.request('/admin/sites-https/status');
 }
 
-export async function setupSitesHttps(providerId, email) {
+export async function setupSitesHttps(providerId, email, base) {
     return this.request('/admin/sites-https/setup', {
         method: 'POST',
-        body: { provider_id: providerId, email }
+        body: { provider_id: providerId, email, base }
+    });
+}
+
+// Base-domain registry (managed sites can publish under several base domains)
+export async function addSiteBaseDomain(domain, { dnsMode = 'wildcard', makeDefault = false } = {}) {
+    return this.request('/admin/sites-https/base-domains', {
+        method: 'POST',
+        body: { domain, dns_mode: dnsMode, make_default: makeDefault }
+    });
+}
+
+export async function removeSiteBaseDomain(domain) {
+    return this.request(`/admin/sites-https/base-domains/${encodeURIComponent(domain)}`, {
+        method: 'DELETE'
+    });
+}
+
+export async function setDefaultSiteBaseDomain(domain) {
+    return this.request(`/admin/sites-https/base-domains/${encodeURIComponent(domain)}/default`, {
+        method: 'POST'
+    });
+}
+
+export async function updateSiteBaseDomain(domain, { dnsMode } = {}) {
+    return this.request(`/admin/sites-https/base-domains/${encodeURIComponent(domain)}`, {
+        method: 'PATCH',
+        body: { dns_mode: dnsMode }
     });
 }
 

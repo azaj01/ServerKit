@@ -122,6 +122,10 @@ def create_app(config_name=None):
     app.register_blueprint(apps_bp, url_prefix='/api/v1/services', name='services')
     app.register_blueprint(domains_bp, url_prefix='/api/v1/domains')
     app.register_blueprint(private_urls_bp, url_prefix='/api/v1/apps')
+    # Per-app managed volumes — same dual mount as apps (/apps + /services alias).
+    from app.api.app_volumes import app_volumes_bp
+    app.register_blueprint(app_volumes_bp, url_prefix='/api/v1/apps')
+    app.register_blueprint(app_volumes_bp, url_prefix='/api/v1/services', name='app_volumes_services')
 
     # Register blueprints - System
     from app.api.system import system_bp

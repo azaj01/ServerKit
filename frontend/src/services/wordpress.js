@@ -11,6 +11,10 @@ const wordpressApi = {
         body: data
     }),
 
+    // Base domains a new site can be published under (<slug>.<base>), for the
+    // create-flow picker. Returns { base_domains: [...], default }.
+    listBaseDomains: () => api.request('/domains/base-domains'),
+
     // Import an existing WP site from an uploaded SQL dump, plus an optional
     // wp-content/full-site .zip (plugins/themes/uploads). Multipart upload.
     importSite: ({ name, adminEmail, oldUrl, sqlFile, wpContentFile }) => {
@@ -144,6 +148,58 @@ const wordpressApi = {
     }),
 
     deactivatePlugin: (siteId, plugin) => api.request(`${BASE_PATH}/${siteId}/plugins/${encodeURIComponent(plugin)}/deactivate`, {
+        method: 'POST'
+    }),
+
+    // =========================================
+    // Global Plugin Library
+    // =========================================
+    LIBRARY_PATH: '/wordpress/plugins/library',
+
+    getLibraryPlugins: () => api.request('/wordpress/plugins/library'),
+
+    getLibraryPlugin: (id) => api.request(`/wordpress/plugins/library/${id}`),
+
+    addLibraryPlugin: (data) => api.request('/wordpress/plugins/library', {
+        method: 'POST',
+        body: data
+    }),
+
+    updateLibraryPlugin: (id, data) => api.request(`/wordpress/plugins/library/${id}`, {
+        method: 'PUT',
+        body: data
+    }),
+
+    deleteLibraryPlugin: (id) => api.request(`/wordpress/plugins/library/${id}`, {
+        method: 'DELETE'
+    }),
+
+    syncLibraryPlugin: (id) => api.request(`/wordpress/plugins/library/${id}/sync`, {
+        method: 'POST'
+    }),
+
+    // Install/update a library plugin on a specific site.
+    installLibraryPluginOnSite: (id, siteId, activate = true) =>
+        api.request(`/wordpress/plugins/library/${id}/install`, {
+            method: 'POST',
+            body: { site_id: siteId, activate }
+        }),
+
+    uninstallLibraryPluginFromSite: (id, siteId) =>
+        api.request(`/wordpress/plugins/library/${id}/uninstall`, {
+            method: 'POST',
+            body: { site_id: siteId }
+        }),
+
+    // Push the latest cached version to every site that has the plugin.
+    bulkUpdateLibraryPlugin: (id) => api.request(`/wordpress/plugins/library/${id}/bulk-update`, {
+        method: 'POST'
+    }),
+
+    // Per-site: which installed plugins are library-managed (+ update state).
+    getManagedPlugins: (siteId) => api.request(`${BASE_PATH}/${siteId}/plugins/managed`),
+
+    scanManagedPlugins: (siteId) => api.request(`${BASE_PATH}/${siteId}/plugins/library-scan`, {
         method: 'POST'
     }),
 

@@ -57,6 +57,7 @@ def create_site():
     enable_page_cache = bool(data.get('enablePageCache'))
     enable_object_cache = bool(data.get('enableObjectCache'))
     domain = (data.get('domain') or '').strip()
+    base_domain = (data.get('baseDomain') or data.get('base_domain') or '').strip()
 
     if not name:
         return jsonify({'error': 'Site name is required'}), 400
@@ -71,6 +72,7 @@ def create_site():
         enable_page_cache=enable_page_cache,
         enable_object_cache=enable_object_cache,
         domain=domain or None,
+        base_domain=base_domain or None,
     )
 
     if result.get('success'):
@@ -1452,3 +1454,181 @@ def install_wp_cli():
     """Install WP-CLI."""
     result = WordPressService.install_wp_cli()
     return jsonify(result), 200 if result['success'] else 400
+
+
+# ==================== GLOBAL PLUGIN LIBRARY ====================
+# A global layer over the per-site plugin management above: operators register
+# their own plugins (GitHub repo / local path) once, then install or update them
+# across any number of managed WordPress sites from one place.
+
+def _resolve_wp_site(site_or_app_id):
+    """Resolve an ID to a WordPressSite (accepts a WordPressSite.id or Application.id)."""
+    site = WordPressSite.query.get(site_or_app_id)
+    if site:
+        return site
+    return WordPressSite.query.filter_by(application_id=site_or_app_id).first()
+
+
+@wordpress_bp.route('/plugins/library', methods=['GET'])
+@jwt_required()
+def list_library_plugins():
+    """List all plugins in the global library."""
+    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService
+    return jsonify({'plugins': WordPressPluginLibraryService.list_plugins()}), 200
+
+
+@wordpress_bp.route('/plugins/library', methods=['POST'])
+@jwt_required()
+@admin_required
+def add_library_plugin():
+    """Register a new plugin in the library and sync it into the cache."""
+    from app.services.wordpress_plugin_library_service import (
+        WordPressPluginLibraryService, PluginLibraryError)
+    data = request.get_json() or {}
+    try:
+        result = WordPressPluginLibraryService.add_plugin(data, user_id=get_jwt_identity())
+        return jsonify(result), 201
+    except PluginLibraryError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@wordpress_bp.route('/plugins/library/<int:plugin_id>', methods=['GET'])
+@jwt_required()
+def get_library_plugin(plugin_id):
+    """Library plugin detail, including per-site installations."""
+    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService
+    data = WordPressPluginLibraryService.get_plugin(plugin_id)
+    if not data:
+        return jsonify({'error': 'Plugin not found'}), 404
+    return jsonify(data), 200
+
+
+@wordpress_bp.route('/plugins/library/<int:plugin_id>', methods=['PUT'])
+@jwt_required()
+@admin_required
+def update_library_plugin(plugin_id):
+    """Update a library plugin's source / branch / active state."""
+    from app.services.wordpress_plugin_library_service import (
+        WordPressPluginLibraryService, PluginLibraryError)
+    data = request.get_json() or {}
+    try:
+        result = WordPressPluginLibraryService.update_plugin(
+            plugin_id, data, user_id=get_jwt_identity())
+        return jsonify(result), 200
+    except PluginLibraryError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@wordpress_bp.route('/plugins/library/<int:plugin_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_library_plugin(plugin_id):
+    """Remove a plugin from the library (and delete its cache directory)."""
+    from app.services.wordpress_plugin_library_service import (
+        WordPressPluginLibraryService, PluginLibraryError)
+    try:
+        return jsonify(WordPressPluginLibraryService.delete_plugin(plugin_id)), 200
+    except PluginLibraryError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@wordpress_bp.route('/plugins/library/<int:plugin_id>/sync', methods=['POST'])
+@jwt_required()
+@admin_required
+def sync_library_plugin(plugin_id):
+    """Pull the latest source into the cache and re-parse the plugin header."""
+    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService
+    from app.models import WordPressCustomPlugin
+    plugin = WordPressCustomPlugin.query.get(plugin_id)
+    if not plugin:
+        return jsonify({'error': 'Plugin not found'}), 404
+    result = WordPressPluginLibraryService.sync_plugin(plugin, user_id=get_jwt_identity())
+    return jsonify(result), 200 if result.get('success') else 400
+
+
+@wordpress_bp.route('/plugins/library/<int:plugin_id>/install', methods=['POST'])
+@jwt_required()
+@admin_required
+def install_library_plugin(plugin_id):
+    """Install (or update) a library plugin on a specific site."""
+    from app.services.wordpress_plugin_library_service import (
+        WordPressPluginLibraryService, PluginLibraryError)
+    from app.models import WordPressCustomPlugin
+    data = request.get_json() or {}
+    site_id = data.get('site_id')
+    if not site_id:
+        return jsonify({'error': 'site_id is required'}), 400
+
+    plugin = WordPressCustomPlugin.query.get(plugin_id)
+    if not plugin:
+        return jsonify({'error': 'Plugin not found'}), 404
+    site = _resolve_wp_site(site_id)
+    if not site:
+        return jsonify({'error': 'Site not found'}), 404
+
+    try:
+        result = WordPressPluginLibraryService.install_on_site(
+            plugin, site, activate=data.get('activate', True))
+        return jsonify(result), 200
+    except PluginLibraryError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@wordpress_bp.route('/plugins/library/<int:plugin_id>/bulk-update', methods=['POST'])
+@jwt_required()
+@admin_required
+def bulk_update_library_plugin(plugin_id):
+    """Push the latest cached version to every site that has the plugin."""
+    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService
+    from app.models import WordPressCustomPlugin
+    plugin = WordPressCustomPlugin.query.get(plugin_id)
+    if not plugin:
+        return jsonify({'error': 'Plugin not found'}), 404
+    return jsonify(WordPressPluginLibraryService.bulk_update(plugin)), 200
+
+
+@wordpress_bp.route('/plugins/library/<int:plugin_id>/uninstall', methods=['POST'])
+@jwt_required()
+@admin_required
+def uninstall_library_plugin(plugin_id):
+    """Remove a library plugin from a specific site."""
+    from app.services.wordpress_plugin_library_service import (
+        WordPressPluginLibraryService, PluginLibraryError)
+    from app.models import WordPressCustomPlugin
+    data = request.get_json() or {}
+    site_id = data.get('site_id')
+    if not site_id:
+        return jsonify({'error': 'site_id is required'}), 400
+    plugin = WordPressCustomPlugin.query.get(plugin_id)
+    if not plugin:
+        return jsonify({'error': 'Plugin not found'}), 404
+    site = _resolve_wp_site(site_id)
+    if not site:
+        return jsonify({'error': 'Site not found'}), 404
+    try:
+        return jsonify(WordPressPluginLibraryService.uninstall_from_site(plugin, site)), 200
+    except PluginLibraryError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@wordpress_bp.route('/sites/<int:app_id>/plugins/library-scan', methods=['POST'])
+@jwt_required()
+@admin_required
+def scan_site_library_plugins(app_id):
+    """Scan a site and tag which installed plugins are library-managed."""
+    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService
+    site = _resolve_wp_site(app_id)
+    if not site:
+        return jsonify({'error': 'Site not found'}), 404
+    return jsonify(WordPressPluginLibraryService.scan_site(site)), 200
+
+
+@wordpress_bp.route('/sites/<int:app_id>/plugins/managed', methods=['GET'])
+@jwt_required()
+def get_site_managed_plugins(app_id):
+    """Which of a site's installed plugins are library-managed (+ update state)."""
+    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService
+    site = _resolve_wp_site(app_id)
+    if not site:
+        return jsonify({'error': 'Site not found'}), 404
+    return jsonify({'managed': WordPressPluginLibraryService.managed_for_site(site)}), 200

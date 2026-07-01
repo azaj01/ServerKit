@@ -40,7 +40,7 @@ class ConnectionRegistry:
     @classmethod
     def list_all(cls, user_id=None):
         out = []
-        for fn in (cls._source, cls._dns, cls._infra, cls._registrar, cls._storage, cls._email):
+        for fn in (cls._source, cls._dns, cls._infra, cls._registrar, cls._storage, cls._email, cls._registries):
             try:
                 out += fn(user_id) if fn is cls._source else fn()
             except Exception as e:  # one failing store never breaks the whole list
@@ -102,6 +102,15 @@ class ConnectionRegistry:
             out.append(_entry('email', c.provider, c.name, id=c.id, scope=scope,
                               encrypted=True, created_at=c.created_at))
         return out
+
+    @staticmethod
+    def _registries():
+        from app.models.container_registry import ContainerRegistry
+        return [
+            _entry('registry', c.provider, c.name, id=c.id, scope=c.login_host(),
+                   encrypted=bool(c.secret_encrypted), created_at=c.created_at)
+            for c in ContainerRegistry.query.all()
+        ]
 
     @staticmethod
     def _storage():

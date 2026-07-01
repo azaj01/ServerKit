@@ -4,6 +4,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Pill } from '@/components/ds';
 
 const SiteSettingsTab = ({ onDevModeChange }) => {
     const [settings, setSettings] = useState({
@@ -15,14 +16,17 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
     const [saving, setSaving] = useState(false);
     const [savingPort, setSavingPort] = useState(false);
     const [message, setMessage] = useState(null);
-    const [https, setHttps] = useState({ base_domain: '', server_ip: '', https_enabled: false, dns_mode: 'wildcard', providers: [] });
+    const [https, setHttps] = useState({ base_domain: '', server_ip: '', https_enabled: false, dns_mode: 'wildcard', providers: [], bases: [] });
     const [baseDomain, setBaseDomain] = useState('');
     const [serverIp, setServerIp] = useState('');
-    const [dnsMode, setDnsMode] = useState('wildcard');
     const [providerId, setProviderId] = useState('');
     const [savingDomain, setSavingDomain] = useState(false);
     const [savingDnsMode, setSavingDnsMode] = useState(false);
-    const [settingUpHttps, setSettingUpHttps] = useState(false);
+    // Base-domain registry: add a new base + track which row an action is running on.
+    const [newDomain, setNewDomain] = useState('');
+    const [newDnsMode, setNewDnsMode] = useState('wildcard');
+    const [addingDomain, setAddingDomain] = useState(false);
+    const [rowBusy, setRowBusy] = useState('');   // domain currently being mutated
 
     useEffect(() => {
         loadSettings();
@@ -36,14 +40,7 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                 dev_mode: data.dev_mode || false
             });
             setBasePort(String(data.managed_app_base_port ?? 0));
-            try {
-                const h = await api.getSitesHttpsStatus();
-                setHttps(h);
-                setBaseDomain(h.base_domain || '');
-                setServerIp(h.server_ip || '');
-                setDnsMode(h.dns_mode || 'wildcard');
-                if (h.providers?.length) setProviderId(String(h.providers[0].id));
-            } catch { /* non-admin or endpoint unavailable */ }
+            await loadHttps();
         } catch (err) {
             console.error('Failed to load settings:', err);
         } finally {
@@ -51,15 +48,147 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
         }
     }
 
+    async function loadHttps() {
+        try {
+            const h = await api.getSitesHttpsStatus();
+            setHttps(h);
+            setBaseDomain(h.base_domain || '');
+            setServerIp(h.server_ip || '');
+            if (h.providers?.length && !providerId) setProviderId(String(h.providers[0].id));
+        } catch { /* non-admin or endpoint unavailable */ }
+    }
+
+    // The bases to show: the registry when populated, else a synthetic row for
+    // the single legacy base (editable in place) so single-domain installs and
+    // fresh installs both work through the same UI.
+    const displayBases = (https.bases && https.bases.length)
+        ? https.bases
+        : (baseDomain
+            ? [{ domain: baseDomain, is_default: true, https_enabled: https.https_enabled, dns_mode: https.dns_mode, _legacy: true }]
+            : []);
+    const hasRegistry = !!(https.bases && https.bases.length);
+
+    async function handleAddDomain() {
+        const domain = newDomain.trim();
+        if (!domain) return;
+        setAddingDomain(true);
+        setMessage(null);
+        try {
+            const res = await api.addSiteBaseDomain(domain, { dnsMode: newDnsMode });
+            if (res.success) {
+                setNewDomain('');
+                setMessage({ type: 'success', text: `Added base domain ${domain}` });
+                await loadHttps();
+            } else {
+                setMessage({ type: 'error', text: res.error || 'Could not add base domain' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'Could not add base domain' });
+        } finally {
+            setAddingDomain(false);
+        }
+    }
+
+    async function handleRemoveDomain(domain) {
+        setRowBusy(domain);
+        setMessage(null);
+        try {
+            const res = await api.removeSiteBaseDomain(domain);
+            if (res.success) {
+                setMessage({ type: 'success', text: `Removed ${domain}` });
+                await loadHttps();
+            } else {
+                setMessage({ type: 'error', text: res.error || 'Could not remove base domain' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'Could not remove base domain' });
+        } finally {
+            setRowBusy('');
+        }
+    }
+
+    async function handleMakeDefault(domain) {
+        setRowBusy(domain);
+        setMessage(null);
+        try {
+            const res = await api.setDefaultSiteBaseDomain(domain);
+            if (res.success) {
+                setMessage({ type: 'success', text: `${domain} is now the default base domain` });
+                await loadHttps();
+            } else {
+                setMessage({ type: 'error', text: res.error || 'Could not set default' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'Could not set default' });
+        } finally {
+            setRowBusy('');
+        }
+    }
+
+    async function handleRowDnsMode(base, mode) {
+        if (base._legacy) return handleSaveDnsMode(mode);   // legacy setting path
+        setRowBusy(base.domain);
+        setMessage(null);
+        try {
+            const res = await api.updateSiteBaseDomain(base.domain, { dnsMode: mode });
+            if (res.success) await loadHttps();
+            else setMessage({ type: 'error', text: res.error || 'Could not update DNS mode' });
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'Could not update DNS mode' });
+        } finally {
+            setRowBusy('');
+        }
+    }
+
+    async function handleSetupHttpsFor(base) {
+        if (!providerId) {
+            setMessage({ type: 'error', text: 'Connect and select a DNS provider first' });
+            return;
+        }
+        setRowBusy(base.domain);
+        setMessage(null);
+        try {
+            if (serverIp.trim()) await api.updateSystemSetting('server_public_ip', serverIp.trim());
+            // A legacy synthetic row has no registry entry yet — omit base so the
+            // backend targets the default (and persists to settings).
+            const res = await api.setupSitesHttps(Number(providerId), undefined, base._legacy ? undefined : base.domain);
+            if (res.success) {
+                setMessage({ type: 'success', text: `Wildcard HTTPS set up for *.${res.base_domain}` + (res.warning ? ` — ${res.warning}` : '') });
+                await loadHttps();
+            } else {
+                setMessage({ type: 'error', text: res.error || 'HTTPS setup failed' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'HTTPS setup failed' });
+        } finally {
+            setRowBusy('');
+        }
+    }
+
+    async function handleSaveServerIp() {
+        setSavingDomain(true);
+        setMessage(null);
+        try {
+            await api.updateSystemSetting('server_public_ip', serverIp.trim());
+            setMessage({ type: 'success', text: 'Server public IP saved' });
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'Failed to save server IP' });
+        } finally {
+            setSavingDomain(false);
+        }
+    }
+
+    // Legacy single-base edit: persists the sites_base_domain setting in place
+    // (only used for the synthetic row on installs with no registry entries yet).
     async function handleSaveDomain() {
         setSavingDomain(true);
         setMessage(null);
         try {
             await api.updateSystemSetting('sites_base_domain', baseDomain.trim());
-            await api.updateSystemSetting('server_public_ip', serverIp.trim());
-            setMessage({ type: 'success', text: 'Sites domain settings saved' });
+            setMessage({ type: 'success', text: 'Base domain saved' });
+            await loadHttps();
         } catch (err) {
-            setMessage({ type: 'error', text: err.message || 'Failed to save domain settings' });
+            setMessage({ type: 'error', text: err.message || 'Failed to save base domain' });
         } finally {
             setSavingDomain(false);
         }
@@ -70,7 +199,6 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
         setMessage(null);
         try {
             await api.updateSystemSetting('sites_dns_mode', mode);
-            setDnsMode(mode);
             setHttps((h) => ({ ...h, dns_mode: mode }));
             setMessage({
                 type: 'success',
@@ -82,34 +210,6 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
             setMessage({ type: 'error', text: err.message || 'Failed to update DNS mode' });
         } finally {
             setSavingDnsMode(false);
-        }
-    }
-
-    async function handleSetupHttps() {
-        if (!providerId) {
-            setMessage({ type: 'error', text: 'Connect and select a DNS provider first' });
-            return;
-        }
-        setSettingUpHttps(true);
-        setMessage(null);
-        try {
-            // Persist the typed domain/IP first so setup reads current values.
-            await api.updateSystemSetting('sites_base_domain', baseDomain.trim());
-            await api.updateSystemSetting('server_public_ip', serverIp.trim());
-            const res = await api.setupSitesHttps(Number(providerId));
-            if (res.success) {
-                setHttps((h) => ({ ...h, https_enabled: true }));
-                setMessage({
-                    type: 'success',
-                    text: `Wildcard HTTPS set up for *.${res.base_domain}` + (res.warning ? ` — ${res.warning}` : ''),
-                });
-            } else {
-                setMessage({ type: 'error', text: res.error || 'HTTPS setup failed' });
-            }
-        } catch (err) {
-            setMessage({ type: 'error', text: err.message || 'HTTPS setup failed' });
-        } finally {
-            setSettingUpHttps(false);
         }
     }
 
@@ -224,30 +324,8 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
             </div>
 
             <div className="settings-card">
-                <h3>Managed Sites Domain &amp; HTTPS</h3>
-                <p>Publish managed sites at <code>&lt;name&gt;.&lt;base-domain&gt;</code>, auto-create their DNS, and serve them over HTTPS with a wildcard certificate.</p>
-
-                <div className="form-group">
-                    <div className="settings-row">
-                        <div className="settings-label">
-                            <Label htmlFor="sites-base-domain">Base domain</Label>
-                        </div>
-                        <div className="settings-control">
-                            <Input
-                                id="sites-base-domain"
-                                type="text"
-                                placeholder="apps.example.com"
-                                value={baseDomain}
-                                onChange={(e) => setBaseDomain(e.target.value)}
-                                className="w-56"
-                            />
-                        </div>
-                    </div>
-                    <span className="form-help">
-                        Each site is published at <code>&lt;name&gt;.{baseDomain || 'base-domain'}</code>. Point a
-                        wildcard DNS record <code>*.{baseDomain || 'base-domain'}</code> at this server.
-                    </span>
-                </div>
+                <h3>Managed Sites — Base Domains</h3>
+                <p>Publish managed sites at <code>&lt;name&gt;.&lt;base-domain&gt;</code>. Register one or more base domains; a new site can be created under any of them, defaulting to the one marked <strong>Default</strong>. Point a wildcard record <code>*.&lt;base&gt;</code> (or per-site A records) at this server.</p>
 
                 <div className="form-group">
                     <div className="settings-row">
@@ -263,75 +341,104 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                                 onChange={(e) => setServerIp(e.target.value)}
                                 className="w-56"
                             />
-                            <Button onClick={handleSaveDomain} disabled={savingDomain}>
+                            <Button onClick={handleSaveServerIp} disabled={savingDomain}>
                                 {savingDomain ? 'Saving…' : 'Save'}
                             </Button>
                         </div>
                     </div>
-                    <span className="form-help">Used to auto-create DNS A records for managed domains.</span>
+                    <span className="form-help">Shared by every base domain — used to auto-create their DNS A records.</span>
                 </div>
 
-                <div className="form-group">
-                    <div className="settings-row">
-                        <div className="settings-label">
-                            <Label htmlFor="sites-dns-mode">Subdomain DNS</Label>
-                        </div>
-                        <div className="settings-control">
-                            <select
-                                id="sites-dns-mode"
-                                className="settings-select"
-                                value={dnsMode}
-                                onChange={(e) => handleSaveDnsMode(e.target.value)}
-                                disabled={savingDnsMode}
-                            >
-                                <option value="wildcard">Wildcard — one record, every site instant</option>
-                                <option value="per-site">Per-site — one A record per site</option>
-                            </select>
-                        </div>
-                    </div>
-                    <span className="form-help">
-                        <strong>Wildcard</strong>: point <code>*.{baseDomain || 'base-domain'}</code> once and
-                        every site resolves instantly. <strong>Per-site</strong>: each new site gets its own A
-                        record, auto-created via a connected DNS provider (visible per record, ownership-tracked).
-                    </span>
-                </div>
-
-                <div className="form-group">
-                    <div className="settings-row">
-                        <div className="settings-label">
-                            <Label>Wildcard HTTPS</Label>
-                            <span className="form-help">
-                                {https.https_enabled
-                                    ? 'Enabled — managed subdomains serve HTTPS.'
-                                    : 'Not set up yet.'}
-                            </span>
-                        </div>
-                        <div className="settings-control">
-                            {https.providers?.length ? (
-                                <select
-                                    className="settings-select"
-                                    value={providerId}
-                                    onChange={(e) => setProviderId(e.target.value)}
-                                >
+                {https.providers?.length > 0 ? (
+                    <div className="form-group">
+                        <div className="settings-row">
+                            <div className="settings-label"><Label>DNS provider for HTTPS</Label></div>
+                            <div className="settings-control">
+                                <select className="settings-select" value={providerId} onChange={(e) => setProviderId(e.target.value)}>
                                     {https.providers.map((p) => (
                                         <option key={p.id} value={p.id}>{p.name} ({p.provider})</option>
                                     ))}
                                 </select>
-                            ) : (
-                                <span className="form-help">Connect a DNS provider under Email → DNS Providers first.</span>
-                            )}
-                            <Button
-                                onClick={handleSetupHttps}
-                                disabled={settingUpHttps || !https.providers?.length || !baseDomain.trim()}
-                            >
-                                {settingUpHttps ? 'Setting up…' : 'Set up wildcard HTTPS'}
+                            </div>
+                        </div>
+                        <span className="form-help">Used to issue each base&apos;s wildcard certificate (DNS-01). Each base can use a different connected provider.</span>
+                    </div>
+                ) : (
+                    <span className="form-help">Connect a DNS provider under Email → DNS Providers to enable per-domain wildcard HTTPS.</span>
+                )}
+
+                {displayBases.length === 0 ? (
+                    <p className="form-help">No base domain yet — add one below to start publishing sites at real subdomains.</p>
+                ) : displayBases.map((b) => (
+                    <div key={b.domain} className="form-group">
+                        <div className="settings-row">
+                            <div className="settings-label">
+                                {b._legacy ? (
+                                    <div className="settings-control">
+                                        <Input type="text" placeholder="apps.example.com" value={baseDomain}
+                                            onChange={(e) => setBaseDomain(e.target.value)} className="w-56" />
+                                        <Button onClick={handleSaveDomain} disabled={savingDomain}>
+                                            {savingDomain ? 'Saving…' : 'Save'}
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <span className="flex items-center gap-2">
+                                        <code>{b.domain}</code>
+                                        {b.is_default && <Pill kind="blue" dot={false}>Default</Pill>}
+                                        <Pill kind={b.https_enabled ? 'green' : 'gray'} dot={false}>
+                                            {b.https_enabled ? 'HTTPS' : 'HTTP only'}
+                                        </Pill>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="settings-control">
+                                <select className="settings-select" value={b.dns_mode || 'wildcard'}
+                                    onChange={(e) => handleRowDnsMode(b, e.target.value)}
+                                    disabled={rowBusy === b.domain || savingDnsMode}>
+                                    <option value="wildcard">Wildcard DNS</option>
+                                    <option value="per-site">Per-site DNS</option>
+                                </select>
+                                <Button variant="outline" onClick={() => handleSetupHttpsFor(b)}
+                                    disabled={rowBusy === b.domain || !https.providers?.length}>
+                                    {rowBusy === b.domain ? 'Working…' : (b.https_enabled ? 'Renew HTTPS' : 'Set up HTTPS')}
+                                </Button>
+                                {hasRegistry && !b.is_default && (
+                                    <Button variant="ghost" onClick={() => handleMakeDefault(b.domain)} disabled={rowBusy === b.domain}>
+                                        Make default
+                                    </Button>
+                                )}
+                                {hasRegistry && displayBases.length > 1 && (
+                                    <Button variant="ghost" onClick={() => handleRemoveDomain(b.domain)} disabled={rowBusy === b.domain}>
+                                        Remove
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                        <span className="form-help">
+                            Sites publish at <code>&lt;name&gt;.{b.domain || 'base-domain'}</code>.{' '}
+                            {(b.dns_mode || 'wildcard') === 'wildcard'
+                                ? <>Point <code>*.{b.domain || 'base-domain'}</code> at this server.</>
+                                : <>Each new site gets its own A record, auto-created via the provider.</>}
+                        </span>
+                    </div>
+                ))}
+
+                <div className="form-group">
+                    <div className="settings-row">
+                        <div className="settings-label"><Label htmlFor="new-base-domain">Add base domain</Label></div>
+                        <div className="settings-control">
+                            <Input id="new-base-domain" type="text" placeholder="toto.com"
+                                value={newDomain} onChange={(e) => setNewDomain(e.target.value)} className="w-56" />
+                            <select className="settings-select" value={newDnsMode} onChange={(e) => setNewDnsMode(e.target.value)}>
+                                <option value="wildcard">Wildcard DNS</option>
+                                <option value="per-site">Per-site DNS</option>
+                            </select>
+                            <Button onClick={handleAddDomain} disabled={addingDomain || !newDomain.trim()}>
+                                {addingDomain ? 'Adding…' : 'Add'}
                             </Button>
                         </div>
                     </div>
-                    <span className="form-help">
-                        Creates <code>*.{baseDomain || 'base-domain'}</code> DNS and issues a wildcard
-                        Let&apos;s Encrypt certificate via the selected provider (DNS-01).
-                    </span>
+                    <span className="form-help">Register another domain sites can be published under. Set up its wildcard HTTPS from its row above.</span>
                 </div>
             </div>
 

@@ -49,6 +49,7 @@ import Downloads from './pages/Downloads';
 import WordPress from './pages/WordPress';
 import WordPressDetail from './pages/WordPressDetail';
 import WordPressProjects from './pages/WordPressProjects';
+import WordPressPluginLibrary from './pages/WordPressPluginLibrary';
 import WordPressProject from './pages/WordPressProject';
 import SSLCertificates from './pages/SSLCertificates';
 import Email from './pages/Email';
@@ -96,6 +97,7 @@ const PAGE_TITLES = {
     '/shared-variables': 'Shared Variables',
     '/fleet-proxy': 'Fleet Proxy',
     '/wordpress': 'WordPress Sites',
+    '/wordpress/plugins/library': 'WordPress Plugin Library',
     '/wordpress/pipelines': 'WordPress Pipelines',
     '/templates': 'Templates',
     '/deployments': 'Deployment Activity',
@@ -341,6 +343,7 @@ function AppRoutes() {
                 <Route path="apps/:id/:tab" element={<LegacyAppRedirect />} />
                 <Route element={<TabGroupLayout tabs={WORDPRESS_TABS} />}>
                     <Route path="wordpress" element={<WordPress />} />
+                    <Route path="wordpress/plugins/library" element={<WordPressPluginLibrary />} />
                     <Route path="wordpress/pipelines" element={<WordPressProjects />} />
                 </Route>
                 <Route path="wordpress/pipelines/:id" element={<WordPressProject />} />

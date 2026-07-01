@@ -67,6 +67,32 @@ _CATALOG = {
         'severity': 'warning',
         'category': 'system',
     },
+    # Managed-sites publishing readiness — nudged when a site is created but the
+    # base-domain / DNS / HTTPS config is only partly set up.
+    'sites.publish.no_base_domain': {
+        'title': 'Publish your sites at a real domain',
+        'template': 'generic',
+        'severity': 'warning',
+        'category': 'system',
+    },
+    'sites.publish.http_only': {
+        'title': 'Managed sites are served over HTTP',
+        'template': 'generic',
+        'severity': 'info',
+        'category': 'system',
+    },
+    'sites.publish.no_server_ip': {
+        'title': 'Set a server IP so site DNS can auto-create',
+        'template': 'generic',
+        'severity': 'warning',
+        'category': 'system',
+    },
+    'sites.publish.base_overlaps_panel': {
+        'title': 'Site base domain overlaps the panel domain',
+        'template': 'generic',
+        'severity': 'warning',
+        'category': 'system',
+    },
     # Multi-alert monitoring digest (used by the legacy send_all path).
     'monitoring.alert': {
         'title': 'ServerKit alert',

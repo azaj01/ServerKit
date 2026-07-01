@@ -70,6 +70,16 @@ jobs:
           bash scripts/test/test_install.sh
           bash scripts/test/test_lib.sh
 
+      - name: nginx -t smoke (shipped vhosts parse on a real nginx)
+        run: |
+          # The panel frontend is served straight from these vhosts (static SPA +
+          # /api + /socket.io proxy). Parse them with the real nginx so a broken
+          # directive fails here, not with a 502 on someone's server. The smoke
+          # script stages each vhost against nginx and skips if nginx is absent —
+          # so install it first to make sure the step actually runs.
+          sudo apt-get install -y -qq nginx openssl
+          bash scripts/test/test_nginx_conf.sh
+
   cross-distro:
     name: unit (${{ matrix.image }})
     runs-on: ubuntu-latest

@@ -14,6 +14,7 @@ from app.services.git_service import GitService
 from app.services.repository_manifest_service import RepositoryManifestService
 from app.services.source_connection_service import SourceConnectionService
 from app.services.remote_docker_service import RemoteDockerService
+from app.services.container_registry_service import ContainerRegistryService
 from app.services.image_update_service import ImageUpdateService
 from app.services.container_sleep_service import ContainerSleepService
 from app.services.container_scale_service import ContainerScaleService
@@ -905,6 +906,7 @@ def create_app():
         port=data.get('port'),
         root_path=data.get('root_path'),
         docker_image=data.get('docker_image'),
+        registry_id=data.get('registry_id'),
         source=data.get('source') or 'github',
         compose_file=data.get('compose_file'),
         systemd_unit=data.get('systemd_unit'),
@@ -1259,6 +1261,9 @@ def update_app(app_id):
         app.root_path = data['root_path']
     if 'docker_image' in data:
         app.docker_image = data['docker_image']
+    if 'registry_id' in data:
+        # Accept null to unbind; otherwise a valid registry id.
+        app.registry_id = data['registry_id'] or None
     if 'source' in data:
         app.source = data['source']
     if 'compose_file' in data:
@@ -1364,11 +1369,17 @@ def start_app(app_id):
                 user_id=current_user_id
             )
         else:
-            result = DockerService.compose_up(
-                app.root_path,
-                detach=True,
-                compose_file=_local_compose_file(app)
-            )
+            # Authenticate a bound private registry before compose pulls the
+            # image; best-effort, always logs back out. No-op without registry_id.
+            _registry = ContainerRegistryService.login_for_app(app)
+            try:
+                result = DockerService.compose_up(
+                    app.root_path,
+                    detach=True,
+                    compose_file=_local_compose_file(app)
+                )
+            finally:
+                ContainerRegistryService.logout_for_app(_registry)
         if not result.get('success') or _agent_result_failed(result):
             return jsonify({'error': _agent_result_error(result, 'Failed to start containers')}), 400
 
@@ -1407,10 +1418,15 @@ def apply_image_update(app_id):
             return jsonify({'error': _agent_result_error(pull, 'Failed to pull image')}), 400
         up = RemoteDockerService.compose_up(app.server_id, _compose_target(app), detach=True, user_id=current_user_id)
     else:
-        pull = DockerService.compose_pull(app.root_path, compose_file=_local_compose_file(app))
-        if not pull.get('success'):
-            return jsonify({'error': pull.get('error', 'Failed to pull image')}), 400
-        up = DockerService.compose_up(app.root_path, detach=True, compose_file=_local_compose_file(app))
+        # Authenticate a bound private registry for the pull; always log out after.
+        _registry = ContainerRegistryService.login_for_app(app)
+        try:
+            pull = DockerService.compose_pull(app.root_path, compose_file=_local_compose_file(app))
+            if not pull.get('success'):
+                return jsonify({'error': pull.get('error', 'Failed to pull image')}), 400
+            up = DockerService.compose_up(app.root_path, detach=True, compose_file=_local_compose_file(app))
+        finally:
+            ContainerRegistryService.logout_for_app(_registry)
 
     if not up.get('success') or _agent_result_failed(up):
         return jsonify({'error': _agent_result_error(up, 'Failed to recreate containers')}), 400

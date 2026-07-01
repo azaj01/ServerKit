@@ -30,6 +30,10 @@ class Application(db.Model):
     # Docker specific
     docker_image = db.Column(db.String(200), nullable=True)
     container_id = db.Column(db.String(100), nullable=True)
+    # Optional private-registry binding. Set => authenticate (docker login) with
+    # the stored credentials before pulling docker_image. NULL => anonymous pull
+    # (today's behavior). See app/services/container_registry_service.py.
+    registry_id = db.Column(db.Integer, db.ForeignKey('container_registries.id'), nullable=True, index=True)
 
     # Build packs (zero-Dockerfile deploys). When the build method routes through
     # the build-pack layer, the detected plan and any user overrides are persisted
@@ -105,6 +109,7 @@ class Application(db.Model):
             'root_path': self.root_path,
             'docker_image': self.docker_image,
             'container_id': self.container_id,
+            'registry_id': self.registry_id,
             'buildpack_type': self.buildpack_type,
             'buildpack_plan': json.loads(self.buildpack_plan) if self.buildpack_plan else None,
             'buildpack_overrides': json.loads(self.buildpack_overrides) if self.buildpack_overrides else None,

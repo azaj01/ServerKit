@@ -1907,7 +1907,8 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
     @classmethod
     def create_site(cls, name: str, admin_email: str, user_id: int, admin_user: str = 'admin',
                     php_version: str = None, enable_page_cache: bool = False,
-                    enable_object_cache: bool = False, domain: str = None) -> Dict:
+                    enable_object_cache: bool = False, domain: str = None,
+                    base_domain: str = None) -> Dict:
         """Create a new WordPress site via Docker.
 
         One-click orchestration: provision the Docker stack on a chosen PHP version,
@@ -1965,9 +1966,11 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
             # canonical home/siteurl, so this is what makes the site usable as an
             # actual website. Falls back to localhost when no base domain is set
             # (e.g. an unconfigured production install).
-            site_host = SiteDomainService.subdomain_for(safe_name)
+            site_host = SiteDomainService.subdomain_for(safe_name, base=base_domain)
             if site_host:
-                site_url = SiteDomainService.site_url(site_host, ssl=SiteDomainService.https_enabled())
+                base_used = SiteDomainService.covering_base(site_host)
+                site_url = SiteDomainService.site_url(
+                    site_host, ssl=SiteDomainService.https_enabled(base_used))
             else:
                 site_url = f'http://localhost:{http_port}' if http_port else 'http://localhost'
             wp_warning = None
@@ -2073,6 +2076,14 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
                     attach_err = attach_res.get('error') or 'Custom domain could not be attached'
                     wp_warning = (wp_warning + ' ' + attach_err) if wp_warning else attach_err
 
+            # Nudge admins (in-app) if the site landed on localhost or the
+            # base-domain/HTTPS/DNS config is only partly set up. Best-effort —
+            # never let a notification failure affect the create result.
+            try:
+                SiteDomainService.notify_publishing_gaps()
+            except Exception:
+                pass
+
             result = {
                 'success': True,
                 'message': 'WordPress site created successfully',
@@ -2146,37 +2157,19 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
 
     @classmethod
     def _write_app_vhost(cls, app) -> Dict:
-        """Write + enable the nginx reverse-proxy vhost for a docker app from its
-        current Domain rows (server_name = every domain). Best-effort and never
-        raises; returns ``{'nginx', 'warning'}``."""
-        from app.models.domain import Domain
-        from app.services.nginx_service import NginxService
+        """Write + enable the nginx reverse-proxy vhost for a WordPress site from
+        its current Domain rows (server_name = every domain). Best-effort and
+        never raises; returns ``{'nginx', 'warning'}``.
+
+        Delegates to the shared ``SiteDomainService.write_app_vhost`` writer,
+        forcing the docker proxy template: a managed WP site is always served by
+        proxying to its container, never via the stock php-fpm ``wordpress``
+        template. A portless site is a silent no-op (nothing to proxy to)."""
         from app.services.site_domain_service import SiteDomainService
 
         if not app.port:
             return {'nginx': None, 'warning': None}
-        domains = [d.name for d in Domain.query.filter_by(application_id=app.id).all()]
-        if not domains:
-            return {'nginx': None, 'warning': None}
-        # Serve the wildcard cert when HTTPS is set up and every vhost domain is a
-        # managed subdomain it covers (custom domains carry their own cert).
-        ssl_cert = ssl_key = None
-        if SiteDomainService.https_enabled() and all(SiteDomainService.covers(d) for d in domains):
-            ssl_cert, ssl_key = SiteDomainService.wildcard_cert_paths()
-        try:
-            res = NginxService.create_site(
-                name=app.name, app_type='docker', domains=domains,
-                root_path=app.root_path or '', port=app.port,
-                ssl_cert=ssl_cert, ssl_key=ssl_key,
-            )
-            if res.get('success'):
-                en = NginxService.enable_site(app.name)
-                if not en.get('success'):
-                    res['warning'] = f"vhost written but not enabled: {en.get('error')}"
-                return {'nginx': res, 'warning': None}
-            return {'nginx': res, 'warning': f"nginx vhost not created: {res.get('error')}"}
-        except Exception as e:
-            return {'nginx': None, 'warning': f'nginx vhost error: {e}'}
+        return SiteDomainService.write_app_vhost(app, force_type='docker')
 
     @classmethod
     def _canonical_site_url(cls, app) -> str:

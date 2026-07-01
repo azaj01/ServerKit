@@ -266,6 +266,24 @@ class DeploymentService:
         from app.services.env_service import EnvService
         env = EnvService.get_effective_env(app.id)
 
+        # Authenticate + pre-pull from a private registry when this app is bound
+        # to one, so the run below uses the locally-present image. Gated on
+        # registry_id: apps built from source never set it, so their locally-built
+        # image_tag is untouched (an authenticated pull of it would fail).
+        from app.services.container_registry_service import ContainerRegistryService
+        registry = ContainerRegistryService.for_app(app)
+        if registry is not None:
+            if log_callback:
+                log_callback(f"Authenticating with registry {registry.name}...")
+            pull = DockerService.pull_image(image_tag, tag=None, registry=registry)
+            if not pull.get('success'):
+                return {'success': False, 'error': pull.get('error', 'Registry pull failed')}
+
+        # Attach any managed volumes so app data persists across redeploys
+        # (each returns a `name:/mount[:ro]` spec for `docker run -v`).
+        from app.services.volume_service import VolumeService
+        volumes = VolumeService.run_args(app)
+
         # Run new container
         if log_callback:
             log_callback(f"Starting container {container_name}...")
@@ -274,6 +292,7 @@ class DeploymentService:
             image=image_tag,
             name=container_name,
             ports=ports if ports else None,
+            volumes=volumes if volumes else None,
             env=env if env else None,
             restart_policy='unless-stopped',
             detach=True

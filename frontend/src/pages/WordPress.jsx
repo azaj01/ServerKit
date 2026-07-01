@@ -15,6 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 
+// Mirror the backend slug rule (a-z, 0-9, single dashes) so the create modal can
+// preview the exact <slug>.<base> host the site will be published at.
+function slugifyPreview(name) {
+    return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site';
+}
+
 function WordPress() {
     const [sites, setSites] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,8 +31,17 @@ function WordPress() {
     const [createLoading, setCreateLoading] = useState(false);
     const [createForm, setCreateForm] = useState({
         name: '', domain: '', adminEmail: '', phpVersion: '', enablePageCache: false, enableObjectCache: false,
+        baseDomain: '',
     });
+    // Base domains a new site can be published under (<slug>.<base>), loaded when
+    // the create modal opens. Empty when site routing isn't configured.
+    const [baseDomains, setBaseDomains] = useState([]);
     const [createdCreds, setCreatedCreds] = useState(null);
+    // Where a freshly-created site is reachable, so we can tell the user it is
+    // already live (at <slug>.<base>, HTTPS when the wildcard cert is set up)
+    // rather than leaving them to wonder — or nudge them to set a base domain
+    // when the site only came up on localhost.
+    const [createdSite, setCreatedSite] = useState(null);
     const [showImportModal, setShowImportModal] = useState(false);
     const [importLoading, setImportLoading] = useState(false);
     const [importForm, setImportForm] = useState({ name: '', adminEmail: '', oldUrl: '' });
@@ -42,6 +57,25 @@ function WordPress() {
     useEffect(() => {
         loadSites();
     }, []);
+
+    // Load the available base domains when the create modal opens, and preselect
+    // the default so the site publishes under it unless the user picks another.
+    useEffect(() => {
+        if (!showCreateModal) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const data = await wordpressApi.listBaseDomains();
+                if (cancelled) return;
+                const bases = data.base_domains || [];
+                setBaseDomains(bases);
+                setCreateForm(f => ({ ...f, baseDomain: f.baseDomain || data.default || '' }));
+            } catch {
+                if (!cancelled) setBaseDomains([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [showCreateModal]);
 
     const loadSites = async () => {
         setLoading(true);
@@ -70,12 +104,15 @@ function WordPress() {
                     // The generated admin password is returned once — surface it.
                     setCreatedCreds({ user: result.admin_user || 'admin', password: result.admin_password });
                 }
+                if (result.url) {
+                    setCreatedSite({ url: result.url, domain: result.domain || null });
+                }
                 if (result.warning) {
                     toast.info(result.warning, { duration: 8000 });
                 }
                 toast.success('WordPress site created successfully');
                 setShowCreateModal(false);
-                setCreateForm({ name: '', domain: '', adminEmail: '', phpVersion: '', enablePageCache: false, enableObjectCache: false });
+                setCreateForm({ name: '', domain: '', adminEmail: '', phpVersion: '', enablePageCache: false, enableObjectCache: false, baseDomain: '' });
                 await loadSites();
             } else {
                 toast.error(result.error || 'Failed to create site');
@@ -301,14 +338,31 @@ function WordPress() {
             keyField="id"
             onRowClick={(site) => navigate(`/wordpress/${site.id}`)}
             rowClassName={(site) => (selectedIds.has(site.id) ? 'is-selected' : '')}
-            header={createdCreds && (
+            header={(createdCreds || createdSite) && (
                 <div className="wp-creds-banner">
                     <div className="wp-creds-banner-text">
-                        <strong>Save these admin credentials — they are shown only once.</strong>
-                        <span>Username: <code>{createdCreds.user}</code></span>
-                        <span>Password: <code>{createdCreds.password}</code></span>
+                        {createdSite && (createdSite.domain ? (
+                            <span>
+                                Your site is live at{' '}
+                                <a href={createdSite.url} target="_blank" rel="noopener noreferrer"><code>{createdSite.domain}</code></a>
+                                {createdSite.url?.startsWith('https') ? ' — HTTPS is ready.' : '.'}
+                            </span>
+                        ) : (
+                            <span>
+                                Your site is running at{' '}
+                                <a href={createdSite.url} target="_blank" rel="noopener noreferrer"><code>{createdSite.url}</code></a>.
+                                {' '}Set a managed-sites base domain in Settings to publish it at a public URL.
+                            </span>
+                        ))}
+                        {createdCreds && (
+                            <>
+                                <strong>Save these admin credentials — they are shown only once.</strong>
+                                <span>Username: <code>{createdCreds.user}</code></span>
+                                <span>Password: <code>{createdCreds.password}</code></span>
+                            </>
+                        )}
                     </div>
-                    <Button variant="ghost" onClick={() => setCreatedCreds(null)}>Dismiss</Button>
+                    <Button variant="ghost" onClick={() => { setCreatedCreds(null); setCreatedSite(null); }}>Dismiss</Button>
                 </div>
             )}
             filters={[
@@ -499,6 +553,33 @@ function WordPress() {
                                 <span className="form-hint">Used as the Docker project name. Letters, numbers, and hyphens only.</span>
                             </div>
 
+                            {baseDomains.length > 0 ? (
+                                <div className="form-group">
+                                    <Label>Publish under</Label>
+                                    <select
+                                        value={createForm.baseDomain}
+                                        onChange={e => setCreateForm({ ...createForm, baseDomain: e.target.value })}
+                                        disabled={createLoading}
+                                    >
+                                        {baseDomains.map(b => (
+                                            <option key={b.domain} value={b.domain}>
+                                                {b.domain}{b.is_default ? ' (default)' : ''}{b.https_enabled ? ' — HTTPS' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <span className="form-hint">
+                                        {createForm.name
+                                            ? <>The site will be live at <code>{slugifyPreview(createForm.name)}.{createForm.baseDomain}</code>.</>
+                                            : <>Which base domain to publish this site under.</>}
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="form-group">
+                                    <Label>Publish under</Label>
+                                    <span className="form-hint">No base domain configured — the site will be reachable at <code>localhost:&lt;port&gt;</code>. Add a managed-sites base domain in Settings to publish it at a real subdomain.</span>
+                                </div>
+                            )}
+
                             <div className="form-group">
                                 <Label>Custom Domain</Label>
                                 <Input
@@ -508,7 +589,7 @@ function WordPress() {
                                     placeholder="example.com"
                                     disabled={createLoading}
                                 />
-                                <span className="form-hint">Optional. If set, the site will be created and migrated to this domain.</span>
+                                <span className="form-hint">Optional. Overrides the base domain above — the site is created and migrated to this domain.</span>
                             </div>
 
                             <div className="form-group">

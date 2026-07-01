@@ -8,18 +8,28 @@ ServerKit's backend **manages the host it runs on** — it creates app
 directories under `/var/serverkit/apps`, drives the host Docker daemon (one
 container per managed app), reloads nginx, and runs systemctl/firewall/PHP-FPM.
 A backend running *inside a container* cannot do any of that. So the canonical
-deployment installed by `./serverkit install` (`install.sh`) runs:
+deployment installed by `./serverkit install` (`install.sh`) runs **fully off
+Docker for the panel itself**:
 
 - the **backend on the host** via systemd (`serverkit.service`), and
-- **only the frontend in Docker** (`docker-compose.yml` is frontend-only; its
-  nginx proxies `/api` + `/socket.io` to the host backend via the
-  `backend:host-gateway` alias).
+- the **frontend as static files served directly by host nginx** from
+  `frontend/dist` (built by `install.sh`) — no container. Host nginx serves the
+  SPA at `location /` and proxies `/api` + `/socket.io` to the host backend on
+  `:5000`.
 
-Do **not** add the backend back into `docker-compose.yml` — a containerized
-backend fails app/WordPress creation with `Permission denied:
-/var/serverkit/apps/...` and has no access to the host Docker daemon. The
-single-container image in `./Dockerfile` exists only for throwaway demos and,
-as its header states, cannot manage the host.
+Docker is therefore used **only for the workloads you host** (one container per
+managed app). This is deliberate: a ServerKit update never touches those
+containers, and host nginx — which reverse-proxies them — is only ever
+*reloaded*, never stopped, so updating the panel causes **zero downtime for
+hosted apps**.
+
+Do **not** add the backend into Docker — a containerized backend fails
+app/WordPress creation with `Permission denied: /var/serverkit/apps/...` and has
+no access to the host Docker daemon. A containerized *frontend* is still
+available as an opt-in escape hatch (`docker compose --profile legacy-frontend
+up -d`, plus repointing nginx `location /` at `127.0.0.1:3847`) but is not used
+by the default install. The single-container image in `./Dockerfile` exists only
+for throwaway demos and, as its header states, cannot manage the host.
 
 ## Quick Install (Ubuntu)
 
@@ -227,16 +237,18 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 
 ### 5. Build and Start
 
-`docker compose` builds and serves only the **frontend** container; the backend
-runs on the host under systemd (`serverkit.service`, set up by `./serverkit
-install`). See the **Deployment model** note above.
+Both panel tiers run on the host: the backend under systemd
+(`serverkit.service`) and the frontend as static files served by host nginx from
+`frontend/dist`. `./serverkit install` builds the bundle and wires nginx for
+you. See the **Deployment model** note above.
 
 ```bash
-# Build + start the frontend container
-docker compose up -d --build
+# Build the SPA bundle host nginx serves (install.sh does this automatically)
+cd frontend && npm ci && npm run build && cd ..
 
-# Start the host backend (installed by ./serverkit install)
+# Start the host backend + nginx
 sudo systemctl start serverkit
+sudo systemctl reload nginx
 
 # Verify
 serverkit status

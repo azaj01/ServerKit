@@ -220,6 +220,21 @@ class BackupPolicyService:
 
         if policy.target_type == 'database':
             meta = policy.get_target_meta()
+            # Managed database: target_id is a real FK into managed_databases and
+            # the descriptor (incl. the encrypted admin secret) lives on the row.
+            # Legacy policies have no 'managed' marker and keep the JSON path below.
+            if meta.get('managed'):
+                from app.models.managed_database import ManagedDatabase
+                from app.services.managed_database_service import ManagedDatabaseService
+                managed = ManagedDatabase.query.get(policy.target_id)
+                if managed is None:
+                    raise BackupPolicyError('Managed database is no longer tracked')
+                return {
+                    'name': managed.name, 'root_path': None,
+                    'target_type': 'database', 'site': None, 'app': None,
+                    'managed_db': managed,
+                    'db_config': ManagedDatabaseService.backup_descriptor(managed),
+                }
             db_name = meta.get('db_name')
             if not db_name:
                 raise BackupPolicyError('Database target is missing db_name')

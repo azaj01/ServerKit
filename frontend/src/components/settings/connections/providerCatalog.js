@@ -12,6 +12,7 @@
 export const CONNECTION_CATEGORIES = [
     { key: 'source', label: 'Source code', blurb: 'Create services straight from a repository instead of pasting clone URLs.' },
     { key: 'infra', label: 'Infrastructure', blurb: 'Cloud accounts ServerKit can provision and manage servers in.' },
+    { key: 'registry', label: 'Container registries', blurb: 'Store a login once so ServerKit can pull private images (GHCR, Docker Hub, GitLab, ECR).' },
     { key: 'dns', label: 'DNS & domains', blurb: 'Let ServerKit manage DNS records and issue wildcard certificates automatically.' },
     { key: 'registrar', label: 'Registrars & ownership', blurb: 'Track the domains you own and when their registration expires.' },
     { key: 'email', label: 'Email & delivery', blurb: 'Outbound relays and deliverability for the mail server.' },
@@ -56,6 +57,15 @@ export const CONNECTION_PROVIDERS = [
         id: 'linode', category: 'infra', name: 'Linode', kind: 'cloud', providerType: 'linode',
         blurb: 'Provision and manage Linodes (Akamai).',
         docUrl: 'https://cloud.linode.com/profile/tokens', manageHref: '/servers',
+    },
+
+    // ── Container registries ──
+    // One card holds every registry; the add modal has a provider selector
+    // (GHCR / Docker Hub / GitLab / ECR / generic) that presets the login host.
+    {
+        id: 'container_registry', category: 'registry', name: 'Container registry', kind: 'registry',
+        blurb: 'Store credentials for a private registry so services can deploy its images.',
+        docUrl: 'https://docs.docker.com/engine/reference/commandline/login/', manageHref: '/services/new',
     },
 
     // ── DNS & domains ──
@@ -114,6 +124,18 @@ export const CONNECTION_PROVIDERS = [
 export function getProvider(id) {
     return CONNECTION_PROVIDERS.find((p) => p.id === id) || null;
 }
+
+// Container-registry provider presets for the add-registry form. `url` presets
+// the login host; `usernameHint`/`secretHint` label the credential fields per
+// provider. `urlLocked` means the host is fixed (Docker Hub / GHCR); a generic
+// registry lets the operator type any host.
+export const REGISTRY_PROVIDERS = [
+    { id: 'ghcr', name: 'GitHub (GHCR)', url: 'ghcr.io', urlLocked: true, usernameHint: 'GitHub username', secretHint: 'Personal access token (read:packages)' },
+    { id: 'dockerhub', name: 'Docker Hub', url: '', urlLocked: true, usernameHint: 'Docker Hub username', secretHint: 'Access token or password' },
+    { id: 'gitlab', name: 'GitLab', url: 'registry.gitlab.com', urlLocked: false, usernameHint: 'GitLab username', secretHint: 'Deploy token or PAT (read_registry)' },
+    { id: 'ecr', name: 'AWS ECR', url: '', urlLocked: false, usernameHint: 'Leave blank (uses AWS)', secretHint: 'ACCESS_KEY_ID:SECRET_ACCESS_KEY' },
+    { id: 'generic', name: 'Other / generic', url: '', urlLocked: false, usernameHint: 'Registry username', secretHint: 'Password or token' },
+];
 
 // Access-level ("scope") derivation for DNS-provider records. Cloudflare with an
 // account email uses a Global API Key (full account); without one it's a scoped

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, ArrowUpCircle, Moon, Sun, Gauge as GaugeIcon } from 'lucide-react';
+import { RefreshCw, ArrowUpCircle, Moon, Sun, Gauge as GaugeIcon, Boxes } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -149,6 +150,89 @@ const ImageUpdateSection = ({ app, onChanged }) => {
                             {applying ? 'Updating…' : 'Update now'}
                         </Button>
                     )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ============================================================
+// Private registry section — which stored registry credentials to
+// authenticate with before pulling this app's image (docker login).
+// ============================================================
+const RegistrySection = ({ app, onChanged }) => {
+    const toast = useToast();
+    const [registries, setRegistries] = useState([]);
+    const [selected, setSelected] = useState(app.registry_id ?? '');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => { setSelected(app.registry_id ?? ''); }, [app.registry_id]);
+
+    useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                const data = await api.getContainerRegistries();
+                if (active) setRegistries(data?.registries || []);
+            } catch {
+                /* listing failing just means no picker options */
+            } finally {
+                if (active) setLoading(false);
+            }
+        })();
+        return () => { active = false; };
+    }, []);
+
+    async function handleChange(value) {
+        const next = value === '' ? null : Number(value);
+        setSelected(value);
+        setSaving(true);
+        try {
+            await api.updateApp(app.id, { registry_id: next });
+            toast.success(next ? 'Registry attached.' : 'Registry detached — pulls are anonymous.');
+            onChanged?.();
+        } catch (err) {
+            toast.error(err.message || 'Failed to update registry');
+            setSelected(app.registry_id ?? '');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div className="app-panel container-ops__section">
+            <div className="app-panel-header">
+                <Boxes />
+                <span>Private Registry</span>
+            </div>
+            <div className="app-panel-body">
+                <p className="app-panel-hint">
+                    Authenticate with stored credentials before pulling this app&apos;s image. Add
+                    registries under <Link to="/settings/connections">Settings → Connections</Link>.
+                </p>
+
+                <div className="container-ops__field">
+                    <div className="container-ops__field-text">
+                        <Label htmlFor={`registry-${app.id}`}>Registry</Label>
+                        <span className="container-ops__field-hint">
+                            Public images pull anonymously; pick a registry for private images.
+                        </span>
+                    </div>
+                    <select
+                        id={`registry-${app.id}`}
+                        className="container-ops__select"
+                        value={selected}
+                        onChange={(e) => handleChange(e.target.value)}
+                        disabled={loading || saving}
+                    >
+                        <option value="">Public (no auth)</option>
+                        {registries.map((r) => (
+                            <option key={r.id} value={r.id}>
+                                {r.name} · {r.login_host}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </div>
         </div>
@@ -517,6 +601,7 @@ const ContainerOpsPanel = ({ app, onChanged }) => {
     return (
         <div className="container-ops">
             <ImageUpdateSection app={app} onChanged={onChanged} />
+            <RegistrySection app={app} onChanged={onChanged} />
             <AutoSleepSection app={app} onChanged={onChanged} />
             <AutoScaleSection app={app} onChanged={onChanged} />
         </div>

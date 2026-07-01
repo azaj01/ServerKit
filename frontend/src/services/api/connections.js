@@ -30,3 +30,26 @@ export async function getRegistrarDomains() {
 export async function syncRegistrarDomains() {
     return this.request('/registrars/sync', { method: 'POST' });
 }
+
+// Container registries — stored credentials for pulling private images. Listing
+// is available to any authenticated user (the app-create picker needs it);
+// mutations are admin-only server-side. Secrets are never returned (has_secret).
+export async function getContainerRegistries() {
+    return this.request('/connections/registries');
+}
+
+export async function addContainerRegistry(data) {
+    return this.request('/connections/registries', { method: 'POST', body: data });
+}
+
+export async function updateContainerRegistry(id, data) {
+    return this.request(`/connections/registries/${id}`, { method: 'PUT', body: data });
+}
+
+export async function deleteContainerRegistry(id) {
+    return this.request(`/connections/registries/${id}`, { method: 'DELETE' });
+}
+
+export async function testContainerRegistry(id) {
+    return this.request(`/connections/registries/${id}/test`, { method: 'POST' });
+}

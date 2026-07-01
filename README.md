@@ -588,6 +588,14 @@ fork → feature branch → commit → push → pull request
 
 ---
 
+## 🔭 Related Projects
+
+**[Faro](https://github.com/jhd3197/faro)** — A modern desktop client for SFTP, FTP, SSH, and S3-compatible storage, from the same author. Save a server once, then browse its files in a dual-pane view and open a terminal against the same SSH session — plus drag-and-drop transfers, one-way directory sync, and edit-in-place. It even has an **Agent Bridge** that lets Claude Code (or any MCP agent) run commands on a box through your authenticated session, with per-command approval and no shared credentials.
+
+> ServerKit manages your servers from the browser; Faro is the desktop companion for hands-on file transfer, shells, and ad-hoc work across all your boxes. [Grab a build →](https://github.com/jhd3197/faro/releases/latest)
+
+---
+
 ## 💬 Community
 
 [![Discord](https://img.shields.io/badge/Discord-Join_Us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/ZKk6tkCQfG)

@@ -20,6 +20,25 @@ awaiting a stable release:
 
 ### Added
 
+- **Managed databases** — the databases ServerKit provisions are now tracked as
+  first-class resources (beside the existing live explorer): durable rows for
+  backups and connection strings. A managed database backs a `BackupPolicy` by a
+  real foreign key (not an untethered descriptor), one-click "Protect" creates
+  that policy, and a real connection URI can be revealed/copied (audited, secret
+  Fernet-encrypted at rest). Adopt an existing database to start tracking it. API
+  under `/api/v1/databases/managed`. Not a DBaaS — no pooling/replicas/scaling.
+- **Per-app managed volumes** — first-class, tracked persistent storage for a
+  service. Attach a named Docker volume at a chosen container path under
+  Settings → Storage; it survives redeploys and is visible with live
+  present/size state, instead of a fragile relative bind mount
+  (`./mysql-data:/var/lib/mysql`). Detaching keeps the data by default; wiping is
+  blocked while the app runs. API under `/api/v1/apps/<id>/volumes`.
+- **Private container registries** — store credentials once under Settings →
+  Connections (GHCR, Docker Hub, GitLab, ECR, or any generic registry) and
+  ServerKit runs `docker login` before pulling a private image, then logs out.
+  Secrets are Fernet-encrypted at rest and piped via stdin (never on argv);
+  attach a registry to a service under Container Ops. Anonymous pulls are
+  unchanged. API under `/api/v1/connections/registries`.
 - **Container status aggregator** — collapses an app's per-container Docker
   states into one deterministic status (`running:healthy` … `degraded` …
   `unknown`) at `/api/v1/status/app/<id>` and `/api/v1/status/apps`, with

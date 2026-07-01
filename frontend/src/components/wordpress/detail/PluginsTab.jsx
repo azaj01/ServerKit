@@ -20,6 +20,8 @@ const PluginsTab = ({ siteId }) => {
     const [updating, setUpdating] = useState(null); // plugin name being updated, or 'all'
     const [newPlugin, setNewPlugin] = useState('');
     const [toggling, setToggling] = useState(null); // plugin name being activated/deactivated
+    // Map of slug -> managed metadata (installed/library version, update_available).
+    const [managed, setManaged] = useState({});
 
     useEffect(() => {
         loadPlugins();
@@ -31,11 +33,44 @@ const PluginsTab = ({ siteId }) => {
         try {
             const data = await wordpressApi.getPlugins(siteId);
             setPlugins(data.plugins || []);
+            loadManaged();
         } catch (err) {
             console.error('Failed to load plugins:', err);
             setError(err);
         } finally {
             setLoading(false);
+        }
+    }
+
+    // Which installed plugins are library-managed. Best-effort: a scan first so the
+    // mapping reflects the live site, then read it back keyed by slug.
+    async function loadManaged() {
+        try {
+            await wordpressApi.scanManagedPlugins(siteId);
+            const data = await wordpressApi.getManagedPlugins(siteId);
+            const map = {};
+            (data.managed || []).forEach(m => { map[m.slug] = m; });
+            setManaged(map);
+        } catch {
+            // Library layer is optional — never block the plugins list on it.
+            setManaged({});
+        }
+    }
+
+    async function handleLibraryUpdate(slug) {
+        const m = managed[slug];
+        if (!m) return;
+        setUpdating(slug);
+        toast.info(`Updating ${slug} from library…`, { duration: 4000 });
+        try {
+            const res = await wordpressApi.installLibraryPluginOnSite(m.plugin_id, siteId, m.status === 'active');
+            if (res.success === false) { toast.error(res.error || 'Library update failed'); return; }
+            toast.success(`${slug} updated to library version`);
+            loadPlugins();
+        } catch (err) {
+            toast.error(err.message || 'Library update failed');
+        } finally {
+            setUpdating(null);
         }
     }
 
@@ -158,15 +193,30 @@ const PluginsTab = ({ siteId }) => {
                 <div className="wp-asset-grid">
                     {plugins.map(plugin => {
                         const isActive = plugin.status === 'active';
+                        const mgd = managed[plugin.name];
                         return (
                             <div className={`wp-asset-card ${isActive ? 'is-active' : ''}`} key={plugin.name}>
                                 <ServiceTile name={plugin.title || plugin.name} size={42} />
                                 <div className="wp-asset-card__body">
-                                    <div className="wp-asset-card__name">{plugin.title || plugin.name}</div>
+                                    <div className="wp-asset-card__name">
+                                        {plugin.title || plugin.name}
+                                        {mgd && <span className="wp-managed-pill">Managed</span>}
+                                    </div>
                                     <div className="wp-asset-card__sub">{plugin.name}</div>
                                     <div className="wp-asset-card__foot">
                                         <span className="wp-asset-card__ver">v{plugin.version}</span>
-                                        {plugin.update === 'available' && (
+                                        {mgd && mgd.update_available ? (
+                                            <button
+                                                type="button"
+                                                className="wp-update-flag wp-update-flag--library"
+                                                onClick={() => handleLibraryUpdate(plugin.name)}
+                                                disabled={updating !== null}
+                                                title={`Library has v${mgd.library_version}`}
+                                            >
+                                                <Download size={11} />
+                                                {updating === plugin.name ? 'Updating…' : `Update from library ${mgd.library_version}`}
+                                            </button>
+                                        ) : plugin.update === 'available' && (
                                             <button
                                                 type="button"
                                                 className="wp-update-flag"

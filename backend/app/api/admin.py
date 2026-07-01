@@ -429,11 +429,56 @@ def sites_https_status():
 @admin_bp.route('/sites-https/setup', methods=['POST'])
 @admin_required
 def sites_https_setup():
-    """Create the wildcard DNS record + issue the wildcard cert for the base domain."""
+    """Create the wildcard DNS record + issue the wildcard cert for a base domain
+    (the default base when ``base`` is omitted)."""
     from app.services.sites_https_service import SitesHttpsService
     data = request.get_json() or {}
-    result = SitesHttpsService.setup(data.get('provider_id'), email=data.get('email'))
+    result = SitesHttpsService.setup(data.get('provider_id'), email=data.get('email'),
+                                     base=data.get('base') or data.get('domain'))
     return jsonify(result), 200 if result.get('success') else 400
+
+
+@admin_bp.route('/sites-https/base-domains', methods=['POST'])
+@admin_required
+def sites_base_domain_add():
+    """Register a base domain managed sites can publish under."""
+    from app.services.site_base_domain_service import SiteBaseDomainService
+    data = request.get_json() or {}
+    result = SiteBaseDomainService.add(
+        data.get('domain'),
+        dns_provider_config_id=data.get('provider_id') or data.get('dns_provider_config_id'),
+        dns_mode=data.get('dns_mode') or 'wildcard',
+        make_default=bool(data.get('make_default')),
+    )
+    return jsonify(result), 201 if result.get('success') else 400
+
+
+@admin_bp.route('/sites-https/base-domains/<path:domain>', methods=['DELETE'])
+@admin_required
+def sites_base_domain_remove(domain):
+    """Unregister a base domain (promotes another to default if it was default)."""
+    from app.services.site_base_domain_service import SiteBaseDomainService
+    result = SiteBaseDomainService.remove(domain)
+    return jsonify(result), 200 if result.get('success') else 404
+
+
+@admin_bp.route('/sites-https/base-domains/<path:domain>/default', methods=['POST'])
+@admin_required
+def sites_base_domain_set_default(domain):
+    """Make a registered base domain the default for new sites."""
+    from app.services.site_base_domain_service import SiteBaseDomainService
+    result = SiteBaseDomainService.set_default(domain)
+    return jsonify(result), 200 if result.get('success') else 404
+
+
+@admin_bp.route('/sites-https/base-domains/<path:domain>', methods=['PATCH'])
+@admin_required
+def sites_base_domain_update(domain):
+    """Update a base domain's DNS mode (wildcard | per-site)."""
+    from app.services.site_base_domain_service import SiteBaseDomainService
+    data = request.get_json() or {}
+    result = SiteBaseDomainService.update(domain, dns_mode=data.get('dns_mode'))
+    return jsonify(result), 200 if result.get('success') else 404
 
 
 # ============================================

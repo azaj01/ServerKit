@@ -11,6 +11,7 @@ import {
     Boxes,
     Hammer,
     Archive,
+    HardDrive,
     CircleCheck,
     CircleX,
     Sparkles,
@@ -21,6 +22,7 @@ import { DangerZone } from '../DangerZone';
 import RepoConnectForm from '../git/RepoConnectForm';
 import ProtectionPanel from '../backups/ProtectionPanel';
 import ContainerOpsPanel from '../apps/ContainerOpsPanel';
+import VolumesPanel from '../apps/VolumesPanel';
 import AppWafPanel from '../apps/AppWafPanel';
 import BuildTab from '../appdetail/BuildTab';
 import DeployTab from '../appdetail/DeployTab';
@@ -66,7 +68,13 @@ function buildSettingsGroups(app) {
             label: 'Security',
             items: [{ id: 'waf', label: 'WAF', icon: ShieldCheck }],
         }] : []),
-        { label: 'Data', items: [{ id: 'backups', label: 'Backups', icon: Archive }] },
+        {
+            label: 'Data',
+            items: [
+                ...(isDocker ? [{ id: 'storage', label: 'Storage', icon: HardDrive }] : []),
+                { id: 'backups', label: 'Backups', icon: Archive },
+            ],
+        },
         { label: 'Advanced', items: [{ id: 'danger', label: 'Danger Zone', icon: AlertTriangle }] },
     ];
 }
@@ -288,6 +296,15 @@ const SettingsTab = ({ app, deployConfig, domains, primaryDomain, onUpdate }) =>
                     </div>
                 )}
 
+                {/* Storage (Docker only) — first-class managed volumes that
+                    survive redeploys, replacing fragile relative bind mounts. */}
+                {section === 'storage' && (
+                    <div className="svc-settings__section">
+                        <h3 className="svc-settings__section-title">Storage</h3>
+                        <VolumesPanel app={app} onChanged={onUpdate} />
+                    </div>
+                )}
+
                 {/* Git & Deploy — the shared RepoConnectForm (provider picker + URL
                     fallback, connected summary with Disconnect) owns the repo
                     connection. Once a repo is linked, the embedded DeployTab adds
@@ -386,6 +403,10 @@ const DomainSslPanel = ({ app, domains, primaryDomain, onUpdate }) => {
     const [subdomainLabel, setSubdomainLabel] = useState('');
     const [suggesting, setSuggesting] = useState(false);
     const [publishing, setPublishing] = useState(false);
+    // Base domains the app can be published under, and the chosen one, so a
+    // multi-base install can pick which domain the subdomain lives on.
+    const [subdomainBases, setSubdomainBases] = useState([]);
+    const [subdomainBase, setSubdomainBase] = useState('');
 
     const isPublicDomain = !!primaryDomain
         && !/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(primaryDomain)
@@ -449,15 +470,22 @@ const DomainSslPanel = ({ app, domains, primaryDomain, onUpdate }) => {
     async function handleSuggestSubdomain() {
         setSuggesting(true);
         try {
-            const res = await api.suggestSubdomain(app.id);
-            if (!res.base_domain) {
+            const [suggestRes, basesRes] = await Promise.all([
+                api.suggestSubdomain(app.id),
+                api.getSiteBaseDomains().catch(() => ({ base_domains: [], default: null })),
+            ]);
+            if (!suggestRes.base_domain) {
                 toast.info('Set a managed-sites base domain in Settings → Sites to publish on a subdomain.', 6000);
                 return;
             }
+            const bases = basesRes.base_domains || [];
+            const chosen = basesRes.default || suggestRes.base_domain;
             // Prefill the editable label from the suggestion (<label>.<base>).
-            const suggestedLabel = (res.suggestion || '').replace(`.${res.base_domain}`, '');
+            const suggestedLabel = (suggestRes.suggestion || '').replace(`.${suggestRes.base_domain}`, '');
             setSubdomainLabel(suggestedLabel);
-            setSubdomainModal({ base_domain: res.base_domain, dns_mode: res.dns_mode });
+            setSubdomainBases(bases);
+            setSubdomainBase(chosen);
+            setSubdomainModal({ base_domain: chosen, dns_mode: suggestRes.dns_mode });
         } catch (err) {
             toast.error(err.message || 'Failed to suggest a subdomain');
         } finally {
@@ -468,7 +496,7 @@ const DomainSslPanel = ({ app, domains, primaryDomain, onUpdate }) => {
     async function handleGiveSubdomain() {
         setPublishing(true);
         try {
-            const res = await api.giveSubdomain(app.id, subdomainLabel.trim());
+            const res = await api.giveSubdomain(app.id, subdomainLabel.trim(), subdomainBase || undefined);
             if (res.success) {
                 if (res.warning) toast.warning(res.warning);
                 toast.success(res.url ? `Published at ${res.url}` : 'Subdomain published');
@@ -658,8 +686,26 @@ const DomainSslPanel = ({ app, domains, primaryDomain, onUpdate }) => {
                         <div className="modal-body">
                             <p className="hint">
                                 Publish <strong>{app.name}</strong> at a managed subdomain of{' '}
-                                <code>{subdomainModal.base_domain}</code>.
+                                <code>{subdomainBase || subdomainModal.base_domain}</code>.
                             </p>
+                            {subdomainBases.length > 1 && (
+                                <div className="form-group">
+                                    <Label>Base domain</Label>
+                                    <select
+                                        className="settings-select"
+                                        value={subdomainBase}
+                                        onChange={(e) => setSubdomainBase(e.target.value)}
+                                        disabled={publishing}
+                                    >
+                                        {subdomainBases.map((b) => (
+                                            <option key={b.domain} value={b.domain}>
+                                                {b.domain}{b.is_default ? ' (default)' : ''}{b.https_enabled ? ' — HTTPS' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <span className="form-hint">Which registered base domain to publish this service under.</span>
+                                </div>
+                            )}
                             <div className="form-group">
                                 <Label>Subdomain</Label>
                                 <div className="svc-subdomain-input">
@@ -670,10 +716,10 @@ const DomainSslPanel = ({ app, domains, primaryDomain, onUpdate }) => {
                                         placeholder="my-app"
                                         disabled={publishing}
                                     />
-                                    <span className="svc-subdomain-input__suffix">.{subdomainModal.base_domain}</span>
+                                    <span className="svc-subdomain-input__suffix">.{subdomainBase || subdomainModal.base_domain}</span>
                                 </div>
                                 <span className="form-hint">
-                                    {subdomainModal.dns_mode === 'wildcard'
+                                    {(subdomainBases.find((b) => b.domain === subdomainBase)?.dns_mode || subdomainModal.dns_mode) === 'wildcard'
                                         ? 'Wildcard DNS is configured — this resolves instantly, no record needed.'
                                         : 'Per-site mode — a DNS record will be created for this host.'}
                                 </span>

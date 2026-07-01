@@ -200,7 +200,7 @@ These are the features that make a user say "this is a managed platform, not a f
 - **Reuse:** `WordPressSite.to_dict`, `WordPressSiteCard.jsx`.
 - **Done when:** Sites can be tagged and filtered.
 
-### #21 — Temporary preview URL before DNS is pointed `[M]` ❌ — ⏸️ Deferred (BLOCKED: a genuinely public, TLS-valid preview URL needs a pre-configured public base domain + wildcard DNS; managed sites are localhost:port only. Revisit after a public base-domain setting exists.)
+### #21 — Temporary preview URL before DNS is pointed `[M]` ❌ — ✅ Done (unblocked by the base-domain + wildcard-cert stack: once `sites_base_domain` is set and Phase-5 wildcard HTTPS is enabled, every new site is reachable at `<slug>.<base>` with a valid `*.<base>` cert the moment it is created — no per-site DNS, no localhost:port. The create flow now surfaces the live link — and, when no base domain is configured, nudges the operator to set one. A user pointing a custom domain keeps this base subdomain as the working preview until DNS propagates. The distinct `*.preview.<panel-domain>` scheme is unnecessary given the wildcard base domain.)
 - **Today:** `EnvironmentDomainService.generate_domain` only emits real subdomains or a `.localhost` fallback; the env nginx template listens on `:80` only. No preview hostname scheme.
 - **Do:** Add a wildcard/preview hostname (e.g. `<site>.preview.<panel-domain>` or a `*.sslip.io`-style scheme) with auto TLS so a site is reachable and verifiable pre-DNS.
 - **Reuse:** `environment_domain_service`, wildcard SSL (#8).
