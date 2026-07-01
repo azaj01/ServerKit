@@ -140,6 +140,124 @@ class SiteDomainService:
             return {'created': False, 'reason': 'error', 'error': str(e)}
 
     @classmethod
+    def panel_host(cls):
+        """Hostname the ServerKit panel itself is served on (from the canonical
+        domain / panel origin), or ``None``. Used to tailor DNS guidance — an
+        install on a subdomain (``panel.example.com``) needs a different base
+        domain than one on the apex (``example.com``)."""
+        origin = cls.panel_origin()
+        if not origin:
+            return None
+        host = origin.split('://', 1)[-1].split('/', 1)[0].split(':', 1)[0]
+        return host.strip().lower().strip('.') or None
+
+    @classmethod
+    def suggested_base_domain(cls):
+        """A sensible ``sites_base_domain`` to suggest, derived from the panel's
+        own domain so the recommendation fits the install shape:
+
+        * apex install ``example.com`` → ``apps.example.com`` (keeps the apex for
+          the panel, scopes the site wildcard under a dedicated label), and
+        * subdomain install ``panel.example.com`` → ``apps.example.com`` (a
+          sibling label, so ``*.apps.example.com`` never collides with the
+          panel's own ``panel`` record).
+
+        Returns ``None`` when the panel domain is unknown (nothing to derive from).
+        """
+        host = cls.panel_host()
+        if not host or host in ('localhost',) or host.replace('.', '').isdigit():
+            return None
+        parts = host.split('.')
+        # A subdomain install (3+ labels) → sibling under the parent zone; an
+        # apex install (2 labels) → a dedicated label under the apex.
+        parent = '.'.join(parts[1:]) if len(parts) >= 3 else host
+        return f'apps.{parent}'
+
+    @classmethod
+    def publishing_gaps(cls):
+        """The managed-sites publishing config gaps that are open *right now*, as
+        a list of ``{code, event, message}`` (empty when publishing is fully set
+        up). Only surfaces gaps that are actionable given what IS configured — the
+        HTTPS and server-IP gaps are meaningless before a base domain exists, so a
+        missing base domain short-circuits the rest.
+        """
+        base = cls.base_domain()
+        if not base:
+            suggestion = cls.suggested_base_domain()
+            eg = f' (e.g. {suggestion})' if suggestion else ''
+            return [{
+                'code': 'no_base_domain',
+                'event': 'sites.publish.no_base_domain',
+                'message': (
+                    'New sites are only reachable at localhost:<port>. Set a '
+                    f'managed-sites base domain{eg} in Settings → Managed Sites and '
+                    'point a wildcard record (*.<domain>) at this server, so every '
+                    'site is published at <name>.<domain>.'),
+            }]
+
+        gaps = []
+        if not cls.https_enabled():
+            gaps.append({
+                'code': 'http_only',
+                'event': 'sites.publish.http_only',
+                'message': (
+                    f'Sites are published over HTTP at <name>.{base}. Enabling '
+                    f'wildcard HTTPS (Settings → Managed Sites) serves them over TLS '
+                    f'from a *.{base} certificate — optional, but recommended for a '
+                    f'public site.'),
+            })
+        if cls.dns_mode() == 'per-site' and not cls.server_ip():
+            gaps.append({
+                'code': 'no_server_ip',
+                'event': 'sites.publish.no_server_ip',
+                'message': (
+                    f"DNS mode is per-site but no server public IP is set, so each "
+                    f"site's A record under {base} can't be auto-created. Set the "
+                    'server public IP in Settings, or switch to wildcard DNS mode.'),
+            })
+        return gaps
+
+    @classmethod
+    def _has_open_gap_notice(cls, event_key):
+        """True when an admin already has an *unread* in-app nudge for this event,
+        so the same gap is nudged once — not on every site create."""
+        try:
+            from app import db
+            from app.notifications.models import Notification, NotificationDelivery
+            return db.session.query(NotificationDelivery.id).join(
+                Notification, NotificationDelivery.notification_id == Notification.id
+            ).filter(
+                Notification.event_key == event_key,
+                NotificationDelivery.channel == NotificationDelivery.CHANNEL_INAPP,
+                NotificationDelivery.read_at.is_(None),
+            ).first() is not None
+        except Exception:
+            return False
+
+    @classmethod
+    def notify_publishing_gaps(cls):
+        """Best-effort: drop an in-app nudge to admins for each open publishing
+        gap, deduped against an already-open unread nudge for the same gap. Never
+        raises — a nudge must never break the create flow that triggered it.
+        Returns ``{'sent': n}``."""
+        try:
+            gaps = cls.publishing_gaps()
+        except Exception:
+            return {'sent': 0}
+        sent = 0
+        for gap in gaps:
+            try:
+                if cls._has_open_gap_notice(gap['event']):
+                    continue
+                from app.plugins_sdk import notify
+                notify.send(gap['event'], to='admins',
+                            data={'message': gap['message'], 'summary': gap['message']})
+                sent += 1
+            except Exception:
+                continue
+        return {'sent': sent}
+
+    @classmethod
     def _vhost_create_kwargs(cls, app, domains, ssl_cert, ssl_key, force_type=None):
         """Build ``NginxService.create_site(**kwargs)`` for ``app``, or
         ``(None, reason)`` when the app type can't be served by host nginx or is
@@ -256,6 +374,10 @@ class SiteDomainService:
         dns = cls.ensure_site_dns(host)
         if dns and not dns.get('skipped') and not dns.get('created') and dns.get('message'):
             warning = (warning + '; ' + dns['message']) if warning else dns['message']
+
+        # Nudge admins about any remaining publishing-config gaps (HTTP-only,
+        # per-site DNS without a server IP). Best-effort, deduped, never fatal.
+        cls.notify_publishing_gaps()
 
         return {'success': True, 'host': host,
                 'url': cls.site_url(host, ssl=cls.https_enabled() and cls.covers(host)),

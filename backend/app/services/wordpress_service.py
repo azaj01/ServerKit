@@ -2073,6 +2073,14 @@ RewriteRule ^wp-content/uploads/.*\\.php$ - [F]
                     attach_err = attach_res.get('error') or 'Custom domain could not be attached'
                     wp_warning = (wp_warning + ' ' + attach_err) if wp_warning else attach_err
 
+            # Nudge admins (in-app) if the site landed on localhost or the
+            # base-domain/HTTPS/DNS config is only partly set up. Best-effort —
+            # never let a notification failure affect the create result.
+            try:
+                SiteDomainService.notify_publishing_gaps()
+            except Exception:
+                pass
+
             result = {
                 'success': True,
                 'message': 'WordPress site created successfully',
