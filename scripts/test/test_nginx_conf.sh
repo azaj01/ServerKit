@@ -79,14 +79,17 @@ chmod 644 "$CERT_DIR"/*.pem
 
 # The shipped vhosts declare `listen ... default_server`; the distro default site
 # does too, which would trip a duplicate-default_server error. Move it aside for
-# the duration of the test.
+# the duration of the test. It must land OUTSIDE sites-enabled/ — nginx.conf
+# includes `sites-enabled/*` (bare glob), so a `.smoke-bak` suffix left in that
+# dir would still be loaded and still collide.
 DEFAULT_SITE=/etc/nginx/sites-enabled/default
+DEFAULT_BAK=/etc/nginx/default.smoke-bak
 DEFAULT_MOVED=0
 if [ -e "$DEFAULT_SITE" ]; then
-    "${SUDO[@]}" mv "$DEFAULT_SITE" "$DEFAULT_SITE.smoke-bak" && DEFAULT_MOVED=1
+    "${SUDO[@]}" mv "$DEFAULT_SITE" "$DEFAULT_BAK" && DEFAULT_MOVED=1
 fi
 restore_default() {
-    [ "$DEFAULT_MOVED" = "1" ] && "${SUDO[@]}" mv "$DEFAULT_SITE.smoke-bak" "$DEFAULT_SITE" 2>/dev/null || true
+    [ "$DEFAULT_MOVED" = "1" ] && "${SUDO[@]}" mv "$DEFAULT_BAK" "$DEFAULT_SITE" 2>/dev/null || true
 }
 trap 'restore_default; cleanup' EXIT
 
