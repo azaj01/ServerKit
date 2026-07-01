@@ -140,6 +140,77 @@ class SiteDomainService:
             return {'created': False, 'reason': 'error', 'error': str(e)}
 
     @classmethod
+    def _vhost_create_kwargs(cls, app, domains, ssl_cert, ssl_key, force_type=None):
+        """Build ``NginxService.create_site(**kwargs)`` for ``app``, or
+        ``(None, reason)`` when the app type can't be served by host nginx or is
+        missing what it needs (a port for proxied apps, a root for served ones).
+
+        ``force_type`` overrides the ``app_type`` → template choice — a managed
+        WordPress site always proxies to its container port even though the row
+        says ``wordpress`` (whose stock template is php-fpm, not a proxy).
+        """
+        t = (force_type or app.app_type or '').lower()
+        base = dict(name=app.name, domains=domains, ssl_cert=ssl_cert, ssl_key=ssl_key)
+        # Reverse-proxy to a local container/app port.
+        if t in ('docker', 'wordpress'):
+            if not app.port:
+                return None, f'{t} app has no published port to route to.'
+            return dict(base, app_type='docker', port=app.port), None
+        if t in ('flask', 'django', 'python'):
+            if not app.port:
+                return None, f'{t} app has no published port to route to.'
+            return dict(base, app_type=t, root_path=app.root_path or '', port=app.port), None
+        # Serve from a filesystem root.
+        if t == 'php':
+            if not app.root_path:
+                return None, 'php app has no root path to serve.'
+            return dict(base, app_type='php', root_path=app.root_path,
+                        php_version=(getattr(app, 'php_version', None) or '8.2')), None
+        if t == 'static':
+            if not app.root_path:
+                return None, 'static app has no root path to serve.'
+            return dict(base, app_type='static', root_path=app.root_path), None
+        return None, f"app type '{t}' cannot be published via host nginx."
+
+    @classmethod
+    def write_app_vhost(cls, app, force_type=None):
+        """(Re)write and enable the host-nginx vhost publishing ``app`` at every
+        one of its Domain rows (``server_name`` = all domains).
+
+        Handles all host-nginx app types: docker/wordpress and
+        python/flask/django reverse-proxy to the app's port; php/static serve a
+        filesystem root. Serves the base-domain wildcard cert when HTTPS is
+        enabled and every domain is a covered subdomain (custom domains bring
+        their own cert). Best-effort — never raises; returns ``{'nginx',
+        'warning'}`` (``nginx`` is ``None`` when nothing was written).
+        """
+        from app.models.domain import Domain
+        from app.services.nginx_service import NginxService
+
+        domains = [d.name for d in Domain.query.filter_by(application_id=app.id).all()]
+        if not domains:
+            return {'nginx': None, 'warning': None}
+
+        ssl_cert = ssl_key = None
+        if cls.https_enabled() and all(cls.covers(d) for d in domains):
+            ssl_cert, ssl_key = cls.wildcard_cert_paths()
+
+        kwargs, reason = cls._vhost_create_kwargs(app, domains, ssl_cert, ssl_key, force_type)
+        if reason:
+            return {'nginx': None, 'warning': reason}
+
+        try:
+            res = NginxService.create_site(**kwargs)
+        except Exception as e:
+            return {'nginx': None, 'warning': str(e)}
+        if not res.get('success'):
+            return {'nginx': res, 'warning': f"nginx vhost not created: {res.get('error')}"}
+        en = NginxService.enable_site(app.name)
+        if not en.get('success'):
+            return {'nginx': res, 'warning': f"vhost written but not enabled: {en.get('error')}"}
+        return {'nginx': res, 'warning': None}
+
+    @classmethod
     def give_subdomain(cls, app, label=None):
         """One-click 'give this app a subdomain': publish ``app`` at
         ``<label>.<base_domain>`` (label defaults to the app-name slug). Creates the
@@ -151,7 +222,6 @@ class SiteDomainService:
         """
         from app import db
         from app.models.domain import Domain
-        from app.services.nginx_service import NginxService
 
         base = cls.base_domain()
         if not base:
@@ -175,21 +245,13 @@ class SiteDomainService:
             db.session.rollback()
             return {'success': False, 'error': f'Could not record domain: {e}'}
 
-        warning = None
-        nginx = None
-        if app.app_type == 'docker' and app.port:
-            all_domains = [d.name for d in Domain.query.filter_by(application_id=app.id).all()]
-            ssl_cert, ssl_key = (None, None)
-            if cls.https_enabled() and all(cls.covers(d) for d in all_domains):
-                ssl_cert, ssl_key = cls.wildcard_cert_paths()
-            nginx = NginxService.create_site(
-                name=app.name, app_type='docker', domains=all_domains,
-                root_path=app.root_path or '', port=app.port,
-                ssl_cert=ssl_cert, ssl_key=ssl_key)
-            if nginx.get('success'):
-                NginxService.enable_site(app.name)
-            else:
-                warning = nginx.get('error')
+        # Publish the site: (re)write + enable its host-nginx vhost. Works for
+        # every host-nginx app type (docker/wordpress/python proxy to the app
+        # port; php/static serve a root), not just docker — a non-routable or
+        # misconfigured app degrades to a warning rather than failing the publish.
+        v = cls.write_app_vhost(app)
+        nginx = v.get('nginx')
+        warning = v.get('warning')
 
         dns = cls.ensure_site_dns(host)
         if dns and not dns.get('skipped') and not dns.get('created') and dns.get('message'):

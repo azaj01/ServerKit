@@ -84,6 +84,90 @@ def test_give_subdomain_wildcard_mode_skips_per_site_record(app, monkeypatch):
     assert Domain.query.filter_by(name='wild-one.apps.example.com').first() is not None
 
 
+def _capture_create_site(monkeypatch):
+    """Patch NginxService so give_subdomain writes no real vhost but we can see
+    exactly which template/params it chose. Returns the captured kwargs dict."""
+    from app.services.nginx_service import NginxService
+    captured = {}
+    monkeypatch.setattr(NginxService, 'create_site',
+                        staticmethod(lambda **k: (captured.update(k), {'success': True})[1]))
+    monkeypatch.setattr(NginxService, 'enable_site', staticmethod(lambda name: {'success': True}))
+    return captured
+
+
+def test_give_subdomain_routes_php_app_from_root(app, monkeypatch):
+    """A managed PHP app (no port, has a root) must get a real php-fpm vhost —
+    not the old docker-only skip that left it at localhost only."""
+    from app import db
+    from app.services.site_domain_service import SiteDomainService
+
+    _set('sites_base_domain', 'apps.example.com')
+    a = _mk_app(name='Legacy PHP', port=None)
+    a.app_type = 'php'
+    a.root_path = '/srv/legacy-php'
+    db.session.commit()
+
+    captured = _capture_create_site(monkeypatch)
+    res = SiteDomainService.give_subdomain(a)
+    assert res['success'] and res.get('warning') is None
+    assert captured['app_type'] == 'php'
+    assert captured['root_path'] == '/srv/legacy-php'
+    assert 'legacy-php.apps.example.com' in captured['domains']
+
+
+def test_give_subdomain_routes_static_app_from_root(app, monkeypatch):
+    from app import db
+    from app.services.site_domain_service import SiteDomainService
+
+    _set('sites_base_domain', 'apps.example.com')
+    a = _mk_app(name='Brochure', port=None)
+    a.app_type = 'static'
+    a.root_path = '/srv/brochure'
+    db.session.commit()
+
+    captured = _capture_create_site(monkeypatch)
+    res = SiteDomainService.give_subdomain(a)
+    assert res['success'] and res.get('warning') is None
+    assert captured['app_type'] == 'static'
+    assert captured['root_path'] == '/srv/brochure'
+
+
+def test_give_subdomain_routes_python_app_by_port(app, monkeypatch):
+    from app import db
+    from app.services.site_domain_service import SiteDomainService
+
+    _set('sites_base_domain', 'apps.example.com')
+    a = _mk_app(name='Flask API', port=9100)
+    a.app_type = 'python'
+    db.session.commit()
+
+    captured = _capture_create_site(monkeypatch)
+    res = SiteDomainService.give_subdomain(a)
+    assert res['success'] and res.get('warning') is None
+    assert captured['app_type'] == 'python'
+    assert captured['port'] == 9100
+
+
+def test_give_subdomain_warns_when_app_type_unroutable(app, monkeypatch):
+    """A php app with no root can't be served — the publish records the Domain
+    but surfaces a warning instead of silently pretending it routed."""
+    from app import db
+    from app.models.domain import Domain
+    from app.services.site_domain_service import SiteDomainService
+
+    _set('sites_base_domain', 'apps.example.com')
+    a = _mk_app(name='Broken PHP', port=None)
+    a.app_type = 'php'
+    a.root_path = None
+    db.session.commit()
+
+    _capture_create_site(monkeypatch)
+    res = SiteDomainService.give_subdomain(a)
+    assert res['success'] and res['nginx'] is None
+    assert 'root' in (res.get('warning') or '')
+    assert Domain.query.filter_by(name='broken-php.apps.example.com').first() is not None
+
+
 def test_give_subdomain_rejects_label_taken_by_other_app(app, monkeypatch):
     from app import db
     from app.models.domain import Domain
