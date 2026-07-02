@@ -44,6 +44,11 @@ SERVER_URL=""
 SERVER_NAME=""
 VERSION="latest"
 
+# Version injected by the panel when it serves this script (the panel already
+# resolves the latest agent release for its update endpoints). Empty means
+# discover the version via the GitHub API in get_latest_version().
+SERVERKIT_AGENT_VERSION=""
+
 print_banner() {
     echo
     printf "  ${V1}${BOLD}╔═╗┌─┐┌─┐┌┬┐┌─┐┬┌─┐${NC}\n"
@@ -92,18 +97,22 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             --token|-t)
+                [[ $# -ge 2 ]] || log_error "Option $1 requires a value"
                 TOKEN="$2"
                 shift 2
                 ;;
             --server|-s)
+                [[ $# -ge 2 ]] || log_error "Option $1 requires a value"
                 SERVER_URL="$2"
                 shift 2
                 ;;
             --name|-n)
+                [[ $# -ge 2 ]] || log_error "Option $1 requires a value"
                 SERVER_NAME="$2"
                 shift 2
                 ;;
             --version|-v)
+                [[ $# -ge 2 ]] || log_error "Option $1 requires a value"
                 VERSION="$2"
                 shift 2
                 ;;
@@ -172,29 +181,83 @@ check_dependencies() {
 }
 
 get_latest_version() {
-    if [[ "$VERSION" == "latest" ]]; then
-        log_info "Fetching latest version..."
-        VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases" | \
-            grep -oP '"tag_name": "agent-v\K[^"]+' | head -1)
-
-        if [[ -z "$VERSION" ]]; then
-            log_error "Failed to fetch latest version"
-        fi
-        log_info "Latest version: v${VERSION}"
+    if [[ "$VERSION" != "latest" ]]; then
+        return 0
     fi
+
+    # The panel injects the version it already resolved when serving this
+    # script — use it and keep GitHub out of the enrollment path entirely.
+    if [[ -n "$SERVERKIT_AGENT_VERSION" ]]; then
+        VERSION="$SERVERKIT_AGENT_VERSION"
+        log_info "Using panel-resolved version: v${VERSION}"
+        return 0
+    fi
+
+    log_info "Fetching latest version..."
+
+    # Agent tags share this repo with panel releases, which can push every
+    # agent-v* tag off the first page — so page through instead of trusting
+    # the default (30-entry) first page. Capped at 3 pages of 100.
+    local page releases
+    VERSION=""
+    for page in 1 2 3; do
+        releases=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=100&page=${page}") || break
+        VERSION=$(printf '%s\n' "$releases" | grep -o '"tag_name": *"agent-v[^"]*"' | head -1 | sed -e 's/.*agent-v//' -e 's/"$//') || true
+        [[ -n "$VERSION" ]] && break
+        # A page with no tags at all means the release list is exhausted.
+        printf '%s' "$releases" | grep -q '"tag_name"' || break
+    done
+
+    if [[ -z "$VERSION" ]]; then
+        log_error "Failed to fetch latest version"
+    fi
+    log_info "Latest version: v${VERSION}"
+}
+
+# Verify the downloaded archive against the release's checksums.txt.
+# Best-effort when checksums.txt is unavailable (older releases); a present-
+# but-mismatching checksum is a hard failure.
+verify_checksum() {
+    local tmp_dir="$1" asset_name="$2"
+    local checksums_url="https://github.com/${GITHUB_REPO}/releases/download/agent-v${VERSION}/checksums.txt"
+
+    if ! command -v sha256sum &> /dev/null; then
+        log_warn "sha256sum not available — skipping checksum verification"
+        return 0
+    fi
+
+    if ! curl -fsSL "$checksums_url" -o "${tmp_dir}/checksums.txt"; then
+        log_warn "Could not download checksums.txt — skipping verification"
+        return 0
+    fi
+
+    if ! grep -q "$asset_name" "${tmp_dir}/checksums.txt"; then
+        log_warn "checksums.txt has no entry for ${asset_name} — skipping verification"
+        return 0
+    fi
+
+    if ! (cd "$tmp_dir" && sha256sum -c <(grep "$asset_name" checksums.txt) >/dev/null 2>&1); then
+        rm -rf "$tmp_dir"
+        log_error "Checksum verification FAILED for ${asset_name} — aborting install"
+    fi
+
+    log_success "Checksum verified"
 }
 
 download_agent() {
     log_info "Downloading ServerKit Agent v${VERSION}..."
 
-    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/agent-v${VERSION}/serverkit-agent-${VERSION}-linux-${ARCH}.tar.gz"
+    ASSET_NAME="serverkit-agent-${VERSION}-linux-${ARCH}.tar.gz"
+    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/agent-v${VERSION}/${ASSET_NAME}"
     TMP_DIR=$(mktemp -d)
-    ARCHIVE="${TMP_DIR}/serverkit-agent.tar.gz"
+    ARCHIVE="${TMP_DIR}/${ASSET_NAME}"
 
     if ! curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE"; then
         rm -rf "$TMP_DIR"
         log_error "Failed to download agent from: $DOWNLOAD_URL"
     fi
+
+    verify_checksum "$TMP_DIR" "$ASSET_NAME"
 
     # Extract binary
     log_info "Extracting agent..."
@@ -215,12 +278,24 @@ create_user() {
         log_info "User $SERVICE_USER already exists"
     else
         log_info "Creating service user: $SERVICE_USER"
-        useradd -r -s /bin/false -d /nonexistent "$SERVICE_USER"
+        if command -v useradd &> /dev/null; then
+            useradd -r -s /bin/false -d /nonexistent "$SERVICE_USER"
+        elif command -v adduser &> /dev/null; then
+            # Alpine/busybox ships adduser instead of useradd
+            adduser -S -D -H -s /bin/false "$SERVICE_USER"
+        else
+            log_error "Cannot create user: neither useradd nor adduser found"
+        fi
     fi
 
     # Add to docker group if it exists
     if getent group docker > /dev/null 2>&1; then
-        usermod -aG docker "$SERVICE_USER"
+        if command -v usermod &> /dev/null; then
+            usermod -aG docker "$SERVICE_USER"
+        else
+            # busybox equivalent of usermod -aG
+            addgroup "$SERVICE_USER" docker
+        fi
         log_info "Added $SERVICE_USER to docker group"
     fi
 }
@@ -372,5 +447,13 @@ main() {
     start_service
     print_success
 }
+
+# Sourcing this file (e.g. from scripts/test/test_agent_install.sh) defines
+# every function above for unit testing without running an install. Piped
+# execution (curl | bash) has no BASH_SOURCE[0], so only a real `source`
+# takes the early return.
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ "${BASH_SOURCE[0]}" != "$0" ]; then
+    return 0
+fi
 
 main "$@"

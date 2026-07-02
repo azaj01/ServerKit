@@ -47,26 +47,36 @@ echo ""
 PASS=0
 FAIL=0
 
+# NOTE: every probe below must be run inside an `if`/`||` so a failing check
+# is *recorded* instead of killing the script via `set -e`. `((PASS++))` is
+# also a set -e trap (arithmetic returns the pre-increment value, so the first
+# increment from 0 "fails") — use the assignment form instead.
 check() {
     local name=$1
     local result=$2
     if [ "$result" = "0" ]; then
         echo -e "  ${GREEN}✓${NC} $name"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo -e "  ${RED}✗${NC} $name"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
 # Test 1: Port accessibility
 echo "1. Checking port accessibility..."
 if command -v nc &> /dev/null; then
-    nc -z -w 2 127.0.0.1 $PORT 2>/dev/null
-    check "Port $PORT is accessible on localhost" $?
+    if nc -z -w 2 127.0.0.1 "$PORT" 2>/dev/null; then
+        check "Port $PORT is accessible on localhost" 0
+    else
+        check "Port $PORT is accessible on localhost" 1
+    fi
 elif command -v curl &> /dev/null; then
-    curl -s --connect-timeout 2 http://127.0.0.1:$PORT/ > /dev/null 2>&1
-    check "Port $PORT is accessible on localhost" $?
+    if curl -s --connect-timeout 2 "http://127.0.0.1:$PORT/" > /dev/null 2>&1; then
+        check "Port $PORT is accessible on localhost" 0
+    else
+        check "Port $PORT is accessible on localhost" 1
+    fi
 else
     echo -e "  ${YELLOW}!${NC} Cannot check port (nc and curl not available)"
 fi
@@ -96,8 +106,14 @@ fi
 echo ""
 echo "3. Testing Nginx configuration syntax..."
 if command -v nginx &> /dev/null; then
-    sudo nginx -t 2>&1 | grep -q "successful"
-    check "Nginx config syntax is valid" $?
+    # nginx -t needs root; only reach for sudo when we aren't root already
+    SUDO=""
+    [ "$(id -u)" -ne 0 ] && SUDO="sudo"
+    if $SUDO nginx -t 2>&1 | grep -q "successful"; then
+        check "Nginx config syntax is valid" 0
+    else
+        check "Nginx config syntax is valid" 1
+    fi
 else
     echo -e "  ${YELLOW}!${NC} Nginx command not available"
 fi
@@ -106,18 +122,26 @@ fi
 echo ""
 echo "4. Checking Nginx service status..."
 if command -v systemctl &> /dev/null; then
-    systemctl is-active nginx > /dev/null 2>&1
-    check "Nginx service is running" $?
+    if systemctl is-active nginx > /dev/null 2>&1; then
+        check "Nginx service is running" 0
+    else
+        check "Nginx service is running" 1
+    fi
 else
-    ps aux | grep -v grep | grep -q nginx
-    check "Nginx process is running" $?
+    if ps aux | grep -v grep | grep -q nginx; then
+        check "Nginx process is running" 0
+    else
+        check "Nginx process is running" 1
+    fi
 fi
 
 # Test 5: Direct backend request
 echo ""
 echo "5. Testing direct backend request..."
 if command -v curl &> /dev/null; then
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://127.0.0.1:$PORT/ 2>/dev/null || echo "000")
+    # NB: on connection failure curl still prints "000" via -w AND exits
+    # non-zero — `|| echo 000` would concatenate to "000000" and false-pass.
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://127.0.0.1:$PORT/" 2>/dev/null) || HTTP_CODE="000"
     if [ "$HTTP_CODE" != "000" ]; then
         check "Backend responds (HTTP $HTTP_CODE)" 0
     else
@@ -134,7 +158,7 @@ if [ -n "$DOMAIN" ]; then
     echo "6. Testing domain routing..."
     if command -v curl &> /dev/null; then
         # Test via Host header to localhost (simulates domain routing)
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 -H "Host: $DOMAIN" http://127.0.0.1/ 2>/dev/null || echo "000")
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 -H "Host: $DOMAIN" http://127.0.0.1/ 2>/dev/null) || HTTP_CODE="000"
         if [ "$HTTP_CODE" != "000" ] && [ "$HTTP_CODE" != "404" ]; then
             check "Domain routing works (HTTP $HTTP_CODE)" 0
         else
@@ -165,7 +189,7 @@ if command -v docker &> /dev/null; then
     PORT_BINDINGS=$(docker port "$APP_NAME" 2>/dev/null || echo "")
     if [ -n "$PORT_BINDINGS" ]; then
         echo -e "     Port bindings:"
-        echo "$PORT_BINDINGS" | while read line; do
+        echo "$PORT_BINDINGS" | while read -r line; do
             echo -e "       $line"
         done
     fi
@@ -182,7 +206,7 @@ echo -e " ${GREEN}Passed:${NC} $PASS"
 echo -e " ${RED}Failed:${NC} $FAIL"
 echo ""
 
-if [ $FAIL -eq 0 ]; then
+if [ "$FAIL" -eq 0 ]; then
     echo -e "${GREEN}All checks passed! Routing should be working.${NC}"
     exit 0
 else

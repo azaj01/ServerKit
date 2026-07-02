@@ -1835,6 +1835,19 @@ def get_install_script_linux():
     content = content.replace('https://your-serverkit.com', server_url)
     content = content.replace('jhd3197/ServerKit', GITHUB_REPO)
 
+    # Inject the agent version the panel already resolved so enrollment does
+    # not depend on the installer rediscovering it via the GitHub API. Best
+    # effort: on failure the placeholder stays empty and the script falls
+    # back to its own GitHub discovery.
+    release = _get_latest_agent_release()
+    version = (release or {}).get('version') or ''
+    if version and all(c.isalnum() or c in '._-' for c in version):
+        content = content.replace(
+            'SERVERKIT_AGENT_VERSION=""',
+            f'SERVERKIT_AGENT_VERSION="{version}"',
+            1
+        )
+
     return Response(
         content,
         mimetype='text/x-shellscript',
@@ -1956,10 +1969,13 @@ def _get_latest_agent_release():
         return _releases_cache['data']
 
     try:
-        # Fetch releases from GitHub
+        # Fetch releases from GitHub. per_page=100: agent-v* tags share this
+        # repo with panel releases, which can push them off the default
+        # 30-entry first page.
         response = requests.get(
             f'https://api.github.com/repos/{GITHUB_REPO}/releases',
             headers={'Accept': 'application/vnd.github.v3+json'},
+            params={'per_page': 100},
             timeout=10
         )
         response.raise_for_status()
