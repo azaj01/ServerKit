@@ -75,6 +75,11 @@ const EMPTY = {
     command_palette: [],
     widgets: [],
     layouts: [],
+    // Tabs contributed into core-owned TabGroupLayout groups (#43):
+    // { group, to, label, icon?, end?, order? }. `group` is the core group id
+    // (== the sidebar item id: files | servers | monitoring). Consumed by
+    // TabGroupLayout (tab strip merge) + Sidebar (group item stays lit).
+    tabs: [],
     // AI assistant contributions: per-route suggested prompts + custom
     // tool-result renderers. Consumed by the core AIAssistant via
     // useContributions().ai.
@@ -106,6 +111,7 @@ function getBuildTimeContributions() {
     const command_palette = [];
     const widgets = [];
     const layouts = [];
+    const tabs = [];
     const ai = { suggested_prompts: [], tool_renderers: [] };
 
     for (const entry of installed) {
@@ -121,6 +127,7 @@ function getBuildTimeContributions() {
         command_palette.push(...tagItems(contrib.command_palette, slug));
         widgets.push(...tagItems(contrib.widgets, slug));
         layouts.push(...tagItems(contrib.layouts, slug));
+        tabs.push(...tagItems(contrib.tabs, slug));
 
         if (contrib.ai && typeof contrib.ai === 'object') {
             ai.suggested_prompts.push(...tagItems(contrib.ai.suggested_prompts, slug));
@@ -139,6 +146,7 @@ function getBuildTimeContributions() {
         command_palette,
         widgets,
         layouts,
+        tabs,
         ai,
     };
 }

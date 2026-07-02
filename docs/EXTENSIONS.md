@@ -107,6 +107,9 @@ tagged at runtime with its source `plugin` slug so the frontend can resolve
   ],
   "widgets": [ { "slot": "dashboard.top", "component": "GitStatusWidget" } ],
   "layouts": [ { "id": "my-fullscreen", "component": "MyLayout" } ],
+  "tabs": [
+    { "group": "files", "to": "/ftp", "label": "FTP Server", "icon": "<rect …/>" }
+  ],
   "ai": {
     "suggested_prompts": [ { "route": "/git", "label": "…", "prompt": "…" } ],
     "tool_renderers":    [ { "tool": "git__list_branches", "component": "BranchList" } ]
@@ -117,11 +120,12 @@ tagged at runtime with its source `plugin` slug so the frontend can resolve
 | Kind | Shape | Notes |
 |---|---|---|
 | `nav` | `{id,label,route,category,icon,requiresCondition?}` | `icon` is raw inner-SVG markup. `category`: overview/infrastructure/operations/system. Merged into the sidebar; deduped by `id`. |
-| `routes` | `{path,component,layout?}` | `component` = a named export of the plugin's `index.{js,jsx}`. `layout`: `padded` (default) / `full` / `bare` / a custom layout id. |
+| `routes` | `{path,component,layout?,group?}` | `component` = a named export of the plugin's `index.{js,jsx}`. `layout`: `padded` (default) / `full` / `bare` / a custom layout id. `group` nests the route inside a core tab group instead — see [Tab-group contributions](#tab-group-contributions). |
 | `page_titles` | `{ "/path": "Title" }` | Sets `document.title`. |
 | `command_palette` | `{label,path,category,keywords}` | `category` defaults to `Extensions`. |
 | `widgets` | `{slot,component}` | Slots: `global` (renders inside DashboardLayout), plus the enrich-core slots (`dashboard.top`, `service.detail.tab`, `domain.drawer.panel`). |
 | `layouts` | `{id,component}` | Custom wrappers; the component must render `<Outlet/>`. Built-in ids `padded`/`full`/`bare` are reserved. |
+| `tabs` | `{group,to,label,icon?,end?,order?}` | Adds a tab to a core-owned tab group. `group` = the group id (`files` / `servers` / `monitoring`). See [Tab-group contributions](#tab-group-contributions). |
 | `ai` | `{suggested_prompts,tool_renderers}` | See [AI](#extending-the-ai-assistant). |
 
 ### Route layouts
@@ -131,6 +135,36 @@ tagged at runtime with its source `plugin` slug so the frontend can resolve
 - `bare` — **outside** `DashboardLayout` (no sidebar), under the auth guard —
   fullscreen authenticated pages.
 - `<custom-id>` — wrapped in a `layouts`-contributed component.
+
+### Tab-group contributions
+
+Some core surfaces are **tab groups** (one shared `PageTopbar` + routed tabs,
+rendered by `TabGroupLayout`). An extension can add a tab to one of these
+groups instead of contributing a standalone page, so its feature sits where
+users expect it (e.g. FTP as a tab of Files) and the group's chrome stays.
+
+Two halves, both required:
+
+```jsonc
+"tabs":   [ { "group": "files", "to": "/ftp", "label": "FTP Server",
+              "icon": "<rect …/>", "order": 1 } ],
+"routes": [ { "path": "ftp", "component": "FtpServerPage", "group": "files" },
+            { "path": "ftp/:tab", "component": "FtpServerPage", "group": "files" } ]
+```
+
+- The `tabs` entry puts the tab in the strip; the `group`-tagged routes render
+  the page **inside** that group's `TabGroupLayout` (a `group` route ignores
+  `layout`).
+- `group` ids match the group's **sidebar item id**: `files`, `servers`,
+  `monitoring`. The host also extends that sidebar item's highlight to the
+  contributed tab's path, so the group stays lit. (Other groups can accept
+  contributions later by passing `groupId` to their `TabGroupLayout` in
+  `App.jsx`.)
+- `icon` is raw inner-SVG markup (24×24 viewBox, stroked), like nav icons.
+  `order` is an optional insertion index; default appends after the core tabs.
+  Core tabs always win a `to` collision.
+- Pages rendered in a tab group must not render their own top bar; publish
+  actions via the `useTopbarActions()` outlet context like core tab pages do.
 
 ---
 

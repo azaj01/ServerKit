@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 CONVERTED_BUILTIN_SLUGS = [
     'serverkit-gpu',
     'serverkit-workflows',
+    'serverkit-ftp',
 ]
 
 

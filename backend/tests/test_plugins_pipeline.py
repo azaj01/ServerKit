@@ -51,10 +51,16 @@ def _write_builtin(builtin_dir, slug='serverkit-demo', version='1.0.0',
         'contributions': {
             'nav': [{'id': 'demo', 'label': 'Demo', 'route': '/demo',
                      'category': 'system', 'icon': '<circle cx="12" cy="12" r="8"/>'}],
-            'routes': [{'path': 'demo', 'component': 'DemoPage'}],
+            'routes': [{'path': 'demo', 'component': 'DemoPage'},
+                       {'path': 'demo-tab', 'component': 'DemoTabPage',
+                        'group': 'files'}],
             'page_titles': {'/demo': 'Demo'},
             'command_palette': [{'label': 'Demo', 'path': '/demo',
                                  'category': 'Pages', 'keywords': 'demo'}],
+            # Tab-group contribution (#43): a tab added to a core-owned
+            # TabGroupLayout group, paired with the group route above.
+            'tabs': [{'group': 'files', 'to': '/demo-tab', 'label': 'Demo Tab',
+                      'icon': '<circle cx="12" cy="12" r="8"/>'}],
         },
     }
     (folder / 'plugin.json').write_text(json.dumps(manifest), encoding='utf-8')
@@ -157,7 +163,7 @@ def test_contributions_endpoint_envelope(app, client, auth_headers, plugin_dirs)
 
     # The envelope always carries every key.
     for key in ('nav', 'routes', 'page_titles', 'command_palette', 'widgets',
-                'layouts', 'ai'):
+                'layouts', 'tabs', 'ai'):
         assert key in data
 
     # Contributions are tagged with the source plugin slug.
@@ -166,6 +172,13 @@ def test_contributions_endpoint_envelope(app, client, auth_headers, plugin_dirs)
     assert any(r.get('plugin') == 'serverkit-demo' and r.get('component') == 'DemoPage'
                for r in data['routes'])
     assert data['page_titles'].get('/demo') == 'Demo'
+
+    # Tab-group contributions (#43): the tab entry and its group-nested route
+    # both survive the round-trip, tagged with the plugin slug.
+    assert any(t.get('plugin') == 'serverkit-demo' and t.get('group') == 'files'
+               and t.get('to') == '/demo-tab' for t in data['tabs'])
+    assert any(r.get('plugin') == 'serverkit-demo' and r.get('group') == 'files'
+               and r.get('component') == 'DemoTabPage' for r in data['routes'])
 
 
 def test_disabled_plugin_drops_from_contributions(app, client, auth_headers, plugin_dirs):

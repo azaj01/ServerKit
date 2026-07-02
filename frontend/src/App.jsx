@@ -21,7 +21,6 @@ import Backups from './pages/Backups';
 import Terminal from './pages/Terminal';
 import Settings from './pages/Settings';
 import FileManager from './pages/FileManager';
-import FTPServer from './pages/FTPServer';
 // Firewall is now part of Security page
 import CronJobs from './pages/CronJobs';
 import Security from './pages/Security';
@@ -97,7 +96,6 @@ const PAGE_TITLES = {
     '/servers': 'Servers',
     '/downloads': 'Downloads',
     '/files': 'File Manager',
-    '/ftp': 'FTP Server',
     '/observability': 'Observability',
     '/monitoring': 'Monitoring',
     '/backups': 'Backups',
@@ -249,7 +247,7 @@ function LegacyGitExtRedirect() {
 }
 
 function AppRoutes() {
-    const { dashboardRoutes, standaloneGroups } = useExtensionRoutes();
+    const { dashboardRoutes, groupRoutes, standaloneGroups } = useExtensionRoutes();
     return (
         <Routes>
             <Route path="/migrate" element={<DatabaseMigration />} />
@@ -343,7 +341,7 @@ function AppRoutes() {
                 <Route path="databases/:tab" element={<Databases />} />
                 <Route path="docker" element={<Docker />} />
                 <Route path="docker/:tab" element={<Docker />} />
-                <Route element={<TabGroupLayout tabs={SERVER_TABS} />}>
+                <Route element={<TabGroupLayout tabs={SERVER_TABS} groupId="servers" />}>
                     <Route path="servers" element={<Servers />} />
                     <Route path="fleet" element={<AgentFleet />} />
                     <Route path="fleet-monitor" element={<FleetMonitor />} />
@@ -351,6 +349,7 @@ function AppRoutes() {
                     <Route path="cloud" element={<CloudProvision />} />
                     <Route path="remote-access" element={<RemoteAccess />} />
                     <Route path="server-templates" element={<ServerTemplates />} />
+                    {groupRoutes.servers}
                 </Route>
                 <Route path="servers/:id" element={<ServerDetail />} />
                 <Route path="servers/:id/:tab" element={<ServerDetail />} />
@@ -381,18 +380,22 @@ function AppRoutes() {
                 <Route path="firewall" element={<Navigate to="/security/firewall" replace />} />
                 <Route path="git-ext" element={<LegacyGitExtRedirect />} />
                 <Route path="git-ext/:tab" element={<LegacyGitExtRedirect />} />
-                <Route element={<TabGroupLayout tabs={FILE_TABS} />}>
+                {/* /ftp is now the serverkit-ftp builtin extension: it joins
+                    this group via a tabs contribution + group-nested routes
+                    (groupRoutes.files), so tab + page disappear together when
+                    it's uninstalled. */}
+                <Route element={<TabGroupLayout tabs={FILE_TABS} groupId="files" />}>
                     <Route path="files" element={<FileManager />} />
-                    <Route path="ftp" element={<FTPServer />} />
-                    <Route path="ftp/:tab" element={<FTPServer />} />
+                    {groupRoutes.files}
                 </Route>
                 {/* Observability tab group (§4): Monitoring / Events / Status
                     Pages share one PageTopbar. /observability lands on Monitoring. */}
-                <Route element={<TabGroupLayout tabs={MONITOR_TABS} />}>
+                <Route element={<TabGroupLayout tabs={MONITOR_TABS} groupId="monitoring" />}>
                     <Route path="monitoring" element={<Monitoring />} />
                     <Route path="monitoring/:tab" element={<Monitoring />} />
                     <Route path="telemetry" element={<Telemetry />} />
                     <Route path="status-pages" element={<StatusPages />} />
+                    {groupRoutes.monitoring}
                 </Route>
                 <Route path="observability" element={<Navigate to="/monitoring" replace />} />
                 {/* /gpu is now the serverkit-gpu builtin extension. */}

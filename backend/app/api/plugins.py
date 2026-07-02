@@ -425,7 +425,9 @@ def get_manifest_spec():
                 'properties': {
                     'nav': {'type': 'array', 'description': 'Sidebar items: {id, label, route, category, icon}.'},
                     'routes': {'type': 'array',
-                               'description': 'SPA routes: {path, component, layout?}. component matches a named export of the plugin index module. layout: padded (default) | full | bare | <custom-layout-id>.'},
+                               'description': 'SPA routes: {path, component, layout?, group?}. component matches a named export of the plugin index module. layout: padded (default) | full | bare | <custom-layout-id>. group nests the route inside that core tab group\'s TabGroupLayout instead (see tabs).'},
+                    'tabs': {'type': 'array',
+                             'description': 'Tabs added to a core-owned tab group: {group, to, label, icon?, end?, order?}. group is the core group id (files | servers | monitoring; == the sidebar item id). Pair with a route contribution carrying the same group. icon is raw inner-SVG markup; order is an optional insertion index (default: appended).'},
                     'page_titles': {'type': 'object', 'description': 'Map of route path → document title.'},
                     'command_palette': {'type': 'array', 'description': '{label, path, category, keywords}.'},
                     'widgets': {'type': 'array', 'description': '{slot, component}. slot=global renders globally inside DashboardLayout.'},

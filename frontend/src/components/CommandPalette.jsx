@@ -21,7 +21,7 @@ const STATIC_PAGES = [
     { label: 'Deployments', path: '/deployments', category: 'Pages', keywords: 'deploy jobs status logs' },
     // WordPress palette entries are contributed by the serverkit-wordpress extension.
     { label: 'Files', path: '/files', category: 'Pages', keywords: 'file manager explorer' },
-    { label: 'FTP Server', path: '/ftp', category: 'Pages', keywords: 'sftp upload' },
+    // The FTP Server palette entry is contributed by the serverkit-ftp extension.
     { label: 'Observability', path: '/monitoring', category: 'Pages', keywords: 'metrics uptime monitoring alerts' },
     { label: 'Backups', path: '/backups', category: 'Pages', keywords: 'snapshots restore' },
     { label: 'Cron Jobs', path: '/cron', category: 'Pages', keywords: 'schedule tasks' },

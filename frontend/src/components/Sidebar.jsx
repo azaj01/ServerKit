@@ -136,7 +136,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         api.updateCurrentUser({ sidebar_config: config }).catch(() => {});
     };
 
-    const { nav: pluginNav } = useContributions();
+    const { nav: pluginNav, tabs: pluginTabs } = useContributions();
 
     const visibleItems = useMemo(() => {
         const core = getVisibleItems(user?.sidebar_config);
@@ -159,9 +159,22 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         // only when a GPU is present, or the Email/WordPress modules being
         // enabled), mirroring sub-item requiresCondition.
         const conds = { wpInstalled, gpuAvailable, wordpressEnabled };
-        const items = [...core, ...fromPlugins].filter(
+        let items = [...core, ...fromPlugins].filter(
             (item) => !item.requiresCondition || conds[item.requiresCondition]
         );
+        // Extension-contributed tab-group tabs (#43) keep the host group's
+        // sidebar item lit on extension-owned tab routes (group id == sidebar
+        // item id) — the core matchPrefixes only cover the group's own tabs.
+        const tabPrefixes = {};
+        for (const t of (pluginTabs || [])) {
+            if (!t || !t.group || !t.to) continue;
+            (tabPrefixes[t.group] = tabPrefixes[t.group] || []).push(t.to);
+        }
+        items = items.map((item) => (
+            tabPrefixes[item.id]
+                ? { ...item, matchPrefixes: [...(item.matchPrefixes || []), ...tabPrefixes[item.id]] }
+                : item
+        ));
         // Apply workspace-level nav permissions if an active workspace is set
         // and it defines a nav map. This lets a workspace restrict which sidebar
         // items its members see based on their effective workspace role.
@@ -175,7 +188,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
             }
         }
         return applyWorkspaceNavPermissions(items, activeWorkspace, user);
-    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable, wordpressEnabled, user]);
+    }, [user?.sidebar_config, pluginNav, pluginTabs, wpInstalled, gpuAvailable, wordpressEnabled, user]);
 
     // Group visible items by category
     const groupedItems = useMemo(() => {
