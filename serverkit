@@ -36,6 +36,7 @@ HUE_OK_TC="$(paint 52 211 153)"; HUE_WARN_TC="$(paint 250 204 21)"; HUE_ERR_TC="
 # Configuration
 INSTALL_DIR="${SERVERKIT_DIR:-/opt/serverkit}"
 VENV_DIR="${SERVERKIT_VENV_DIR:-$INSTALL_DIR/venv}"
+NGINX_DIR="${SERVERKIT_NGINX_DIR:-/etc/nginx}"
 BACKEND_SERVICE="serverkit"
 FRONTEND_CONTAINER="serverkit-frontend"
 
@@ -132,6 +133,15 @@ compare_versions() {
         return 0
     fi
 
+    # Unparsable versions used to compare as "equal" (every [ -gt ] probe below
+    # failed silently under 2>/dev/null), reporting "up to date" on a box with
+    # a missing or corrupt VERSION file. Treat them as "older" instead so
+    # check-update points the operator at `serverkit update`, which re-validates.
+    local vre='^[0-9]+\.[0-9]+(\.[0-9]+)?$'
+    if ! [[ "$v1" =~ $vre ]] || ! [[ "$v2" =~ $vre ]]; then
+        return 2
+    fi
+
     # Compare version components
     local v1_major=$(echo "$v1" | cut -d. -f1)
     local v1_minor=$(echo "$v1" | cut -d. -f2)
@@ -140,6 +150,10 @@ compare_versions() {
     local v2_major=$(echo "$v2" | cut -d. -f1)
     local v2_minor=$(echo "$v2" | cut -d. -f2)
     local v2_patch=$(echo "$v2" | cut -d. -f3)
+
+    # X.Y versions carry no patch component — compare it as 0.
+    v1_patch="${v1_patch:-0}"
+    v2_patch="${v2_patch:-0}"
 
     if [ "$v1_major" -gt "$v2_major" ] 2>/dev/null; then return 1; fi
     if [ "$v1_major" -lt "$v2_major" ] 2>/dev/null; then return 2; fi
@@ -273,12 +287,13 @@ cmd_start() {
     check_installed
     print_info "Starting ServerKit..."
 
-    # Start backend (systemd)
-    systemctl start $BACKEND_SERVICE
+    # Start backend (systemd) — a partial install / non-systemd box must get a
+    # readable warning, not a raw set -e abort.
+    systemctl start $BACKEND_SERVICE || print_warning "Could not start backend service '$BACKEND_SERVICE' (is systemd available?)"
 
     # Start frontend (Docker)
     cd "$INSTALL_DIR"
-    docker compose up -d
+    docker compose up -d || print_warning "Could not start frontend container (is Docker running?)"
 
     sleep 3
     print_success "ServerKit started"
@@ -305,12 +320,13 @@ cmd_restart() {
     check_installed
     print_info "Restarting ServerKit..."
 
-    # Restart backend (systemd)
-    systemctl restart $BACKEND_SERVICE
+    # Restart backend (systemd) — mirror cmd_stop's guards: a failing service
+    # manager is reported, never a raw abort.
+    systemctl restart $BACKEND_SERVICE || print_warning "Could not restart backend service '$BACKEND_SERVICE' (is systemd available?)"
 
     # Restart frontend (Docker)
     cd "$INSTALL_DIR"
-    docker compose restart
+    docker compose restart || print_warning "Could not restart frontend container (is Docker running?)"
 
     sleep 3
     print_success "ServerKit restarted"
@@ -368,22 +384,32 @@ cmd_logs() {
 
     case "$service" in
         backend)
-            journalctl -u $BACKEND_SERVICE -f
+            if command -v journalctl >/dev/null 2>&1; then
+                journalctl -u $BACKEND_SERVICE -f || print_warning "Could not read the backend journal (is journald running?)"
+            else
+                print_warning "journalctl not found — cannot stream backend logs on this system"
+            fi
             ;;
         frontend)
             cd "$INSTALL_DIR"
-            docker compose logs -f
+            docker compose logs -f || print_warning "Could not read frontend container logs (is Docker running?)"
             ;;
         all|*)
             print_info "Showing backend logs (Ctrl+C to switch to frontend)..."
             echo ""
-            # Show both in split view isn't easy in bash, so show backend first
-            journalctl -u $BACKEND_SERVICE -n 50 --no-pager
+            # Show both in split view isn't easy in bash, so show backend first.
+            # A journal-less box must still fall through to the Docker logs
+            # below instead of dying here.
+            if command -v journalctl >/dev/null 2>&1; then
+                journalctl -u $BACKEND_SERVICE -n 50 --no-pager || print_warning "Could not read the backend journal"
+            else
+                print_warning "journalctl not found — skipping backend logs"
+            fi
             echo ""
             print_info "Showing frontend logs..."
             echo ""
             cd "$INSTALL_DIR"
-            docker compose logs --tail=50
+            docker compose logs --tail=50 || print_warning "Could not read frontend container logs (is Docker running?)"
             echo ""
             print_info "For live logs, use: serverkit logs backend OR serverkit logs frontend"
             ;;
@@ -420,8 +446,15 @@ cmd_update() {
                 shift
                 ;;
             --branch|-b)
-                update_args+=("--branch" "$2")
-                shift 2
+                # A missing value used to make `shift 2` fail and exit the CLI
+                # silently under set -e. Guard it like --release below.
+                if [[ -n "${2:-}" ]] && [[ ! "$2" =~ ^- ]]; then
+                    update_args+=("--branch" "$2")
+                    shift 2
+                else
+                    print_error "--branch requires a branch name (e.g. --branch dev)"
+                    exit 1
+                fi
                 ;;
             --release|-r)
                 update_args+=("--release")
@@ -483,7 +516,9 @@ cmd_uninstall() {
     echo ""
 
     if [ "$assume_yes" != "1" ]; then
-        read -p "Are you sure? (y/N) " -n 1 -r
+        # EOF (no tty / piped input) must not abort under set -e; an empty
+        # REPLY falls through to the safe "No" path below.
+        read -p "Are you sure? (y/N) " -n 1 -r || true
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             print_warning "Uninstall cancelled"
@@ -493,7 +528,19 @@ cmd_uninstall() {
 
     local lib="$INSTALL_DIR/scripts/lib/uninstall.sh"
     if [ ! -f "$lib" ]; then
+        # Remnants-only box: the install tree (and the shared lib) is gone but
+        # traces remain. Don't duplicate the teardown here — point at the
+        # standalone uninstaller, which carries its own inline fallback.
         print_error "Canonical uninstall routine not found at $lib"
+        echo ""
+        if [ -f "$INSTALL_DIR/uninstall.sh" ]; then
+            print_info "Run the standalone uninstaller instead:"
+            echo "  sudo bash $INSTALL_DIR/uninstall.sh"
+        else
+            print_info "Fetch and run the standalone uninstaller instead:"
+            echo "  curl -fsSL https://raw.githubusercontent.com/jhd3197/serverkit/main/uninstall.sh | sudo bash"
+            echo "  (pass flags with: ... | sudo bash -s -- --purge --yes)"
+        fi
         exit 1
     fi
 
@@ -625,7 +672,7 @@ cmd_restore_db() {
         echo "Available backups:"
         ls -la "$BACKUP_DIR"/*.db 2>/dev/null || echo "No backups found"
         echo ""
-        read -p "Enter backup file path: " BACKUP_FILE
+        read -p "Enter backup file path: " BACKUP_FILE || true
     else
         BACKUP_FILE="$1"
     fi
@@ -636,7 +683,7 @@ cmd_restore_db() {
     fi
 
     print_warning "This will overwrite the current database!"
-    read -p "Continue? (y/N) " -n 1 -r
+    read -p "Continue? (y/N) " -n 1 -r || true
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -798,6 +845,30 @@ cmd_app_logs() {
     docker compose logs -f
 }
 
+# Resolve the nginx vhost layout: Debian-style sites-available/sites-enabled
+# when present, otherwise the conf.d layout used by the RHEL family. Sets
+# SITE_FILE (where the vhost lives) and SITE_LINK (the sites-enabled symlink;
+# empty in conf.d layouts, where the vhost file itself is live).
+resolve_site_paths() {
+    local domain="$1"
+    if [ -d "$NGINX_DIR/sites-available" ]; then
+        SITE_FILE="$NGINX_DIR/sites-available/${domain}.conf"
+        SITE_LINK="$NGINX_DIR/sites-enabled/${domain}.conf"
+    else
+        SITE_FILE="$NGINX_DIR/conf.d/${domain}.conf"
+        SITE_LINK=""
+    fi
+}
+
+# Reload nginx if we can; on non-systemd or stopped-nginx boxes this is an
+# observation, not a fatal error — the config is already on disk either way.
+reload_nginx_or_warn() {
+    if systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null; then
+        return 0
+    fi
+    print_warning "Could not reload nginx — apply the change manually: systemctl reload nginx (or nginx -s reload)"
+}
+
 cmd_add_site() {
     check_root
 
@@ -813,11 +884,11 @@ cmd_add_site() {
         exit 1
     fi
 
-    SITE_FILE="/etc/nginx/sites-available/${DOMAIN}.conf"
+    resolve_site_paths "$DOMAIN"
 
     if [ -f "$SITE_FILE" ]; then
         print_warning "Site config already exists: $SITE_FILE"
-        read -p "Overwrite? (y/N) " -n 1 -r
+        read -p "Overwrite? (y/N) " -n 1 -r || true
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             exit 0
@@ -825,6 +896,7 @@ cmd_add_site() {
     fi
 
     print_info "Creating site config for $DOMAIN..."
+    mkdir -p "$(dirname "$SITE_FILE")"
 
     cat > "$SITE_FILE" << EOF
 # Site: $DOMAIN
@@ -847,12 +919,16 @@ server {
 }
 EOF
 
-    # Enable the site
-    ln -sf "$SITE_FILE" /etc/nginx/sites-enabled/
+    # Enable the site (Debian layout only — conf.d configs are live as written)
+    if [ -n "$SITE_LINK" ]; then
+        mkdir -p "$(dirname "$SITE_LINK")"
+        ln -sf "$SITE_FILE" "$SITE_LINK"
+    fi
 
-    # Test and reload nginx
+    # Test and reload nginx. A stopped nginx (or a non-systemd box) must not
+    # raw-abort here — the site file is already written and valid.
     if nginx -t 2>/dev/null; then
-        systemctl reload nginx
+        reload_nginx_or_warn
         print_success "Site added: $DOMAIN → localhost:$PORT"
         echo ""
         echo "Next steps:"
@@ -862,7 +938,15 @@ EOF
         echo ""
     else
         print_error "Nginx config error. Check: $SITE_FILE"
-        rm -f "/etc/nginx/sites-enabled/${DOMAIN}.conf"
+        if [ -n "$SITE_LINK" ]; then
+            rm -f "$SITE_LINK"
+        elif mv -f "$SITE_FILE" "${SITE_FILE}.disabled" 2>/dev/null; then
+            # conf.d layouts have no enabled/available split — park the broken
+            # file so it can't poison an unrelated nginx reload.
+            print_info "Broken config parked at: ${SITE_FILE}.disabled"
+        else
+            print_warning "Remove or fix $SITE_FILE before reloading nginx"
+        fi
         exit 1
     fi
 }
@@ -873,11 +957,23 @@ cmd_list_sites() {
     echo "Configured Sites:"
     echo "─────────────────────────────────────────"
 
-    if [ -d /etc/nginx/sites-enabled ]; then
-        for site in /etc/nginx/sites-enabled/*.conf; do
+    # Debian layout lists sites-enabled; conf.d layouts (RHEL family) list conf.d.
+    local sites_dir="$NGINX_DIR/sites-enabled"
+    if [ ! -d "$sites_dir" ]; then
+        sites_dir="$NGINX_DIR/conf.d"
+    fi
+
+    if [ -d "$sites_dir" ]; then
+        for site in "$sites_dir"/*.conf; do
             if [ -f "$site" ]; then
-                DOMAIN=$(grep -m1 "server_name" "$site" | awk '{print $2}' | tr -d ';')
-                PORT=$(grep -m1 "proxy_pass" "$site" | grep -oP ':\K[0-9]+' || echo "static")
+                # `|| true`: a vhost without server_name/proxy_pass is data,
+                # not an error — never abort the listing under set -e/pipefail.
+                DOMAIN=$(grep -m1 "server_name" "$site" | awk '{print $2}' | tr -d ';' || true)
+                # Portable port extraction (GNU-only `grep -oP` broke busybox)
+                PORT=$(grep -m1 "proxy_pass" "$site" | sed -n 's/.*:\([0-9][0-9]*\).*/\1/p' || true)
+                if [ -z "$PORT" ]; then
+                    PORT="static"
+                fi
                 ENABLED="✓"
                 printf "  %s %-35s → port %s\n" "$ENABLED" "$DOMAIN" "$PORT"
             fi
@@ -960,7 +1056,7 @@ cmd_doctor() {
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "$FRONTEND_CONTAINER"; then
             FRONTEND_RUNNING=true
             # Get the actual host port the container is mapped to
-            FRONTEND_PORT=$(docker port "$FRONTEND_CONTAINER" 80 2>/dev/null | head -1 | grep -oP ':\K[0-9]+' || echo "")
+            FRONTEND_PORT=$(docker port "$FRONTEND_CONTAINER" 80 2>/dev/null | head -1 | sed -n 's/.*:\([0-9][0-9]*\).*/\1/p' || true)
             doctor_ok "Container running (port $FRONTEND_PORT)"
         else
             doctor_issue "Container '$FRONTEND_CONTAINER' is not running"
@@ -968,7 +1064,7 @@ cmd_doctor() {
                 cd "$INSTALL_DIR"
                 docker compose up -d 2>/dev/null && {
                     sleep 3
-                    FRONTEND_PORT=$(docker port "$FRONTEND_CONTAINER" 80 2>/dev/null | head -1 | grep -oP ':\K[0-9]+' || echo "")
+                    FRONTEND_PORT=$(docker port "$FRONTEND_CONTAINER" 80 2>/dev/null | head -1 | sed -n 's/.*:\([0-9][0-9]*\).*/\1/p' || true)
                     FRONTEND_RUNNING=true
                     doctor_fixed "Started frontend container (port $FRONTEND_PORT)"
                 } || print_error "  Could not start container"
@@ -1016,7 +1112,7 @@ cmd_doctor() {
 
     # Scan ALL enabled nginx configs for competing server_name _
     # Only serverkit.conf should use server_name _ (the catch-all panel block)
-    for SITE_CONF in /etc/nginx/sites-enabled/*; do
+    for SITE_CONF in "$NGINX_DIR/sites-enabled"/*; do
         [ -f "$SITE_CONF" ] || continue
         SITE_NAME=$(basename "$SITE_CONF")
         # Skip all ServerKit-managed configs
@@ -1025,8 +1121,8 @@ cmd_doctor() {
         if grep -Eq 'server_name[[:space:]]+_;' "$SITE_CONF" 2>/dev/null; then
             doctor_issue "'$SITE_NAME' uses server_name _ (conflicts with panel, can hijack all traffic)"
             if [ "$FIX_MODE" = "--fix" ]; then
-                rm -f "/etc/nginx/sites-enabled/$SITE_NAME"
-                rm -f "/etc/nginx/sites-available/$SITE_NAME"
+                rm -f "$NGINX_DIR/sites-enabled/$SITE_NAME"
+                rm -f "$NGINX_DIR/sites-available/$SITE_NAME"
                 doctor_fixed "Removed conflicting '$SITE_NAME'"
             else
                 doctor_skip "Remove conflicting '$SITE_NAME' from sites-enabled"
@@ -1035,20 +1131,20 @@ cmd_doctor() {
     done
 
     # Ensure serverkit-locations directory exists
-    if [ ! -d /etc/nginx/serverkit-locations ]; then
-        print_warning "Missing /etc/nginx/serverkit-locations directory"
+    if [ ! -d "$NGINX_DIR/serverkit-locations" ]; then
+        print_warning "Missing $NGINX_DIR/serverkit-locations directory"
         if [ "$FIX_MODE" = "--fix" ]; then
-            mkdir -p /etc/nginx/serverkit-locations
-            doctor_fixed "Created /etc/nginx/serverkit-locations"
+            mkdir -p "$NGINX_DIR/serverkit-locations"
+            doctor_fixed "Created $NGINX_DIR/serverkit-locations"
         else
-            doctor_skip "mkdir -p /etc/nginx/serverkit-locations"
+            doctor_skip "mkdir -p $NGINX_DIR/serverkit-locations"
         fi
     fi
 
     # Check for port mismatch between nginx and frontend container
-    NGINX_CONF="/etc/nginx/sites-available/serverkit.conf"
+    NGINX_CONF="$NGINX_DIR/sites-available/serverkit.conf"
     if [ -f "$NGINX_CONF" ]; then
-        NGINX_FRONTEND_PORT=$(grep -m1 'proxy_pass.*127.0.0.1' "$NGINX_CONF" | head -1 | grep -oP ':\K[0-9]+' || echo "")
+        NGINX_FRONTEND_PORT=$(grep -m1 'proxy_pass.*127.0.0.1' "$NGINX_CONF" | head -1 | sed -n 's/.*:\([0-9][0-9]*\).*/\1/p' || true)
 
         if [ -n "$FRONTEND_PORT" ] && [ -n "$NGINX_FRONTEND_PORT" ]; then
             if [ "$NGINX_FRONTEND_PORT" = "$FRONTEND_PORT" ]; then
@@ -1071,7 +1167,7 @@ cmd_doctor() {
         fi
 
         # Check API proxy port
-        NGINX_API_PORT=$(grep -A1 'location /api' "$NGINX_CONF" | grep proxy_pass | grep -oP ':\K[0-9]+' || echo "")
+        NGINX_API_PORT=$(grep -A1 'location /api' "$NGINX_CONF" | grep proxy_pass | sed -n 's/.*:\([0-9][0-9]*\).*/\1/p' | head -1 || true)
         if [ -n "$NGINX_API_PORT" ]; then
             if ss -tlnp 2>/dev/null | grep -q ":${NGINX_API_PORT}.*gunicorn\|:${NGINX_API_PORT}.*python"; then
                 doctor_ok "nginx API proxy port ($NGINX_API_PORT) has backend listening"
@@ -1187,6 +1283,17 @@ cmd_doctor() {
         fi
     fi
     echo ""
+
+    # Meaningful exit code so doctor can gate scripts: non-zero while issues
+    # remain (with --fix, only the ones that could not be auto-fixed count).
+    local remaining="$ISSUES"
+    if [ "$FIX_MODE" = "--fix" ]; then
+        remaining=$((ISSUES - FIXED))
+    fi
+    if [ "$remaining" -gt 0 ]; then
+        return 1
+    fi
+    return 0
 }
 
 cmd_remove_site() {
@@ -1200,8 +1307,7 @@ cmd_remove_site() {
         exit 1
     fi
 
-    SITE_FILE="/etc/nginx/sites-available/${DOMAIN}.conf"
-    ENABLED_FILE="/etc/nginx/sites-enabled/${DOMAIN}.conf"
+    resolve_site_paths "$DOMAIN"
 
     if [ ! -f "$SITE_FILE" ]; then
         print_error "Site not found: $DOMAIN"
@@ -1209,18 +1315,26 @@ cmd_remove_site() {
     fi
 
     print_warning "This will remove the site config for $DOMAIN"
-    read -p "Continue? (y/N) " -n 1 -r
+    read -p "Continue? (y/N) " -n 1 -r || true
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -f "$ENABLED_FILE"
+        if [ -n "$SITE_LINK" ]; then
+            rm -f "$SITE_LINK"
+        fi
         rm -f "$SITE_FILE"
-        systemctl reload nginx
+        reload_nginx_or_warn
         print_success "Site removed: $DOMAIN"
     fi
 }
 
 # Main
+#
+# Sourcing this file (e.g. from scripts/test/test_cli.sh) exposes every
+# function above for unit testing without dispatching a command — the same
+# pattern as scripts/update.sh. Only direct execution runs the dispatch below.
+[ "${BASH_SOURCE[0]}" = "${0}" ] || return 0
+
 case "${1:-help}" in
     help|--help|-h)
         cmd_help
