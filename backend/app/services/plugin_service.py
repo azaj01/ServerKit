@@ -297,7 +297,8 @@ def _update_plugin_metadata(plugin, manifest):
     plugin.category = manifest.get('category', 'utility')
 
 
-def install_from_url(url, user_id=None, expected_sha256=None, force=False):
+def install_from_url(url, user_id=None, expected_sha256=None, force=False,
+                     hot_load=True):
     """Download and install a plugin from a URL.
 
     Args:
@@ -306,6 +307,9 @@ def install_from_url(url, user_id=None, expected_sha256=None, force=False):
         expected_sha256: if given, the downloaded zip must match this digest
             before extraction — a mismatch is a hard failure (no partial install)
         force: allow reinstalling over an already-active plugin (used by updates)
+        hot_load: register the blueprint into the running app immediately.
+            The boot-time repair pass (#48) passes False — load_all_plugins
+            registers right after, and a double registration would error.
 
     Returns:
         InstalledPlugin instance
@@ -327,10 +331,11 @@ def install_from_url(url, user_id=None, expected_sha256=None, force=False):
 
     return _install_from_buffer(
         buf, source_url=url, source_type='url', user_id=user_id, force=force,
+        hot_load=hot_load,
     )
 
 
-def install_from_path(path, user_id=None):
+def install_from_path(path, user_id=None, force=False, hot_load=True):
     """Install a plugin from a local directory on the panel host.
 
     Useful during plugin development: point at the working tree, install,
@@ -395,6 +400,7 @@ def install_from_path(path, user_id=None):
 
     return _install_from_buffer(
         buf, source_url=path, source_type='local', user_id=user_id,
+        force=force, hot_load=hot_load,
     )
 
 
@@ -411,14 +417,16 @@ def install_from_zip(zip_bytes, user_id=None, source_name=None):
     )
 
 
-def _install_from_buffer(buf, source_url, source_type, user_id=None, force=False):
+def _install_from_buffer(buf, source_url, source_type, user_id=None, force=False,
+                         hot_load=True):
     """Shared install pipeline: takes a seekable BytesIO containing a zip,
     extracts it into the panel's plugin dirs, and registers / hot-loads
     the resulting blueprint. All public install_* helpers funnel here so
     behavior matches across URL / local / upload sources.
 
     `force=True` allows reinstalling over an active plugin (the update path);
-    normal installs still refuse to clobber an active install.
+    normal installs still refuse to clobber an active install. `hot_load=False`
+    skips the immediate blueprint registration (the boot repair pass, #48).
     """
     _ensure_dirs()
 
@@ -584,7 +592,7 @@ def _install_from_buffer(buf, source_url, source_type, user_id=None, force=False
         db.session.commit()
 
         # Try to register the blueprint immediately (hot-load)
-        if has_backend and entry_point:
+        if has_backend and entry_point and hot_load:
             try:
                 _register_plugin_blueprint(plugin)
             except Exception as e:
@@ -821,6 +829,87 @@ def _regenerate_frontend_manifest():
     logger.info(f'Frontend plugin manifest regenerated with {len(entries)} plugin(s)')
 
 
+def repair_missing_plugins():
+    """Self-heal installed plugins whose files are gone (#48).
+
+    A panel update deploys a fresh source tree preserving only `.env` and the
+    database, so a URL/upload-installed plugin's extracted files (and a
+    copy-installed builtin's backend under ``app/plugins/``) can vanish while
+    the InstalledPlugin row stays active — the boot loader would then flip it
+    to `error`. Before the loader runs, restore what we can:
+
+      - builtin slug        → reinstall from ``builtin-extensions/`` (in-repo,
+                              always present in the fresh tree)
+      - source_type 'url'   → re-download from ``source_url`` (no checksum —
+                              the original install verified it; best effort)
+      - anything else       → mark `error` with a re-upload hint
+
+    Reinstalls run with ``hot_load=False`` — load_all_plugins registers the
+    blueprints right after this pass. Never raises; each repair is
+    best-effort and logged. The update.sh carry-forward is the first line of
+    defense; this is the backstop (e.g. Docker image updates).
+    """
+    builtin_by_slug = {}
+    try:
+        for entry in list_builtin_extensions():
+            builtin_by_slug[entry['slug']] = entry
+    except Exception:
+        pass
+
+    plugins = InstalledPlugin.query.filter(
+        InstalledPlugin.status.in_([
+            InstalledPlugin.STATUS_ACTIVE,
+            InstalledPlugin.STATUS_ERROR,
+        ]),
+    ).all()
+
+    for plugin in plugins:
+        slug = plugin.slug
+        # Flagships load in-place from builtin-extensions/ (repo-tracked, never
+        # copy-installed) — nothing on disk to go missing.
+        if slug in FLAGSHIP_SLUGS:
+            continue
+
+        backend_missing = bool(plugin.has_backend) and not os.path.isdir(
+            os.path.join(BACKEND_PLUGINS_DIR, slug))
+        frontend_missing = bool(plugin.has_frontend) and not os.path.isdir(
+            os.path.join(FRONTEND_PLUGINS_DIR, slug))
+        if not backend_missing and not frontend_missing:
+            continue
+
+        halves = ' + '.join(h for h, m in (('backend', backend_missing),
+                                           ('frontend', frontend_missing)) if m)
+        logger.warning(
+            f'Plugin {slug}: {halves} files missing (panel update?) — attempting repair')
+
+        try:
+            if slug in builtin_by_slug:
+                install_from_path(builtin_by_slug[slug]['path'],
+                                  user_id=plugin.installed_by,
+                                  force=True, hot_load=False)
+                logger.info(f'Plugin {slug}: restored from builtin-extensions/')
+            elif plugin.source_type == 'url' and plugin.source_url:
+                install_from_url(plugin.source_url, user_id=plugin.installed_by,
+                                 force=True, hot_load=False)
+                logger.info(f'Plugin {slug}: reinstalled from {plugin.source_url}')
+            else:
+                plugin.status = InstalledPlugin.STATUS_ERROR
+                plugin.error_message = (
+                    'Plugin files are missing (likely removed by a panel update) '
+                    'and there is no source URL to reinstall from. Re-upload the '
+                    'plugin zip from the Marketplace to restore it.'
+                )
+                db.session.commit()
+        except Exception as e:
+            logger.error(f'Plugin {slug}: repair failed: {e}')
+            try:
+                plugin.status = InstalledPlugin.STATUS_ERROR
+                plugin.error_message = f'Repair after panel update failed: {e}'
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+
 def load_all_plugins(app):
     """Load all active plugin blueprints at app startup.
 
@@ -829,6 +918,13 @@ def load_all_plugins(app):
     _ensure_dirs()
 
     with app.app_context():
+        # Restore any install whose files a panel update wiped (#48) BEFORE
+        # querying/loading, so a repaired plugin loads normally this boot.
+        try:
+            repair_missing_plugins()
+        except Exception as e:
+            logger.warning(f'Plugin repair pass failed: {e}')
+
         plugins = InstalledPlugin.query.filter_by(
             status=InstalledPlugin.STATUS_ACTIVE,
             has_backend=True,

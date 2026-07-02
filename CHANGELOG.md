@@ -20,6 +20,15 @@ awaiting a stable release:
 
 ### Added
 
+- **Extensions platform (Phase 7 — installed extensions survive panel updates)** —
+  previously a panel update deployed a fresh source tree preserving only `.env`
+  and the database, silently wiping any URL/registry/upload-installed extension's
+  files (the install row then flipped to `error` on the next boot). Two-layer fix:
+  the updater now carries user-installed plugin directories forward into the new
+  tree (before the frontend build, so their UI recompiles), and the backend gained
+  a boot-time repair pass that restores builtin installs from `builtin-extensions/`
+  and re-downloads URL installs from their recorded source — upload-only installs
+  it can't restore get a clear "re-upload" error instead of a cryptic import failure.
 - **Extensions platform (Phase 7 — extensions can now contribute tabs to core
   tab groups)** — a new `tabs` contribution kind lets an installed extension add
   a real tab to a core-owned tab group (Files, Servers, Observability): the tab

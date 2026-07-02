@@ -223,3 +223,86 @@ def test_disable_guard_returns_503(app):
     r = c.get('/api/v1/guard-test/ping')
     assert r.status_code == 503
     assert r.get_json()['status'] == 'disabled'
+
+
+# --------------------------------------------------------------------------- #
+# Boot repair pass (#48): plugins whose files a panel update wiped
+# --------------------------------------------------------------------------- #
+
+def test_repair_restores_builtin_files(app, plugin_dirs):
+    """A builtin install whose extracted files vanished (fresh update tree) is
+    restored from builtin-extensions/ and stays active."""
+    import shutil
+    _write_builtin(plugin_dirs['builtin'])
+    plugin = plugin_service.install_builtin_extension('serverkit-demo')
+    assert (plugin_dirs['frontend'] / 'serverkit-demo' / 'index.jsx').exists()
+
+    # Simulate the update wiping the extracted plugin dirs.
+    shutil.rmtree(plugin_dirs['frontend'] / 'serverkit-demo')
+
+    plugin_service.repair_missing_plugins()
+
+    assert (plugin_dirs['frontend'] / 'serverkit-demo' / 'index.jsx').exists()
+    db.session.refresh(plugin)
+    assert plugin.status == InstalledPlugin.STATUS_ACTIVE
+
+
+def test_repair_reinstalls_url_plugin_from_source(app, plugin_dirs, monkeypatch):
+    """A URL-installed plugin with missing files is re-downloaded from its
+    source_url, without hot-loading (the boot loader registers right after)."""
+    p = InstalledPlugin(
+        name='remote-thing', display_name='Remote Thing', slug='remote-thing',
+        version='1.0.0', status=InstalledPlugin.STATUS_ACTIVE,
+        has_backend=True, source_type='url',
+        source_url='https://example.com/remote-thing.zip',
+    )
+    p.manifest = {}
+    db.session.add(p)
+    db.session.commit()
+
+    calls = []
+    monkeypatch.setattr(
+        plugin_service, 'install_from_url',
+        lambda url, **kw: calls.append((url, kw)))
+
+    plugin_service.repair_missing_plugins()
+
+    assert calls, 'repair should reinstall from the recorded source_url'
+    url, kw = calls[0]
+    assert url == 'https://example.com/remote-thing.zip'
+    assert kw.get('force') is True
+    assert kw.get('hot_load') is False
+
+
+def test_repair_marks_sourceless_install_as_error(app, plugin_dirs):
+    """An upload-installed plugin (no source URL) with missing files can't be
+    auto-restored — it flips to error with a re-upload hint instead."""
+    p = InstalledPlugin(
+        name='uploaded-thing', display_name='Uploaded Thing',
+        slug='uploaded-thing', version='1.0.0',
+        status=InstalledPlugin.STATUS_ACTIVE,
+        has_frontend=True, source_type='upload', source_url='uploaded.zip',
+    )
+    p.manifest = {}
+    db.session.add(p)
+    db.session.commit()
+
+    plugin_service.repair_missing_plugins()
+
+    db.session.refresh(p)
+    assert p.status == InstalledPlugin.STATUS_ERROR
+    assert 'Re-upload' in p.error_message
+
+
+def test_repair_leaves_intact_installs_alone(app, plugin_dirs, monkeypatch):
+    """A healthy install (files present) is not touched by the repair pass."""
+    _write_builtin(plugin_dirs['builtin'])
+    plugin = plugin_service.install_builtin_extension('serverkit-demo')
+
+    monkeypatch.setattr(
+        plugin_service, 'install_from_path',
+        lambda *a, **kw: pytest.fail('repair must not reinstall a healthy plugin'))
+
+    plugin_service.repair_missing_plugins()
+    db.session.refresh(plugin)
+    assert plugin.status == InstalledPlugin.STATUS_ACTIVE
