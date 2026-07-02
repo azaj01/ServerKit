@@ -97,15 +97,15 @@ const getLocalCatalogEntry = (builtin) => {
     return {
         key: `local:${builtin.slug}`,
         source: 'local',
-        sourceLabel: 'Local mapping',
-        sourceDetail: 'Mapped in local registry',
+        sourceLabel: 'Built-in',
+        sourceDetail: 'Bundled with ServerKit',
         installKey: builtin.slug,
         displayName: manifest.display_name || builtin.slug,
-        description: manifest.description || 'Local extension package.',
+        description: manifest.description || 'Bundled extension.',
         category: manifest.category || 'utility',
         version: manifest.version || '0.0.0',
         author: manifest.author,
-        extensionType: 'local',
+        extensionType: 'built-in',
         installed: Boolean(builtin.installed),
         status: builtin.status,
     };
@@ -294,7 +294,7 @@ const Marketplace = () => {
         <div className="sk-tabgroup__inner marketplace-page">
             <StatStrip ariaLabel="Marketplace summary">
                 <Stat label="Catalog" value={availableCount} />
-                <Stat label="Local Entries" value={builtins.length} />
+                <Stat label="Built-in" value={builtins.length} />
                 <Stat label="Installed" value={installedCatalogCount} />
                 <Stat
                     label="Active Plugins"
@@ -442,8 +442,8 @@ const Marketplace = () => {
                                 </div>
                                 <div className="marketplace-runtime">
                                     <RuntimeRow label="Published installs" value={formatCount(totalDownloads)} />
-                                    <RuntimeRow label="Local mappings" value={builtins.length} />
-                                    <RuntimeRow label="Installed local" value={`${installedBuiltinCount}/${builtins.length}`} />
+                                    <RuntimeRow label="Built-in" value={builtins.length} />
+                                    <RuntimeRow label="Built-in installed" value={`${installedBuiltinCount}/${builtins.length}`} />
                                     <RuntimeRow label="Active plugins" value={`${activePluginCount}/${plugins.length}`} />
                                     <RuntimeRow
                                         label="Plugin issues"
@@ -667,7 +667,7 @@ const CatalogExtensionCard = ({ entry, installing, onInstall, statusVariant }) =
                     {entry.author && <span>by {entry.author}</span>}
                     {entry.extensionType && (
                         <Badge variant="secondary">
-                            {isLocal ? 'local db' : entry.extensionType}
+                            {isLocal ? 'built-in' : entry.extensionType}
                         </Badge>
                     )}
                 </div>

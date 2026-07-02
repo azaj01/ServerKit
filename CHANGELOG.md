@@ -20,6 +20,18 @@ awaiting a stable release:
 
 ### Added
 
+- **Extensions platform (Phase 0 — hygiene)** — groundwork for the small-core +
+  marketplace direction. A single **extension author guide**
+  ([`docs/EXTENSIONS.md`](docs/EXTENSIONS.md)) documents the manifest schema,
+  contribution envelope, lifecycle hooks, backend SDK, install sources, and the
+  production frontend-delivery constraint. Builtin-extension frontends are now
+  mechanically kept in sync with their source
+  (`scripts/sync-builtin-frontends.mjs` + an `Extensions CI` drift gate) instead
+  of hand-duplicated. The Marketplace labels bundled entries honestly ("Built-in"
+  rather than "Local mapping/Entries"). First automated coverage for the plugin
+  install pipeline (builtin install, contributions envelope, disable→503 guard,
+  reinstall metadata refresh, zip-slip rejection).
+
 - **Managed databases** — the databases ServerKit provisions are now tracked as
   first-class resources (beside the existing live explorer): durable rows for
   backups and connection strings. A managed database backs a `BackupPolicy` by a
