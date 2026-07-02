@@ -359,8 +359,12 @@ def create_app(config_name=None):
 
     # Register blueprints - Cloudflare operations (zone settings/cache/WAF on top
     # of the existing Cloudflare DNS connection)
-    from app.api.cloudflare import cloudflare_bp
-    app.register_blueprint(cloudflare_bp, url_prefix='/api/v1/cloudflare')
+    # Cloudflare zone-ops moved into the bundled, default-installed
+    # `serverkit-cloudflare-ops` extension (#36). Its blueprint (kept at
+    # /api/v1/cloudflare, D9) is registered from the extension by the plugin
+    # loader — seeded as a flagship in create_app. DNS records + the Cloudflare
+    # connection stay core (they back /domains); the extension borrows the single
+    # core CloudflareClient, never a duplicate.
 
     # Register blueprints - Dynamic DNS
     from app.api.ddns import ddns_bp

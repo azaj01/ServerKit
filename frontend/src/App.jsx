@@ -56,7 +56,6 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import SharedVariables from './pages/SharedVariables';
 import FleetProxy from './pages/FleetProxy';
-import CloudflareZoneSettings from './pages/CloudflareZoneSettings';
 import StatusPages from './pages/StatusPages';
 import PublicStatusPage from './pages/PublicStatusPage';
 import CloudProvision from './pages/CloudProvision';
@@ -336,9 +335,10 @@ function AppRoutes() {
                     keep the old paths working by redirecting. */}
                 <Route path="dns" element={<Navigate to="/domains" replace />} />
                 <Route path="dynamic-dns" element={<Navigate to="/domains" replace />} />
-                {/* Cloudflare zone settings — a detail page reached from a
-                    Cloudflare-managed DNS zone (full-bleed, own top bar). */}
-                <Route path="cloudflare/zones/:zoneId" element={<CloudflareZoneSettings />} />
+                {/* Cloudflare zone settings moved into the serverkit-cloudflare-ops
+                    builtin extension (#36); it contributes the
+                    cloudflare/zones/:zoneId route via its manifest. Reached from the
+                    "Open in Cloudflare" button on a Cloudflare-managed domain. */}
                 <Route path="databases" element={<Databases />} />
                 <Route path="databases/:tab" element={<Databases />} />
                 <Route path="docker" element={<Docker />} />

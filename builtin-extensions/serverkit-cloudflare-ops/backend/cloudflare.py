@@ -9,7 +9,7 @@ captured by the global audit fallback (method, route args, sanitized body).
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.services.cloudflare_service import CloudflareService, CloudflareError
+from .cloudflare_service import CloudflareService, CloudflareError
 
 cloudflare_bp = Blueprint('cloudflare', __name__)
 

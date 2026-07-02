@@ -62,7 +62,7 @@ BUILTIN_EXTENSIONS_DIR = os.environ.get(
 # (handled one-shot in extension_migration), a flagship is seeded in-place — no
 # file copy — its backend loads straight from builtin-extensions/ and its frontend
 # is pre-bundled (D5). A user uninstall records a marker so it stays gone.
-FLAGSHIP_SLUGS = ['serverkit-wordpress']
+FLAGSHIP_SLUGS = ['serverkit-wordpress', 'serverkit-cloudflare-ops']
 _FLAGSHIP_UNINSTALLED_KEY = 'extensions.flagship_uninstalled'
 
 

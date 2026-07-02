@@ -20,6 +20,17 @@ awaiting a stable release:
 
 ### Added
 
+- **Extensions platform (Phase 5 — Cloudflare zone-ops is now a bundled extension)** —
+  the Cloudflare per-zone control panel (zone settings, cache purge, WAF, Workers,
+  Tunnels, and R2/KV/D1 storage, reached from the "Open in Cloudflare" button on a
+  Cloudflare-managed domain) moved out of core into the **`serverkit-cloudflare-ops`**
+  extension. It ships installed by default (a flagship — zero nav footprint, and the
+  core Domains button depends on the route) and is uninstallable. Crucially, **DNS
+  records and the Cloudflare connection stay core** (they back `/domains`): the
+  extension borrows the single core Cloudflare API client rather than vendoring its
+  own, so there's exactly one client and no credential duplication. API paths are
+  unchanged (`/api/v1/cloudflare`, D9), and the `CloudflareWorker`/`CloudflareTunnel`
+  models stay core (they key off the shared DNS-provider connection).
 - **Extensions platform (Phase 5 — WordPress is now a bundled extension)** — the
   entire WordPress backend (site provisioning, plugin library, environments/
   pipelines, updates, security, vulnerability scanning, analytics & reports, and
