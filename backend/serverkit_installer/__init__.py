@@ -2,7 +2,7 @@
 
 A stdlib-only, import-safe, unit-tested Python package that mirrors the bash
 installer's distro/dependency/firewall/service logic. Per the hardening plan
-(docs/plans/INSTALLER_UPDATER_UNINSTALLER_HARDENING_PLAN.md §8) this is an
+(docs/plans/07_INSTALLER_UPDATER_UNINSTALLER_HARDENING_PLAN.md §8) this is an
 *additive foundation*: install.sh remains the canonical installer. The point of
 porting the stabilized bash logic here is to get unit-testable orchestration and
 a single source of truth for distro detection that the backend can eventually

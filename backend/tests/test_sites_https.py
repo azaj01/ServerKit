@@ -4,6 +4,7 @@ A one-time setup creates the *.<base> + <base> A records via a connected DNS
 provider and issues a wildcard cert, after which managed subdomain vhosts serve
 TLS from it.
 """
+from app.services import wordpress_bridge
 
 
 def _mk_user(db, username='owner'):
@@ -189,7 +190,7 @@ def test_write_vhost_uses_wildcard_cert_when_https_enabled(app, monkeypatch):
     from app import db
     from app.models.system_settings import SystemSettings
     from app.services import nginx_service
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db)
     app_row = _mk_app(db, user.id, host='blog.lvh.me')   # covered by the lvh.me wildcard
@@ -211,7 +212,7 @@ def test_write_vhost_no_wildcard_for_custom_domain(app, monkeypatch):
     from app.models.domain import Domain
     from app.models.system_settings import SystemSettings
     from app.services import nginx_service
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o2')
     app_row = _mk_app(db, user.id, name='shop', host='blog.lvh.me')

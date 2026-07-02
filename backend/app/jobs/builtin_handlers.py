@@ -175,7 +175,8 @@ def _prune_old_health_checks():
 
 def check_update_schedules():
     from app.models.wordpress_site import WordPressSite, WordPressUpdateRun
-    from app.services.wp_update_service import WpUpdateService
+    from app.services.wordpress_bridge import wp_update_service
+    WpUpdateService = wp_update_service()
     from datetime import datetime
     import json as _json
 
@@ -262,6 +263,50 @@ def run_backup_scheduler():
     BackupService.check_backup_schedules()
 
 
+def run_extension_update_check():
+    """Daily registry check for installed-extension updates (#50).
+
+    Notifies admins through the Notifications Bus — but only when the set of
+    available (slug, version) pairs CHANGED since the last notification, so a
+    pending update nags once per release, not once per day. The Marketplace
+    badge remains the always-current surface.
+    """
+    import json as _json
+    from app.services.plugin_service import check_for_updates
+    from app.services.settings_service import SettingsService
+
+    try:
+        updates = [u for u in check_for_updates() if u.get('update_available')]
+    except Exception as e:
+        logger.debug(f'Extension update check skipped: {e}')
+        return None
+    if not updates:
+        return None
+
+    fingerprint = _json.dumps(sorted(
+        f"{u.get('slug')}@{u.get('available_version')}" for u in updates))
+    marker_key = 'extensions.update_notified'
+    if fingerprint == SettingsService.get(marker_key, ''):
+        return {'updates': len(updates), 'notified': False}
+
+    summary = ', '.join(
+        f"{u.get('slug')} v{u.get('installed_version')} → v{u.get('available_version')}"
+        for u in updates[:5])
+    if len(updates) > 5:
+        summary += f' (+{len(updates) - 5} more)'
+
+    from app.notifications.sdk import NotifySdk
+    NotifySdk().send(
+        'extensions.updates_available',
+        to='admins',
+        data={'count': len(updates), 'summary': summary,
+              'message': f'Updates available: {summary}. '
+                         f'Review them on the Marketplace → Installed tab.'},
+    )
+    SettingsService.set(marker_key, fingerprint)
+    return {'updates': len(updates), 'notified': True}
+
+
 # ---------------------------------------------------------------------------
 # Handler registration + schedule seeding
 # ---------------------------------------------------------------------------
@@ -278,6 +323,7 @@ _BUILTINS = [
     ('builtin.pairing_prune',       run_pairing_prune,         'pairing-prune',      3600,  60),
     ('builtin.registrar_expiry',    run_registrar_expiry,      'registrar-expiry',   86400, 300),
     ('builtin.backup_scheduler',    run_backup_scheduler,      'backup-scheduler',   30,    30),
+    ('builtin.extension_updates',   run_extension_update_check, 'extension-updates', 86400, 600),
 ]
 
 

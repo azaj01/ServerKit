@@ -4,6 +4,7 @@ Managed sites are published at a real hostname (<slug>.<base_domain>) instead
 of localhost:<port>: SiteDomainService resolves the host, and WordPressService
 provisions a primary Domain row + nginx reverse-proxy vhost.
 """
+from app.services import wordpress_bridge
 
 
 def _mk_user(db, username='owner'):
@@ -60,7 +61,7 @@ def test_provision_routing_creates_primary_domain_and_docker_vhost(app, monkeypa
     from app import db
     from app.models.domain import Domain
     from app.services import nginx_service
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db)
     app_row = _mk_app(db, user.id, name='blog', port=8300)
@@ -93,7 +94,7 @@ def test_provision_routing_warns_when_nginx_unavailable(app, monkeypatch):
     from app import db
     from app.models.domain import Domain
     from app.services import nginx_service
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'owner2')
     app_row = _mk_app(db, user.id, name='shop', port=8400)
@@ -110,7 +111,7 @@ def test_provision_routing_warns_when_nginx_unavailable(app, monkeypatch):
 def test_canonical_site_url_prefers_primary_domain(app):
     from app import db
     from app.models.domain import Domain
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'owner3')
     app_row = _mk_app(db, user.id, name='acme', port=8500)

@@ -32,8 +32,12 @@ export async function installPluginFromZip(file) {
     });
 }
 
-export async function uninstallPlugin(pluginId) {
-    return this.request(`/plugins/${pluginId}`, {
+// Uninstall a plugin. When `purge` is true the backend also drops the
+// extension's own database tables (?purge=true); otherwise data is kept so the
+// extension can be reinstalled later.
+export async function uninstallPlugin(pluginId, purge = false) {
+    const query = purge ? '?purge=true' : '';
+    return this.request(`/plugins/${pluginId}${query}`, {
         method: 'DELETE',
     });
 }
@@ -67,6 +71,35 @@ export async function getBuiltinExtensions() {
 // One-click install for a bundled extension by slug.
 export async function installBuiltinExtension(slug) {
     return this.request(`/plugins/builtin/${encodeURIComponent(slug)}/install`, {
+        method: 'POST',
+    });
+}
+
+// Saved config values for an installed plugin (admin):
+//   { config: {...}, config_schema: {...} }
+export async function getPluginConfig(pluginId) {
+    return this.request(`/plugins/${pluginId}/config`);
+}
+
+// Persist a plugin's config values (admin). The plugin reads them via
+// plugins_sdk.config(slug) on the backend.
+export async function updatePluginConfig(pluginId, config) {
+    return this.request(`/plugins/${pluginId}/config`, {
+        method: 'PUT',
+        body: JSON.stringify({ config }),
+    });
+}
+
+// Returns available updates for installed plugins:
+//   { updates: [ { slug, plugin_id, installed_version, available_version,
+//                  update_available, compatible, source } ] }
+export async function getPluginUpdates() {
+    return this.request('/plugins/updates');
+}
+
+// Updates an installed plugin in place; returns the updated plugin dict.
+export async function updatePlugin(pluginId) {
+    return this.request(`/plugins/${pluginId}/update`, {
         method: 'POST',
     });
 }

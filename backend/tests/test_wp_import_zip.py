@@ -3,6 +3,8 @@ and the container-copy flow (docker cp mocked; extraction/resolution is real).""
 import os
 import zipfile
 
+from app.services import wordpress_bridge
+
 
 def _make_zip(path, entries):
     """entries: {arcname: content_str}."""
@@ -14,7 +16,7 @@ def _make_zip(path, entries):
 # ---- zip-slip safety -------------------------------------------------------
 
 def test_safe_extract_rejects_parent_traversal(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     z = tmp_path / 'evil.zip'
     _make_zip(str(z), {'../escape.txt': 'x', 'wp-content/ok.txt': 'y'})
     dest = tmp_path / 'out'
@@ -25,7 +27,7 @@ def test_safe_extract_rejects_parent_traversal(tmp_path):
 
 
 def test_safe_extract_rejects_deep_traversal(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     z = tmp_path / 'evil2.zip'
     _make_zip(str(z), {'wp-content/../../../../tmp/evil.txt': 'x'})
     dest = tmp_path / 'out2'
@@ -35,7 +37,7 @@ def test_safe_extract_rejects_deep_traversal(tmp_path):
 
 
 def test_safe_extract_ok(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     z = tmp_path / 'good.zip'
     _make_zip(str(z), {'wp-content/plugins/p/p.php': '<?php',
                        'wp-content/themes/t/style.css': 'body{}'})
@@ -47,7 +49,7 @@ def test_safe_extract_ok(tmp_path):
 
 
 def test_safe_extract_rejects_bad_zip(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     bad = tmp_path / 'notazip.zip'
     bad.write_text('this is not a zip')
     dest = tmp_path / 'out4'
@@ -59,26 +61,26 @@ def test_safe_extract_rejects_bad_zip(tmp_path):
 # ---- wp-content resolution (3 archive layouts) -----------------------------
 
 def test_resolve_wp_content_at_root(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     (tmp_path / 'wp-content' / 'plugins').mkdir(parents=True)
     assert WordPressService._resolve_wp_content_dir(str(tmp_path)) == str(tmp_path / 'wp-content')
 
 
 def test_resolve_full_site_wrapper_folder(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     (tmp_path / 'mysite' / 'wp-content' / 'themes').mkdir(parents=True)
     assert WordPressService._resolve_wp_content_dir(str(tmp_path)) == str(tmp_path / 'mysite' / 'wp-content')
 
 
 def test_resolve_root_is_wp_content(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     (tmp_path / 'plugins').mkdir()
     (tmp_path / 'themes').mkdir()
     assert WordPressService._resolve_wp_content_dir(str(tmp_path)) == str(tmp_path)
 
 
 def test_resolve_none_when_unrecognizable(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     (tmp_path / 'random').mkdir()
     assert WordPressService._resolve_wp_content_dir(str(tmp_path)) is None
 
@@ -86,8 +88,8 @@ def test_resolve_none_when_unrecognizable(tmp_path):
 # ---- container copy flow (docker cp mocked) --------------------------------
 
 def test_import_wp_content_zip_issues_cp_and_chown(tmp_path, monkeypatch):
-    from app.services.wordpress_service import WordPressService
-    import app.services.wordpress_service as wp_mod
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
+    wp_mod = wordpress_bridge.load('wordpress_service')
     z = tmp_path / 'c.zip'
     _make_zip(str(z), {'wp-content/plugins/p/p.php': '<?php'})
 
@@ -106,8 +108,8 @@ def test_import_wp_content_zip_issues_cp_and_chown(tmp_path, monkeypatch):
 
 
 def test_import_wp_content_zip_propagates_cp_failure(tmp_path, monkeypatch):
-    from app.services.wordpress_service import WordPressService
-    import app.services.wordpress_service as wp_mod
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
+    wp_mod = wordpress_bridge.load('wordpress_service')
     z = tmp_path / 'c.zip'
     _make_zip(str(z), {'wp-content/uploads/x.jpg': 'data'})
 
@@ -122,7 +124,7 @@ def test_import_wp_content_zip_propagates_cp_failure(tmp_path, monkeypatch):
 
 
 def test_import_wp_content_zip_no_wp_content_found(tmp_path):
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     z = tmp_path / 'empty.zip'
     _make_zip(str(z), {'readme.txt': 'hello'})
     # No subprocess mock needed: resolution fails before any docker call.

@@ -1,6 +1,6 @@
 """Per-app managed volumes — model, service, deploy wiring, and API.
 
-Covers the proving points from docs/plans/APP_MANAGED_VOLUMES.md:
+Covers the proving points from docs/plans/10_APP_MANAGED_VOLUMES.md:
 - create persists a row AND a namespaced Docker volume
 - a duplicate mount path is refused
 - delete(wipe=False) never calls `docker volume rm`

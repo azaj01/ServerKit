@@ -1,7 +1,7 @@
 # serverkit_installer
 
 Phase 5 foundation from the
-[Installer/Updater/Uninstaller Hardening Plan](../../docs/plans/INSTALLER_UPDATER_UNINSTALLER_HARDENING_PLAN.md)
+[Installer/Updater/Uninstaller Hardening Plan](../../docs/plans/07_INSTALLER_UPDATER_UNINSTALLER_HARDENING_PLAN.md)
 (§8). A stdlib-only, import-safe, unit-tested Python port of the bash installer's
 detection and orchestration logic.
 

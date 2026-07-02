@@ -21,6 +21,7 @@ import { useTopbarActions } from '@/hooks/useTopbarActions';
 import RegistrarPortfolio from '../components/domains/RegistrarPortfolio';
 import { ProviderBrandIcon } from '../components/icons/ProviderBrands';
 import DomainDnsPanel from '../components/domains/DomainDnsPanel';
+import PluginSlot from '../components/PluginSlot';
 import { formatExpiry } from '../utils/expiry';
 
 const Domains = () => {
@@ -539,6 +540,9 @@ const Domains = () => {
                                 </Button>
                             </div>
                         )}
+
+                        {/* Extension slot: panels contributed to the domain drawer */}
+                        <PluginSlot name="domain.drawer.panel" context={{ domain: drawerDomain }} />
                     </div>
                 )}
             </Drawer>

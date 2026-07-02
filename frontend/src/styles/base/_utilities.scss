@@ -197,7 +197,7 @@
 // TAILWIND-REMOVAL COMPATIBILITY LAYER
 // ============================================
 // Added when Tailwind was removed from the build
-// (docs/plans/FRONTEND_UX_TAILWIND_CLEANUP_PLAN.md, Phase 2). These re-create,
+// (docs/plans/05_FRONTEND_UX_TAILWIND_CLEANUP_PLAN.md, Phase 2). These re-create,
 // theme-aware, the remaining Tailwind utility classes still referenced in
 // pages/components so dropping the Tailwind dependency causes no visual
 // regression. New code should prefer semantic SCSS classes over these.

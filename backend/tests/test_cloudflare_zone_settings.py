@@ -96,20 +96,20 @@ def _make_cf_zone(domain='example.com', provider='cloudflare', zid='zoneABC', to
 
 
 def test_service_rejects_non_cloudflare_zone(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone(provider='manual', token=None)
     with pytest.raises(CloudflareError):
         CloudflareService.get_settings(zone.id)
 
 
 def test_service_rejects_missing_zone(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     with pytest.raises(CloudflareError):
         CloudflareService.get_settings(99999)
 
 
 def test_service_rejects_zone_without_provider_zone_id(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone(zid=None)
     with pytest.raises(CloudflareError):
         CloudflareService.get_settings(zone.id)
@@ -119,7 +119,7 @@ def test_service_rejects_zone_without_provider_zone_id(app):
 
 def test_service_get_settings_indexes_by_id(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     monkeypatch.setattr(cf.requests, 'request',
                         lambda *a, **k: _Resp({'success': True, 'result': [
@@ -134,7 +134,7 @@ def test_service_get_settings_indexes_by_id(app, monkeypatch):
 
 def test_service_update_setting_surfaces_provider_error(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     monkeypatch.setattr(cf.requests, 'request',
                         lambda *a, **k: _Resp({'success': False,
@@ -145,7 +145,7 @@ def test_service_update_setting_surfaces_provider_error(app, monkeypatch):
 
 def test_service_apply_preset_reports_each(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
 
     def capture(method, url, headers=None, json=None, params=None, timeout=None):
@@ -179,7 +179,7 @@ def test_client_purge_cache_posts_payload(monkeypatch):
 
 def test_service_purge_everything(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     sent = {}
     monkeypatch.setattr(cf.requests, 'request',
@@ -192,7 +192,7 @@ def test_service_purge_everything(app, monkeypatch):
 
 def test_service_purge_files_caps_at_30(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     sent = {}
     monkeypatch.setattr(cf.requests, 'request',
@@ -205,7 +205,7 @@ def test_service_purge_files_caps_at_30(app, monkeypatch):
 
 
 def test_service_purge_nothing_raises(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.purge_cache(zone.id)
@@ -213,7 +213,7 @@ def test_service_purge_nothing_raises(app):
 
 def test_service_purge_surfaces_provider_error(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     monkeypatch.setattr(cf.requests, 'request',
                         lambda *a, **k: _Resp({'success': False,
@@ -226,7 +226,7 @@ def test_service_purge_surfaces_provider_error(app, monkeypatch):
 
 def test_waf_list_no_ruleset_is_empty(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     monkeypatch.setattr(cf.requests, 'request',
                         lambda method, url, **k:
@@ -240,7 +240,7 @@ def test_waf_list_no_ruleset_is_empty(app, monkeypatch):
 
 def test_waf_list_surfaces_listing_error(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     monkeypatch.setattr(cf.requests, 'request',
                         lambda *a, **k: _Resp({'success': False,
@@ -251,7 +251,7 @@ def test_waf_list_surfaces_listing_error(app, monkeypatch):
 
 def test_waf_list_with_ruleset(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
 
     def stub(method, url, headers=None, json=None, params=None, timeout=None):
@@ -271,7 +271,7 @@ def test_waf_list_with_ruleset(app, monkeypatch):
 
 def test_waf_add_creates_phase_ruleset_when_absent(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     seen = {}
 
@@ -291,7 +291,7 @@ def test_waf_add_creates_phase_ruleset_when_absent(app, monkeypatch):
 
 def test_waf_add_posts_to_existing_ruleset(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     seen = {}
 
@@ -310,14 +310,14 @@ def test_waf_add_posts_to_existing_ruleset(app, monkeypatch):
 
 
 def test_waf_add_rejects_bad_action(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.add_waf_rule(zone.id, description='d', expression='x', action='nuke')
 
 
 def test_waf_preset_lock_requires_valid_ip(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.apply_waf_preset(zone.id, 'lock_wp_admin', {'ip': 'not-an-ip'})
@@ -325,7 +325,7 @@ def test_waf_preset_lock_requires_valid_ip(app):
 
 def test_waf_preset_lock_builds_safe_expression(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     seen = {}
 
@@ -345,7 +345,7 @@ def test_waf_preset_lock_builds_safe_expression(app, monkeypatch):
 
 
 def test_waf_update_validates_action(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.update_waf_rule(zone.id, 'rs1', 'r1', {'action': 'nuke'})
@@ -353,7 +353,7 @@ def test_waf_update_validates_action(app):
 
 def test_waf_delete_calls_delete(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     deleted = {}
 
@@ -390,7 +390,7 @@ def test_upload_worker_module_is_multipart(monkeypatch):
 
 
 def test_deploy_worker_validates_name(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.deploy_worker(zone.id, name='Bad Name!', code='x')
@@ -398,7 +398,7 @@ def test_deploy_worker_validates_name(app):
 
 def test_deploy_worker_records_source(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     from app.models.cloudflare_worker import CloudflareWorker
     zone = _make_cf_zone()
 
@@ -422,7 +422,7 @@ def test_deploy_worker_records_source(app, monkeypatch):
 def test_list_workers_flags_managed(app, monkeypatch):
     from app import db
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     from app.models.cloudflare_worker import CloudflareWorker
     zone = _make_cf_zone()
     db.session.add(CloudflareWorker(account_id='acct1', name='managed-one', source='x'))
@@ -452,7 +452,7 @@ def test_list_workers_flags_managed(app, monkeypatch):
 def test_delete_worker_removes_local_row(app, monkeypatch):
     from app import db
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     from app.models.cloudflare_worker import CloudflareWorker
     zone = _make_cf_zone()
     db.session.add(CloudflareWorker(account_id='acct1', name='gone', source='x'))
@@ -499,7 +499,7 @@ def test_client_create_tunnel_uses_cloudflare_config_src(monkeypatch):
 
 
 def test_create_tunnel_requires_name(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.create_tunnel(zone.id, '   ')
@@ -507,7 +507,7 @@ def test_create_tunnel_requires_name(app):
 
 def test_create_tunnel_stores_token_and_returns_install(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     from app.models.cloudflare_tunnel import CloudflareTunnel
     from app.utils.crypto import decrypt_secret_safe
     zone = _make_cf_zone()
@@ -533,7 +533,7 @@ def test_create_tunnel_stores_token_and_returns_install(app, monkeypatch):
 def test_list_tunnels_flags_managed(app, monkeypatch):
     from app import db
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     from app.models.cloudflare_tunnel import CloudflareTunnel
     zone = _make_cf_zone()
     db.session.add(CloudflareTunnel(tunnel_id='tun1', name='mine', account_id='acct1'))
@@ -558,7 +558,7 @@ def test_list_tunnels_flags_managed(app, monkeypatch):
 def test_delete_tunnel_removes_local_row(app, monkeypatch):
     from app import db
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     from app.models.cloudflare_tunnel import CloudflareTunnel
     zone = _make_cf_zone()
     db.session.add(CloudflareTunnel(tunnel_id='tun1', name='mine', account_id='acct1'))
@@ -579,7 +579,7 @@ def test_delete_tunnel_removes_local_row(app, monkeypatch):
 
 def test_add_tunnel_hostname_sets_ingress_with_catchall(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     put_body = {}
 
@@ -610,7 +610,7 @@ def test_add_tunnel_hostname_sets_ingress_with_catchall(app, monkeypatch):
 
 def test_list_storage_aggregates_and_reports_errors(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
 
     def req(method, url, headers=None, json=None, params=None, timeout=None):
@@ -635,7 +635,7 @@ def test_list_storage_aggregates_and_reports_errors(app, monkeypatch):
 
 
 def test_create_r2_bucket_validates_name(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.create_r2_bucket(zone.id, 'Bad_Bucket!')
@@ -643,7 +643,7 @@ def test_create_r2_bucket_validates_name(app):
 
 def test_create_r2_bucket_creates(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     seen = {}
 
@@ -662,14 +662,14 @@ def test_create_r2_bucket_creates(app, monkeypatch):
 
 
 def test_create_kv_namespace_requires_title(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.create_kv_namespace(zone.id, '   ')
 
 
 def test_create_d1_database_requires_name(app):
-    from app.services.cloudflare_service import CloudflareService, CloudflareError
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService, CloudflareError = _cfb.cloudflare_service(), _cfb.cloudflare_error()
     zone = _make_cf_zone()
     with pytest.raises(CloudflareError):
         CloudflareService.create_d1_database(zone.id, '')
@@ -677,7 +677,7 @@ def test_create_d1_database_requires_name(app):
 
 def test_delete_r2_bucket_calls_delete(app, monkeypatch):
     from app.services.dns import cloudflare as cf
-    from app.services.cloudflare_service import CloudflareService
+    from app.services import cloudflare_ops_bridge as _cfb; CloudflareService = _cfb.cloudflare_service()
     zone = _make_cf_zone()
     deleted = {}
 

@@ -4,6 +4,8 @@ import shutil
 
 import pytest
 
+from app.services import wordpress_bridge
+
 
 PLUGIN_PHP = """<?php
 /*
@@ -43,8 +45,8 @@ def _fake_privileged(cmd, *args, **kwargs):
 # Pure helpers
 # --------------------------------------------------------------------------
 def test_slug_validation():
-    from app.services.wordpress_plugin_library_service import (
-        WordPressPluginLibraryService as S, PluginLibraryError)
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
+    PluginLibraryError = wordpress_bridge.get('wordpress_plugin_library_service', 'PluginLibraryError')
     assert S.validate_slug('my-plugin') == 'my-plugin'
     assert S.slugify('My Cool Plugin!') == 'my-cool-plugin'
     with pytest.raises(PluginLibraryError):
@@ -54,7 +56,7 @@ def test_slug_validation():
 
 
 def test_version_behind():
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
     assert S._version_behind('1.0.0', '1.0.1') is True
     assert S._version_behind('1.2.0', '1.10.0') is True
     assert S._version_behind('2.0.0', '1.9.9') is False
@@ -64,7 +66,7 @@ def test_version_behind():
 
 
 def test_parse_plugin_header(tmp_path):
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
     src = _make_local_plugin(tmp_path, 'my-plugin')
     header = S.parse_plugin_header(src, 'my-plugin')
     assert header['name'] == 'My Custom Plugin'
@@ -74,7 +76,7 @@ def test_parse_plugin_header(tmp_path):
 
 
 def test_parse_plugin_header_falls_back_to_first_php(tmp_path):
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
     src = tmp_path / 'src'
     src.mkdir()
     (src / 'main.php').write_text(PLUGIN_PHP, encoding='utf-8')
@@ -86,8 +88,8 @@ def test_parse_plugin_header_falls_back_to_first_php(tmp_path):
 # Service: sync + CRUD (local source)
 # --------------------------------------------------------------------------
 def test_add_and_sync_local_plugin(app, tmp_path, monkeypatch):
-    import app.services.wordpress_plugin_library_service as mod
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
+    mod = wordpress_bridge.load('wordpress_plugin_library_service')
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
 
     monkeypatch.setattr(S, 'CACHE_DIR', str(tmp_path / 'cache'))
     src = _make_local_plugin(tmp_path, 'my-plugin')
@@ -102,13 +104,13 @@ def test_add_and_sync_local_plugin(app, tmp_path, monkeypatch):
     assert os.path.isfile(os.path.join(cache, 'my-plugin.php'))
 
     # Duplicate slug rejected
-    from app.services.wordpress_plugin_library_service import PluginLibraryError
+    PluginLibraryError = wordpress_bridge.get('wordpress_plugin_library_service', 'PluginLibraryError')
     with pytest.raises(PluginLibraryError):
         S.add_plugin({'source_type': 'local', 'source_url': src, 'slug': 'my-plugin'})
 
 
 def test_sync_reparses_updated_version(app, tmp_path, monkeypatch):
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
     monkeypatch.setattr(S, 'CACHE_DIR', str(tmp_path / 'cache'))
     src_dir = tmp_path / 'src'
     src_dir.mkdir()
@@ -153,9 +155,9 @@ def _make_site(app, tmp_path, name='acme'):
 
 
 def test_install_on_site_copies_and_records(app, tmp_path, monkeypatch):
-    import app.services.wordpress_plugin_library_service as mod
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
-    from app.services.wordpress_service import WordPressService
+    mod = wordpress_bridge.load('wordpress_plugin_library_service')
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     from app.models import WordPressSitePlugin
 
     monkeypatch.setattr(S, 'CACHE_DIR', str(tmp_path / 'cache'))
@@ -187,8 +189,8 @@ def test_install_on_site_copies_and_records(app, tmp_path, monkeypatch):
 
 
 def test_scan_site_tags_managed(app, tmp_path, monkeypatch):
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
-    from app.services.wordpress_service import WordPressService
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     monkeypatch.setattr(S, 'CACHE_DIR', str(tmp_path / 'cache'))
 
     src = _make_local_plugin(tmp_path, 'my-plugin')
@@ -217,7 +219,7 @@ def test_scan_site_tags_managed(app, tmp_path, monkeypatch):
 # API: CRUD + bulk update
 # --------------------------------------------------------------------------
 def test_api_library_crud(app, client, auth_headers, tmp_path, monkeypatch):
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
     monkeypatch.setattr(S, 'CACHE_DIR', str(tmp_path / 'cache'))
     src = _make_local_plugin(tmp_path, 'api-plugin')
 
@@ -246,7 +248,7 @@ def test_api_library_crud(app, client, auth_headers, tmp_path, monkeypatch):
 
 
 def test_api_add_requires_source(app, client, auth_headers, tmp_path, monkeypatch):
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
     monkeypatch.setattr(S, 'CACHE_DIR', str(tmp_path / 'cache'))
     r = client.post('/api/v1/wordpress/plugins/library',
                     json={'source_type': 'github'}, headers=auth_headers)
@@ -254,9 +256,9 @@ def test_api_add_requires_source(app, client, auth_headers, tmp_path, monkeypatc
 
 
 def test_api_bulk_update(app, client, auth_headers, tmp_path, monkeypatch):
-    import app.services.wordpress_plugin_library_service as mod
-    from app.services.wordpress_plugin_library_service import WordPressPluginLibraryService as S
-    from app.services.wordpress_service import WordPressService
+    mod = wordpress_bridge.load('wordpress_plugin_library_service')
+    S = wordpress_bridge.get('wordpress_plugin_library_service', 'WordPressPluginLibraryService')
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     monkeypatch.setattr(S, 'CACHE_DIR', str(tmp_path / 'cache'))
     monkeypatch.setattr(mod, 'run_privileged', _fake_privileged)

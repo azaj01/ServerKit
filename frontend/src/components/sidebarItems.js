@@ -86,24 +86,11 @@ export const SIDEBAR_ITEMS = [
         category: 'infrastructure',
         icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'
     },
-    {
-        // Redesign: WordPress uses the top-bar layout (REDESIGN_MAP §6 dec. 3).
-        // Pipeline now lives in the page's top bar (PageTopbar WORDPRESS_TABS),
-        // not as a sidebar sub-item. The pipeline list is at /wordpress/pipelines
-        // (renamed from /wordpress/projects in §2; old URLs redirect).
-        id: 'wordpress',
-        label: 'WordPress',
-        route: '/wordpress',
-        category: 'infrastructure',
-        icon: '<circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M3.5 9h17M3.5 15h17"/>'
-    },
-    {
-        id: 'workflow',
-        label: 'Workflow Builder',
-        route: '/workflow',
-        category: 'infrastructure',
-        icon: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98"/><path d="M15.41 6.51l-6.82 3.98"/>'
-    },
+    // WordPress is now the serverkit-wordpress builtin extension (Phase 5 #38);
+    // its sidebar item is contributed by the extension manifest (nav), so it
+    // disappears cleanly when the extension is uninstalled.
+    // Workflow Builder is now the serverkit-workflows builtin extension; its
+    // sidebar item is contributed by the extension manifest.
     {
         id: 'databases',
         label: 'Databases',
@@ -168,13 +155,8 @@ export const SIDEBAR_ITEMS = [
         category: 'operations',
         icon: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4m0 4h.01"/>'
     },
-    {
-        id: 'email',
-        label: 'Email Server',
-        route: '/email',
-        category: 'operations',
-        icon: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>'
-    },
+    // Email Server is now the serverkit-email builtin extension; its sidebar item
+    // is contributed by the extension manifest.
     {
         id: 'queue',
         label: 'Queue Bus',
@@ -196,16 +178,9 @@ export const SIDEBAR_ITEMS = [
         category: 'system',
         icon: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>'
     },
-    {
-        id: 'gpu',
-        label: 'GPU Monitor',
-        route: '/gpu',
-        // Hidden unless the panel host reports a GPU (Sidebar sets gpuAvailable
-        // from api.getGpuInfo) — no point showing an empty monitor.
-        requiresCondition: 'gpuAvailable',
-        category: 'system',
-        icon: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6v12"/><circle cx="13" cy="12" r="2.5"/><path d="M17 6v12"/>'
-    },
+    // GPU Monitor is now the serverkit-gpu builtin extension; its sidebar item
+    // (still gated on gpuAvailable via requiresCondition) is contributed by the
+    // extension manifest.
     {
         // Inbound webhook console. Secret storage ("Vaults") that used to share
         // this page now lives under the Organization tab group (/vaults); only
@@ -225,16 +200,20 @@ export const SIDEBAR_ITEMS = [
         route: '/marketplace',
         matchPrefixes: groupPrefixes(MARKET_TABS),
         category: 'system',
+        // Always visible, like Dashboard — the Marketplace is the front door to
+        // extensions, so no onboarding preset (or custom config) should hide it.
+        alwaysVisible: true,
         icon: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>'
     }
 ];
 
 // "Advanced" items are powerful but not part of the everyday core for a solo
-// dev / small team: the Marketplace, the internal job-queue console, and the
-// inbound-Webhooks console. They're hidden by the default ("Recommended") view
-// and every curated preset, but stay one click away via the "Full" view or
-// Customize Sidebar — and remain fully routable (deep links, command palette).
-export const ADVANCED_ITEM_IDS = ['marketplace', 'queue', 'webhooks'];
+// dev / small team: the internal job-queue console and the inbound-Webhooks
+// console. They're hidden by the default ("Recommended") view and every curated
+// preset, but stay one click away via the "Full" view or Customize Sidebar — and
+// remain fully routable (deep links, command palette). The Marketplace is NOT in
+// this list — it's alwaysVisible so extensions are always discoverable.
+export const ADVANCED_ITEM_IDS = ['queue', 'webhooks'];
 
 // Preset profiles define which items are hidden (top-level only)
 export const SIDEBAR_PRESETS = {

@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from app.services import wordpress_bridge
+
 
 def _mk_user(db, username='owner'):
     from app.models import User
@@ -37,7 +39,7 @@ def _current_month():
 # ---- pure helpers ---------------------------------------------------------
 
 def test_month_bounds_normal_and_december():
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
     start, end = WpReportsService._month_bounds(2026, 5)
     assert start == datetime(2026, 5, 1)
     assert end == datetime(2026, 6, 1)
@@ -48,7 +50,7 @@ def test_month_bounds_normal_and_december():
 
 
 def test_client_from_tags():
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
     assert WpReportsService._client_from_tags(['retainer', 'client-acme']) == 'acme'
     assert WpReportsService._client_from_tags(['client:Globex']) == 'Globex'
     assert WpReportsService._client_from_tags(['php8', 'retainer']) is None
@@ -60,7 +62,7 @@ def test_client_from_tags():
 def test_generate_aggregates_bound_site(app):
     import json
     from app import db
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
     from app.models.status_page import StatusPage, StatusComponent, HealthCheck
     from app.models.wordpress_site import WordPressUpdateRun, DatabaseSnapshot, WordPressVulnerability
 
@@ -123,7 +125,7 @@ def test_generate_aggregates_bound_site(app):
 
 def test_generate_unbound_site_has_no_uptime_history(app):
     from app import db
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
 
     user = _mk_user(db, 'owner2')
     _, site = _mk_site(db, user.id, name='nobound')
@@ -140,7 +142,7 @@ def test_generate_unbound_site_has_no_uptime_history(app):
 
 def test_generate_is_upsert(app):
     from app import db
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
     from app.models.wordpress_site import WordPressReport
 
     user = _mk_user(db, 'owner3')
@@ -155,7 +157,7 @@ def test_generate_is_upsert(app):
 
 def test_generate_rejects_future_month(app):
     from app import db
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
 
     user = _mk_user(db, 'owner4')
     _, site = _mk_site(db, user.id, name='future')
@@ -168,7 +170,7 @@ def test_generate_rejects_future_month(app):
 def test_daily_series_never_emits_a_future_day(app):
     """Regression: the to-date daily series must stop at today, not tomorrow."""
     from app import db
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
     from app.models.status_page import StatusPage, StatusComponent
 
     user = _mk_user(db, 'owner5')
@@ -193,7 +195,7 @@ def test_ongoing_incident_duration_is_clamped_to_the_month(app):
     its full elapsed time (up to now) into that month's attributed duration."""
     from datetime import datetime, timedelta
     from app import db
-    from app.services.wp_reports_service import WpReportsService
+    WpReportsService = wordpress_bridge.get('wp_reports_service', 'WpReportsService')
     from app.models.status_page import StatusPage, StatusComponent, StatusIncident
 
     now = datetime.utcnow()

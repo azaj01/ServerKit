@@ -1,6 +1,13 @@
-from flask import Blueprint, request, jsonify
+"""Marketplace API — the extension registry surface.
+
+The legacy DB-seeded ``Extension``/``ExtensionInstall`` catalog was retired
+(#51): nothing ever populated it on a real panel, so it fed Browse an empty
+third lane that was redundant with the three real sources — the builtin
+folder scan (``/plugins/builtin``), the remote registry (below), and live
+``InstalledPlugin`` state. This blueprint now serves only the registry.
+"""
+from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from app.services.marketplace_service import MarketplaceService
 from app.services.audit_service import AuditService
 from app.models.audit_log import AuditLog
 
@@ -13,205 +20,42 @@ def get_current_user():
     return User.query.get(get_jwt_identity())
 
 
-@marketplace_bp.route('', methods=['GET'])
-@marketplace_bp.route('/', methods=['GET'])
+@marketplace_bp.route('/registry', methods=['GET'])
 @jwt_required()
-def list_extensions():
-    category = request.args.get('category')
-    search = request.args.get('search')
-    extensions = MarketplaceService.list_extensions(category=category, search=search)
-    return jsonify({'extensions': [e.to_dict() for e in extensions]})
+def list_registry():
+    """Return the remote-registry extensions (with live install state), for the
+    Browse merge. Read-only; offline-tolerant (falls back to a bundled index)."""
+    from app.services import registry_service
+    return jsonify({
+        'extensions': registry_service.list_catalog(),
+        'source': registry_service.registry_source_label(),
+    })
 
 
-@marketplace_bp.route('/categories', methods=['GET'])
+@marketplace_bp.route('/registry/<slug>/install', methods=['POST'])
 @jwt_required()
-def get_categories():
-    return jsonify({'categories': MarketplaceService.get_categories()})
-
-
-@marketplace_bp.route('/<int:ext_id>', methods=['GET'])
-@jwt_required()
-def get_extension(ext_id):
-    ext = MarketplaceService.get_extension(ext_id)
-    if not ext:
-        return jsonify({'error': 'Not found'}), 404
-    return jsonify(ext.to_dict())
-
-
-@marketplace_bp.route('', methods=['POST'])
-@marketplace_bp.route('/', methods=['POST'])
-@jwt_required()
-def create_extension():
+def install_registry(slug):
+    """Install a registry extension by slug. Checksum-verified (the entry's
+    sha256, when present, must match before extraction)."""
     user = get_current_user()
-    data = request.get_json()
-    if not data or 'name' not in data:
-        return jsonify({'error': 'name required'}), 400
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+
+    from app.services.plugin_service import install_registry_extension
     try:
-        ext = MarketplaceService.create_extension(data, user.id)
+        plugin = install_registry_extension(slug, user_id=user.id)
         AuditService.log(
             action=AuditLog.ACTION_RESOURCE_CREATE,
             user_id=user.id,
-            target_type='marketplace_extension',
-            target_id=ext.id,
-            details={'name': ext.name, 'slug': ext.slug, 'version': ext.version},
+            target_type='plugin',
+            target_id=plugin.id,
+            details={'name': plugin.name, 'version': plugin.version, 'source': 'registry'},
         )
-        return jsonify(ext.to_dict()), 201
+        return jsonify(plugin.to_dict()), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
-
-
-@marketplace_bp.route('/<int:ext_id>', methods=['PUT'])
-@jwt_required()
-def update_extension(ext_id):
-    user = get_current_user()
-    if not user or not user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    data = request.get_json()
-    ext = MarketplaceService.update_extension(ext_id, data)
-    if not ext:
-        return jsonify({'error': 'Not found'}), 404
-    AuditService.log(
-        action=AuditLog.ACTION_RESOURCE_UPDATE,
-        user_id=user.id,
-        target_type='marketplace_extension',
-        target_id=ext.id,
-        details={'name': ext.name, 'slug': ext.slug, 'updated_fields': sorted((data or {}).keys())},
-    )
-    return jsonify(ext.to_dict())
-
-
-@marketplace_bp.route('/<int:ext_id>/publish', methods=['POST'])
-@jwt_required()
-def publish_extension(ext_id):
-    user = get_current_user()
-    if not user or not user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    ext = MarketplaceService.publish_extension(ext_id)
-    if not ext:
-        return jsonify({'error': 'Not found'}), 404
-    AuditService.log(
-        action=AuditLog.ACTION_RESOURCE_UPDATE,
-        user_id=user.id,
-        target_type='marketplace_extension',
-        target_id=ext.id,
-        details={'name': ext.name, 'slug': ext.slug, 'status': ext.status, 'operation': 'publish'},
-    )
-    return jsonify(ext.to_dict())
-
-
-@marketplace_bp.route('/<int:ext_id>', methods=['DELETE'])
-@jwt_required()
-def delete_extension(ext_id):
-    user = get_current_user()
-    if not user or not user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    ext = MarketplaceService.get_extension(ext_id)
-    audit_details = {'name': ext.name if ext else None, 'slug': ext.slug if ext else None}
-    if not MarketplaceService.delete_extension(ext_id):
-        return jsonify({'error': 'Not found'}), 404
-    AuditService.log(
-        action=AuditLog.ACTION_RESOURCE_DELETE,
-        user_id=user.id,
-        target_type='marketplace_extension',
-        target_id=ext_id,
-        details=audit_details,
-    )
-    return jsonify({'message': 'Extension deleted'})
-
-
-# --- Installation ---
-
-@marketplace_bp.route('/<int:ext_id>/install', methods=['POST'])
-@jwt_required()
-def install_extension(ext_id):
-    user = get_current_user()
-    # Marketplace installs now trigger a real plugin install when the
-    # extension carries a source URL — that runs arbitrary downloaded
-    # code and writes to disk, so it must require admin. /plugins/install
-    # already enforces this; we mirror the check here.
-    if not user or not user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    data = request.get_json() or {}
-    try:
-        install = MarketplaceService.install_extension(ext_id, user.id, data.get('config'))
-        AuditService.log(
-            action=AuditLog.ACTION_RESOURCE_INSTALL,
-            user_id=user.id,
-            target_type='marketplace_extension',
-            target_id=ext_id,
-            details={
-                'install_id': install.id,
-                'extension_id': install.extension_id,
-                'extension_name': install.extension.display_name if install.extension else None,
-                'version': install.installed_version,
-            },
-        )
-        return jsonify(install.to_dict()), 201
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-
-
-@marketplace_bp.route('/installs/<int:install_id>', methods=['DELETE'])
-@jwt_required()
-def uninstall_extension(install_id):
-    user = get_current_user()
-    if not user or not user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    install = MarketplaceService.get_install(install_id)
-    audit_details = {
-        'extension_id': install.extension_id if install else None,
-        'extension_name': install.extension.display_name if install and install.extension else None,
-    }
-    if not MarketplaceService.uninstall_extension(install_id):
-        return jsonify({'error': 'Not found'}), 404
-    AuditService.log(
-        action=AuditLog.ACTION_RESOURCE_UNINSTALL,
-        user_id=user.id,
-        target_type='marketplace_extension_install',
-        target_id=install_id,
-        details=audit_details,
-    )
-    return jsonify({'message': 'Extension uninstalled'})
-
-
-@marketplace_bp.route('/installs/<int:install_id>/config', methods=['PUT'])
-@jwt_required()
-def update_config(install_id):
-    user = get_current_user()
-    data = request.get_json() or {}
-    install = MarketplaceService.update_extension_config(install_id, data.get('config', {}))
-    if not install:
-        return jsonify({'error': 'Not found'}), 404
-    AuditService.log(
-        action=AuditLog.ACTION_RESOURCE_UPDATE,
-        user_id=user.id if user else None,
-        target_type='marketplace_extension_install',
-        target_id=install.id,
-        details={
-            'extension_id': install.extension_id,
-            'extension_name': install.extension.display_name if install.extension else None,
-            'operation': 'update_config',
-        },
-    )
-    return jsonify(install.to_dict())
-
-
-@marketplace_bp.route('/my-extensions', methods=['GET'])
-@jwt_required()
-def my_extensions():
-    user = get_current_user()
-    installs = MarketplaceService.get_user_extensions(user.id)
-    return jsonify({'extensions': [i.to_dict() for i in installs]})
-
-
-@marketplace_bp.route('/<int:ext_id>/rate', methods=['POST'])
-@jwt_required()
-def rate_extension(ext_id):
-    data = request.get_json() or {}
-    rating = data.get('rating')
-    if rating is None or not (1 <= rating <= 5):
-        return jsonify({'error': 'Rating must be 1-5'}), 400
-    ext = MarketplaceService.rate_extension(ext_id, rating)
-    if not ext:
-        return jsonify({'error': 'Not found'}), 404
-    return jsonify(ext.to_dict())
+    except Exception:
+        import logging, uuid
+        ref = uuid.uuid4().hex[:8]
+        logging.getLogger(__name__).exception('Registry install failed (ref=%s)', ref)
+        return jsonify({'error': 'Installation failed. Check server logs.', 'ref': ref}), 500

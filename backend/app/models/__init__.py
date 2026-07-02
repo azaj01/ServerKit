@@ -47,7 +47,6 @@ from app.models.tunnel import Tunnel
 from app.models.exposed_service import ExposedService
 from app.models.status_page import StatusPage, StatusComponent, HealthCheck, StatusIncident, StatusIncidentUpdate
 from app.models.cloud_server import CloudProvider, CloudServer, CloudSnapshot
-from app.models.marketplace import Extension, ExtensionInstall
 from app.models.pending_agent import PendingAgent
 from app.models.plugin import InstalledPlugin
 from app.models.ai import AiConversation, AiMessage, AiPendingAction
@@ -85,7 +84,6 @@ __all__ = [
     'Tunnel', 'ExposedService',
     'StatusPage', 'StatusComponent', 'HealthCheck', 'StatusIncident', 'StatusIncidentUpdate',
     'CloudProvider', 'CloudServer', 'CloudSnapshot',
-    'Extension', 'ExtensionInstall',
     'PendingAgent',
     'InstalledPlugin',
     'AiConversation', 'AiMessage', 'AiPendingAction',

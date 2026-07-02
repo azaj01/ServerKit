@@ -2100,7 +2100,8 @@ def create_app_db_snapshot(app_id):
         return err
     from app.models.wordpress_site import DatabaseSnapshot
     from app.services.db_sync_service import DatabaseSyncService
-    from app.services.wordpress_env_service import WordPressEnvService
+    from app.services.wordpress_bridge import wordpress_env_service
+    WordPressEnvService = wordpress_env_service()
     site = _wp_site_for_app(app)
     if not site:
         return jsonify({'error': 'This application is not a WordPress site'}), 400

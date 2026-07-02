@@ -6,6 +6,14 @@
  *   dashboardRoutes   — render inside <DashboardLayout/> alongside core
  *                       pages (layout: 'padded' (default) | 'full').
  *
+ *   groupRoutes       — routes with a `group` field render INSIDE that
+ *                       core tab group's TabGroupLayout (tab-group
+ *                       contribution, #43). App.jsx mounts
+ *                       groupRoutes[<groupId>] as children of the
+ *                       matching group's parent <Route>, so the shared
+ *                       PageTopbar chrome stays. Pair with a `tabs`
+ *                       contribution so the strip shows the tab.
+ *
  *   standaloneGroups  — render OUTSIDE DashboardLayout. One group per
  *                       distinct layout id (built-in 'bare' or any
  *                       plugin-contributed layout). App.jsx wraps each
@@ -59,11 +67,23 @@ export default function useExtensionRoutes() {
     const { routes, layouts } = useContributions();
 
     const dashboardRoutes = [];
+    const groupRoutes = {};
     const groupsByLayout = new Map();
 
     (routes || []).forEach((contrib, i) => {
         const key = `${contrib.plugin}:${contrib.path}:${i}`;
         const layoutId = contrib.layout || 'padded';
+
+        // Tab-group nested route (#43): collected per core group id and
+        // mounted by App.jsx inside that group's TabGroupLayout <Route>.
+        if (contrib.group) {
+            const node = buildRoute(contrib, key);
+            if (node) {
+                if (!groupRoutes[contrib.group]) groupRoutes[contrib.group] = [];
+                groupRoutes[contrib.group].push(node);
+            }
+            return;
+        }
 
         if (isInsideDashboard(layoutId)) {
             const node = buildRoute(contrib, key);
@@ -96,6 +116,7 @@ export default function useExtensionRoutes() {
 
     return {
         dashboardRoutes,
+        groupRoutes,
         standaloneGroups: Array.from(groupsByLayout.values()),
     };
 }

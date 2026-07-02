@@ -1,0 +1,36 @@
+name: Extensions CI
+
+# Guards the builtin-extension platform. The pre-bundled plugin frontends under
+# frontend/src/plugins/<slug>/ are build artifacts of builtin-extensions/<slug>/
+# frontend/ (decision D5 in docs/plans/12_EXTENSIONS_PLATFORM_PLAN.md). They used
+# to be hand-duplicated and silently drifted; this job fails the build if the
+# artifact no longer matches its source, so the two can never diverge unnoticed.
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'builtin-extensions/**'
+      - 'frontend/src/plugins/**'
+      - 'scripts/sync-builtin-frontends.mjs'
+      - '.github/workflows/extensions-ci.yml'
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'builtin-extensions/**'
+      - 'frontend/src/plugins/**'
+      - 'scripts/sync-builtin-frontends.mjs'
+      - '.github/workflows/extensions-ci.yml'
+  workflow_call:
+
+jobs:
+  builtin-frontend-drift:
+    name: builtin frontend drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check builtin-extension frontends are in sync
+        run: node scripts/sync-builtin-frontends.mjs --check

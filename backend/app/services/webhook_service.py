@@ -420,7 +420,8 @@ class WebhookService:
         # WordPressSite whose connected repo+branch matches the push.
         try:
             from app.models.wordpress_site import WordPressSite
-            from app.services.git_wordpress_service import GitWordPressService
+            from app.services.wordpress_bridge import git_wordpress_service
+            GitWordPressService = git_wordpress_service()
 
             pushed_norm = cls._normalize_repo_url(webhook.source_repo_url)
             wp_deployed = 0

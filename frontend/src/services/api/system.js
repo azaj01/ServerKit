@@ -875,57 +875,33 @@ export async function getOfflineCache() {
     return this.request('/mobile/offline-cache');
 }
 
-// Marketplace endpoints
-export async function getMarketplaceExtensions(category, search) {
-    const params = new URLSearchParams();
-    if (category) params.append('category', category);
-    if (search) params.append('search', search);
-    const qs = params.toString();
-    return this.request(`/marketplace/${qs ? '?' + qs : ''}`);
+// Marketplace endpoints. (The legacy DB-seeded Extension catalog was retired,
+// #51 — Browse merges builtins + the registry + installed plugin state.)
+// Remote/bundled registry catalog. Returns:
+//   { extensions: [ { slug, display_name, description, version, category,
+//                     author, first_party, permissions, min_panel_version,
+//                     max_panel_version, source, sha256, icon, screenshots,
+//                     installed, status, installed_version, source_kind } ],
+//     source: 'bundled'|'remote'|null }
+export async function getRegistryExtensions() {
+    return this.request('/marketplace/registry');
 }
 
-export async function getMarketplaceExtension(id) {
-    return this.request(`/marketplace/${id}`);
-}
-
-export async function createMarketplaceExtension(data) {
-    return this.request('/marketplace/', { method: 'POST', body: data });
-}
-
-export async function updateMarketplaceExtension(id, data) {
-    return this.request(`/marketplace/${id}`, { method: 'PUT', body: data });
-}
-
-export async function publishExtension(id) {
-    return this.request(`/marketplace/${id}/publish`, { method: 'POST' });
-}
-
-export async function deleteMarketplaceExtension(id) {
-    return this.request(`/marketplace/${id}`, { method: 'DELETE' });
-}
-
-export async function installMarketplaceExtension(extId, config) {
-    return this.request(`/marketplace/${extId}/install`, {
-        method: 'POST', body: { config }
+// One-click install for a registry extension by slug (admin-only).
+export async function installRegistryExtension(slug) {
+    return this.request(`/marketplace/registry/${encodeURIComponent(slug)}/install`, {
+        method: 'POST',
     });
 }
 
-export async function uninstallMarketplaceExtension(installId) {
-    return this.request(`/marketplace/installs/${installId}`, { method: 'DELETE' });
+// Feature module toggles (Email + WordPress verticals). getModules() is
+// available to any authenticated user; setModule() is admin-only.
+export async function getModules() {
+    return this.request('/modules');
 }
 
-export async function updateMarketplaceExtensionConfig(installId, config) {
-    return this.request(`/marketplace/installs/${installId}/config`, {
-        method: 'PUT', body: { config }
-    });
-}
-
-export async function getMyExtensions() {
-    return this.request('/marketplace/my-extensions');
-}
-
-export async function rateExtension(extId, rating) {
-    return this.request(`/marketplace/${extId}/rate`, {
-        method: 'POST', body: { rating }
+export async function setModule(name, enabled) {
+    return this.request(`/modules/${name}`, {
+        method: 'PUT', body: { enabled }
     });
 }

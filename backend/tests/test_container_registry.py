@@ -1,6 +1,6 @@
 """Container registry authentication — service, API, and deploy-path wiring.
 
-Covers the proving points from docs/plans/CONTAINER_REGISTRY_AUTH.md:
+Covers the proving points from docs/plans/09_CONTAINER_REGISTRY_AUTH.md:
 - encrypt/decrypt round-trip, secret never serialized
 - `login()` pipes the secret via stdin and never places it on argv
 - `pull_image` runs login -> pull -> logout in order, and still logs out on

@@ -1,4 +1,5 @@
 """Tests for #25 PHP-fatals ingest — parsing the WP_DEBUG log (docker exec mocked)."""
+from app.services import wordpress_bridge
 
 _SAMPLE = (
     '__SK_WPDEBUG__\n'
@@ -22,12 +23,12 @@ class _Res:
 
 
 def _mock_run(monkeypatch, rc, out):
-    import app.services.wp_analytics_service as mod
+    mod = wordpress_bridge.load('wp_analytics_service')
     monkeypatch.setattr(mod.subprocess, 'run', lambda *a, **k: _Res(rc, out))
 
 
 def test_classify_php_levels():
-    from app.services.wp_analytics_service import WpAnalyticsService as W
+    W = wordpress_bridge.get('wp_analytics_service', 'WpAnalyticsService')
     assert W._classify_php('Fatal error') == 'fatal'
     assert W._classify_php('Parse error') == 'fatal'
     assert W._classify_php('Recoverable fatal error') == 'fatal'
@@ -38,7 +39,7 @@ def test_classify_php_levels():
 
 
 def test_get_php_errors_parses_and_skips_stack_traces(monkeypatch):
-    from app.services.wp_analytics_service import WpAnalyticsService
+    WpAnalyticsService = wordpress_bridge.get('wp_analytics_service', 'WpAnalyticsService')
     _mock_run(monkeypatch, 0, _SAMPLE)
     out = WpAnalyticsService.get_php_errors('site')
     assert out['available'] is True and out['enabled'] is True
@@ -50,7 +51,7 @@ def test_get_php_errors_parses_and_skips_stack_traces(monkeypatch):
 
 
 def test_get_php_errors_logging_off(monkeypatch):
-    from app.services.wp_analytics_service import WpAnalyticsService
+    WpAnalyticsService = wordpress_bridge.get('wp_analytics_service', 'WpAnalyticsService')
     _mock_run(monkeypatch, 0, '')  # no marker => log file absent
     out = WpAnalyticsService.get_php_errors('site')
     assert out['available'] is False
@@ -58,7 +59,7 @@ def test_get_php_errors_logging_off(monkeypatch):
 
 
 def test_get_php_errors_on_but_empty(monkeypatch):
-    from app.services.wp_analytics_service import WpAnalyticsService
+    WpAnalyticsService = wordpress_bridge.get('wp_analytics_service', 'WpAnalyticsService')
     _mock_run(monkeypatch, 0, '__SK_WPDEBUG__\n')  # log exists, no entries
     out = WpAnalyticsService.get_php_errors('site')
     assert out['available'] is True and out['total'] == 0
@@ -66,20 +67,20 @@ def test_get_php_errors_on_but_empty(monkeypatch):
 
 
 def test_get_php_errors_container_unavailable(monkeypatch):
-    from app.services.wp_analytics_service import WpAnalyticsService
+    WpAnalyticsService = wordpress_bridge.get('wp_analytics_service', 'WpAnalyticsService')
     _mock_run(monkeypatch, 1, '')  # docker exec non-zero (stopped / missing)
     out = WpAnalyticsService.get_php_errors('site')
     assert out['available'] is False and 'unavailable' in out['note']
 
 
 def test_get_php_errors_no_container():
-    from app.services.wp_analytics_service import WpAnalyticsService
+    WpAnalyticsService = wordpress_bridge.get('wp_analytics_service', 'WpAnalyticsService')
     out = WpAnalyticsService.get_php_errors(None)
     assert out['available'] is False and out['total'] == 0
 
 
 def test_message_truncation(monkeypatch):
-    from app.services.wp_analytics_service import WpAnalyticsService
+    WpAnalyticsService = wordpress_bridge.get('wp_analytics_service', 'WpAnalyticsService')
     long = 'x' * 500
     _mock_run(monkeypatch, 0, f'__SK_WPDEBUG__\n[1 UTC] PHP Fatal error:  {long}\n')
     out = WpAnalyticsService.get_php_errors('site')

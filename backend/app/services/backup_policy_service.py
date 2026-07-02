@@ -338,7 +338,8 @@ class BackupPolicyService:
         incremental to a full). Raises on failure."""
         meta = {'engine': target['target_type']}
         if target['target_type'] == 'wordpress_site':
-            from app.services.wordpress_service import WordPressService
+            from app.services.wordpress_bridge import wordpress_service
+            WordPressService = wordpress_service()
             result = WordPressService.backup_wordpress(target['root_path'], include_db=True)
             if not result.get('success'):
                 raise BackupPolicyError(result.get('error') or 'WordPress backup failed')
@@ -716,7 +717,8 @@ class BackupPolicyService:
         """Restore a WordPress backup. 'full' (and 'tables', for now) restores
         files + database; 'database' imports only the SQL dump; 'files' extracts
         only the file archive."""
-        from app.services.wordpress_service import WordPressService
+        from app.services.wordpress_bridge import wordpress_service
+        WordPressService = wordpress_service()
         meta = run.get_metadata() or {}
         backup_dir = run.storage_path
         root = target['root_path']

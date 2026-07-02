@@ -3,6 +3,7 @@
 Changing a site's URL is a serialization-safe DB rewrite (WP-CLI search-replace),
 backed up first and rolled back on failure, then a Domain/nginx re-point.
 """
+from app.services import wordpress_bridge
 
 
 def _mk_user(db, username='owner'):
@@ -31,7 +32,7 @@ def _mk_site_app(db, user_id, name='blog', port=8300, host='blog.lvh.me'):
 # ── pure helpers ────────────────────────────────────────────────────────────
 
 def test_normalize_url():
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     assert WordPressService._normalize_url('example.com') == 'http://example.com'
     assert WordPressService._normalize_url('https://example.com/') == 'https://example.com'
     assert WordPressService._normalize_url('  https://a.com/blog/  ') == 'https://a.com/blog'
@@ -40,7 +41,7 @@ def test_normalize_url():
 
 
 def test_url_swap_pairs():
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     # Host change -> full-URL pair (covers scheme) + host-only pair.
     assert WordPressService._url_swap_pairs('http://old.com', 'https://new.com') == [
         ('http://old.com', 'https://new.com'), ('old.com', 'new.com')]
@@ -50,7 +51,7 @@ def test_url_swap_pairs():
 
 
 def test_parse_sr_count():
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     assert WordPressService._parse_sr_count('Success: 12 replacements to be made.') == 12
     assert WordPressService._parse_sr_count('Table\tx\nSuccess: Made 1,234 replacements.') == 1234
     assert WordPressService._parse_sr_count('') == 0
@@ -61,7 +62,7 @@ def test_parse_sr_count():
 
 def test_preview_counts_per_pair(app, monkeypatch):
     from app import db
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db)
     app_row = _mk_site_app(db, user.id, host='old.lvh.me')
@@ -85,7 +86,7 @@ def test_preview_counts_per_pair(app, monkeypatch):
 
 def test_preview_rejects_same_url(app, monkeypatch):
     from app import db
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
     user = _mk_user(db, 'o2')
     app_row = _mk_site_app(db, user.id, host='same.lvh.me')
     monkeypatch.setattr(WordPressService, 'wp_cli',
@@ -101,7 +102,7 @@ def test_change_url_happy_path_repoints_domain(app, monkeypatch):
     from app import db
     from app.models.domain import Domain
     from app.services import nginx_service
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o3')
     app_row = _mk_site_app(db, user.id, name='shop', host='old.lvh.me')
@@ -135,7 +136,7 @@ def test_change_url_happy_path_repoints_domain(app, monkeypatch):
 
 def test_change_url_rolls_back_on_failure(app, monkeypatch):
     from app import db
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o4')
     app_row = _mk_site_app(db, user.id, name='blogx', host='old.lvh.me')
@@ -167,7 +168,7 @@ def test_change_url_rolls_back_on_failure(app, monkeypatch):
 
 def test_change_url_aborts_if_backup_fails(app, monkeypatch):
     from app import db
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o5')
     app_row = _mk_site_app(db, user.id, name='blogy', host='old.lvh.me')
@@ -185,7 +186,7 @@ def test_change_url_aborts_if_backup_fails(app, monkeypatch):
 def test_repoint_keep_old_demotes_but_keeps(app):
     from app import db
     from app.models.domain import Domain
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o6')
     app_row = _mk_site_app(db, user.id, name='keepblog', host='old.lvh.me')
@@ -201,7 +202,7 @@ def test_repoint_keep_old_demotes_but_keeps(app):
 def test_url_preview_api_smoke(app, client, auth_headers, monkeypatch):
     from app import db
     from app.models import User
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     admin = User.query.filter_by(username='testadmin').first()
     app_row = _mk_site_app(db, admin.id, name='apisite', host='api.lvh.me')

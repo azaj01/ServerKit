@@ -67,6 +67,13 @@ _CATALOG = {
         'severity': 'warning',
         'category': 'system',
     },
+    # Daily registry check found newer versions of installed extensions (#50).
+    'extensions.updates_available': {
+        'title': 'Extension updates available ({count})',
+        'template': 'generic',
+        'severity': 'info',
+        'category': 'system',
+    },
     # Managed-sites publishing readiness — nudged when a site is created but the
     # base-domain / DNS / HTTPS config is only partly set up.
     'sites.publish.no_base_domain': {

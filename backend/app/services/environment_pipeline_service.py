@@ -1468,7 +1468,8 @@ class EnvironmentPipelineService:
         Returns:
             Dict with list of stale environments and cleanup results
         """
-        from app.services.git_wordpress_service import GitWordPressService
+        from app.services.wordpress_bridge import git_wordpress_service
+        GitWordPressService = git_wordpress_service()
 
         prod_site = WordPressSite.query.get(production_site_id)
         if not prod_site:

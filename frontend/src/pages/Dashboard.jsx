@@ -17,6 +17,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { MetricCard, Pill, Feed, FeedItem } from '@/components/ds';
 import { formatRelativeTime } from '@/utils/time';
 import EmptyState from '../components/EmptyState';
+import PluginSlot from '../components/PluginSlot';
 
 // Map an audit action verb to a tinted icon + semantic tone token.
 // Falls back to a neutral history icon for unrecognised actions.
@@ -376,6 +377,9 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Extension slot: widgets contributed to the top of the dashboard */}
+            <PluginSlot name="dashboard.top" />
 
             {/* Grid Container */}
             <div className="grid-container">

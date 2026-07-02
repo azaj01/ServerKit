@@ -4,6 +4,7 @@ Attaching a user-owned domain auto-creates its A record via a connected DNS
 provider (or returns the record to add manually), then migrates the site to it
 by reusing the URL-swap tool.
 """
+from app.services import wordpress_bridge
 
 
 def _mk_user(db, username='owner'):
@@ -98,7 +99,7 @@ def test_ensure_a_record_no_ip(app):
 def test_attach_auto_dns_and_migrate(app, monkeypatch):
     from app import db
     from app.services.dns_provider_service import DNSProviderService
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db)
     app_row = _mk_site_app(db, user.id, host='old.lvh.me')
@@ -127,7 +128,7 @@ def test_attach_auto_dns_and_migrate(app, monkeypatch):
 def test_attach_manual_dns_surfaces_record(app, monkeypatch):
     from app import db
     from app.services.dns_provider_service import DNSProviderService
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o2')
     app_row = _mk_site_app(db, user.id, name='shop', host='old.lvh.me')
@@ -150,7 +151,7 @@ def test_attach_with_ssl_migrates_https(app, monkeypatch):
     import app.services.ssl_service as ssl_mod
     import app.services.nginx_service as nginx_mod
     from app.services.dns_provider_service import DNSProviderService
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o3')
     app_row = _mk_site_app(db, user.id, name='sec', host='old.lvh.me')
@@ -177,7 +178,7 @@ def test_attach_without_migrate_sets_primary_domain(app, monkeypatch):
     import app.services.nginx_service as nginx_mod
     from app.models.domain import Domain
     from app.services.dns_provider_service import DNSProviderService
-    from app.services.wordpress_service import WordPressService
+    WordPressService = wordpress_bridge.get('wordpress_service', 'WordPressService')
 
     user = _mk_user(db, 'o4')
     app_row = _mk_site_app(db, user.id, name='nomig', host='old.lvh.me')

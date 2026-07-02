@@ -141,19 +141,15 @@ def create_app(config_name=None):
     app.register_blueprint(nginx_bp, url_prefix='/api/v1/nginx')
     app.register_blueprint(ssl_bp, url_prefix='/api/v1/ssl')
 
-    # Register blueprints - PHP & WordPress
+    # Register blueprints - PHP
     from app.api.php import php_bp
-    from app.api.wordpress import wordpress_bp
-    from app.api.wordpress_sites import wordpress_sites_bp
-    from app.api.environment_pipeline import environment_pipeline_bp
     app.register_blueprint(php_bp, url_prefix='/api/v1/php')
-    app.register_blueprint(wordpress_bp, url_prefix='/api/v1/wordpress')
-    app.register_blueprint(wordpress_sites_bp, url_prefix='/api/v1/wordpress')
-    app.register_blueprint(environment_pipeline_bp, url_prefix='/api/v1/wordpress/projects')
-    # "WordPress Projects" was renamed to "Pipelines" (§2 unification). Mount the
-    # same blueprint under /wordpress/pipelines as a true alias so both URL
-    # spaces resolve identically during the deprecation window.
-    app.register_blueprint(environment_pipeline_bp, url_prefix='/api/v1/wordpress/pipelines', name='environment_pipeline_pipelines')
+    # WordPress moved into the bundled, default-installed `serverkit-wordpress`
+    # extension (#38). Its blueprints (wordpress / wordpress_sites /
+    # environment_pipeline, keeping the /api/v1/wordpress[/projects|/pipelines]
+    # prefixes per D9, incl. the /pipelines alias) are registered from the
+    # extension by the plugin loader — seeded as a flagship in create_app. The old
+    # `wordpress` module toggle is retired; the plugin status guard is the gate.
 
     # Register blueprints - Python
     from app.api.python import python_bp
@@ -260,9 +256,11 @@ def create_app(config_name=None):
     from app.api.cron import cron_bp
     app.register_blueprint(cron_bp, url_prefix='/api/v1/cron')
 
-    # Register blueprints - Email Server
-    from app.api.email import email_bp
-    app.register_blueprint(email_bp, url_prefix='/api/v1/email')
+    # Email Server is now the serverkit-email builtin extension (Phase 4, #32):
+    # its /api/v1/email blueprint + Postfix/Dovecot/DKIM/SpamAssassin/Roundcube
+    # services live in builtin-extensions/serverkit-email/ and are registered by
+    # the plugin loader when installed. The outbound relay (email_relay_service)
+    # and all email models stay core (notifications SMTP + shared Postfix relay).
 
     # Register blueprints - Uptime Tracking
     from app.api.uptime import uptime_bp
@@ -361,8 +359,12 @@ def create_app(config_name=None):
 
     # Register blueprints - Cloudflare operations (zone settings/cache/WAF on top
     # of the existing Cloudflare DNS connection)
-    from app.api.cloudflare import cloudflare_bp
-    app.register_blueprint(cloudflare_bp, url_prefix='/api/v1/cloudflare')
+    # Cloudflare zone-ops moved into the bundled, default-installed
+    # `serverkit-cloudflare-ops` extension (#36). Its blueprint (kept at
+    # /api/v1/cloudflare, D9) is registered from the extension by the plugin
+    # loader — seeded as a flagship in create_app. DNS records + the Cloudflare
+    # connection stay core (they back /domains); the extension borrows the single
+    # core CloudflareClient, never a duplicate.
 
     # Register blueprints - Dynamic DNS
     from app.api.ddns import ddns_bp
@@ -410,6 +412,10 @@ def create_app(config_name=None):
     # Register blueprints - Plugins
     from app.api.plugins import plugins_bp
     app.register_blueprint(plugins_bp, url_prefix='/api/v1/plugins')
+
+    # Register blueprints - Modules (core-vertical toggles)
+    from app.api.modules import modules_bp
+    app.register_blueprint(modules_bp, url_prefix='/api/v1/modules')
 
     # Register blueprints - Queue Bus
     from app.api.queue_bus import queue_bus_bp
@@ -489,6 +495,17 @@ def create_app(config_name=None):
             import logging as _logging
             _logging.getLogger(__name__).warning(f'Legacy secret encryption skipped: {e}')
 
+        # Seed bundled flagship extensions (D4) — WordPress ships installed by
+        # default on every panel (fresh and upgrade) unless the user uninstalled
+        # it. Done BEFORE load_all_plugins so the loader registers the seeded
+        # blueprints. In-place: no file copy. Best-effort.
+        try:
+            from app.services.plugin_service import seed_flagship_extensions
+            seed_flagship_extensions()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'Flagship seed: {e}')
+
         # Load installed plugins (dynamic blueprints) AFTER migrations,
         # so the installed_plugins table exists.
         try:
@@ -497,6 +514,16 @@ def create_app(config_name=None):
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f'Plugin loader: {e}')
+
+        # One-shot: auto-install builtin extensions that used to be core pages
+        # so an upgraded panel doesn't lose the feature (decision D3). Fresh
+        # installs see them in the Marketplace instead. Best-effort.
+        try:
+            from app.services.extension_migration import run_auto_install
+            run_auto_install()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'Extension auto-install: {e}')
 
         # Start metrics history collection in background
         from app.services.metrics_history_service import MetricsHistoryService

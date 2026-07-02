@@ -1,6 +1,6 @@
 """Managed database resource — service, backup FK wiring, and API.
 
-Covers the proving points from docs/plans/MANAGED_DATABASE_RESOURCE.md:
+Covers the proving points from docs/plans/11_MANAGED_DATABASE_RESOURCE.md:
 - provisioning persists a row; adopt is idempotent
 - build_connection_uri is correct per engine and masks the secret by default
 - sync_state flags a dropped-but-tracked DB as drifted

@@ -21,7 +21,6 @@ import Backups from './pages/Backups';
 import Terminal from './pages/Terminal';
 import Settings from './pages/Settings';
 import FileManager from './pages/FileManager';
-import FTPServer from './pages/FTPServer';
 // Firewall is now part of Security page
 import CronJobs from './pages/CronJobs';
 import Security from './pages/Security';
@@ -29,7 +28,6 @@ import Services from './pages/Services';
 import NewService from './pages/NewService';
 import ServiceDetail from './pages/ServiceDetail';
 import Templates from './pages/Templates';
-import WorkflowBuilder from './pages/WorkflowBuilder';
 import Servers from './pages/Servers';
 import ServerDetail from './pages/ServerDetail';
 import AgentFleet from './pages/AgentFleet';
@@ -41,33 +39,22 @@ import { SERVICE_TABS } from './components/services/serviceTabs';
 import { FILE_TABS } from './components/files/fileTabs';
 import { MONITOR_TABS } from './components/monitoring/monitorTabs';
 import { MARKET_TABS } from './components/marketplace/marketTabs';
-import { WORDPRESS_TABS } from './components/wordpress/wordpressTabs';
 import { BACKUP_TABS } from './components/backups/backupTabs';
 import { SECURITY_TABS } from './components/security/securityTabs';
 import { ORG_TABS } from './components/organization/organizationTabs';
 import Downloads from './pages/Downloads';
-import WordPress from './pages/WordPress';
-import WordPressDetail from './pages/WordPressDetail';
-import WordPressProjects from './pages/WordPressProjects';
-import WordPressPluginLibrary from './pages/WordPressPluginLibrary';
-import WordPressProject from './pages/WordPressProject';
 import SSLCertificates from './pages/SSLCertificates';
-import Email from './pages/Email';
 import SSOCallback from './pages/SSOCallback';
 import SourceConnectionCallback from './pages/SourceConnectionCallback';
 import DatabaseMigration from './pages/DatabaseMigration';
 import ServerTemplates from './pages/ServerTemplates';
-import RemoteAccess from './pages/RemoteAccess';
 import Workspaces from './pages/Workspaces';
 import WorkspaceDetail from './pages/WorkspaceDetail';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import SharedVariables from './pages/SharedVariables';
 import FleetProxy from './pages/FleetProxy';
-import CloudflareZoneSettings from './pages/CloudflareZoneSettings';
-import StatusPages from './pages/StatusPages';
 import PublicStatusPage from './pages/PublicStatusPage';
-import CloudProvision from './pages/CloudProvision';
 import Marketplace from './pages/Marketplace';
 import Vaults from './pages/Vaults';
 import Webhooks from './pages/Webhooks';
@@ -75,7 +62,6 @@ import StyleGuide from './pages/StyleGuide';
 import AppMap from './pages/AppMap';
 import Documentation from './pages/Documentation';
 import Deployments from './pages/Deployments';
-import GpuMonitor from './pages/GpuMonitor';
 import QueueOperations from './pages/QueueOperations';
 import QueueDetail from './pages/QueueDetail';
 import Notifications from './pages/Notifications';
@@ -96,12 +82,10 @@ const PAGE_TITLES = {
     '/projects': 'Projects',
     '/shared-variables': 'Shared Variables',
     '/fleet-proxy': 'Fleet Proxy',
-    '/wordpress': 'WordPress Sites',
-    '/wordpress/plugins/library': 'WordPress Plugin Library',
-    '/wordpress/pipelines': 'WordPress Pipelines',
+    // WordPress list-page titles come from the serverkit-wordpress manifest
+    // (page_titles) now; the dynamic detail-page fallbacks below stay in core.
     '/templates': 'Templates',
     '/deployments': 'Deployment Activity',
-    '/workflow': 'Workflow Builder',
     '/domains': 'Domains',
     '/databases': 'Databases',
     '/ssl': 'SSL Certificates',
@@ -109,13 +93,11 @@ const PAGE_TITLES = {
     '/servers': 'Servers',
     '/downloads': 'Downloads',
     '/files': 'File Manager',
-    '/ftp': 'FTP Server',
     '/observability': 'Observability',
     '/monitoring': 'Monitoring',
     '/backups': 'Backups',
     '/cron': 'Cron Jobs',
     '/security': 'Security',
-    '/email': 'Email Server',
     '/terminal': 'Terminal',
     '/settings': 'Settings',
     '/connections/callback/github': 'GitHub Connection',
@@ -135,15 +117,12 @@ const PAGE_TITLES = {
     '/workspaces/:id/settings/general': 'Workspace Settings',
     '/workspaces/:id/settings/navigation': 'Workspace Navigation Permissions',
     '/dns': 'DNS Zones',
-    '/status-pages': 'Status Pages',
-    '/cloud': 'Cloud Provisioning',
     '/marketplace': 'Marketplace',
     '/vaults': 'Vaults',
     '/webhooks': 'Webhooks',
     '/style-guide': 'Style Guide',
     '/app-map': 'App Map',
     '/documentation': 'Documentation',
-    '/gpu': 'GPU Monitor',
     '/dynamic-dns': 'Dynamic DNS',
     '/queue': 'Queue Bus',
     '/notifications': 'Notifications',
@@ -159,14 +138,6 @@ function LegacyAppRedirect() {
     const { id, tab } = useParams();
     const suffix = [id, tab].filter(Boolean).join('/');
     return <Navigate to={`/services/${suffix}`} replace />;
-}
-
-// "WordPress Projects" was renamed to "Pipelines" (§2 unification) to end the
-// collision with generic /projects. Forward old deep links to the new space.
-function LegacyWpPipelineRedirect() {
-    const { id, tab } = useParams();
-    const suffix = [id, tab].filter(Boolean).join('/');
-    return <Navigate to={`/wordpress/pipelines/${suffix}`} replace />;
 }
 
 function PageTitleUpdater() {
@@ -271,7 +242,7 @@ function LegacyGitExtRedirect() {
 }
 
 function AppRoutes() {
-    const { dashboardRoutes, standaloneGroups } = useExtensionRoutes();
+    const { dashboardRoutes, groupRoutes, standaloneGroups } = useExtensionRoutes();
     return (
         <Routes>
             <Route path="/migrate" element={<DatabaseMigration />} />
@@ -341,23 +312,13 @@ function AppRoutes() {
                 <Route path="apps" element={<Navigate to="/services" replace />} />
                 <Route path="apps/:id" element={<LegacyAppRedirect />} />
                 <Route path="apps/:id/:tab" element={<LegacyAppRedirect />} />
-                <Route element={<TabGroupLayout tabs={WORDPRESS_TABS} />}>
-                    <Route path="wordpress" element={<WordPress />} />
-                    <Route path="wordpress/plugins/library" element={<WordPressPluginLibrary />} />
-                    <Route path="wordpress/pipelines" element={<WordPressProjects />} />
-                </Route>
-                <Route path="wordpress/pipelines/:id" element={<WordPressProject />} />
-                <Route path="wordpress/pipelines/:id/:tab" element={<WordPressProject />} />
-                {/* Legacy "WordPress Projects" URLs → Pipelines (§2). */}
-                <Route path="wordpress/projects" element={<Navigate to="/wordpress/pipelines" replace />} />
-                <Route path="wordpress/projects/:id" element={<LegacyWpPipelineRedirect />} />
-                <Route path="wordpress/projects/:id/:tab" element={<LegacyWpPipelineRedirect />} />
-                <Route path="wordpress/:id" element={<WordPressDetail />} />
-                <Route path="wordpress/:id/:tab" element={<WordPressDetail />} />
-                {/* Settings sub-section in the URL (e.g. .../settings/git) so the
-                    Settings left-nav is shareable and survives a refresh. */}
-                <Route path="wordpress/:id/:tab/:section" element={<WordPressDetail />} />
-                <Route path="workflow" element={<WorkflowBuilder />} />
+                {/* WordPress moved into the serverkit-wordpress builtin extension
+                    (Phase 5 #38). It contributes a single splat route wordpress/*
+                    via its manifest and self-renders the whole sub-router (tab
+                    group + full-bleed detail + legacy /projects redirects), so all
+                    the WordPress routing now lives in the extension. */}
+                {/* /workflow is now the serverkit-workflows builtin extension
+                    (contributes the route via its manifest, full layout). */}
                 <Route element={<TabGroupLayout tabs={DOMAIN_TABS} />}>
                     <Route path="domains" element={<Domains />} />
                     <Route path="ssl" element={<SSLCertificates />} />
@@ -367,21 +328,25 @@ function AppRoutes() {
                     keep the old paths working by redirecting. */}
                 <Route path="dns" element={<Navigate to="/domains" replace />} />
                 <Route path="dynamic-dns" element={<Navigate to="/domains" replace />} />
-                {/* Cloudflare zone settings — a detail page reached from a
-                    Cloudflare-managed DNS zone (full-bleed, own top bar). */}
-                <Route path="cloudflare/zones/:zoneId" element={<CloudflareZoneSettings />} />
+                {/* Cloudflare zone settings moved into the serverkit-cloudflare-ops
+                    builtin extension (#36); it contributes the
+                    cloudflare/zones/:zoneId route via its manifest. Reached from the
+                    "Open in Cloudflare" button on a Cloudflare-managed domain. */}
                 <Route path="databases" element={<Databases />} />
                 <Route path="databases/:tab" element={<Databases />} />
                 <Route path="docker" element={<Docker />} />
                 <Route path="docker/:tab" element={<Docker />} />
-                <Route element={<TabGroupLayout tabs={SERVER_TABS} />}>
+                {/* /cloud and /remote-access are now the serverkit-cloud-provision
+                    and serverkit-remote-access builtin extensions: they join this
+                    group via tabs contributions + group-nested routes
+                    (groupRoutes.servers). */}
+                <Route element={<TabGroupLayout tabs={SERVER_TABS} groupId="servers" />}>
                     <Route path="servers" element={<Servers />} />
                     <Route path="fleet" element={<AgentFleet />} />
                     <Route path="fleet-monitor" element={<FleetMonitor />} />
                     <Route path="fleet-proxy" element={<FleetProxy />} />
-                    <Route path="cloud" element={<CloudProvision />} />
-                    <Route path="remote-access" element={<RemoteAccess />} />
                     <Route path="server-templates" element={<ServerTemplates />} />
+                    {groupRoutes.servers}
                 </Route>
                 <Route path="servers/:id" element={<ServerDetail />} />
                 <Route path="servers/:id/:tab" element={<ServerDetail />} />
@@ -412,21 +377,27 @@ function AppRoutes() {
                 <Route path="firewall" element={<Navigate to="/security/firewall" replace />} />
                 <Route path="git-ext" element={<LegacyGitExtRedirect />} />
                 <Route path="git-ext/:tab" element={<LegacyGitExtRedirect />} />
-                <Route element={<TabGroupLayout tabs={FILE_TABS} />}>
+                {/* /ftp is now the serverkit-ftp builtin extension: it joins
+                    this group via a tabs contribution + group-nested routes
+                    (groupRoutes.files), so tab + page disappear together when
+                    it's uninstalled. */}
+                <Route element={<TabGroupLayout tabs={FILE_TABS} groupId="files" />}>
                     <Route path="files" element={<FileManager />} />
-                    <Route path="ftp" element={<FTPServer />} />
-                    <Route path="ftp/:tab" element={<FTPServer />} />
+                    {groupRoutes.files}
                 </Route>
                 {/* Observability tab group (§4): Monitoring / Events / Status
                     Pages share one PageTopbar. /observability lands on Monitoring. */}
-                <Route element={<TabGroupLayout tabs={MONITOR_TABS} />}>
+                {/* /status-pages is now the serverkit-status builtin extension
+                    (tabs contribution + group-nested route, groupRoutes.monitoring);
+                    the public /status/:slug route stays core above. */}
+                <Route element={<TabGroupLayout tabs={MONITOR_TABS} groupId="monitoring" />}>
                     <Route path="monitoring" element={<Monitoring />} />
                     <Route path="monitoring/:tab" element={<Monitoring />} />
                     <Route path="telemetry" element={<Telemetry />} />
-                    <Route path="status-pages" element={<StatusPages />} />
+                    {groupRoutes.monitoring}
                 </Route>
                 <Route path="observability" element={<Navigate to="/monitoring" replace />} />
-                <Route path="gpu" element={<GpuMonitor />} />
+                {/* /gpu is now the serverkit-gpu builtin extension. */}
                 <Route element={<TabGroupLayout tabs={BACKUP_TABS} />}>
                     <Route path="backups" element={<Backups />} />
                     <Route path="backups/:tab" element={<Backups />} />
@@ -436,8 +407,10 @@ function AppRoutes() {
                     <Route path="security" element={<Security />} />
                     <Route path="security/:tab" element={<Security />} />
                 </Route>
-                <Route path="email" element={<Email />} />
-                <Route path="email/:tab" element={<Email />} />
+                {/* Email routes are gated by the Email module toggle
+                    (Settings → Modules); disabled ⇒ redirect to the dashboard. */}
+                {/* /email is now the serverkit-email builtin extension (contributes
+                    the route via its manifest). */}
                 <Route path="terminal" element={<Terminal />} />
                 <Route path="terminal/terminal" element={<Navigate to="/terminal/shell" replace />} />
                 <Route path="terminal/:tab" element={<Terminal />} />

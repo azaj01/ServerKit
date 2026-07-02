@@ -13,6 +13,7 @@ import pytest
 
 from app.services.fail2ban_jail_service import Fail2banJailService as F2B
 from app.services.nginx_service import NginxService
+from app.services import wordpress_bridge
 
 
 def _app(name='myblog'):
@@ -172,7 +173,7 @@ def test_get_status_shape_when_jail_absent():
 # ---------- WpSecurityService wrapper ----------
 
 def test_wp_security_set_brute_force_delegates_to_jail_service():
-    from app.services.wp_security_service import WpSecurityService
+    WpSecurityService = wordpress_bridge.get('wp_security_service', 'WpSecurityService')
     app = _app('myblog')
     site = types.SimpleNamespace(application=app)
     with patch.object(F2B, 'enable_wp_jail', return_value={'success': True}) as en, \
@@ -185,7 +186,7 @@ def test_wp_security_set_brute_force_delegates_to_jail_service():
 
 
 def test_wp_security_brute_force_handles_missing_application():
-    from app.services.wp_security_service import WpSecurityService
+    WpSecurityService = wordpress_bridge.get('wp_security_service', 'WpSecurityService')
     site = types.SimpleNamespace(application=None)
     assert WpSecurityService.set_brute_force(site, True)['success'] is False
     assert WpSecurityService.get_brute_force(site)['no_application'] is True

@@ -19,27 +19,26 @@ const STATIC_PAGES = [
     { label: 'SSL Certificates', path: '/ssl', category: 'Pages', keywords: 'https tls' },
     { label: 'Templates', path: '/templates', category: 'Pages', keywords: 'deploy one-click' },
     { label: 'Deployments', path: '/deployments', category: 'Pages', keywords: 'deploy jobs status logs' },
-    { label: 'Workflow Builder', path: '/workflow', category: 'Pages', keywords: 'automation pipeline' },
-    { label: 'WordPress', path: '/wordpress', category: 'Pages', keywords: 'wp sites' },
-    { label: 'WordPress Pipelines', path: '/wordpress/pipelines', category: 'Pages', keywords: 'wp environments projects pipeline' },
+    // WordPress palette entries are contributed by the serverkit-wordpress extension.
     { label: 'Files', path: '/files', category: 'Pages', keywords: 'file manager explorer' },
-    { label: 'FTP Server', path: '/ftp', category: 'Pages', keywords: 'sftp upload' },
+    // The FTP Server palette entry is contributed by the serverkit-ftp extension.
     { label: 'Observability', path: '/monitoring', category: 'Pages', keywords: 'metrics uptime monitoring alerts' },
     { label: 'Backups', path: '/backups', category: 'Pages', keywords: 'snapshots restore' },
     { label: 'Cron Jobs', path: '/cron', category: 'Pages', keywords: 'schedule tasks' },
     { label: 'Security', path: '/security', category: 'Pages', keywords: 'firewall fail2ban' },
-    { label: 'Email', path: '/email', category: 'Pages', keywords: 'smtp postfix' },
     { label: 'Terminal', path: '/terminal', category: 'Pages', keywords: 'shell ssh console' },
     { label: 'Servers', path: '/servers', category: 'Pages', keywords: 'fleet agents' },
     { label: 'Fleet Monitor', path: '/fleet-monitor', category: 'Pages', keywords: 'agents status' },
-    { label: 'Status Pages', path: '/status-pages', category: 'Pages', keywords: 'uptime incidents' },
-    { label: 'Cloud Provision', path: '/cloud', category: 'Pages', keywords: 'vps deploy' },
+    // Status Pages / Cloud Provision / Remote Access palette entries are
+    // contributed by the serverkit-status / serverkit-cloud-provision /
+    // serverkit-remote-access extensions.
     { label: 'Marketplace', path: '/marketplace', category: 'Pages', keywords: 'extensions plugins' },
     { label: 'Downloads', path: '/downloads', category: 'Pages', keywords: 'agent installer' },
     { label: 'Projects', path: '/projects', category: 'Pages', keywords: 'organization group' },
     { label: 'Shared Variables', path: '/shared-variables', category: 'Pages', keywords: 'env secrets shared' },
     { label: 'Workspaces', path: '/workspaces', category: 'Pages', keywords: 'organization team' },
-    { label: 'GPU Monitor', path: '/gpu', category: 'Pages', keywords: 'nvidia cuda metrics' },
+    // GPU Monitor + Workflow Builder command-palette entries are contributed by
+    // the serverkit-gpu / serverkit-workflows builtin extensions.
     { label: 'Queue', path: '/queue', category: 'Pages', keywords: 'bus operations tasks' },
     { label: 'Jobs', path: '/jobs', category: 'Pages', keywords: 'scheduler background work' },
     { label: 'Events', path: '/telemetry', category: 'Pages', keywords: 'telemetry metrics observability system events' },

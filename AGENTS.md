@@ -143,7 +143,7 @@ add Tailwind utility classes, CSS-in-JS, or new inline styles.
 - **Fonts**: `IBM Plex Sans` / `IBM Plex Mono` (the established SCSS stack).
 
 **Migration status**: Tailwind removal is in progress (see
-`docs/plans/FRONTEND_UX_TAILWIND_CLEANUP_PLAN.md`). Do not introduce new Tailwind
+`docs/plans/05_FRONTEND_UX_TAILWIND_CLEANUP_PLAN.md`). Do not introduce new Tailwind
 usage; convert any you touch to the SCSS equivalents above.
 
 ## Adding a New Feature (Full Stack)

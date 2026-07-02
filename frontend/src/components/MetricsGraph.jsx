@@ -17,6 +17,20 @@ const CHART_COLORS = {
     disk: '#f5b945'      // amber (Disk)
 };
 
+// Intl only accepts IANA zone names (e.g. "America/New_York"). A server on
+// Windows can report a display name like "Eastern Daylight Time", which makes
+// toLocale*String throw a RangeError and crash the chart. Validate once and
+// fall back to the browser's local zone rather than blowing up the render.
+function safeTimeZone(tz) {
+    if (!tz) return undefined;
+    try {
+        new Intl.DateTimeFormat([], { timeZone: tz });
+        return tz;
+    } catch {
+        return undefined;
+    }
+}
+
 const MetricsGraph = ({ compact = false, timezone, serverId }) => {
     const [data, setData] = useState(null);
     const [period, setPeriod] = useState('1h');
@@ -58,7 +72,7 @@ const MetricsGraph = ({ compact = false, timezone, serverId }) => {
 
     function formatTimestamp(isoString) {
         const date = new Date(isoString);
-        const tz = timezone || undefined;
+        const tz = safeTimeZone(timezone);
         if (period === '1h' || period === '6h' || period === '24h') {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz });
         } else if (period === '7d') {

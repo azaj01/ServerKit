@@ -316,8 +316,9 @@ class PreviewService:
         try:
             if getattr(app, 'app_type', None) == 'wordpress':
                 try:
-                    from app.services.wordpress_service import WordPressService
+                    from app.services.wordpress_bridge import wordpress_service
                     from app.models.wordpress_site import WordPressSite
+                    WordPressService = wordpress_service()
                     site = WordPressSite.query.filter_by(application_id=app.id).first()
                     if site:
                         res = WordPressService.create_preview_instance(
@@ -358,8 +359,9 @@ class PreviewService:
             # Best-effort WordPress teardown.
             if app is not None and getattr(app, 'app_type', None) == 'wordpress':
                 try:
-                    from app.services.wordpress_service import WordPressService
+                    from app.services.wordpress_bridge import wordpress_service
                     from app.models.wordpress_site import WordPressSite
+                    WordPressService = wordpress_service()
                     site = WordPressSite.query.filter_by(application_id=app.id).first()
                     if site:
                         WordPressService.destroy_preview_instance(site, preview.pr_number)

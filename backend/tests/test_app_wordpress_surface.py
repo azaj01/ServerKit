@@ -7,6 +7,8 @@ docker-compose paths that key on app_type=='docker' are unaffected.
 """
 import pytest
 
+from app.services import wordpress_bridge
+
 
 def _seed_app(app, *, wordpress=True):
     from app import db
@@ -62,7 +64,7 @@ def test_db_snapshots_list_empty(app, client, auth_headers):
 
 def test_db_snapshot_create_and_delete(app, client, auth_headers, monkeypatch):
     from app.services.db_sync_service import DatabaseSyncService
-    from app.services.wordpress_env_service import WordPressEnvService
+    WordPressEnvService = wordpress_bridge.get('wordpress_env_service', 'WordPressEnvService')
 
     monkeypatch.setattr(WordPressEnvService, '_get_db_password', staticmethod(lambda site: 'pw'))
     monkeypatch.setattr(DatabaseSyncService, 'create_snapshot', staticmethod(

@@ -21,6 +21,7 @@ import OverviewTab from '../components/service-detail/OverviewTab';
 // imported by SettingsTab rather than rendered as top-level tabs here.
 import PreviewList from '../components/previews/PreviewList';
 import EmptyState from '../components/EmptyState';
+import PluginSlot from '../components/PluginSlot';
 import { Layers, FileArchive, RotateCcw, LayoutDashboard, History, ScrollText, Variable, Terminal, Activity, Package, Server, SquareTerminal, Settings, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Pill, ServiceTile, PageTopbar } from '@/components/ds';
@@ -558,6 +559,9 @@ const ServiceDetail = () => {
                     />
                 )}
             </div>
+
+            {/* Extension slot: widgets contributed to the service detail page */}
+            <PluginSlot name="service.detail.tab" context={{ serviceId: service.id }} />
             </div>
         </div>
     );

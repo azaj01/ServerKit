@@ -38,6 +38,12 @@ class InstalledPlugin(db.Model):
     # Full manifest stored as JSON
     manifest_json = db.Column(db.Text)
 
+    # Saved per-plugin config values (#49). The manifest's `config_schema`
+    # describes the fields; admins edit values from the Marketplace and the
+    # plugin reads them via plugins_sdk.config(slug). May hold secrets — kept
+    # out of to_dict; served only by the admin-gated config endpoint.
+    config_json = db.Column(db.Text)
+
     # Status
     STATUS_ACTIVE = 'active'
     STATUS_DISABLED = 'disabled'
@@ -62,6 +68,14 @@ class InstalledPlugin(db.Model):
     @manifest.setter
     def manifest(self, v):
         self.manifest_json = json.dumps(v)
+
+    @property
+    def config(self):
+        return json.loads(self.config_json) if self.config_json else {}
+
+    @config.setter
+    def config(self, v):
+        self.config_json = json.dumps(v or {})
 
     def to_dict(self):
         manifest = self.manifest or {}
@@ -92,6 +106,9 @@ class InstalledPlugin(db.Model):
             'contributions': manifest.get('contributions') or {},
             'templates': manifest.get('templates') or [],
             'lifecycle': manifest.get('lifecycle') or {},
+            # Schema only — saved VALUES may hold secrets and are served
+            # exclusively by the admin-gated /config endpoint.
+            'config_schema': manifest.get('config_schema') or {},
             'installed_at': self.installed_at.isoformat() if self.installed_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

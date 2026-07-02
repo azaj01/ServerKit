@@ -88,6 +88,8 @@ def audit(action, target_type, target_id=None, details=None, user_id=None):
 # tools/context against the core assistant (see plugins_sdk/ai.py). Imported
 # lazily-safe: ai.py only depends on the AI tool registry, not on a running app.
 from app.plugins_sdk import ai
+from app.plugins_sdk import permissions
+from app.plugins_sdk import sockets
 from app.queue_bus.sdk import QueueBusSdk
 from app.notifications.sdk import NotifySdk
 from app.jobs.sdk import JobsSdk
@@ -95,6 +97,29 @@ from app.jobs.sdk import JobsSdk
 queue = QueueBusSdk()
 notify = NotifySdk()
 jobs = JobsSdk()
+
+
+def panel_version():
+    """The panel's version string (for compat checks inside a plugin)."""
+    from app.utils.version import get_panel_version
+    return get_panel_version()
+
+
+def config(slug):
+    """Saved config values for an installed plugin (empty dict if none).
+
+    The manifest's ``config_schema`` documents the fields; admins edit the
+    values from Marketplace → Installed → Configure. Read-only here — the
+    panel owns writes (PUT /api/v1/plugins/<id>/config).
+    """
+    from app.models.plugin import InstalledPlugin
+    p = InstalledPlugin.query.filter_by(slug=slug).first()
+    return dict(p.config or {}) if p else {}
+
+
+# Capability gate: `require(slug, 'docker')` raises unless the plugin declared
+# that permission in its manifest. See app/plugins_sdk/permissions.py.
+require_permission = permissions.require
 
 __all__ = [
     'db',
@@ -109,4 +134,9 @@ __all__ = [
     'queue',
     'notify',
     'jobs',
+    'permissions',
+    'require_permission',
+    'panel_version',
+    'config',
+    'sockets',
 ]

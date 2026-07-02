@@ -123,6 +123,11 @@ class SettingsService:
         'ai_pii_redaction': {'value': True, 'type': 'boolean', 'description': 'Redact PII from AI input and tool output'},
         'ai_injection_detection': {'value': True, 'type': 'boolean', 'description': 'Refuse prompts flagged as prompt-injection'},
         'ai_pending_action_ttl_s': {'value': 300, 'type': 'integer', 'description': 'Seconds a write-tool confirmation stays valid'},
+        # Module toggles — hide heavy verticals that haven't been extracted into
+        # extensions yet (Email, WordPress). Disabling hides the nav + routes and
+        # 503s the module's API (same mechanism as the plugin status guard). The
+        # toggle state later becomes the extraction auto-install signal (#34).
+        'module_wordpress_enabled': {'value': True, 'type': 'boolean', 'description': 'Show the WordPress module (nav, routes, and /api/v1/wordpress).'},
     }
 
     # Settings that must never be returned through the API (only "is it set?").

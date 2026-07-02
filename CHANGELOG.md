@@ -18,7 +18,141 @@ and the project aims to follow [Semantic Versioning](https://semver.org/spec/v2.
 The `dev` branch is well ahead of the last `main` release. The headline work
 awaiting a stable release:
 
+### Removed
+
+- **Legacy marketplace catalog** — the DB-seeded `Extension`/`ExtensionInstall`
+  catalog (a third, always-empty lane in Marketplace Browse) was retired. Browse
+  now has exactly the real sources: bundled built-ins, the remote registry, and
+  installed-plugin state. The orphaned `extensions`/`extension_installs` tables
+  are dropped by migration 046 (they never held real data — nothing seeded them).
+
 ### Added
+
+- **Extensions platform (Phase 7 — settings slot + manifest linting)** — extensions
+  can now contribute sections to the Settings page (a `settings.section` widget
+  slot rendered below the active tab), and `plugin.json` manifests are shape-checked
+  at install time: malformed entry points, socket/model references, jobs, schedules,
+  or contribution entries now fail the install with a message naming each problem
+  instead of being silently dropped at runtime. Authors get the same rules locally
+  via `node scripts/new-extension.mjs --validate <path>`.
+- **Extensions platform (Phase 7 — scheduled update checks)** — the panel now
+  checks the extension registry for updates once a day (a regular scheduled job,
+  visible under Jobs) and notifies admins through the Notifications Bus when new
+  versions are available — once per release set, not once per day. The
+  Marketplace "Update available" badge remains the always-current surface.
+- **Extensions platform (Phase 7 — per-extension configuration)** — an extension
+  that declares a `config_schema` in its manifest now gets a real **Configure**
+  form on the Marketplace Installed tab (text/number/boolean/enum/secret fields);
+  values persist on the panel and the extension's backend reads them with the new
+  `plugins_sdk.config(slug)` accessor. Config values may hold secrets, so they are
+  served only by an admin-gated endpoint and never appear in plugin listings.
+- **Extensions platform (Phase 7 — installed extensions survive panel updates)** —
+  previously a panel update deployed a fresh source tree preserving only `.env`
+  and the database, silently wiping any URL/registry/upload-installed extension's
+  files (the install row then flipped to `error` on the next boot). Two-layer fix:
+  the updater now carries user-installed plugin directories forward into the new
+  tree (before the frontend build, so their UI recompiles), and the backend gained
+  a boot-time repair pass that restores builtin installs from `builtin-extensions/`
+  and re-downloads URL installs from their recorded source — upload-only installs
+  it can't restore get a clear "re-upload" error instead of a cryptic import failure.
+- **Extensions platform (Phase 7 — extensions can now contribute tabs to core
+  tab groups)** — a new `tabs` contribution kind lets an installed extension add
+  a real tab to a core-owned tab group (Files, Servers, Observability): the tab
+  joins the shared top-bar strip, its routes render inside the group's layout so
+  the chrome stays, and the group's sidebar item stays lit on the extension's
+  routes. Four pages moved out of core onto it: **FTP Server → `serverkit-ftp`**
+  (Files group), **Cloud Provisioning → `serverkit-cloud-provision`** and
+  **Remote Access → `serverkit-remote-access`** (Servers group, keeping their
+  original tab positions; the per-server Remote Access tab on the server detail
+  page stays core), and **Status Pages → `serverkit-status`** (Observability
+  group; the public `/status/<slug>` page stays core). Each tab + page + palette
+  entry disappears together when its extension is uninstalled. Existing panels
+  auto-install all four once on upgrade so nothing disappears; fresh installs
+  find them in the Marketplace.
+- **Extensions platform (Phase 5 — Cloudflare zone-ops is now a bundled extension)** —
+  the Cloudflare per-zone control panel (zone settings, cache purge, WAF, Workers,
+  Tunnels, and R2/KV/D1 storage, reached from the "Open in Cloudflare" button on a
+  Cloudflare-managed domain) moved out of core into the **`serverkit-cloudflare-ops`**
+  extension. It ships installed by default (a flagship — zero nav footprint, and the
+  core Domains button depends on the route) and is uninstallable. Crucially, **DNS
+  records and the Cloudflare connection stay core** (they back `/domains`): the
+  extension borrows the single core Cloudflare API client rather than vendoring its
+  own, so there's exactly one client and no credential duplication. API paths are
+  unchanged (`/api/v1/cloudflare`, D9), and the `CloudflareWorker`/`CloudflareTunnel`
+  models stay core (they key off the shared DNS-provider connection).
+- **Extensions platform (Phase 5 — WordPress is now a bundled extension)** — the
+  entire WordPress backend (site provisioning, plugin library, environments/
+  pipelines, updates, security, vulnerability scanning, analytics & reports, and
+  the `/api/v1/wordpress` API family) has moved out of core into the
+  **`serverkit-wordpress`** extension. Because WordPress is a flagship, it ships
+  **installed by default on every panel** and can be uninstalled to slim the core —
+  it never becomes a Marketplace hunt (decision D4). API paths are unchanged
+  (`/api/v1/wordpress`, `/projects`, and the `/pipelines` alias all survive, D9),
+  and every WordPress model stays core so backups, Fail2ban, status pages, and
+  environment activity keep their foreign keys. The old WordPress "module toggle"
+  is retired — the extension's install/enable state is the gate. Core code reaches
+  the extension's services through an importlib bridge, so a panel with WordPress
+  uninstalled no longer loads any of the ~6k lines of WordPress service code. The
+  **WordPress UI is contributed by the extension too** — a single `wordpress/*`
+  route self-renders the whole WordPress sub-router (site list + plugin library +
+  pipelines tab group, plus the full-bleed site/pipeline detail pages), and the
+  sidebar item, command-palette entries, and page titles all come from the
+  extension manifest. Uninstalling WordPress now cleanly removes its nav, routes,
+  and API in one go.
+- **Extensions platform (Phase 4 — Email is now an extension)** — the mail-server
+  stack (Postfix/Dovecot, domains, mailboxes, DKIM/SpamAssassin, Roundcube webmail,
+  and the `/api/v1/email` API) has moved out of core into the bundled
+  **`serverkit-email`** extension. Panels that never run mail no longer load any of
+  it — a real "smaller core" win. Existing panels that actually used mail
+  auto-install the extension once on upgrade (detected by existing mail domains/
+  accounts); everyone else finds it in the Marketplace. Outbound notification SMTP
+  is unaffected — it never depended on the mail server. (The Email "module toggle"
+  is retired in favor of installing/disabling the extension.)
+- **Extensions platform (Phase 3 — platform primitives)** — the machinery that
+  makes extensions first-class and safe. Extensions can now own **data models**
+  (manifest `models` → `ext_<slug>_*` tables, created on install, dropped on
+  purge), **background jobs & schedules** (wired into the Jobs system, and paused
+  automatically when the extension is disabled), and a **real-time Socket.IO
+  namespace** (`/ext/<slug>`, status-guarded). Declared **permissions** are now a
+  consent step and enforced by an SDK capability gate (`require_permission`).
+  **Panel-version compatibility** (`min_panel_version`/`max_panel_version`) is
+  enforced at install and update. Uninstall offers **keep-data vs purge**. New
+  generic **contribution slots** (`dashboard.top`, `service.detail.tab`,
+  `domain.drawer.panel`) let extensions enrich core surfaces, not just add pages.
+  The frontend-delivery decision is recorded in
+  [`docs/adr/0001-extension-frontend-delivery.md`](docs/adr/0001-extension-frontend-delivery.md).
+- **Extensions platform (Phase 2 — remote registry & updates)** — the Marketplace
+  Browse tab can now show extensions from a curated remote **registry** (a single
+  `index.json`), merged in and labeled "Registry", with no per-panel seeding. The
+  fetch is offline-tolerant (last-good cache → a bundled fallback index) and
+  cached. Installing from the registry is **checksum-verified** — the downloaded
+  zip's sha256 must match the index before extraction, or the install hard-fails.
+  Panel-version gates (`min_panel_version`/`max_panel_version`) block installs a
+  panel is too old to run. Installed extensions listed in the registry now get an
+  "Update available" badge and a one-click **Update**. Format + publishing guide in
+  [`docs/EXTENSIONS_REGISTRY.md`](docs/EXTENSIONS_REGISTRY.md).
+- **Extensions platform (Phase 1 — seed the marketplace)** — the Marketplace is
+  now genuinely populated. **GPU Monitor** and **Workflow Builder** became bundled
+  builtin extensions (`serverkit-gpu`, `serverkit-workflows`) — same route, but
+  their nav/route/title/command-palette entries now come from the extension
+  manifest. An upgraded panel auto-installs a converted builtin once so nothing
+  disappears; fresh installs simply see it in the Marketplace. New **Module
+  toggles** (Settings → Modules) let an admin hide the Email and WordPress
+  verticals — nav, routes, and the module's API (`/api/v1/email`,
+  `/api/v1/wordpress`) all switch off — for a smaller panel without uninstalling
+  anything. The Marketplace gained a "by ServerKit" first-party badge, real
+  category chips, and an extension detail view with icon + screenshots.
+- **Extensions platform (Phase 0 — hygiene)** — groundwork for the small-core +
+  marketplace direction. A single **extension author guide**
+  ([`docs/EXTENSIONS.md`](docs/EXTENSIONS.md)) documents the manifest schema,
+  contribution envelope, lifecycle hooks, backend SDK, install sources, and the
+  production frontend-delivery constraint. Builtin-extension frontends are now
+  mechanically kept in sync with their source
+  (`scripts/sync-builtin-frontends.mjs` + an `Extensions CI` drift gate) instead
+  of hand-duplicated. The Marketplace labels bundled entries honestly ("Built-in"
+  rather than "Local mapping/Entries"). First automated coverage for the plugin
+  install pipeline (builtin install, contributions envelope, disable→503 guard,
+  reinstall metadata refresh, zip-slip rejection).
 
 - **Managed databases** — the databases ServerKit provisions are now tracked as
   first-class resources (beside the existing live explorer): durable rows for

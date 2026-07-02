@@ -748,6 +748,39 @@ backup_current() {
 }
 
 # ---------------------------------------------------------------------------
+# Carry user-installed plugins across a redeploy (#48).
+#
+# URL/registry/upload-installed extensions live as extracted dirs under
+# backend/app/plugins/<slug> and frontend/src/plugins/<slug>. A fresh
+# clone/tarball only contains the repo-tracked ones, so anything the user
+# installed would silently vanish — copy forward every plugin dir the new
+# tree doesn't already ship. Runs BEFORE the frontend build so carried
+# frontends compile into the new bundle. The backend also has a boot-time
+# repair pass as a backstop (plugin_service.repair_missing_plugins).
+# ---------------------------------------------------------------------------
+preserve_installed_plugins() {
+    local src="$1" target="$2"
+    local sub dir name
+    for sub in backend/app/plugins frontend/src/plugins; do
+        [ -d "$src/$sub" ] || continue
+        for dir in "$src/$sub"/*/; do
+            [ -d "$dir" ] || continue
+            name="$(basename "$dir")"
+            [ "$name" = "__pycache__" ] && continue
+            if [ ! -e "$target/$sub/$name" ]; then
+                mkdir -p "$target/$sub" 2>/dev/null || true
+                if cp -a "$dir" "$target/$sub/$name" 2>/dev/null; then
+                    info "Preserved installed plugin: $sub/$name"
+                else
+                    warn "Could not preserve plugin $sub/$name"
+                fi
+            fi
+        done
+    done
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # Deploy source into the next directory
 # ---------------------------------------------------------------------------
 deploy_source() {
@@ -776,6 +809,8 @@ deploy_source() {
     mkdir -p "$target/backend/instance"
     cp "$tmp_db" "$target/backend/instance/serverkit.db" 2>/dev/null || true
     rm -f "$tmp_env" "$tmp_db"
+
+    preserve_installed_plugins "$INSTALL_DIR" "$target"
 
     chmod +x "$target/serverkit"
     chmod +x "$target/scripts/"*.sh 2>/dev/null || true
@@ -814,6 +849,7 @@ deploy_release() {
     cp "$INSTALL_DIR/.env" "$unpacked/.env" 2>/dev/null || true
     mkdir -p "$unpacked/backend/instance"
     cp "$INSTALL_DIR/backend/instance/serverkit.db" "$unpacked/backend/instance/serverkit.db" 2>/dev/null || true
+    preserve_installed_plugins "$INSTALL_DIR" "$unpacked"
 
     rm -rf "$target"
     cp -a "$unpacked" "$target"

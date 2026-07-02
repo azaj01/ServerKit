@@ -10,6 +10,7 @@ import NotificationBell from './NotificationBell';
 import { SIDEBAR_CATEGORIES, CATEGORY_LABELS, SIDEBAR_PRESETS, getHiddenItemIds, getVisibleItems, applyWorkspaceNavPermissions } from './sidebarItems';
 import { useContributions } from '../plugins/contributions';
 import { sanitizeSvgInner } from '../utils/sanitizeSvg';
+import useModules from '../hooks/useModules';
 
 const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {} }) => {
     const { user, logout, updateUser } = useAuth();
@@ -111,7 +112,12 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
             .catch(() => setGpuAvailable(false));
     }, []);
 
-    const conditions = { wpInstalled, gpuAvailable };
+    // Feature-module toggles (WordPress; Email is now an extension). Default to
+    // enabled until the shared module state loads so items never flicker/hide.
+    const { isEnabled: isModuleEnabled } = useModules();
+    const wordpressEnabled = isModuleEnabled('wordpress');
+
+    const conditions = { wpInstalled, gpuAvailable, wordpressEnabled };
     const currentPreset = user?.sidebar_config?.preset || 'recommended';
     const [manualExpanded, setManualExpanded] = useState({});
     const [autoExpanded, setAutoExpanded] = useState(null);
@@ -130,7 +136,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         api.updateCurrentUser({ sidebar_config: config }).catch(() => {});
     };
 
-    const { nav: pluginNav } = useContributions();
+    const { nav: pluginNav, tabs: pluginTabs } = useContributions();
 
     const visibleItems = useMemo(() => {
         const core = getVisibleItems(user?.sidebar_config);
@@ -150,11 +156,25 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
                 category: item.category || 'system',
             }));
         // Top-level items can gate on a runtime condition (e.g. GPU Monitor
-        // only when a GPU is present), mirroring sub-item requiresCondition.
-        const conds = { wpInstalled, gpuAvailable };
-        const items = [...core, ...fromPlugins].filter(
+        // only when a GPU is present, or the Email/WordPress modules being
+        // enabled), mirroring sub-item requiresCondition.
+        const conds = { wpInstalled, gpuAvailable, wordpressEnabled };
+        let items = [...core, ...fromPlugins].filter(
             (item) => !item.requiresCondition || conds[item.requiresCondition]
         );
+        // Extension-contributed tab-group tabs (#43) keep the host group's
+        // sidebar item lit on extension-owned tab routes (group id == sidebar
+        // item id) — the core matchPrefixes only cover the group's own tabs.
+        const tabPrefixes = {};
+        for (const t of (pluginTabs || [])) {
+            if (!t || !t.group || !t.to) continue;
+            (tabPrefixes[t.group] = tabPrefixes[t.group] || []).push(t.to);
+        }
+        items = items.map((item) => (
+            tabPrefixes[item.id]
+                ? { ...item, matchPrefixes: [...(item.matchPrefixes || []), ...tabPrefixes[item.id]] }
+                : item
+        ));
         // Apply workspace-level nav permissions if an active workspace is set
         // and it defines a nav map. This lets a workspace restrict which sidebar
         // items its members see based on their effective workspace role.
@@ -168,7 +188,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
             }
         }
         return applyWorkspaceNavPermissions(items, activeWorkspace, user);
-    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable, user]);
+    }, [user?.sidebar_config, pluginNav, pluginTabs, wpInstalled, gpuAvailable, wordpressEnabled, user]);
 
     // Group visible items by category
     const groupedItems = useMemo(() => {

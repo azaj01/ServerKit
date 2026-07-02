@@ -412,5 +412,35 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# T18 — preserve_installed_plugins (#48): user-installed plugin dirs are
+# carried into the new tree; dirs the new tree already ships are NOT
+# overwritten; __pycache__ is skipped; and the function never dies under
+# set -e (it runs inside deploy_source/deploy_release).
+# --------------------------------------------------------------------------
+t="$WORK/t18"
+mkdir -p "$t/old/backend/app/plugins/third-party" \
+         "$t/old/frontend/src/plugins/third-party" \
+         "$t/old/backend/app/plugins/shipped-plugin" \
+         "$t/old/backend/app/plugins/__pycache__" \
+         "$t/new/backend/app/plugins/shipped-plugin"
+printf 'user-code\n' > "$t/old/backend/app/plugins/third-party/blueprint.py"
+printf 'user-ui\n'   > "$t/old/frontend/src/plugins/third-party/index.jsx"
+printf 'old-copy\n'  > "$t/old/backend/app/plugins/shipped-plugin/__init__.py"
+printf 'stale\n'     > "$t/old/backend/app/plugins/__pycache__/x.pyc"
+printf 'repo-copy\n' > "$t/new/backend/app/plugins/shipped-plugin/__init__.py"
+if (
+    set -Eeuo pipefail
+    preserve_installed_plugins "$t/old" "$t/new"
+    [ -f "$t/new/backend/app/plugins/third-party/blueprint.py" ]
+    [ -f "$t/new/frontend/src/plugins/third-party/index.jsx" ]
+    [ ! -d "$t/new/backend/app/plugins/__pycache__" ]
+    grep -q repo-copy "$t/new/backend/app/plugins/shipped-plugin/__init__.py"
+) >/dev/null 2>&1; then
+    ok "preserve_installed_plugins carries user plugins forward without clobbering repo-shipped ones"
+else
+    bad "preserve_installed_plugins lost a user plugin, clobbered a shipped one, or died under set -e"
+fi
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]

@@ -174,13 +174,14 @@ class TestBuiltins:
         assert 'builtin.auto_sync' in kinds
         assert 'builtin.health_check' in kinds
         assert 'builtin.backup_scheduler' in kinds
-        assert len([k for k in kinds if k.startswith('builtin.')]) == 9
+        assert 'builtin.extension_updates' in kinds
+        assert len([k for k in kinds if k.startswith('builtin.')]) == 10
 
         builtin_handlers.seed_builtin_schedules()
-        assert ScheduledJob.query.count() == 9
+        assert ScheduledJob.query.count() == 10
         # Seeding twice doesn't duplicate.
         builtin_handlers.seed_builtin_schedules()
-        assert ScheduledJob.query.count() == 9
+        assert ScheduledJob.query.count() == 10
 
 
 class TestApi:

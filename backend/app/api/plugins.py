@@ -217,15 +217,22 @@ def uninstall_plugin(plugin_id):
     if not plugin:
         return jsonify({'error': 'Plugin not found'}), 404
 
+    # Keep-data by default; purge drops the plugin's ext_<slug>_ tables. Accept
+    # ?purge=true or a JSON body {"purge": true}.
+    purge = str(request.args.get('purge', '')).lower() in ('1', 'true', 'yes')
+    if not purge:
+        body = request.get_json(silent=True) or {}
+        purge = bool(body.get('purge'))
+
     plugin_name = plugin.name
-    uninstall_plugin(plugin_id)
+    uninstall_plugin(plugin_id, purge=purge)
 
     AuditService.log(
         action=AuditLog.ACTION_RESOURCE_DELETE,
         user_id=user.id,
         target_type='plugin',
         target_id=plugin_id,
-        details={'name': plugin_name}
+        details={'name': plugin_name, 'purge': purge}
     )
     return jsonify({'message': f'Plugin {plugin_name} uninstalled. Restart to fully unload backend routes.'})
 
@@ -328,6 +335,35 @@ def install_builtin(slug):
         }), 500
 
 
+@plugins_bp.route('/<slug>/assets/<path:asset_path>', methods=['GET'])
+@jwt_required()
+def plugin_asset(slug, asset_path):
+    """Serve a file from an installed plugin's frontend directory.
+
+    Foundation for the future remote-frontend delivery mechanism (ADR 0001):
+    a panel can serve a plugin's prebuilt/static assets. Path-traversal safe via
+    send_from_directory. Only active plugins' assets are served.
+    """
+    import re
+    from flask import send_from_directory
+    if not re.match(r'^[a-zA-Z0-9_-]+$', slug or ''):
+        return jsonify({'error': 'Invalid slug'}), 400
+
+    from app.services.plugin_service import get_plugin_by_slug, FRONTEND_PLUGINS_DIR
+    import os
+    plugin = get_plugin_by_slug(slug)
+    if not plugin or plugin.status != 'active':
+        return jsonify({'error': 'Plugin not active'}), 404
+
+    base = os.path.join(FRONTEND_PLUGINS_DIR, slug)
+    if not os.path.isdir(base):
+        return jsonify({'error': 'No assets for this plugin'}), 404
+    try:
+        return send_from_directory(base, asset_path)
+    except Exception:
+        return jsonify({'error': 'Asset not found'}), 404
+
+
 @plugins_bp.route('/manifest-spec', methods=['GET'])
 @jwt_required()
 def get_manifest_spec():
@@ -361,20 +397,37 @@ def get_manifest_spec():
             'frontend_entry': {'type': 'string',
                                'description': 'Optional path within the frontend bundle (informational).'},
             'permissions': {'type': 'array', 'items': {'type': 'string'},
-                            'description': 'Declared host permissions (docker, shell, filesystem, network, db). Informational; surfaced to admins on install.'},
+                            'description': 'Declared host capabilities (docker, shell, filesystem, network, db) or agent.command:<action>. Surfaced as a consent step on install and enforced by the SDK capability gate (require_permission).'},
+            'min_panel_version': {'type': 'string',
+                                  'description': 'Lowest compatible panel version (inclusive). Enforced at install/update.'},
+            'max_panel_version': {'type': 'string',
+                                  'description': 'Highest compatible panel version (inclusive). Optional.'},
             'templates': {'type': 'array',
                           'description': 'App-template ids to install on plugin install. String or {id, app_name?, variables?}.'},
+            'models': {'type': 'string',
+                       'description': "module:func — returns/defines the plugin's SQLAlchemy models (tables named ext_<slug>_*). Tables are created on install; dropped on uninstall --purge."},
+            'jobs': {'type': 'array',
+                     'description': 'Background job handlers: [{kind, handler}] where handler is module:func.'},
+            'schedules': {'type': 'array',
+                          'description': 'Recurring jobs: [{name, kind, cron?|interval_seconds?, payload?}]. Paused automatically when the plugin is disabled.'},
+            'socket_entry': {'type': 'string',
+                             'description': "module:func returning {event: handler}. Registers a status-guarded Socket.IO namespace at /ext/<slug>."},
+            'config_schema': {'type': 'object',
+                              'description': 'JSON-schema-ish object rendered as a settings form on the installed-extension detail.'},
             'lifecycle': {'type': 'object',
                           'properties': {
                               'install': {'type': 'string', 'description': "module:func — runs after install."},
-                              'uninstall': {'type': 'string', 'description': "module:func — runs before uninstall."},
+                              'upgrade': {'type': 'string', 'description': "module:func — runs when installing a different version."},
+                              'uninstall': {'type': 'string', 'description': "module:func(plugin, purge=bool) — runs before uninstall."},
                           }},
             'contributions': {
                 'type': 'object',
                 'properties': {
                     'nav': {'type': 'array', 'description': 'Sidebar items: {id, label, route, category, icon}.'},
                     'routes': {'type': 'array',
-                               'description': 'SPA routes: {path, component, layout?}. component matches a named export of the plugin index module. layout: padded (default) | full | bare | <custom-layout-id>.'},
+                               'description': 'SPA routes: {path, component, layout?, group?}. component matches a named export of the plugin index module. layout: padded (default) | full | bare | <custom-layout-id>. group nests the route inside that core tab group\'s TabGroupLayout instead (see tabs).'},
+                    'tabs': {'type': 'array',
+                             'description': 'Tabs added to a core-owned tab group: {group, to, label, icon?, end?, order?}. group is the core group id (files | servers | monitoring; == the sidebar item id). Pair with a route contribution carrying the same group. icon is raw inner-SVG markup; order is an optional insertion index (default: appended).'},
                     'page_titles': {'type': 'object', 'description': 'Map of route path → document title.'},
                     'command_palette': {'type': 'array', 'description': '{label, path, category, keywords}.'},
                     'widgets': {'type': 'array', 'description': '{slot, component}. slot=global renders globally inside DashboardLayout.'},
@@ -408,6 +461,104 @@ def get_manifest_spec():
             },
         },
     })
+
+
+@plugins_bp.route('/<int:plugin_id>/config', methods=['GET'])
+@jwt_required()
+def get_plugin_config(plugin_id):
+    """Read a plugin's saved config values + its schema (#49).
+
+    Admin-only: config values may hold secrets (API keys etc.), which is also
+    why they are deliberately NOT part of the plugin's to_dict().
+    """
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+
+    from app.services.plugin_service import get_plugin
+    plugin = get_plugin(plugin_id)
+    if not plugin:
+        return jsonify({'error': 'Plugin not found'}), 404
+    return jsonify({
+        'config': plugin.config,
+        'config_schema': (plugin.manifest or {}).get('config_schema') or {},
+    })
+
+
+@plugins_bp.route('/<int:plugin_id>/config', methods=['PUT'])
+@jwt_required()
+def update_plugin_config(plugin_id):
+    """Save a plugin's config values (#49). Body: {"config": {...}}.
+
+    The manifest's config_schema is advisory — values are stored as given so a
+    plugin can evolve its fields without a panel release. Plugins read them via
+    plugins_sdk.config(slug).
+    """
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+
+    from app import db
+    from app.services.plugin_service import get_plugin
+    plugin = get_plugin(plugin_id)
+    if not plugin:
+        return jsonify({'error': 'Plugin not found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    config = data.get('config')
+    if not isinstance(config, dict):
+        return jsonify({'error': 'config must be an object'}), 400
+
+    plugin.config = config
+    db.session.commit()
+    AuditService.log(
+        action=AuditLog.ACTION_RESOURCE_UPDATE,
+        user_id=user.id,
+        target_type='plugin',
+        target_id=str(plugin.id),
+        details={'event': 'config_update', 'keys': sorted(config.keys())},
+    )
+    return jsonify({'config': plugin.config})
+
+
+@plugins_bp.route('/updates', methods=['GET'])
+@jwt_required()
+def list_updates():
+    """List installed plugins that have a newer version in the registry.
+
+    Each entry: {slug, plugin_id, installed_version, available_version,
+    update_available, compatible, source}.
+    """
+    from app.services.plugin_service import check_for_updates
+    return jsonify({'updates': check_for_updates()})
+
+
+@plugins_bp.route('/<int:plugin_id>/update', methods=['POST'])
+@jwt_required()
+def update_plugin_route(plugin_id):
+    """Update an installed plugin to the registry version (reinstall in place)."""
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+
+    from app.services.plugin_service import update_plugin
+    try:
+        plugin = update_plugin(plugin_id, user_id=user.id)
+        AuditService.log(
+            action=AuditLog.ACTION_RESOURCE_UPDATE,
+            user_id=user.id,
+            target_type='plugin',
+            target_id=plugin.id,
+            details={'name': plugin.name, 'version': plugin.version, 'source': 'registry-update'},
+        )
+        return jsonify(plugin.to_dict())
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception:
+        import logging, uuid
+        ref = uuid.uuid4().hex[:8]
+        logging.getLogger(__name__).exception('Plugin update failed (ref=%s)', ref)
+        return jsonify({'error': 'Update failed. Check server logs.', 'ref': ref}), 500
 
 
 @plugins_bp.route('/contributions', methods=['GET'])

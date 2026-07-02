@@ -18,18 +18,20 @@ import ApiSettingsTab from '../components/settings/ApiSettingsTab';
 import MigrationHistoryTab from '../components/settings/MigrationHistoryTab';
 import IconReferenceTab from '../components/settings/IconReferenceTab';
 import AISettingsTab from '../components/settings/AISettingsTab';
+import ModulesTab from '../components/settings/ModulesTab';
 import AboutTab from '../components/settings/AboutTab';
+import PluginSlot from '../components/PluginSlot';
 import { Activity, Code, Database, Layers, Link2, PaintBucket, Sparkles, Settings as SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageTopbar, SegControl } from '@/components/ds';
 import { useNavigate } from 'react-router-dom';
 
-const VALID_TABS = ['profile', 'security', 'connections', 'appearance', 'sidebar', 'whitelabel', 'notifications', 'system', 'users', 'activity', 'site', 'sso', 'api', 'ai', 'migrations', 'developer', 'about'];
+const VALID_TABS = ['profile', 'security', 'connections', 'appearance', 'sidebar', 'whitelabel', 'notifications', 'system', 'users', 'activity', 'site', 'sso', 'api', 'ai', 'modules', 'migrations', 'developer', 'about'];
 
 // Tabs that belong to the server-wide "Administration" group (admin-only); the
 // rest are personal "My Account" settings. Drives the two-way section switch so
 // personal prefs aren't interleaved with destructive system controls.
-const ADMIN_TABS = ['users', 'activity', 'site', 'connections', 'sso', 'api', 'ai', 'migrations', 'system', 'developer'];
+const ADMIN_TABS = ['users', 'activity', 'site', 'connections', 'sso', 'api', 'ai', 'modules', 'migrations', 'system', 'developer'];
 
 const Settings = () => {
     const [activeTab, setActiveTab] = useTabParam('/settings', VALID_TABS);
@@ -241,6 +243,14 @@ const Settings = () => {
                             </Button>
                             <Button
                                 variant="ghost"
+                                className={`settings-nav-item ${activeTab === 'modules' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('modules')}
+                            >
+                                <Layers size={18} />
+                                Modules
+                            </Button>
+                            <Button
+                                variant="ghost"
                                 className={`settings-nav-item ${activeTab === 'migrations' ? 'active' : ''}`}
                                 onClick={() => setActiveTab('migrations')}
                             >
@@ -300,10 +310,16 @@ const Settings = () => {
                     {activeTab === 'sso' && isAdmin && <SSOConfigTab />}
                     {activeTab === 'api' && isAdmin && <ApiSettingsTab />}
                     {activeTab === 'ai' && isAdmin && <AISettingsTab />}
+                    {activeTab === 'modules' && isAdmin && <ModulesTab />}
                     {activeTab === 'migrations' && isAdmin && <MigrationHistoryTab />}
                     {activeTab === 'system' && isAdmin && <SystemTab />}
                     {activeTab === 'developer' && devMode && isAdmin && <IconReferenceTab />}
                     {activeTab === 'about' && <AboutTab />}
+                    {/* Extension-contributed settings sections (#52): widgets
+                        targeting the settings.section slot render below the
+                        active tab's content; the tab id comes down as context
+                        so a widget can scope itself to specific tabs. */}
+                    <PluginSlot name="settings.section" context={{ tab: activeTab }} />
                 </div>
             </div>
         </div>

@@ -15,7 +15,9 @@ import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import api from '../services/api';
 import SystemNotices from '../components/SystemNotices';
 
-const FULL_PAGE_ROUTES = ['/workflow', '/files', '/docker'];
+// /workflow is contributed by the serverkit-workflows extension with
+// layout:'full', so it's picked up dynamically via fullPagePaths below.
+const FULL_PAGE_ROUTES = ['/files', '/docker'];
 
 const DashboardLayout = () => {
     const location = useLocation();

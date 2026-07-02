@@ -273,6 +273,20 @@ class SystemService:
         return ' '.join(parts) if parts else '0m'
 
     @classmethod
+    @staticmethod
+    def _is_iana_timezone(value):
+        """True if `value` looks like an IANA zone key (Area/Location or a small
+        set of bare names), i.e. something Intl/zoneinfo will accept. Excludes
+        platform display names like 'Eastern Daylight Time' (they contain spaces
+        and no slash)."""
+        if not value or not isinstance(value, str):
+            return False
+        v = value.strip()
+        if v in ('UTC', 'GMT', 'Zulu'):
+            return True
+        return '/' in v and ' ' not in v
+
+    @classmethod
     def get_server_time(cls):
         """Get current server time and timezone info."""
         import time as time_module
@@ -305,6 +319,23 @@ class SystemService:
             except Exception:
                 pass
 
+        # Cross-platform fallback (works on Windows/macOS dev boxes that have
+        # neither /etc/timezone nor timedatectl): resolve the local IANA zone.
+        if not timezone_id:
+            try:
+                from tzlocal import get_localzone_name
+                timezone_id = get_localzone_name()
+            except Exception:
+                pass
+
+        # Only ever expose an IANA-style id. Python's time.tzname yields a
+        # platform *display* name on Windows ("Eastern Daylight Time") which is
+        # NOT a valid Intl/zoneinfo key and would crash time-formatting in the
+        # UI. Keep the display name in timezone_name; leave timezone_id null when
+        # we can't produce a real IANA zone (the UI then uses the local zone).
+        if timezone_id and not cls._is_iana_timezone(timezone_id):
+            timezone_id = None
+
         # Calculate UTC offset
         utc_offset_seconds = (now - utc_now).total_seconds()
         utc_offset_hours = int(utc_offset_seconds // 3600)
@@ -316,7 +347,7 @@ class SystemService:
             'current_time_formatted': now.strftime('%Y-%m-%d %H:%M:%S'),
             'utc_time': utc_now.isoformat(),
             'timezone_name': tz_name,
-            'timezone_id': timezone_id or tz_name,
+            'timezone_id': timezone_id,  # IANA or null (never the display name)
             'utc_offset': utc_offset_str,
             'utc_offset_seconds': int(utc_offset_seconds)
         }

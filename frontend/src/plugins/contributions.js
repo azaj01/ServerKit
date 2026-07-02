@@ -75,67 +75,23 @@ const EMPTY = {
     command_palette: [],
     widgets: [],
     layouts: [],
+    // Tabs contributed into core-owned TabGroupLayout groups (#43):
+    // { group, to, label, icon?, end?, order? }. `group` is the core group id
+    // (== the sidebar item id: files | servers | monitoring). Consumed by
+    // TabGroupLayout (tab strip merge) + Sidebar (group item stays lit).
+    tabs: [],
     // AI assistant contributions: per-route suggested prompts + custom
     // tool-result renderers. Consumed by the core AIAssistant via
     // useContributions().ai.
     ai: { suggested_prompts: [], tool_renderers: [] },
 };
 
-const GIT_PLUGIN_SLUG = 'serverkit-git';
-const GIT_ICON = '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>';
-
+// Merge a raw contribution envelope onto the empty shape so every
+// consumer sees the full set of keys. Extension-specific values (nav,
+// routes, titles, palette entries) now come entirely from each plugin's
+// manifest — there are no host-side compatibility rewrites here.
 function normalizeContributions(value) {
-    const out = { ...EMPTY, ...(value || {}) };
-    const hasGitPlugin = [
-        ...(out.nav || []),
-        ...(out.routes || []),
-        ...(out.command_palette || []),
-    ].some((item) => item?.plugin === GIT_PLUGIN_SLUG);
-
-    if (!hasGitPlugin) return out;
-
-    const oldGitNav = (out.nav || []).find((item) => item?.plugin === GIT_PLUGIN_SLUG);
-
-    // Compatibility for the initial Git extension experiment, which
-    // contributed /git-ext while the host still owned /git. The extension
-    // is now the canonical Git surface.
-    return {
-        ...out,
-        nav: [
-            ...(out.nav || []).filter((item) => item?.plugin !== GIT_PLUGIN_SLUG),
-            {
-                ...oldGitNav,
-                plugin: GIT_PLUGIN_SLUG,
-                id: 'git',
-                label: 'Git',
-                route: '/git',
-                category: oldGitNav?.category || 'infrastructure',
-                icon: oldGitNav?.icon || GIT_ICON,
-            },
-        ],
-        routes: [
-            ...(out.routes || []).filter((item) => item?.plugin !== GIT_PLUGIN_SLUG),
-            { plugin: GIT_PLUGIN_SLUG, path: 'git', component: 'GitExtensionPage' },
-            { plugin: GIT_PLUGIN_SLUG, path: 'git/:tab', component: 'GitExtensionPage' },
-        ],
-        page_titles: {
-            ...(Object.fromEntries(
-                Object.entries(out.page_titles || {})
-                    .filter(([path]) => path !== '/git-ext')
-            )),
-            '/git': 'Git Repositories',
-        },
-        command_palette: [
-            ...(out.command_palette || []).filter((item) => item?.plugin !== GIT_PLUGIN_SLUG),
-            {
-                plugin: GIT_PLUGIN_SLUG,
-                label: 'Git',
-                path: '/git',
-                category: 'Pages',
-                keywords: 'git repos deploy extension plugin',
-            },
-        ],
-    };
+    return { ...EMPTY, ...(value || {}) };
 }
 
 function tagItems(items, slug) {
@@ -155,6 +111,7 @@ function getBuildTimeContributions() {
     const command_palette = [];
     const widgets = [];
     const layouts = [];
+    const tabs = [];
     const ai = { suggested_prompts: [], tool_renderers: [] };
 
     for (const entry of installed) {
@@ -170,6 +127,7 @@ function getBuildTimeContributions() {
         command_palette.push(...tagItems(contrib.command_palette, slug));
         widgets.push(...tagItems(contrib.widgets, slug));
         layouts.push(...tagItems(contrib.layouts, slug));
+        tabs.push(...tagItems(contrib.tabs, slug));
 
         if (contrib.ai && typeof contrib.ai === 'object') {
             ai.suggested_prompts.push(...tagItems(contrib.ai.suggested_prompts, slug));
@@ -188,6 +146,7 @@ function getBuildTimeContributions() {
         command_palette,
         widgets,
         layouts,
+        tabs,
         ai,
     };
 }
