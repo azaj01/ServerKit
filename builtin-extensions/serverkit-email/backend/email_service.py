@@ -6,11 +6,11 @@ from typing import Dict, List, Optional
 from app import db
 from app.models.email import EmailDomain, EmailAccount, EmailAlias, EmailForwardingRule
 from app.services.postfix_service import PostfixService
-from app.services.dovecot_service import DovecotService
-from app.services.dkim_service import DKIMService
-from app.services.spamassassin_service import SpamAssassinService
-from app.services.roundcube_service import RoundcubeService
 from app.utils.system import PackageManager, ServiceControl
+from .dovecot_service import DovecotService
+from .dkim_service import DKIMService
+from .spamassassin_service import SpamAssassinService
+from .roundcube_service import RoundcubeService
 
 logger = logging.getLogger(__name__)
 

@@ -165,15 +165,8 @@ export const SIDEBAR_ITEMS = [
         category: 'operations',
         icon: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4m0 4h.01"/>'
     },
-    {
-        id: 'email',
-        label: 'Email Server',
-        route: '/email',
-        category: 'operations',
-        // Hidden when an admin disables the Email module (Settings → Modules).
-        requiresCondition: 'emailEnabled',
-        icon: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>'
-    },
+    // Email Server is now the serverkit-email builtin extension; its sidebar item
+    // is contributed by the extension manifest.
     {
         id: 'queue',
         label: 'Queue Bus',

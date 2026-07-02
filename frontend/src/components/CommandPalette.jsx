@@ -27,7 +27,6 @@ const STATIC_PAGES = [
     { label: 'Backups', path: '/backups', category: 'Pages', keywords: 'snapshots restore' },
     { label: 'Cron Jobs', path: '/cron', category: 'Pages', keywords: 'schedule tasks' },
     { label: 'Security', path: '/security', category: 'Pages', keywords: 'firewall fail2ban' },
-    { label: 'Email', path: '/email', category: 'Pages', keywords: 'smtp postfix' },
     { label: 'Terminal', path: '/terminal', category: 'Pages', keywords: 'shell ssh console' },
     { label: 'Servers', path: '/servers', category: 'Pages', keywords: 'fleet agents' },
     { label: 'Fleet Monitor', path: '/fleet-monitor', category: 'Pages', keywords: 'agents status' },

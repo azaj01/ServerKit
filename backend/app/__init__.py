@@ -265,12 +265,11 @@ def create_app(config_name=None):
     from app.api.cron import cron_bp
     app.register_blueprint(cron_bp, url_prefix='/api/v1/cron')
 
-    # Register blueprints - Email Server
-    from app.api.email import email_bp
-    # Email is a toggleable module (#14): 503 its API when disabled.
-    from app.services.module_service import attach_module_guard as _attach_module_guard_email
-    _attach_module_guard_email(email_bp, 'email')
-    app.register_blueprint(email_bp, url_prefix='/api/v1/email')
+    # Email Server is now the serverkit-email builtin extension (Phase 4, #32):
+    # its /api/v1/email blueprint + Postfix/Dovecot/DKIM/SpamAssassin/Roundcube
+    # services live in builtin-extensions/serverkit-email/ and are registered by
+    # the plugin loader when installed. The outbound relay (email_relay_service)
+    # and all email models stay core (notifications SMTP + shared Postfix relay).
 
     # Register blueprints - Uptime Tracking
     from app.api.uptime import uptime_bp

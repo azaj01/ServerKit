@@ -15,11 +15,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # name -> presentation metadata. The settings key is module_<name>_enabled.
+#
+# Email used to be a module toggle here; it's now the serverkit-email extension
+# (Phase 4, #32) — install/disable it from the Marketplace instead. WordPress
+# remains a core module toggle until its own extraction (Phase 5, #38).
 MODULES = {
-    'email': {
-        'label': 'Email Server',
-        'description': 'Postfix/Dovecot mail stack, delivery logs, and the /api/v1/email API.',
-    },
     'wordpress': {
         'label': 'WordPress',
         'description': 'WordPress site management, plugin library, and the /api/v1/wordpress API.',

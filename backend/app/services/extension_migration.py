@@ -31,6 +31,27 @@ CONVERTED_BUILTIN_SLUGS = [
     'serverkit-workflows',
 ]
 
+
+def _email_was_configured():
+    """True if this panel actually ran a mail server before the extraction — any
+    email domain/account row exists. Used to gate serverkit-email auto-install so
+    only mail users get it back automatically (#34); everyone else uses the
+    Marketplace."""
+    try:
+        from app.models.email import EmailDomain, EmailAccount
+        return (db.session.query(EmailDomain.id).first() is not None
+                or db.session.query(EmailAccount.id).first() is not None)
+    except Exception:
+        return False
+
+
+# Builtins auto-installed on upgrade ONLY when a usage predicate says the panel
+# actually used the feature (D3/#34). Fresh installs and panels that never used
+# the feature just see it in the Marketplace.
+GATED_BUILTIN_SLUGS = {
+    'serverkit-email': _email_was_configured,
+}
+
 _MARKER_KEY = 'extensions.auto_installed_slugs'
 
 
@@ -78,8 +99,13 @@ def run_auto_install():
         logger.warning(f'Extension auto-install skipped (builtins unavailable): {e}')
         return
 
+    # Ungated converted builtins auto-install on any upgrade; gated ones only when
+    # their usage predicate is true.
+    candidates = [(s, None) for s in CONVERTED_BUILTIN_SLUGS]
+    candidates += [(s, gate) for s, gate in GATED_BUILTIN_SLUGS.items()]
+
     changed = False
-    for slug in CONVERTED_BUILTIN_SLUGS:
+    for slug, gate in candidates:
         if slug in processed:
             continue
 
@@ -88,8 +114,15 @@ def run_auto_install():
             continue
 
         if existing:
-            # Upgrade path: keep the feature alive unless it's already present.
-            if not InstalledPlugin.query.filter_by(slug=slug).first():
+            # Upgrade path: keep the feature alive unless it's already present or
+            # (for gated builtins) the panel never used it.
+            wants_it = True
+            if gate is not None:
+                try:
+                    wants_it = bool(gate())
+                except Exception:
+                    wants_it = False
+            if wants_it and not InstalledPlugin.query.filter_by(slug=slug).first():
                 try:
                     install_builtin_extension(slug)
                     logger.info(f'Auto-installed converted builtin extension: {slug}')
@@ -98,7 +131,8 @@ def run_auto_install():
                         f'Auto-install of {slug} failed (retry next boot): {e}'
                     )
                     continue  # leave unmarked so we retry
-        # Fresh install (marketplace-only) OR successfully installed: record it.
+        # Fresh install (marketplace-only), gate-false (marketplace-only), OR
+        # successfully installed: record it so the one-shot never repeats.
         processed.add(slug)
         changed = True
 

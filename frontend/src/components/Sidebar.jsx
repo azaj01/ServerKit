@@ -112,13 +112,12 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
             .catch(() => setGpuAvailable(false));
     }, []);
 
-    // Feature-module toggles (Email + WordPress). Default to enabled until the
-    // shared module state loads so items never flicker/hide prematurely.
+    // Feature-module toggles (WordPress; Email is now an extension). Default to
+    // enabled until the shared module state loads so items never flicker/hide.
     const { isEnabled: isModuleEnabled } = useModules();
-    const emailEnabled = isModuleEnabled('email');
     const wordpressEnabled = isModuleEnabled('wordpress');
 
-    const conditions = { wpInstalled, gpuAvailable, emailEnabled, wordpressEnabled };
+    const conditions = { wpInstalled, gpuAvailable, wordpressEnabled };
     const currentPreset = user?.sidebar_config?.preset || 'recommended';
     const [manualExpanded, setManualExpanded] = useState({});
     const [autoExpanded, setAutoExpanded] = useState(null);
@@ -159,7 +158,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
         // Top-level items can gate on a runtime condition (e.g. GPU Monitor
         // only when a GPU is present, or the Email/WordPress modules being
         // enabled), mirroring sub-item requiresCondition.
-        const conds = { wpInstalled, gpuAvailable, emailEnabled, wordpressEnabled };
+        const conds = { wpInstalled, gpuAvailable, wordpressEnabled };
         const items = [...core, ...fromPlugins].filter(
             (item) => !item.requiresCondition || conds[item.requiresCondition]
         );
@@ -176,7 +175,7 @@ const Sidebar = ({ mobileOpen = false, isMobile = false, onMobileClose = () => {
             }
         }
         return applyWorkspaceNavPermissions(items, activeWorkspace, user);
-    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable, emailEnabled, wordpressEnabled, user]);
+    }, [user?.sidebar_config, pluginNav, wpInstalled, gpuAvailable, wordpressEnabled, user]);
 
     // Group visible items by category
     const groupedItems = useMemo(() => {

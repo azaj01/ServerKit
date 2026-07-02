@@ -1,11 +1,27 @@
 # Email extraction — boundary audit (Phase 4, #31)
 
-**Status:** Audit complete — extraction (#32–#35) is the follow-up.
-**Verdict:** the mail-**server** stack is cleanly extractable. Two shared assets
-must stay core; one core→email boot hook must be guarded. Notifications SMTP is
-already independent and keeps working without the extension.
+**Status:** ✅ Audit complete AND extraction shipped (#32–#35, `serverkit-email`).
+**Verdict:** the mail-**server** stack is cleanly extractable. Notifications SMTP is
+independent and keeps working without the extension.
 
-This is the hard gate the plan requires before moving any code (#32). It maps
+> **Deviations discovered during execution (vs. this audit's first draft):**
+> 1. **`postfix_service` stays core.** The audit listed it as "moves (import only)",
+>    but `email_relay_service` (core, notifications-side) *actively uses*
+>    `PostfixService.configure_relay/disable_relay/get_status`. Postfix is shared
+>    outbound-relay infra, so it stays core; the extension imports it (extension→core).
+> 2. **Email models stay core.** Kept in `app/models/email.py` (the audit's sanctioned
+>    two-speed option). This makes the `DNSProviderConfig` relocation a non-issue
+>    (it stays core with the other email models) and avoids a risky data migration —
+>    the server stack has no external model importers.
+> 3. **Frontend uses the re-export pattern** (page stays in `pages/Email.jsx`, the
+>    extension owns the route) — same as serverkit-git/gpu/workflows — rather than
+>    physically relocating a 1000-line component and rewriting its imports.
+>
+> Net moved: `api/email.py` + `email_service`/`dovecot`/`dkim`/`spamassassin`/`roundcube`
+> (6 files, intra-extension relative imports; core imports absolute). Core lost the
+> mail-server API and 5 services; the "Email" module toggle became the extension itself.
+
+This is the hard gate the plan required before moving any code (#32). It maps
 every touchpoint so the move is mechanical.
 
 ---

@@ -20,6 +20,15 @@ awaiting a stable release:
 
 ### Added
 
+- **Extensions platform (Phase 4 — Email is now an extension)** — the mail-server
+  stack (Postfix/Dovecot, domains, mailboxes, DKIM/SpamAssassin, Roundcube webmail,
+  and the `/api/v1/email` API) has moved out of core into the bundled
+  **`serverkit-email`** extension. Panels that never run mail no longer load any of
+  it — a real "smaller core" win. Existing panels that actually used mail
+  auto-install the extension once on upgrade (detected by existing mail domains/
+  accounts); everyone else finds it in the Marketplace. Outbound notification SMTP
+  is unaffected — it never depended on the mail server. (The Email "module toggle"
+  is retired in favor of installing/disabling the extension.)
 - **Extensions platform (Phase 3 — platform primitives)** — the machinery that
   makes extensions first-class and safe. Extensions can now own **data models**
   (manifest `models` → `ext_<slug>_*` tables, created on install, dropped on

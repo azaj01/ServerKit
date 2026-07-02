@@ -51,7 +51,6 @@ import WordPressProjects from './pages/WordPressProjects';
 import WordPressPluginLibrary from './pages/WordPressPluginLibrary';
 import WordPressProject from './pages/WordPressProject';
 import SSLCertificates from './pages/SSLCertificates';
-import Email from './pages/Email';
 import SSOCallback from './pages/SSOCallback';
 import SourceConnectionCallback from './pages/SourceConnectionCallback';
 import DatabaseMigration from './pages/DatabaseMigration';
@@ -113,7 +112,6 @@ const PAGE_TITLES = {
     '/backups': 'Backups',
     '/cron': 'Cron Jobs',
     '/security': 'Security',
-    '/email': 'Email Server',
     '/terminal': 'Terminal',
     '/settings': 'Settings',
     '/connections/callback/github': 'GitHub Connection',
@@ -438,8 +436,8 @@ function AppRoutes() {
                 </Route>
                 {/* Email routes are gated by the Email module toggle
                     (Settings → Modules); disabled ⇒ redirect to the dashboard. */}
-                <Route path="email" element={<ModuleRoute name="email"><Email /></ModuleRoute>} />
-                <Route path="email/:tab" element={<ModuleRoute name="email"><Email /></ModuleRoute>} />
+                {/* /email is now the serverkit-email builtin extension (contributes
+                    the route via its manifest). */}
                 <Route path="terminal" element={<Terminal />} />
                 <Route path="terminal/terminal" element={<Navigate to="/terminal/shell" replace />} />
                 <Route path="terminal/:tab" element={<Terminal />} />

@@ -127,7 +127,6 @@ class SettingsService:
         # extensions yet (Email, WordPress). Disabling hides the nav + routes and
         # 503s the module's API (same mechanism as the plugin status guard). The
         # toggle state later becomes the extraction auto-install signal (#34).
-        'module_email_enabled': {'value': True, 'type': 'boolean', 'description': 'Show the Email server module (nav, routes, and /api/v1/email).'},
         'module_wordpress_enabled': {'value': True, 'type': 'boolean', 'description': 'Show the WordPress module (nav, routes, and /api/v1/wordpress).'},
     }
 

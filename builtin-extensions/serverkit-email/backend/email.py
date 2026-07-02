@@ -1,13 +1,19 @@
-"""Email Server API endpoints for managing mail services, domains, accounts, and DNS."""
+"""Email Server API endpoints for managing mail services, domains, accounts, and DNS.
+
+Lives in the serverkit-email extension (app.plugins.serverkit-email.email after
+install). Intra-extension modules are imported relatively; core services
+(postfix relay, DNS, relay-config, RBAC) are imported absolutely — the mail
+server extends the core, never the other way around.
+"""
 from flask import Blueprint, request, jsonify
 
-from ..middleware.rbac import admin_required, viewer_required
-from ..services.email_service import EmailService
-from ..services.dns_provider_service import DNSProviderService
-from ..services.spamassassin_service import SpamAssassinService
-from ..services.roundcube_service import RoundcubeService
-from ..services.postfix_service import PostfixService
-from ..services.email_relay_service import EmailRelayService
+from app.middleware.rbac import admin_required, viewer_required
+from app.services.dns_provider_service import DNSProviderService
+from app.services.postfix_service import PostfixService
+from app.services.email_relay_service import EmailRelayService
+from .email_service import EmailService
+from .spamassassin_service import SpamAssassinService
+from .roundcube_service import RoundcubeService
 
 email_bp = Blueprint('email', __name__)
 
