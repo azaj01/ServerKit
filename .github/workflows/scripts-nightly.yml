@@ -1,0 +1,184 @@
+name: Scripts Nightly E2E
+
+# Nightly, non-blocking end-to-end coverage for the artifacts users actually
+# receive — deeper (and slower) than the PR-time Scripts CI:
+#
+#   tarball-install      builds the release tarball with scripts/build-release.sh
+#                        and INSTALLS from it through the installer's offline
+#                        path. The PR-time release smoke only proves the tarball
+#                        *builds*; this proves the shipped tree lands and the
+#                        pre-built, relocated venv actually runs at
+#                        /opt/serverkit/venv (the shipped-venv portability class
+#                        of breakage).
+#
+#   update-from-release  installs the latest PUBLISHED release, then runs THIS
+#                        checkout's updater over it — a genuine cross-version
+#                        update, which catches carry-forward/migration
+#                        regressions that a same-version forced update cannot.
+#                        The published baseline may itself be old or broken;
+#                        that is tolerated loudly — only a failure in this
+#                        checkout's updater fails the job.
+#
+# Both jobs mutate their runner (systemd units, nginx, /opt/serverkit), so each
+# runs alone on a fresh VM. There is deliberately no pull_request trigger:
+# nightly results must never block a PR.
+
+on:
+  schedule:
+    # 05:17 UTC — off the top-of-hour spike, after the day's merges settle.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  tarball-install:
+    name: Install from a freshly built release tarball
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv python3-pip rsync
+
+      - name: Build the release tarball
+        run: bash scripts/build-release.sh
+
+      - name: Install from the local tarball (offline release path)
+        run: |
+          # SERVERKIT_OFFLINE_TARBALL is the installer's documented local-tarball
+          # mechanism: fetch_release uses it verbatim instead of downloading.
+          # `sudo env`, not `... | sudo bash`, so the env contract survives
+          # sudo's environment reset; PATH is forwarded so the runner's
+          # toolchain stays visible to root.
+          TARBALL="$GITHUB_WORKSPACE/serverkit-v$(tr -d '\n\r ' < VERSION)-linux-amd64.tar.gz"
+          ls -lh "$TARBALL"
+          sudo env PATH="$PATH" \
+            INSTALL_FROM_RELEASE=1 \
+            SERVERKIT_OFFLINE_TARBALL="$TARBALL" \
+            SERVERKIT_SKIP_SSL=1 \
+            bash install.sh
+
+      - name: Assert the tree landed and the shipped venv works
+        run: |
+          readlink -f /opt/serverkit
+          test -d /opt/serverkit/backend/app
+          test -d /opt/serverkit/frontend/dist
+          test -x /opt/serverkit/serverkit
+          [ "$(tr -d '\n\r ' < VERSION)" = "$(tr -d '\n\r ' < /opt/serverkit/VERSION)" ]
+          test -x /opt/serverkit/venv/bin/python
+          # The venv was built elsewhere (the build step) and relocated by
+          # build-release.sh — importing the app's core deps from its installed
+          # path is the actual portability proof.
+          sudo /opt/serverkit/venv/bin/python -c 'import flask, sqlalchemy, gunicorn; print("shipped venv imports OK")'
+
+      - name: Panel healthy from the tarball install
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:5000/api/v1/system/health >/dev/null 2>&1 && {
+              echo "backend healthy (probe $i)"; exit 0; }
+            sleep 2
+          done
+          echo "backend never became healthy after the tarball install" >&2
+          exit 1
+
+      - name: Dump install state
+        if: failure()
+        run: |
+          set +e
+          echo '===== /var/log/serverkit ====='
+          sudo sh -c 'for f in /var/log/serverkit/*.log; do
+            [ -f "$f" ] || continue
+            echo "----- $f (last 300 lines) -----"
+            tail -n 300 "$f"
+          done'
+          echo '===== systemd ====='
+          sudo systemctl status serverkit --no-pager -l
+          sudo journalctl -u serverkit --no-pager -n 200
+          echo '===== nginx ====='
+          sudo systemctl status nginx --no-pager -l
+          sudo nginx -t
+          sudo tail -n 100 /var/log/nginx/error.log
+          echo '===== layout ====='
+          ls -la /opt/ /opt/serverkit/
+          true
+
+  update-from-release:
+    name: Update from the latest published release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install the latest published release (baseline)
+        id: baseline
+        run: |
+          # INSTALL_FROM_RELEASE=1 with no version pin resolves and installs the
+          # newest published tarball — the state a real, older box is in. The
+          # baseline is not this checkout's product: if it fails to install or
+          # come up healthy, warn loudly and skip the update leg instead of
+          # failing — this job only gates regressions in THIS checkout's updater.
+          ok=true
+          sudo env PATH="$PATH" INSTALL_FROM_RELEASE=1 SERVERKIT_SKIP_SSL=1 \
+            bash install.sh || ok=false
+          if [ "$ok" = "true" ]; then
+            ok=false
+            for i in $(seq 1 30); do
+              curl -fsS http://127.0.0.1:5000/api/v1/system/health >/dev/null 2>&1 && { ok=true; break; }
+              sleep 2
+            done
+          fi
+          echo "baseline version: $(tr -d '\n\r ' < /opt/serverkit/VERSION 2>/dev/null || echo none)"
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          [ "$ok" = "true" ] \
+            || echo "::warning::baseline install of the published release failed or never got healthy — skipping the update leg (not a regression in this checkout)"
+
+      - name: Run THIS checkout's updater over the published install
+        if: steps.baseline.outputs.ok == 'true'
+        run: |
+          # SERVERKIT_NO_SELF_UPDATE=1: do not re-exec into the published
+          # updater — the object under test is scripts/update.sh from this
+          # checkout. --force: never let the version gate skip the run.
+          sudo env PATH="$PATH" SERVERKIT_NO_SELF_UPDATE=1 bash scripts/update.sh --force
+
+      - name: Panel healthy after the cross-version update
+        if: steps.baseline.outputs.ok == 'true'
+        run: |
+          for i in $(seq 1 45); do
+            curl -fsS http://127.0.0.1:5000/api/v1/system/health >/dev/null 2>&1 && {
+              echo "backend healthy after update to version $(tr -d '\n\r ' < /opt/serverkit/VERSION 2>/dev/null || echo unknown) (probe $i)"
+              exit 0
+            }
+            sleep 2
+          done
+          echo "backend never became healthy after the cross-version update" >&2
+          exit 1
+
+      - name: Dump install/update state
+        if: failure()
+        run: |
+          set +e
+          echo '===== /var/log/serverkit (updater logs) ====='
+          sudo sh -c 'for f in /var/log/serverkit/*.log; do
+            [ -f "$f" ] || continue
+            echo "----- $f (last 300 lines) -----"
+            tail -n 300 "$f"
+          done'
+          echo '===== systemd ====='
+          sudo systemctl status serverkit --no-pager -l
+          sudo journalctl -u serverkit --no-pager -n 200
+          echo '===== nginx ====='
+          sudo systemctl status nginx --no-pager -l
+          sudo nginx -t
+          sudo tail -n 100 /var/log/nginx/error.log
+          echo '===== layout ====='
+          ls -la /opt/ /opt/serverkit/
+          true

@@ -6,6 +6,11 @@ name: Scripts CI
 # box. shellcheck catches that whole class statically; the test_*.sh suites
 # exercise the install/update/uninstall + lib logic against fixtures with no
 # server, on every supported distro family.
+#
+# The unit suites *source* the scripts, though — the top-level run block
+# (exactly where the 2026-07-02 update abort lived) executes in none of them.
+# The update-e2e job closes that gap with a REAL install + REAL update on the
+# runner VM, so the code path a user's box actually runs is gated on every PR.
 
 on:
   push:
@@ -64,11 +69,13 @@ jobs:
           # quality doesn't rot. -x follows `source`d files.
           shellcheck --severity=warning -x scripts/lib/*.sh
 
-      - name: Unit tests (update + install + lib)
+      - name: Unit tests (update + install + lib + cli + agent install)
         run: |
           bash scripts/test/test_update.sh
           bash scripts/test/test_install.sh
           bash scripts/test/test_lib.sh
+          bash scripts/test/test_cli.sh
+          bash scripts/test/test_agent_install.sh
 
       - name: nginx -t smoke (shipped vhosts parse on a real nginx)
         run: |
@@ -123,4 +130,115 @@ jobs:
             bash scripts/test/test_update.sh
             bash scripts/test/test_install.sh
             bash scripts/test/test_lib.sh
+            bash scripts/test/test_cli.sh
+            bash scripts/test/test_agent_install.sh
           '
+
+  update-e2e:
+    name: e2e real install + update
+    # The unit suites source the scripts and test functions in isolation — the
+    # top-level run block never executes there, and that run block is exactly
+    # where the 2026-07-02 update abort lived. This job is the missing gate: a
+    # REAL install (the default non-interactive, no-domain, plain-HTTP path)
+    # followed by a REAL run of THIS branch's updater, on the runner VM (full
+    # systemd + docker — the same shape as a user's box). --dry-run is
+    # deliberately NOT used: dry-run returns early from the very functions that
+    # have broken. This job mutates the runner (/opt/serverkit, systemd units,
+    # nginx), so it must stay independent — never fold it into the unit job.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ServerKit (non-interactive, no domain, plain HTTP)
+        run: |
+          # `sudo env`, not `... | sudo bash`: sudo resets the environment, so
+          # the switches must ride on the env command. PATH is forwarded so the
+          # runner's preinstalled node/npm/docker toolchain stays visible to
+          # root. No PANEL_DOMAIN + non-tty stdin is the documented no-prompt
+          # default; SERVERKIT_SKIP_SSL keeps the run HTTP-only (no certbot
+          # attempt on a runner with no DNS). install.sh copes with whatever
+          # web-server state the runner image ships — it is built for real,
+          # already-populated boxes.
+          sudo env PATH="$PATH" SERVERKIT_SKIP_SSL=1 bash install.sh
+
+      - name: Panel healthy after install
+        run: |
+          # Same probe install.sh and the VM harness gate on.
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:5000/api/v1/system/health >/dev/null 2>&1 && {
+              echo "backend healthy after install (probe $i)"; exit 0; }
+            sleep 2
+          done
+          echo "backend never became healthy after install" >&2
+          exit 1
+
+      - name: Real update with THIS branch's updater (--force)
+        run: |
+          # SERVERKIT_NO_SELF_UPDATE=1 stops the bootstrap from re-execing into
+          # the updater published on the target ref — the object under test is
+          # scripts/update.sh from this checkout. --force skips the version
+          # gate so the full deploy → migrate → switch → health path always
+          # executes.
+          sudo env PATH="$PATH" SERVERKIT_NO_SELF_UPDATE=1 bash scripts/update.sh --force
+
+      - name: Panel healthy after update
+        run: |
+          for i in $(seq 1 45); do
+            curl -fsS http://127.0.0.1:5000/api/v1/system/health >/dev/null 2>&1 && {
+              echo "backend healthy after update (probe $i)"; exit 0; }
+            sleep 2
+          done
+          echo "backend never became healthy after update" >&2
+          exit 1
+
+      - name: Version gate skips a redundant re-run
+        run: |
+          # A second run without --force should hit the version gate and skip.
+          # The message check is advisory (the remote may have advanced between
+          # the two runs, making a second full update legitimate) — only the
+          # exit code gates.
+          out="$(sudo env PATH="$PATH" SERVERKIT_NO_SELF_UPDATE=1 bash scripts/update.sh)"
+          printf '%s\n' "$out"
+          printf '%s' "$out" | grep -qi "already up to date" \
+            || echo "::warning::second run did not report 'Already up to date' (remote may have advanced)"
+
+      - name: Dump install/update state
+        if: failure()
+        run: |
+          set +e
+          echo '===== /var/log/serverkit (updater logs) ====='
+          sudo sh -c 'for f in /var/log/serverkit/*.log; do
+            [ -f "$f" ] || continue
+            echo "----- $f (last 300 lines) -----"
+            tail -n 300 "$f"
+          done'
+          echo '===== systemd ====='
+          sudo systemctl status serverkit --no-pager -l
+          sudo journalctl -u serverkit --no-pager -n 200
+          echo '===== nginx ====='
+          sudo systemctl status nginx --no-pager -l
+          sudo nginx -t
+          sudo tail -n 100 /var/log/nginx/error.log
+          echo '===== layout ====='
+          ls -la /opt/ /opt/serverkit/
+          true
+
+  shellcheck-advisory:
+    name: shellcheck full ruleset (advisory)
+    # Everything shellcheck can say about the two scripts users actually pipe
+    # to bash, at maximum sensitivity. Deliberately non-gating: --enable=all
+    # carries style opinions the codebase does not follow, so this exists to be
+    # read when touching install.sh / scripts/update.sh — not chased to green.
+    # The gating checks stay in the lint + unit job above.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck --enable=all (advisory — never fails the build)
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck --enable=all install.sh scripts/update.sh
