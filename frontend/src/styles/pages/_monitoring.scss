@@ -447,4 +447,39 @@
         font-size: 11px;
         color: var(--text-faint);
     }
+
+    // Speed test card (overview tab)
+    .mon-speedtest__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: $space-3;
+    }
+
+    .mon-speedtest__meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: $space-3;
+        margin-top: $space-3;
+
+        span {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-faint);
+        }
+    }
+
+    .mon-speedtest__error {
+        color: var(--red);
+        @include truncate();
+        max-width: 100%;
+    }
+
+    .mon-speedtest__empty {
+        span {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--text-faint);
+        }
+    }
 }
