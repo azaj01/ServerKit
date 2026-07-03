@@ -14,8 +14,15 @@
  *      Kept for backward compatibility with plugins that predate
  *      the contribution model.
  *
- * Plugins that declare a widget contribution opt out of the legacy
- * auto-render to avoid double-rendering.
+ * Plugins that declare ANY contribution (routes, nav, tabs, widgets,
+ * palette entries, layouts, ai) own their rendering through the
+ * contribution model and are excluded from the legacy auto-render.
+ * Gating on widgets alone let bundled extensions whose index module
+ * happened to have a default export (WordPress, Cloudflare zone ops)
+ * mount their whole PAGE globally on every route — the page then ran
+ * with no route params (zones/undefined) and the WordPress sub-router
+ * swallowed the current location ("/domains" → siteId "domains"),
+ * stacking several pages into one view.
  */
 import { useMemo } from 'react';
 import { useContributions, resolveComponent, getPluginModule } from './contributions';
@@ -40,18 +47,27 @@ function getInstalledPlugins() {
 }
 
 const PluginLoader = ({ api }) => {
-    const { widgets } = useContributions();
+    const contributions = useContributions();
+    const { widgets } = contributions;
     const legacyPlugins = useMemo(() => getInstalledPlugins(), []);
 
-    // Plugins that declare a widget contribution own their rendering
-    // through that path; skip the legacy auto-render for them.
+    // Any plugin that declares any contribution owns its rendering
+    // through the contribution model; skip the legacy auto-render for it.
     const slugsWithDeclared = useMemo(() => {
         const set = new Set();
-        for (const w of widgets || []) {
-            if (w && w.plugin) set.add(w.plugin);
+        const buckets = [
+            contributions.routes, contributions.nav, contributions.tabs,
+            contributions.widgets, contributions.command_palette,
+            contributions.layouts,
+            contributions.ai?.suggested_prompts, contributions.ai?.tool_renderers,
+        ];
+        for (const bucket of buckets) {
+            for (const item of bucket || []) {
+                if (item && item.plugin) set.add(item.plugin);
+            }
         }
         return set;
-    }, [widgets]);
+    }, [contributions]);
 
     const declaredWidgets = (widgets || [])
         .filter((w) => w && (w.slot || 'global') === 'global')
