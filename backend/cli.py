@@ -747,5 +747,307 @@ def deployment_status(job_id, logs):
         click.echo('')
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# API-backed commands: talk to the running panel over the local HTTP API using
+# a short-lived break-glass admin token (root/shell on the box already implies
+# full control; every mint is audit-logged as 'cli.breakglass').
+# ─────────────────────────────────────────────────────────────────────────────
+
+STATUS_SYMBOLS = {
+    'ok': ('✓', 'green'),
+    'pass': ('✓', 'green'),
+    'healthy': ('✓', 'green'),
+    'warn': ('!', 'yellow'),
+    'warning': ('!', 'yellow'),
+}
+
+
+def _api_client(with_token=True):
+    """Build an ApiClient for the local panel, minting a break-glass token."""
+    from app.services.cli_api_client import ApiClient, mint_breakglass_token
+
+    token = None
+    if with_token:
+        token, _user = mint_breakglass_token()
+    return ApiClient(token=token)
+
+
+def _fail(message):
+    click.echo(click.style(f'Error: {message}', fg='red'), err=True)
+    sys.exit(1)
+
+
+def _echo_table(headers, rows):
+    """Plain fixed-width table via click.echo (no extra deps)."""
+    rows = [[('' if cell is None else str(cell)) for cell in row] for row in rows]
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+    fmt = '  '.join(f'{{:<{w}}}' for w in widths)
+    click.echo(fmt.format(*headers))
+    click.echo('-' * (sum(widths) + 2 * (len(widths) - 1)))
+    for row in rows:
+        click.echo(fmt.format(*row))
+
+
+@cli.command()
+def status():
+    """Show panel health and version."""
+    from app.utils.version import get_panel_version
+    from app.services.cli_api_client import CliApiError
+
+    version = get_panel_version()
+    try:
+        # /system/health is unauthenticated by design.
+        health = _api_client(with_token=False).get('/system/health')
+    except CliApiError as exc:
+        _fail(str(exc))
+
+    rows = [
+        ('Panel version', version),
+        ('API status', health.get('status', 'unknown')),
+        ('Service', health.get('service', '-')),
+        ('Canonical domain', health.get('canonical_domain') or '-'),
+        ('HTTPS enabled', 'yes' if health.get('canonical_https_enabled') else 'no'),
+        ('Encryption configured', 'yes' if health.get('encryption_configured') else 'no'),
+    ]
+    _echo_table(['Field', 'Value'], rows)
+
+
+@cli.group()
+def services():
+    """Inspect and control system services via the panel API."""
+
+
+@services.command('list')
+def services_list():
+    """List monitored system services."""
+    from app.services.cli_api_client import CliApiError
+
+    try:
+        data = _api_client().get('/processes/services')
+    except CliApiError as exc:
+        _fail(str(exc))
+
+    entries = data.get('services', [])
+    if not entries:
+        click.echo('No services reported.')
+        return
+    rows = [(s.get('name', '-'), s.get('status', '-'), s.get('pid', '-')) for s in entries]
+    _echo_table(['Service', 'Status', 'PID'], rows)
+
+
+@services.command('restart')
+@click.argument('name')
+def services_restart(name):
+    """Restart a system service."""
+    from app.services.cli_api_client import CliApiError
+
+    try:
+        result = _api_client().post(f'/processes/services/{name}', {'action': 'restart'})
+    except CliApiError as exc:
+        _fail(str(exc))
+    click.echo(click.style(result.get('message', f'Service "{name}" restarted.'), fg='green'))
+
+
+@cli.group()
+def apps():
+    """Inspect applications via the panel API."""
+
+
+@apps.command('list')
+def apps_list():
+    """List applications known to the panel."""
+    from app.services.cli_api_client import CliApiError
+
+    try:
+        data = _api_client().get('/apps')
+    except CliApiError as exc:
+        _fail(str(exc))
+
+    entries = data.get('apps', [])
+    if not entries:
+        click.echo('No applications found.')
+        return
+    rows = [(a.get('name', '-'), a.get('app_type', '-'), a.get('status', '-')) for a in entries]
+    _echo_table(['Name', 'Type', 'Status'], rows)
+
+
+@cli.command('login-url')
+@click.option('--ttl', default=15, show_default=True, help='Link lifetime in minutes')
+@click.option('--ip', default=None, help='Bind the link to this client IP address')
+@click.option('--user', 'user_ref', default=None, help='Username or email (default: first active admin)')
+def login_url(ttl, ip, user_ref):
+    """Mint a one-time login link for the panel."""
+    app = create_app()
+    with app.app_context():
+        from app.services import login_link_service
+        from app.services.cli_api_client import find_breakglass_admin, resolve_port
+
+        if user_ref:
+            user = User.query.filter(
+                (User.username == user_ref) | (User.email == user_ref)
+            ).first()
+            if not user:
+                _fail(f'User "{user_ref}" not found.')
+            if not user.is_active:
+                _fail(f'User "{user.username}" is not active.')
+        else:
+            user = find_breakglass_admin()
+            if not user:
+                _fail('No active admin user found — create one with "serverkit create-admin".')
+
+        token, link = login_link_service.mint(user.id, ttl_minutes=ttl, bound_ip=ip)
+
+        origin = None
+        try:
+            from app.services.site_domain_service import SiteDomainService
+            origin = SiteDomainService.panel_origin()
+        except Exception:
+            origin = None
+        if not origin:
+            origin = f'http://localhost:{resolve_port()}'
+
+        click.echo(f'{origin}/login?link={token}')
+        click.echo(
+            f'Single-use link for "{user.username}", expires {link.expires_at.isoformat()}Z'
+            + (f', bound to {ip}' if ip else ''),
+            err=True,
+        )
+
+
+@cli.command()
+@click.option('--repair', 'do_repair', is_flag=True, help='Repair all repairable findings')
+@click.option('--yes', is_flag=True, help='Skip the repair confirmation prompt')
+def doctor(do_repair, yes):
+    """Run panel diagnostics (and optionally repair findings)."""
+    from app.services.cli_api_client import CliApiError
+
+    try:
+        client = _api_client()
+        data = client.post('/doctor/run')
+    except CliApiError as exc:
+        _fail(str(exc))
+
+    checks = (data.get('report') or {}).get('checks', [])
+    if not checks:
+        click.echo('Doctor reported no checks.')
+        return
+
+    rows = []
+    for check in checks:
+        raw_status = str(check.get('status', '')).lower()
+        symbol, color = STATUS_SYMBOLS.get(raw_status, ('✗', 'red'))
+        rows.append((
+            click.style(symbol, fg=color),
+            check.get('title') or check.get('key', '-'),
+            raw_status or '-',
+            check.get('detail') or '',
+        ))
+    _echo_table(['', 'Check', 'Status', 'Detail'], rows)
+
+    if not do_repair:
+        return
+
+    repairable = [
+        c for c in checks
+        if c.get('repairable') and str(c.get('status', '')).lower() not in ('ok', 'pass', 'healthy')
+    ]
+    if not repairable:
+        click.echo('Nothing repairable.')
+        return
+
+    click.echo(f'\n{len(repairable)} repairable finding(s): '
+               + ', '.join(c.get('key', '?') for c in repairable))
+    if not yes and not click.confirm('Repair all of these?', default=False):
+        click.echo('Aborted.')
+        return
+
+    # The repair endpoint takes the repair_ref dicts the report carries
+    # ({'kind': 'drift', 'type', 'id'} / {'kind': 'service', 'name'}).
+    items = [c.get('repair_ref') for c in repairable if c.get('repair_ref')]
+    if not items:
+        click.echo('Nothing repairable.')
+        return
+    try:
+        result = client.post('/doctor/repair', {'items': items})
+    except CliApiError as exc:
+        _fail(str(exc))
+    results = result.get('results', [])
+    ok = sum(1 for r in results if r.get('success'))
+    for r in results:
+        mark = click.style('OK', fg='green') if r.get('success') else click.style('FAIL', fg='red')
+        detail = r.get('error') or ''
+        click.echo(f"  [{mark}] {r.get('item')} {detail}".rstrip())
+    click.echo(click.style(f'{ok}/{len(results)} repairs succeeded.',
+                           fg='green' if ok == len(results) else 'yellow'))
+
+
+@cli.command()
+@click.argument('drift_type')
+@click.argument('drift_id')
+def repair(drift_type, drift_id):
+    """Repair a single drift finding (e.g. serverkit repair nginx <id>)."""
+    from app.services.cli_api_client import CliApiError
+
+    try:
+        result = _api_client().post(
+            f'/doctor/drift/{drift_type}/{drift_id}/repair', {'confirm': True}
+        )
+    except CliApiError as exc:
+        _fail(str(exc))
+    click.echo(click.style(result.get('message', 'Repair triggered.'), fg='green'))
+
+
+@cli.command()
+@click.option('--yes', is_flag=True, help='Skip the confirmation prompt')
+def update(yes):
+    """Update ServerKit via the bundled update script (Linux only)."""
+    import subprocess
+
+    if os.name == 'nt':
+        _fail('serverkit update is Linux-only — run scripts/update.sh on the server itself.')
+
+    from app.utils.version import get_install_dir
+    candidates = [
+        os.path.join(get_install_dir(), 'scripts', 'update.sh'),
+        str(Path(__file__).resolve().parent.parent / 'scripts' / 'update.sh'),
+        '/opt/serverkit/scripts/update.sh',
+    ]
+    script = next((c for c in candidates if os.path.isfile(c)), None)
+    if not script:
+        _fail('update.sh not found (looked in: ' + ', '.join(candidates) + ')')
+
+    click.echo(f'This will run: bash {script}')
+    if not yes and not click.confirm('Update ServerKit now?', default=False):
+        click.echo('Aborted.')
+        return
+
+    # Inherit stdio so the operator sees the updater output live.
+    proc = subprocess.Popen(['bash', script])
+    sys.exit(proc.wait())
+
+
+@cli.command('support-bundle')
+@click.option('--out', 'out_path', default=None, help='Output path for the zip')
+@click.option('--passphrase', default=None,
+              help='Requested bundle passphrase (see output: encryption needs external tooling)')
+def support_bundle(out_path, passphrase):
+    """Build a scrubbed diagnostic support bundle zip."""
+    app = create_app()
+    with app.app_context():
+        from app.services import support_bundle_service
+        path = support_bundle_service.build(out_path=out_path, passphrase=passphrase)
+
+    if passphrase:
+        click.echo(click.style(
+            'Note: built-in zip encryption is unavailable (pyzipper not installed); '
+            'the bundle is NOT encrypted. Encrypt before sharing, e.g. gpg -c ' + path,
+            fg='yellow',
+        ))
+    click.echo(click.style(f'Support bundle written: {path}', fg='green'))
+
+
 if __name__ == '__main__':
     cli()
