@@ -194,6 +194,13 @@ English | [Español](docs/README.es.md) | [中文版](docs/README.zh-CN.md) | [P
 </details>
 
 <details>
+<summary><strong>Marketplace</strong> — Browse and install extensions from the bundled catalog or the remote registry — with a unified Installed tab</summary>
+
+![Marketplace](docs/screenshots/marketplace.png)
+
+</details>
+
+<details>
 <summary><strong>Settings</strong> — Profile, security, appearance/branding, users, connections, and notification channels</summary>
 
 ![Settings](docs/screenshots/settings.png)

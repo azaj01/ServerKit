@@ -268,6 +268,18 @@ awaiting a stable release:
 
 ### Changed
 
+- **Marketplace simplified to a two-tab store** — Browse and Installed. The
+  Installed tab now lists *every* installed extension (built-in, registry,
+  manual) with the full action set (Update / Configure / Enable–Disable /
+  Uninstall with keep-vs-purge), replacing the old duplicate "Installed" and
+  "ServerKit Plugins" tabs. Each row shows where it came from via a
+  Built-in / Registry / Manual source badge, and registry installs are now
+  stamped `source_type='registry'` in the database instead of masquerading as
+  URL installs. Manual install (URL / host folder / zip upload) moved out of
+  tab-land into an "Install manually" modal off the topbar, and Browse dropped
+  its KPI strip, sidebar panels, and duplicate category filters in favor of
+  search + one chips row (plus an All / By ServerKit / Community publisher
+  filter).
 - Overhauled the Docker UI (bulk container stats, compose listing) and migrated
   the frontend design system to SCSS `.ui-*` components.
 - Unified the local dev launcher (`dev.sh` / `dev.ps1`).

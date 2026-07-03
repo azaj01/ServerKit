@@ -143,6 +143,8 @@ const Marketplace = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [category, setCategory] = useState('');
+    // Ownership filter: '' (all), 'serverkit' (firstParty), 'community'.
+    const [ownership, setOwnership] = useState('');
     const [activeTab, setActiveTab] = useState('browse');
     // Manual install modal (URL / folder / zip); null when closed, otherwise
     // the source sub-tab to preselect.
@@ -227,7 +229,7 @@ const Marketplace = () => {
         if (!plugin) return;
         try {
             await api.uninstallPlugin(plugin.id, purge);
-            toast.success(purge ? 'Plugin uninstalled; data purged' : 'Plugin uninstalled; data kept');
+            toast.success(purge ? 'Extension uninstalled; data purged' : 'Extension uninstalled; data kept');
             loadExtensions();
         } catch (err) { toast.error(err.message); }
     };
@@ -236,10 +238,10 @@ const Marketplace = () => {
         setInstalling(true);
         try {
             const result = await api.updatePlugin(pluginId);
-            toast.success(`Plugin "${result.display_name}" updated to v${result.version}.`);
+            toast.success(`Extension "${result.display_name}" updated to v${result.version}.`);
             loadExtensions();
         } catch (err) {
-            toast.error(err.message || 'Plugin update failed');
+            toast.error(err.message || 'Extension update failed');
         } finally {
             setInstalling(false);
         }
@@ -249,10 +251,10 @@ const Marketplace = () => {
         try {
             if (plugin.status === 'active') {
                 await api.disablePlugin(plugin.id);
-                toast.success('Plugin disabled');
+                toast.success('Extension disabled');
             } else {
                 await api.enablePlugin(plugin.id);
-                toast.success('Plugin enabled');
+                toast.success('Extension enabled');
             }
             loadExtensions();
         } catch (err) { toast.error(err.message); }
@@ -261,6 +263,7 @@ const Marketplace = () => {
     const resetFilters = () => {
         setSearch('');
         setCategory('');
+        setOwnership('');
     };
 
     const pluginStatusVariant = (status) => {
@@ -293,8 +296,13 @@ const Marketplace = () => {
     const mergedCatalogEntries = [...localCatalogEntries, ...registryCatalogEntries];
     const catalogCategories = deriveCatalogCategories(mergedCatalogEntries);
     const catalogEntries = mergedCatalogEntries
-        .filter((entry) => catalogEntryMatches(entry, search, category));
-    const hasFilters = Boolean(search.trim() || category);
+        .filter((entry) => catalogEntryMatches(entry, search, category))
+        .filter((entry) => {
+            if (ownership === 'serverkit') return entry.firstParty;
+            if (ownership === 'community') return !entry.firstParty;
+            return true;
+        });
+    const hasFilters = Boolean(search.trim() || category || ownership);
 
     return (
         <div className="sk-tabgroup__inner marketplace-page">
@@ -346,6 +354,24 @@ const Marketplace = () => {
                                 onClick={() => setCategory(item)}
                             >
                                 {titleCase(item)}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="cat-chips cat-chips--ownership" role="group" aria-label="Filter by publisher">
+                        {[
+                            { id: '', label: 'All publishers' },
+                            { id: 'serverkit', label: 'By ServerKit' },
+                            { id: 'community', label: 'Community' },
+                        ].map((option) => (
+                            <button
+                                key={option.id || 'all'}
+                                type="button"
+                                className={`cat-chip ${ownership === option.id ? 'cat-chip--active' : ''}`}
+                                aria-pressed={ownership === option.id}
+                                onClick={() => setOwnership(option.id)}
+                            >
+                                {option.label}
                             </button>
                         ))}
                     </div>
@@ -747,7 +773,7 @@ const PluginConfigDialog = ({ plugin, onClose }) => {
         setSaving(true);
         try {
             await api.updatePluginConfig(plugin.id, values || {});
-            toast.success('Plugin configuration saved');
+            toast.success('Extension configuration saved');
             onClose();
         } catch (err) {
             toast.error(err.message || 'Failed to save configuration');
@@ -819,7 +845,7 @@ const PluginConfigDialog = ({ plugin, onClose }) => {
                         );
                     })}
                     {Object.keys(fields).length === 0 && (
-                        <p className="text-muted">This plugin declares no configuration fields.</p>
+                        <p className="text-muted">This extension declares no configuration fields.</p>
                     )}
                 </div>
             )}
