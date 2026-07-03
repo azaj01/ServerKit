@@ -11,6 +11,11 @@ if _backend not in sys.path:
 
 os.environ.setdefault('FLASK_ENV', 'testing')
 
+# Keep the suite offline: unset SERVERKIT_REGISTRY_URL now means "use the
+# public serverkit-extensions registry", while set-but-EMPTY means explicitly
+# disabled (bundled index only) — which is what hermetic tests want.
+os.environ.setdefault('SERVERKIT_REGISTRY_URL', '')
+
 # Tests use a FILE-backed SQLite, not :memory:. Flask-SQLAlchemy serves an
 # in-memory SQLite from a single shared connection (StaticPool), so a test that
 # drives the DB from a background thread (e.g. the agent send_command round-trip

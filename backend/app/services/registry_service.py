@@ -9,7 +9,9 @@ Design rules:
   - Read-only discovery. NOTHING here ever auto-installs; installs are explicit.
   - Offline-tolerant. A failed/absent fetch falls back to the last good cache, then
     to a bundled copy (app/data/registry_index.json) — the Marketplace never blanks.
-  - Configurable. SERVERKIT_REGISTRY_URL points at the live index; unset ⇒ bundled.
+  - Configurable. SERVERKIT_REGISTRY_URL points at the live index. Unset ⇒ the
+    public serverkit-extensions registry; set-but-EMPTY ⇒ explicitly disabled
+    (bundled copy only — also how the test suite stays offline).
 """
 import json
 import logging
@@ -26,7 +28,20 @@ _BUNDLED_INDEX = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'registry_index.json'
 )
 
-REGISTRY_URL = os.environ.get('SERVERKIT_REGISTRY_URL', '').strip()
+# The curated public index (one JSON file, PR-reviewed, checksum-verified
+# installs). Panels fall back to cache → bundled copy when unreachable.
+DEFAULT_REGISTRY_URL = (
+    'https://raw.githubusercontent.com/jhd3197/serverkit-extensions/main/index.json'
+)
+
+
+def _registry_url():
+    """Resolve the live index URL per request (env changes apply without a
+    restart). Unset ⇒ the public registry; set-but-empty ⇒ disabled."""
+    value = os.environ.get('SERVERKIT_REGISTRY_URL')
+    if value is None:
+        return DEFAULT_REGISTRY_URL
+    return value.strip()
 try:
     _TTL = int(os.environ.get('SERVERKIT_REGISTRY_TTL', '3600'))
 except ValueError:
@@ -85,9 +100,10 @@ def _load_bundled():
 
 
 def _fetch_remote():
-    if not REGISTRY_URL:
+    url = _registry_url()
+    if not url:
         return None
-    resp = requests.get(REGISTRY_URL, timeout=15, headers={
+    resp = requests.get(url, timeout=15, headers={
         'Accept': 'application/json',
         'User-Agent': 'ServerKit-Registry/1.0',
     })
@@ -109,7 +125,7 @@ def refresh(force=False):
         if entries is not None:
             source = 'remote'
     except Exception as e:
-        logger.warning(f'Registry fetch failed ({REGISTRY_URL}): {e}')
+        logger.warning(f'Registry fetch failed ({_registry_url()}): {e}')
 
     if entries is None:
         # Keep the last good remote cache if we have one; else bundled.

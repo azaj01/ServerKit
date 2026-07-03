@@ -151,3 +151,28 @@ def test_update_flow(app, plugin_dirs, monkeypatch):
     updated = plugin_service.update_plugin(plugin.id)
     assert updated.version == '2.0.0'
     assert InstalledPlugin.query.filter_by(slug='regext').count() == 1
+
+
+# --------------------------------------------------------------------------- #
+# Registry URL resolution (live default vs explicit opt-out)
+# --------------------------------------------------------------------------- #
+
+def test_registry_url_defaults_to_public_index(monkeypatch):
+    """Unset env → the curated serverkit-extensions raw index (the go-live
+    default). conftest pins it EMPTY suite-wide, so simulate unset here."""
+    monkeypatch.delenv('SERVERKIT_REGISTRY_URL', raising=False)
+    assert registry_service._registry_url() == registry_service.DEFAULT_REGISTRY_URL
+    assert 'serverkit-extensions' in registry_service.DEFAULT_REGISTRY_URL
+
+
+def test_registry_url_empty_disables_remote(monkeypatch):
+    """Explicitly-empty env disables the remote entirely (bundled only) —
+    the hermetic-test/air-gapped escape hatch."""
+    monkeypatch.setenv('SERVERKIT_REGISTRY_URL', '')
+    assert registry_service._registry_url() == ''
+    assert registry_service._fetch_remote() is None
+
+
+def test_registry_url_env_override_wins(monkeypatch):
+    monkeypatch.setenv('SERVERKIT_REGISTRY_URL', 'https://example.test/index.json')
+    assert registry_service._registry_url() == 'https://example.test/index.json'
