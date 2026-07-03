@@ -209,9 +209,12 @@ ServerKit follows a modern 3-tier architecture:
 > **Deployment constraint — single WebSocket worker.** The agent gateway keeps
 > all connected-agent state (the registry of live agents, socket↔server index,
 > session tokens, and in-flight command queues) **in-memory in one process**.
-> Run the panel with a **single** gevent-websocket worker. Scaling to multiple
-> workers without a shared backplane (e.g. a Redis message queue) will silently
-> misroute or drop commands for agents connected to a different worker.
+> Run the panel with a **single** gunicorn worker process — a plain threaded
+> worker (`-w 1 --threads N`; WebSocket is served by simple-websocket to match
+> `async_mode='threading'` — the gevent-websocket worker class double-answers
+> the WS handshake and breaks WebSocket). Scaling to multiple workers without
+> a shared backplane (e.g. a Redis message queue) will silently misroute or
+> drop commands for agents connected to a different worker.
 
 ---
 

@@ -103,4 +103,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 WORKDIR /app/backend
 
 # Default command - use gunicorn for production
-CMD ["sh", "-c", "exec gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --workers 1 --bind 0.0.0.0:${SERVERKIT_BACKEND_PORT:-5000} --timeout 120 --access-logfile - --error-logfile - run:app"]
+# Single process (agent gateway state is in-memory) + threads: the app runs
+# async_mode='threading' (simple-websocket serves WS); a gevent-websocket
+# worker would double-answer the upgrade handshake and break WebSocket.
+CMD ["sh", "-c", "exec gunicorn --workers 1 --threads 100 --bind 0.0.0.0:${SERVERKIT_BACKEND_PORT:-5000} --timeout 120 --access-logfile - --error-logfile - run:app"]

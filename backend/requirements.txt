@@ -22,8 +22,12 @@ python-engineio==4.11.2
 # System monitoring
 psutil==5.9.7
 
-# Production server
+# Production server. WebSocket is served by simple-websocket (engineio's
+# threading driver) under a plain threaded gunicorn worker — do NOT deploy
+# with the gevent-websocket worker class; it double-answers the WS handshake
+# against async_mode='threading' (browser: "Invalid frame header").
 gunicorn==23.0.0
+simple-websocket==1.1.0
 gevent==25.4.2
 gevent-websocket==0.10.1
 

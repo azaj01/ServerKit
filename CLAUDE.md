@@ -54,7 +54,9 @@ Other backend components:
 - `run.py` — Entry point
 
 > **Agent gateway is single-worker.** All connected-agent state lives in-memory
-> in one process, so the panel must run a **single** gevent-websocket worker;
+> in one process, so the panel must run a **single** gunicorn worker process
+> (`-w 1 --threads N`, plain threaded worker — NOT the gevent-websocket worker
+> class, which double-answers the WS handshake against `async_mode='threading'`);
 > multi-worker deployments silently misroute agent commands. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).
 
