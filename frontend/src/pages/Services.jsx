@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Layers, Plus, Square, Play, RotateCw, GitBranch, Github, FolderOpen, FileArchive, FolderKanban } from 'lucide-react';
+import { Layers, Plus, Square, Play, RotateCw, GitBranch, Github, FolderOpen, FileArchive, FolderKanban, ArrowDownToLine } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { getServiceType, getStatusConfig, formatRelativeTime } from '../utils/serviceTypes';
@@ -112,12 +112,20 @@ const Services = () => {
     const runningCount = useMemo(() => apps.filter(a => a.status === 'running').length, [apps]);
 
     useTopbarActions(() =>
-        <Button size="sm" asChild>
-            <Link to="/services/new">
-                <Plus size={16} />
-                New Service
-            </Link>
-        </Button>,
+        <>
+            <Button variant="outline" size="sm" asChild>
+                <Link to="/imports">
+                    <ArrowDownToLine size={16} />
+                    Import a site
+                </Link>
+            </Button>
+            <Button size="sm" asChild>
+                <Link to="/services/new">
+                    <Plus size={16} />
+                    New Service
+                </Link>
+            </Button>
+        </>,
         []
     );
 

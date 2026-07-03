@@ -1,0 +1,571 @@
+// ============================================
+// IMPORT WIZARD (migrate a site from another panel)
+// ============================================
+
+.import-wizard {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: $space-6;
+    display: flex;
+    flex-direction: column;
+    gap: $space-6;
+
+    h2 {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        margin: 0 0 $space-4;
+        font-size: $font-size-lg;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+    }
+
+    // --------------------------------------------
+    // Stepper
+    // --------------------------------------------
+    &__stepper {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        overflow-x: auto;
+    }
+
+    &__step {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        padding: $space-2 $space-3;
+        border-radius: $radius-full;
+        font-size: $font-size-sm;
+        color: $text-tertiary;
+        white-space: nowrap;
+
+        &.is-active {
+            color: $text-primary;
+            background: $accent-bg;
+
+            .import-wizard__step-dot {
+                background: $accent-primary;
+                border-color: $accent-primary;
+                color: #fff;
+            }
+        }
+
+        &.is-done {
+            color: $text-secondary;
+
+            .import-wizard__step-dot {
+                color: $success;
+                border-color: $success-border;
+            }
+        }
+
+        // Connector between steps
+        & + &::before {
+            content: '';
+            width: 16px;
+            height: 1px;
+            margin-right: $space-2;
+            background: $border-default;
+        }
+    }
+
+    &__step-dot {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border: 1px solid $border-default;
+        border-radius: $radius-full;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-semibold;
+        flex-shrink: 0;
+    }
+
+    // --------------------------------------------
+    // Step panel (shared card shell)
+    // --------------------------------------------
+    &__panel {
+        background: $bg-card;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-xl;
+        padding: $space-6;
+    }
+
+    &__actions {
+        display: flex;
+        justify-content: space-between;
+        gap: $space-3;
+        margin-top: $space-6;
+
+        > :last-child {
+            margin-left: auto;
+        }
+    }
+
+    &__muted {
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+    }
+
+    // --------------------------------------------
+    // Step 1 — source cards
+    // --------------------------------------------
+    &__sources {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: $space-4;
+
+        @media (max-width: 720px) {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    &__source-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: $space-2;
+        padding: $space-5;
+        background: $bg-elevated;
+        border: 1px solid $border-default;
+        border-radius: $radius-lg;
+        text-align: left;
+        text-decoration: none;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+
+        strong {
+            color: $text-primary;
+            font-size: $font-size-base;
+        }
+
+        p {
+            margin: 0;
+            color: $text-secondary;
+            font-size: $font-size-sm;
+            line-height: 1.5;
+        }
+
+        &:hover {
+            border-color: $accent-primary;
+            background: $bg-hover;
+        }
+
+        &--link p::after {
+            content: ' ↗';
+            color: $text-tertiary;
+        }
+    }
+
+    &__source-ico {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: $radius-md;
+        background: $accent-bg;
+        color: $accent-primary;
+    }
+
+    &__source-chev {
+        position: absolute;
+        top: $space-5;
+        right: $space-4;
+        color: $text-tertiary;
+    }
+
+    // --------------------------------------------
+    // Step 2 — upload / URL
+    // --------------------------------------------
+    &__mode {
+        display: inline-flex;
+        gap: $space-1;
+        padding: $space-1;
+        margin-bottom: $space-4;
+        background: $bg-tertiary;
+        border-radius: $radius-md;
+    }
+
+    &__mode-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        padding: $space-2 $space-3;
+        border: none;
+        border-radius: $radius-sm;
+        background: transparent;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+        cursor: pointer;
+
+        &.is-active {
+            background: $bg-card;
+            color: $text-primary;
+        }
+    }
+
+    &__dropzone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: $space-2;
+        padding: $space-10 $space-6;
+        border: 1px dashed $border-active;
+        border-radius: $radius-lg;
+        color: $text-secondary;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+
+        p {
+            margin: 0;
+            color: $text-primary;
+        }
+
+        &:hover,
+        &.is-drag {
+            border-color: $accent-primary;
+            background: $accent-bg-soft;
+        }
+    }
+
+    &__file-input {
+        display: none;
+    }
+
+    &__progress {
+        width: 100%;
+        max-width: 360px;
+        height: 6px;
+        margin-top: $space-3;
+        background: $bg-tertiary;
+        border-radius: $radius-full;
+        overflow: hidden;
+    }
+
+    &__progress-fill {
+        height: 100%;
+        background: $accent-primary;
+        border-radius: $radius-full;
+        transition: width 0.2s ease;
+    }
+
+    &__url {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+        max-width: 560px;
+    }
+
+    // --------------------------------------------
+    // Step 3 — analysis report
+    // --------------------------------------------
+    &__waiting {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: $space-4;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+    }
+
+    &__report {
+        display: flex;
+        flex-direction: column;
+        gap: $space-5;
+    }
+
+    &__report-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-4;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+
+        code {
+            color: $text-primary;
+        }
+    }
+
+    &__report-section {
+        h3 {
+            display: flex;
+            align-items: center;
+            gap: $space-2;
+            margin: 0 0 $space-3;
+            font-size: $font-size-base;
+            font-weight: $font-weight-semibold;
+            color: $text-primary;
+        }
+    }
+
+    &__table-wrap {
+        overflow-x: auto;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+    }
+
+    &__table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: $font-size-sm;
+
+        th,
+        td {
+            padding: $space-2 $space-3;
+            text-align: left;
+            border-bottom: 1px solid $border-subtle;
+            white-space: nowrap;
+        }
+
+        th {
+            color: $text-tertiary;
+            font-weight: $font-weight-medium;
+            background: $bg-elevated;
+        }
+
+        td {
+            color: $text-primary;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        code {
+            font-family: $font-mono;
+            font-size: $font-size-xs;
+            color: $text-secondary;
+        }
+    }
+
+    &__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+    }
+
+    &__chip {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        padding: $space-1 $space-3;
+        background: $bg-tertiary;
+        border-radius: $radius-full;
+        font-size: $font-size-sm;
+        color: $text-primary;
+
+        em {
+            font-style: normal;
+            color: $text-tertiary;
+            font-size: $font-size-xs;
+        }
+    }
+
+    &__cron {
+        margin: 0;
+        padding: $space-3;
+        background: $bg-code;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        font-family: $font-mono;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+        overflow-x: auto;
+    }
+
+    // --------------------------------------------
+    // Callouts (warnings / unsupported / success)
+    // --------------------------------------------
+    &__callout {
+        display: flex;
+        gap: $space-3;
+        padding: $space-4;
+        margin-bottom: $space-4;
+        border-radius: $radius-md;
+        font-size: $font-size-sm;
+
+        svg {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        p {
+            margin: 0;
+        }
+
+        ul {
+            margin: $space-2 0 0;
+            padding-left: $space-5;
+        }
+
+        &--warning {
+            background: $warning-bg;
+            border: 1px solid $warning-border;
+            color: $warning;
+
+            ul,
+            p {
+                color: $text-secondary;
+            }
+        }
+
+        &--danger {
+            background: $danger-bg;
+            border: 1px solid $danger-border;
+            color: $danger;
+
+            ul,
+            p {
+                color: $text-secondary;
+            }
+        }
+
+        &--success {
+            background: $success-bg;
+            border: 1px solid $success-border;
+            color: $success;
+
+            p {
+                color: $text-secondary;
+            }
+
+            a {
+                color: $accent-primary;
+            }
+        }
+    }
+
+    // --------------------------------------------
+    // Step 4 — dry-run plan
+    // --------------------------------------------
+    &__plan {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+        margin: 0 0 $space-4;
+        padding: 0;
+        list-style: none;
+
+        li {
+            display: flex;
+            align-items: flex-start;
+            gap: $space-3;
+            padding: $space-3 $space-4;
+            background: $bg-elevated;
+            border: 1px solid $border-subtle;
+            border-radius: $radius-md;
+            color: $text-secondary;
+            font-size: $font-size-sm;
+
+            svg {
+                flex-shrink: 0;
+                margin-top: 1px;
+                color: $accent-primary;
+            }
+
+            strong {
+                color: $text-primary;
+            }
+
+            &.is-skipped {
+                opacity: 0.55;
+
+                svg {
+                    color: $text-tertiary;
+                }
+            }
+        }
+    }
+
+    &__options {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    // --------------------------------------------
+    // Step 5 — run log
+    // --------------------------------------------
+    &__current-step {
+        font-size: $font-size-sm;
+        font-weight: $font-weight-normal;
+        color: $text-tertiary;
+
+        code {
+            color: $text-secondary;
+        }
+    }
+
+    &__log {
+        height: 320px;
+        margin: 0;
+        padding: $space-4;
+        background: $bg-code;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        font-family: $font-mono;
+        font-size: $font-size-sm;
+        line-height: 1.6;
+        color: $text-secondary;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    // --------------------------------------------
+    // Previous imports
+    // --------------------------------------------
+    &__history {
+        h2 {
+            font-size: $font-size-base;
+        }
+    }
+
+    &__history-list {
+        display: flex;
+        flex-direction: column;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-lg;
+        background: $bg-card;
+        overflow: hidden;
+    }
+
+    &__history-item {
+        display: flex;
+        align-items: center;
+        gap: $space-4;
+        padding: $space-3 $space-4;
+        border-bottom: 1px solid $border-subtle;
+        font-size: $font-size-sm;
+
+        &:last-child {
+            border-bottom: none;
+        }
+    }
+
+    &__history-src {
+        color: $text-primary;
+        font-family: $font-mono;
+    }
+
+    &__history-when {
+        color: $text-tertiary;
+    }
+
+    &__history-actions {
+        display: inline-flex;
+        gap: $space-1;
+        margin-left: auto;
+    }
+}
