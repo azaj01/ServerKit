@@ -1,0 +1,128 @@
+// ============================================
+// DB CONFIG TUNER
+// Curated engine settings: current vs suggested, apply/rollback.
+// ============================================
+
+.db-tuner {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+    }
+
+    &__hint {
+        flex: 1;
+        margin: 0;
+        font-size: 0.8125rem;
+        color: $text-secondary;
+    }
+
+    &__error {
+        margin: 0;
+        font-size: 0.8125rem;
+        color: $color-danger;
+    }
+
+    &__dedicated {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: 0.8125rem;
+        color: $text-secondary;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+    &__table-wrap {
+        overflow-x: auto;
+        border: 1px solid $border-color;
+        border-radius: $radius-md;
+    }
+
+    &__table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8125rem;
+
+        th,
+        td {
+            padding: $space-2 $space-3;
+            text-align: left;
+            border-bottom: 1px solid $border-subtle;
+            vertical-align: top;
+        }
+
+        th {
+            color: $text-secondary;
+            font-weight: 600;
+            background: $bg-secondary;
+            white-space: nowrap;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr.is-diff {
+            background: $bg-hover;
+        }
+    }
+
+    &__key {
+        display: block;
+        font-family: $font-mono;
+        color: $text-primary;
+    }
+
+    &__desc {
+        display: block;
+        margin-top: 2px;
+        color: $text-muted;
+        font-size: 0.75rem;
+        max-width: 340px;
+    }
+
+    &__num {
+        font-family: $font-mono;
+        white-space: nowrap;
+        color: $text-secondary;
+
+        &--suggest {
+            color: $accent-primary;
+            font-weight: 600;
+        }
+    }
+
+    &__input {
+        width: 110px;
+        padding: 4px $space-2;
+        background: $bg-input;
+        border: 1px solid $border-color;
+        border-radius: $radius-md;
+        color: $text-primary;
+        font-family: $font-mono;
+        font-size: 0.8125rem;
+
+        &:focus {
+            outline: none;
+            border-color: $border-active;
+        }
+    }
+
+    &__range {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.6875rem;
+        color: $text-muted;
+    }
+
+    &__actions {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+    }
+}
