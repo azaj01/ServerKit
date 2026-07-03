@@ -69,6 +69,11 @@ class Application(db.Model):
     private_slug = db.Column(db.String(50), unique=True, nullable=True, index=True)
     private_url_enabled = db.Column(db.Boolean, default=False)
 
+    # Opt-in nginx micro-cache (task #21): short-TTL page cache emitted into
+    # the site's vhost, with bypasses for auth/admin/cart traffic. NULL/False
+    # = off (today's behavior).
+    micro_cache_enabled = db.Column(db.Boolean, default=False, nullable=True)
+
     # Environment linking
     environment_type = db.Column(db.String(20), default='standalone')  # 'production', 'development', 'staging', 'standalone'
     linked_app_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=True)
@@ -130,6 +135,7 @@ class Application(db.Model):
             'upload_path': self.upload_path,
             'private_slug': self.private_slug,
             'private_url_enabled': self.private_url_enabled,
+            'micro_cache_enabled': bool(self.micro_cache_enabled),
             'environment_type': self.environment_type,
             'linked_app_id': self.linked_app_id,
             'shared_config': json.loads(self.shared_config) if self.shared_config else None,

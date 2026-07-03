@@ -16,6 +16,7 @@ import {
     CircleCheck,
     CircleX,
     Sparkles,
+    Zap,
 } from 'lucide-react';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
@@ -25,6 +26,7 @@ import ProtectionPanel from '../backups/ProtectionPanel';
 import ContainerOpsPanel from '../apps/ContainerOpsPanel';
 import VolumesPanel from '../apps/VolumesPanel';
 import ResourceLimitsPanel from '../apps/ResourceLimitsPanel';
+import MicroCachePanel from '../apps/MicroCachePanel';
 import AppWafPanel from '../apps/AppWafPanel';
 import BuildTab from '../appdetail/BuildTab';
 import DeployTab from '../appdetail/DeployTab';
@@ -45,6 +47,9 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@
 function buildSettingsGroups(app) {
     const isDocker = app.isDocker ?? app.app_type === 'docker';
     const isPython = app.isPython ?? ['flask', 'django'].includes(app.app_type);
+    // Micro-cache applies to anything nginx fronts with an upstream (proxied
+    // or PHP-FPM); static sites already serve files straight off disk.
+    const isCacheable = isDocker || isPython || ['php', 'wordpress'].includes(app.app_type);
 
     return [
         {
@@ -56,6 +61,7 @@ function buildSettingsGroups(app) {
                 { id: 'domain', label: 'Domain & SSL', icon: Shield },
                 ...(isDocker ? [{ id: 'ops', label: 'Container Ops', icon: Boxes }] : []),
                 ...(isDocker ? [{ id: 'resources', label: 'Resource Limits', icon: Gauge }] : []),
+                ...(isCacheable ? [{ id: 'cache', label: 'Cache', icon: Zap }] : []),
             ],
         },
         {
@@ -305,6 +311,15 @@ const SettingsTab = ({ app, deployConfig, domains, primaryDomain, onUpdate }) =>
                     <div className="svc-settings__section">
                         <h3 className="svc-settings__section-title">Resource Limits</h3>
                         <ResourceLimitsPanel app={app} onChanged={onUpdate} />
+                    </div>
+                )}
+
+                {/* Cache — opt-in nginx micro-cache (task #21): 10s page cache
+                    with auth/admin/cart bypasses and a manual purge. */}
+                {section === 'cache' && (
+                    <div className="svc-settings__section">
+                        <h3 className="svc-settings__section-title">Cache</h3>
+                        <MicroCachePanel app={app} onChanged={onUpdate} />
                     </div>
                 )}
 
