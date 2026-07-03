@@ -1013,7 +1013,27 @@ EOF
     fi
     systemctl daemon-reload 2>/dev/null \
         || warn "systemd daemon-reload failed — the backend may restart with a stale unit"
+
+    report_stale_panel_vhosts
     good "Configuration refreshed"
+}
+
+# The panel used to be served by a frontend container on :3847; it is now
+# served statically by host nginx. A leftover custom vhost proxying to :3847
+# keeps serving whatever bundle the (never-updated) container holds — the
+# panel looks "stuck on an old version" for that hostname only, which reads
+# like a browser/CDN cache problem and wastes hours (2026-07-03 incident).
+# Observation only (R1): warn and continue, tolerate a missing/empty dir.
+report_stale_panel_vhosts() {
+    local hits=""
+    hits="$(grep -rls 'proxy_pass http://127\.0\.0\.1:3847' \
+        "$NGINX_DIR/sites-enabled/" 2>/dev/null | sort -u | tr '\n' ' ' || true)"
+    if [ -n "$hits" ]; then
+        warn "Vhost(s) still proxy the panel to the retired :3847 frontend container: ${hits}"
+        warn "  These serve a STALE panel bundle. Repoint them at the static SPA"
+        warn "  (root $INSTALL_DIR/frontend/dist + /api and /socket.io → :5000),"
+        warn "  mirroring sites-available/serverkit.conf."
+    fi
 }
 
 # ---------------------------------------------------------------------------
