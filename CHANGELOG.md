@@ -281,6 +281,20 @@ awaiting a stable release:
 - Hardened the installer: Docker install on Fedora/RHEL, SELinux + nginx
   reverse-proxy configuration, and low-RAM swap setup.
 - Stopped dropping capability/sysinfo payloads on transient `/poll` failures.
+- **Extension pages no longer ghost-render on every route** — the plugin
+  loader's legacy auto-render (any plugin index default export renders
+  globally) only excluded plugins declaring a *widget* contribution, so the
+  WordPress and Cloudflare-ops builtins mounted their whole pages on every
+  navigation: pages stacked into one view, the Cloudflare page fetched
+  `zones/undefined`, and the WordPress sub-router swallowed the current URL as
+  a site id. Legacy auto-render now skips any plugin declaring any
+  contribution, and the surplus default exports were removed.
+- **Live updates (WebSocket) actually work now** — the deployed gunicorn
+  worker class (gevent-websocket) double-answered the WebSocket handshake
+  against the app's `threading` async mode; browsers reported "Invalid frame
+  header" and every panel silently fell back to polling. The service unit and
+  Docker image now run a plain threaded worker (still a single process, which
+  the agent gateway requires) with `simple-websocket` serving the socket.
 - Settings → About now reports the real panel version on custom-directory
   installs and in Docker: version resolution honors the install location
   (`SERVERKIT_INSTALL_DIR`, rendered into the service unit from the installer's

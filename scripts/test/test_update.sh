@@ -386,7 +386,42 @@ for f in serverkit.conf serverkit-insecure.conf; do
     else
         bad "$f is not a clean static-serve config (still proxying :3847?)"
     fi
+    # The HTML entrypoint must revalidate every load (expires -1 → no-cache):
+    # a cached index.html references hashed assets that vanish on the next
+    # blue/green switch, bricking the panel behind any caching layer.
+    if grep -q 'expires -1;' "$cfg"; then
+        ok "$f marks the SPA entrypoint no-cache (expires -1)"
+    else
+        bad "$f lets the HTML entrypoint be cached — stale index.html breaks after a slot switch"
+    fi
 done
+
+# --------------------------------------------------------------------------
+# T15b — report_stale_panel_vhosts: a leftover custom vhost proxying the
+# retired :3847 frontend container serves a permanently stale panel bundle
+# (2026-07-03 incident: looked exactly like a browser/CDN cache problem).
+# The check must WARN and name the file — and never abort, even with no
+# sites-enabled dir at all (fresh box; also covered by the loop below).
+# --------------------------------------------------------------------------
+t="$WORK/t15b"; mkdir -p "$t/nginx/sites-enabled"
+printf 'server {\n  location / {\n    proxy_pass http://127.0.0.1:3847;\n  }\n}\n' \
+    > "$t/nginx/sites-enabled/legacy-panel.conf"
+printf 'server {\n  root /opt/serverkit/frontend/dist;\n}\n' \
+    > "$t/nginx/sites-enabled/clean.conf"
+if out="$( set -Eeuo pipefail; NGINX_DIR="$t/nginx"; INSTALL_DIR="/opt/serverkit"
+           report_stale_panel_vhosts 2>&1 )" \
+   && printf '%s' "$out" | grep -q 'legacy-panel.conf' \
+   && ! printf '%s' "$out" | grep -q 'clean.conf'; then
+    ok "report_stale_panel_vhosts warns about (only) vhosts proxying :3847"
+else
+    bad "report_stale_panel_vhosts missed the stale vhost or flagged a clean one: [$out]"
+fi
+if out="$( set -Eeuo pipefail; NGINX_DIR="$t/nowhere"; INSTALL_DIR="/opt/serverkit"
+           report_stale_panel_vhosts 2>&1 )" && [ -z "$out" ]; then
+    ok "report_stale_panel_vhosts is silent (rc 0) with no sites-enabled dir"
+else
+    bad "report_stale_panel_vhosts failed or spoke on a missing dir: [$out]"
+fi
 
 # --------------------------------------------------------------------------
 # T16 — app-uptime verification: discover_app_upstreams must extract the unique
@@ -761,7 +796,7 @@ UPDATE_OBSERVERS=(
     version_gate active_real_dir next_real_dir discover_app_upstreams
     probe_app_upstreams snapshot_app_reachability report_app_uptime_regressions
     locate_python wait_for_service quick_health is_docker_deployment
-    snapshot_docker_state report_failure
+    snapshot_docker_state report_failure report_stale_panel_vhosts
 )
 
 loop_fail=0

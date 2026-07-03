@@ -57,4 +57,7 @@ export function WordPressExtension() {
     );
 }
 
-export default WordPressExtension;
+// No default export on purpose: PluginLoader legacy-auto-renders any plugin
+// default export globally — this sub-router mounted that way runs outside its
+// route and swallows the current location ("/domains" → :id "domains").
+// The route contribution resolves the NAMED export via resolveComponent.

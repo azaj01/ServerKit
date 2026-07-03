@@ -59,6 +59,7 @@ For a detailed internal audit of the panel, see
 ## Deployment Note
 
 The agent gateway keeps all connected-agent state in-memory in a single process.
-Run the panel with a **single** gevent-websocket worker; multi-worker
+Run the panel with a **single** gunicorn worker process (threaded worker,
+`-w 1 --threads N` — not the gevent-websocket worker class); multi-worker
 deployments can misroute agent commands. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

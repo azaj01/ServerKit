@@ -19,4 +19,6 @@ export function CloudflareZoneSettingsPage() {
     return <CloudflareZoneSettings />;
 }
 
-export default CloudflareZoneSettingsPage;
+// No default export on purpose: PluginLoader legacy-auto-renders any plugin
+// default export globally (the page then runs with zoneId=undefined). The
+// route contribution resolves the NAMED export via resolveComponent.
