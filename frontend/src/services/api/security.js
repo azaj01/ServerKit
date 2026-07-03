@@ -223,6 +223,36 @@ export async function runFullScan() {
     return this.request('/security/scan/full', { method: 'POST' });
 }
 
+export async function scanApp(appId) {
+    // Job-backed malware scan (YARA + ClamAV) of an app's docroot → { job_id }
+    return this.request(`/security/scan/app/${appId}`, { method: 'POST' });
+}
+
+export async function scanPathJob(path) {
+    return this.request('/security/scan/job', {
+        method: 'POST',
+        body: { path }
+    });
+}
+
+// YARA web-shell rules
+export async function getYaraRules() {
+    return this.request('/security/yara/rules');
+}
+
+export async function uploadYaraRule(filename, content) {
+    return this.request('/security/yara/rules', {
+        method: 'POST',
+        body: { filename, content }
+    });
+}
+
+export async function deleteYaraRule(filename) {
+    return this.request(`/security/yara/rules/${encodeURIComponent(filename)}`, {
+        method: 'DELETE'
+    });
+}
+
 export async function getQuarantinedFiles() {
     return this.request('/security/quarantine');
 }
@@ -237,6 +267,12 @@ export async function quarantineFile(path) {
 export async function deleteQuarantinedFile(filename) {
     return this.request(`/security/quarantine/${encodeURIComponent(filename)}`, {
         method: 'DELETE'
+    });
+}
+
+export async function restoreQuarantinedFile(filename) {
+    return this.request(`/security/quarantine/${encodeURIComponent(filename)}/restore`, {
+        method: 'POST'
     });
 }
 

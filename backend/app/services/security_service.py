@@ -385,12 +385,17 @@ class SecurityService:
 
     @classmethod
     def quarantine_file(cls, file_path: str) -> Dict:
-        """Move infected file to quarantine."""
+        """Move infected file to quarantine (with a sidecar recording the
+        original location so it can be restored)."""
         config = cls.get_config()
         quarantine_path = config.get('clamav', {}).get('quarantine_path', paths.SERVERKIT_QUARANTINE_DIR)
 
         if not os.path.exists(file_path):
             return {'success': False, 'error': 'File not found'}
+
+        # Never quarantine something already inside the quarantine directory.
+        if os.path.abspath(file_path).startswith(os.path.abspath(quarantine_path) + os.sep):
+            return {'success': False, 'error': 'File is already in quarantine'}
 
         try:
             # Create quarantine directory
@@ -404,6 +409,16 @@ class SecurityService:
 
             # Move file
             os.rename(file_path, quarantine_full_path)
+
+            # Sidecar with the original location (enables restore)
+            try:
+                with open(quarantine_full_path + '.meta.json', 'w') as f:
+                    json.dump({
+                        'original_path': os.path.abspath(file_path),
+                        'quarantined_at': datetime.now().isoformat(),
+                    }, f)
+            except Exception:
+                pass  # restore becomes unavailable, quarantine itself succeeded
 
             # Log the quarantine action
             cls._log_alert('quarantine', f'File quarantined: {file_path}', {
@@ -433,14 +448,21 @@ class SecurityService:
         try:
             files = []
             for filename in os.listdir(quarantine_path):
+                if filename.endswith('.meta.json'):
+                    continue  # restore sidecars, not quarantined payloads
                 full_path = os.path.join(quarantine_path, filename)
                 stat = os.stat(full_path)
-                files.append({
+                entry = {
                     'name': filename,
                     'path': full_path,
                     'size': stat.st_size,
-                    'quarantined_at': datetime.fromtimestamp(stat.st_mtime).isoformat()
-                })
+                    'quarantined_at': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    'original_path': None,
+                }
+                meta = cls._read_quarantine_meta(full_path)
+                if meta:
+                    entry['original_path'] = meta.get('original_path')
+                files.append(entry)
 
             return {'success': True, 'files': files}
 
@@ -463,7 +485,63 @@ class SecurityService:
 
         try:
             os.remove(file_path)
+            try:
+                os.remove(file_path + '.meta.json')
+            except OSError:
+                pass
             return {'success': True, 'message': 'File deleted'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    @classmethod
+    def _read_quarantine_meta(cls, quarantine_full_path: str) -> Optional[Dict]:
+        """Read the restore sidecar for a quarantined file, if present."""
+        try:
+            with open(quarantine_full_path + '.meta.json', 'r') as f:
+                return json.load(f)
+        except Exception:
+            return None
+
+    @classmethod
+    def restore_quarantined_file(cls, filename: str) -> Dict:
+        """Move a quarantined file back to its recorded original location."""
+        config = cls.get_config()
+        quarantine_path = config.get('clamav', {}).get('quarantine_path', paths.SERVERKIT_QUARANTINE_DIR)
+        file_path = os.path.join(quarantine_path, filename)
+
+        # Security check: ensure file is in quarantine directory
+        if not os.path.abspath(file_path).startswith(os.path.abspath(quarantine_path)):
+            return {'success': False, 'error': 'Invalid file path'}
+
+        if not os.path.exists(file_path):
+            return {'success': False, 'error': 'File not found'}
+
+        meta = cls._read_quarantine_meta(file_path)
+        original_path = (meta or {}).get('original_path')
+        if not original_path:
+            return {'success': False,
+                    'error': 'Original location unknown — this file was quarantined '
+                             'before restore metadata existed'}
+
+        if os.path.exists(original_path):
+            return {'success': False,
+                    'error': f'A file already exists at {original_path}; '
+                             'remove it first to restore'}
+
+        try:
+            os.makedirs(os.path.dirname(original_path), exist_ok=True)
+            os.rename(file_path, original_path)
+            try:
+                os.remove(file_path + '.meta.json')
+            except OSError:
+                pass
+
+            cls._log_alert('quarantine_restore', f'File restored from quarantine: {original_path}', {
+                'quarantine_name': filename,
+                'restored_to': original_path,
+            })
+            return {'success': True, 'message': 'File restored',
+                    'restored_to': original_path}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 

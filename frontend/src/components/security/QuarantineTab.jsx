@@ -35,6 +35,19 @@ const QuarantineTab = () => {
         }
     }
 
+    async function handleRestore(file) {
+        const target = file.original_path || 'its original location';
+        if (!confirm(`Restore ${file.name} to ${target}? Only do this for false positives.`)) return;
+
+        try {
+            const result = await api.restoreQuarantinedFile(file.name);
+            setMessage({ type: 'success', text: result.message || 'File restored' });
+            loadFiles();
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message });
+        }
+    }
+
     return (
         <div className="quarantine-tab">
             {message && (
@@ -68,6 +81,7 @@ const QuarantineTab = () => {
                         <thead>
                             <tr>
                                 <th>Filename</th>
+                                <th>Original Location</th>
                                 <th>Size</th>
                                 <th>Quarantined</th>
                                 <th>Actions</th>
@@ -77,16 +91,30 @@ const QuarantineTab = () => {
                             {files.map((file, index) => (
                                 <tr key={index}>
                                     <td className="sk-cell-mono sec-path sec-path--red">{file.name}</td>
+                                    <td className="sk-cell-mono sec-path sec-faint" title={file.original_path || ''}>
+                                        {file.original_path || '—'}
+                                    </td>
                                     <td className="sk-cell-mono">{formatBytes(file.size, { defaultValue: '0 B' })}</td>
                                     <td className="sk-cell-mono sec-faint">{new Date(file.quarantined_at).toLocaleString()}</td>
                                     <td>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleDelete(file.name)}
-                                        >
-                                            Delete
-                                        </Button>
+                                        <div className="quarantine-actions">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleRestore(file)}
+                                                disabled={!file.original_path}
+                                                title={file.original_path ? 'Restore to original location' : 'Original location unknown'}
+                                            >
+                                                Restore
+                                            </Button>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => handleDelete(file.name)}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

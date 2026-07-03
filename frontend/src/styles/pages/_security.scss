@@ -100,6 +100,13 @@
         .sk-info-row .v.sec-v-amber { color: var(--amber); }
     }
 
+    // Left-aligned "what changed" chip cluster inside a table cell (FIM)
+    .sec-what {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
     // Right-aligned chip cluster inside an info row (jail tags…)
     .sec-chiprow {
         display: flex;
@@ -401,8 +408,12 @@
 .scanner-tab {
     .scan-options {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: $space-4;
+
+        @media (max-width: $breakpoint-lg) {
+            grid-template-columns: repeat(2, 1fr);
+        }
 
         @media (max-width: $breakpoint-md) {
             grid-template-columns: 1fr;
@@ -456,8 +467,10 @@
     .scan-card--quick .scan-card-icon { background: var(--accent-bg); color: var(--accent-bright); }
     .scan-card--full .scan-card-icon { background: var(--violet-bg); color: var(--violet); }
     .scan-card--custom .scan-card-icon { background: var(--cyan-bg); color: var(--cyan); }
+    .scan-card--app .scan-card-icon { background: var(--amber-bg); color: var(--amber); }
 
-    .scan-card--custom {
+    .scan-card--custom,
+    .scan-card--app {
         cursor: default;
 
         &:hover {
@@ -478,9 +491,62 @@
         }
     }
 
+    // App selector inside the "Scan an App" card — matches Input chrome
+    .scan-app-select {
+        flex: 1;
+        min-width: 0;
+        padding: 0 $space-2;
+        height: 32px;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        font-size: 12.5px;
+
+        &:focus {
+            outline: none;
+            border-color: var(--accent-dim);
+        }
+    }
+
     .scan-toolbar {
         display: flex;
         justify-content: flex-end;
+        gap: $space-2;
+    }
+
+    // Findings table (YARA + ClamAV merged report)
+    .scan-findings {
+        border-color: rgba(240, 82, 82, 0.35);
+
+        .scan-snippet {
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px;
+            color: var(--text-faint);
+        }
+    }
+
+    // Web-shell rules manager card
+    .yara-file-input { display: none; }
+
+    .yara-custom-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .yara-custom-item {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: 8px 0;
+        border-top: 1px solid var(--border-soft);
+
+        &:first-child { border-top: none; }
+
+        > .sec-mono:first-child { flex: 1; min-width: 0; }
     }
 }
 
@@ -510,6 +576,11 @@
 // ── Quarantine tab ───────────────────────────────────────────
 .quarantine-tab {
     .empty-state svg { color: var(--green); }
+
+    .quarantine-actions {
+        display: flex;
+        gap: $space-2;
+    }
 }
 
 // ── Integrity tab ────────────────────────────────────────────

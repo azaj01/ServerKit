@@ -2,8 +2,15 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.middleware.rbac import admin_required
 from app.services.security_service import SecurityService
+from app.services.malware_scan_service import MalwareScanService
+from app.services.yara_scan_service import YaraScanService
 
 security_bp = Blueprint('security', __name__)
+
+# Register the security.malware_scan job handler at boot (this module is
+# imported by create_app); registration is idempotent and also re-asserted on
+# every enqueue.
+MalwareScanService.register_jobs()
 
 
 # ==========================================
@@ -111,6 +118,34 @@ def scan_directory():
     return jsonify(result), 200 if result['success'] else 400
 
 
+@security_bp.route('/scan/app/<int:app_id>', methods=['POST'])
+@jwt_required()
+@admin_required
+def scan_app(app_id):
+    """Enqueue a job-backed malware scan (YARA + ClamAV) of an app's docroot."""
+    try:
+        job = MalwareScanService.enqueue_scan(app_id=app_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404 if 'not found' in str(e) else 400
+    return jsonify({'job_id': job.id, 'kind': job.kind,
+                    'path': (job.get_payload() or {}).get('path')}), 202
+
+
+@security_bp.route('/scan/job', methods=['POST'])
+@jwt_required()
+@admin_required
+def scan_path_job():
+    """Enqueue a job-backed malware scan of an arbitrary path."""
+    data = request.get_json()
+    if not data or not data.get('path'):
+        return jsonify({'error': 'Path required'}), 400
+    try:
+        job = MalwareScanService.enqueue_scan(path=data['path'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'job_id': job.id, 'kind': job.kind, 'path': data['path']}), 202
+
+
 @security_bp.route('/scan/status', methods=['GET'])
 @jwt_required()
 def get_scan_status():
@@ -169,6 +204,51 @@ def delete_quarantined_file(filename):
     """Permanently delete a quarantined file."""
     result = SecurityService.delete_quarantined_file(filename)
     return jsonify(result), 200 if result['success'] else 400
+
+
+@security_bp.route('/quarantine/<filename>/restore', methods=['POST'])
+@jwt_required()
+@admin_required
+def restore_quarantined_file(filename):
+    """Restore a quarantined file to its recorded original location."""
+    result = SecurityService.restore_quarantined_file(filename)
+    return jsonify(result), 200 if result['success'] else 400
+
+
+# ==========================================
+# YARA RULES (web-shell pass)
+# ==========================================
+@security_bp.route('/yara/rules', methods=['GET'])
+@jwt_required()
+@admin_required
+def list_yara_rules():
+    """List builtin (curated) and custom YARA rule files."""
+    return jsonify(YaraScanService.list_rules()), 200
+
+
+@security_bp.route('/yara/rules', methods=['POST'])
+@jwt_required()
+@admin_required
+def upload_yara_rule():
+    """Upload a custom .yar rule file (size-capped; requires real yara to run)."""
+    data = request.get_json()
+    if not data or not data.get('filename'):
+        return jsonify({'error': 'filename required'}), 400
+    result = YaraScanService.save_custom_rule(data['filename'], data.get('content', ''))
+    if not result['success']:
+        return jsonify({'error': result['error']}), 400
+    return jsonify(result), 200
+
+
+@security_bp.route('/yara/rules/<filename>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_yara_rule(filename):
+    """Delete a custom .yar rule file."""
+    result = YaraScanService.delete_custom_rule(filename)
+    if not result['success']:
+        return jsonify({'error': result['error']}), 400
+    return jsonify(result), 200
 
 
 # ==========================================
@@ -577,3 +657,89 @@ def get_sbom(sbom_id):
     if not sbom:
         return jsonify({'error': 'SBOM not found'}), 404
     return jsonify(sbom.to_dict(include_sbom=True)), 200
+
+
+# ==========================================
+# FILE INTEGRITY MONITORING (SCOPED FIM)
+# ==========================================
+# Baseline-and-diff over ServerKit-managed paths (nginx / systemd /
+# opted-in app docroots). The legacy /integrity/* endpoints above are kept
+# as-is for compatibility; this is the scoped surface the UI uses.
+
+@security_bp.route('/fim', methods=['GET'])
+@jwt_required()
+def get_fim_status():
+    """Get FIM scopes, baselines and last check results."""
+    from app.services.file_integrity_service import FileIntegrityService
+    return jsonify(FileIntegrityService.get_status()), 200
+
+
+@security_bp.route('/fim/<scope>/baseline', methods=['POST'])
+@jwt_required()
+@admin_required
+def fim_baseline(scope):
+    """Create (or recreate) the baseline for a scope."""
+    from app.services.file_integrity_service import (
+        FileIntegrityService, FileIntegrityScopeError,
+    )
+    data = request.get_json(silent=True) or {}
+    options = data.get('options') if isinstance(data.get('options'), dict) else None
+    try:
+        result = FileIntegrityService.baseline(scope, options=options)
+    except FileIntegrityScopeError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    return jsonify(result), 200
+
+
+@security_bp.route('/fim/<scope>/check', methods=['POST'])
+@jwt_required()
+@admin_required
+def fim_check(scope):
+    """Diff the scope against its baseline."""
+    from app.services.file_integrity_service import (
+        FileIntegrityService, FileIntegrityScopeError,
+    )
+    try:
+        result = FileIntegrityService.check(scope)
+    except FileIntegrityScopeError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    return jsonify(result), 200
+
+
+@security_bp.route('/fim/<scope>/accept', methods=['POST'])
+@jwt_required()
+@admin_required
+def fim_accept(scope):
+    """Accept current state (re-baseline the scope)."""
+    from app.services.file_integrity_service import (
+        FileIntegrityService, FileIntegrityScopeError,
+    )
+    try:
+        result = FileIntegrityService.accept(scope)
+    except FileIntegrityScopeError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+    return jsonify(result), 200
+
+
+@security_bp.route('/fim/apps', methods=['PUT'])
+@jwt_required()
+@admin_required
+def fim_set_app_optins():
+    """Set the per-app FIM opt-in list: {app_ids: [1, 2, ...]}."""
+    from app.services.file_integrity_service import (
+        FileIntegrityService, FileIntegrityScopeError,
+    )
+    data = request.get_json(silent=True)
+    if not data or 'app_ids' not in data:
+        return jsonify({'error': 'app_ids required'}), 400
+    try:
+        ids = FileIntegrityService.set_app_optins(data['app_ids'])
+    except FileIntegrityScopeError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'app_optins': ids}), 200
