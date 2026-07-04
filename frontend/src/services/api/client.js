@@ -107,7 +107,14 @@ class ApiClient {
     async handleResponse(response) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            const err = new Error(data.error || data.msg || 'Request failed');
+            // No server-provided message means the route itself misbehaved
+            // (404 unknown endpoint, 405 SPA catch-all, 502 proxy...) — name
+            // the endpoint and status so the toast is diagnosable.
+            let fallback = `Request failed (${response.status})`;
+            try {
+                fallback += `: ${new URL(response.url).pathname}`;
+            } catch { /* keep the status-only message */ }
+            const err = new Error(data.error || data.msg || fallback);
             err.status = response.status;
             err.data = data;
             throw err;
