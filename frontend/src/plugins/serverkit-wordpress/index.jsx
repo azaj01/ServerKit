@@ -23,6 +23,7 @@ import WordPressPluginLibrary from '../../pages/WordPressPluginLibrary';
 import WordPressProjects from '../../pages/WordPressProjects';
 import WordPressProject from '../../pages/WordPressProject';
 import WordPressDetail from '../../pages/WordPressDetail';
+import WordPressSshImport from './WordPressSshImport';
 
 // "WordPress Projects" was renamed to "Pipelines" (§2 unification). Forward old
 // deep links to the new space.
@@ -40,6 +41,9 @@ export function WordPressExtension() {
                 <Route index element={<WordPress />} />
                 <Route path="plugins/library" element={<WordPressPluginLibrary />} />
                 <Route path="pipelines" element={<WordPressProjects />} />
+                {/* SSH pull-import (Panel Improvements #3) — shares the group
+                    chrome; reached via the command palette / direct link. */}
+                <Route path="ssh-import" element={<WordPressSshImport />} />
             </Route>
             {/* Full-bleed pipeline detail (own chrome, outside the tab group). */}
             <Route path="pipelines/:id" element={<WordPressProject />} />
