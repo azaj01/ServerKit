@@ -43,6 +43,17 @@ export async function verifyBackupRun(targetType, targetId, runId) {
     return this.request(`${runsBase(targetType, targetId)}/${runId}/verify`, { method: 'POST' });
 }
 
+// Trigger a restore drill (a proving test-restore into a throwaway location).
+// Applications and WordPress sites use their own edit-gated, target-scoped
+// endpoint (the same owner who can back up a target can drill it); any other
+// target routes through the admin-only generic policy-by-target endpoint.
+export async function runBackupDrill(targetType, targetId) {
+    if (targetType === 'application' || targetType === 'wordpress_site') {
+        return this.request(`${runsBase(targetType, targetId)}/drill`, { method: 'POST' });
+    }
+    return this.request(`/backups/policies/${targetType}/${targetId}/drill`, { method: 'POST' });
+}
+
 export async function deleteBackupRun(targetType, targetId, runId) {
     return this.request(`${runsBase(targetType, targetId)}/${runId}`, { method: 'DELETE' });
 }

@@ -42,10 +42,38 @@ class BackupRun(db.Model):
 
     storage_path = db.Column(db.Text, nullable=True)  # local archive directory/path
     remote_key = db.Column(db.Text, nullable=True)
-    verified = db.Column(db.Boolean, default=False)
+    verified = db.Column(db.Boolean, default=False)  # remote-side evidence (legacy S3 HEAD)
+
+    # Verification ladder (plan 23). 'none' → 'listed' (tar -t readable) → 'hashed'
+    # (manifest sha256 spot-check passed) → 'drilled' (a real restore drill of a
+    # chain ending at this run succeeded). Only a drill ever sets 'drilled'.
+    verify_level = db.Column(db.String(12), nullable=False, default='none')
+    verified_at = db.Column(db.DateTime, nullable=True)
+    verify_error = db.Column(db.Text, nullable=True)
+    # sha256 of the primary archive, computed at build time (Decision 3).
+    checksum_sha256 = db.Column(db.String(64), nullable=True)
 
     error_message = db.Column(db.Text, nullable=True)
     metadata_json = db.Column(db.Text, default='{}')  # tables, files, compression, etc.
+
+    # Ordered verification levels, weakest → strongest.
+    VERIFY_LEVELS = ('none', 'listed', 'hashed', 'drilled')
+
+    @classmethod
+    def _verify_rank(cls, level):
+        try:
+            return cls.VERIFY_LEVELS.index(level or 'none')
+        except ValueError:
+            return 0
+
+    def effective_verify_level(self):
+        """Verify level mapping the legacy ``verified`` boolean forward: a run
+        with no explicit level but a remote-verified copy reads as 'listed' (the
+        remote HEAD proves it exists + size-matches) so old rows aren't 'none'."""
+        level = self.verify_level or 'none'
+        if level == 'none' and self.verified:
+            return 'listed'
+        return level
 
     def get_metadata(self):
         if not self.metadata_json:
@@ -80,6 +108,10 @@ class BackupRun(db.Model):
             'storage_path': self.storage_path,
             'remote_key': self.remote_key,
             'verified': self.verified,
+            'verify_level': self.effective_verify_level(),
+            'verified_at': self.verified_at.isoformat() if self.verified_at else None,
+            'verify_error': self.verify_error,
+            'checksum_sha256': self.checksum_sha256,
             'error_message': self.error_message,
             'compression': meta.get('compression'),
             'tables': meta.get('tables'),
