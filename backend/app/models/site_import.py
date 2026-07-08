@@ -13,7 +13,8 @@ from app import db
 
 # Formats the importer registry may grow to support. 'cpanel' ships first;
 # the others plug into the same pipeline (see app/services/site_importers/).
-VALID_SOURCE_TYPES = ('auto', 'cpanel', 'directadmin', 'hestia', 'wordpress_ssh')
+VALID_SOURCE_TYPES = ('auto', 'cpanel', 'directadmin', 'hestia', 'ssh',
+                      'wordpress_ssh')
 
 VALID_STATUSES = (
     'created', 'uploading', 'analyzing', 'analyzed',

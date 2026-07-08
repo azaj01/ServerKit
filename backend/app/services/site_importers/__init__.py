@@ -48,7 +48,11 @@ def detect_format(extracted_dir):
 from .cpanel import CpanelImporter  # noqa: E402
 from .directadmin import DirectadminImporter  # noqa: E402
 from .hestia import HestiaImporter  # noqa: E402
+from .ssh import GenericSshImporter  # noqa: E402
 
 register_importer(CpanelImporter)
 register_importer(DirectadminImporter)
 register_importer(HestiaImporter)
+# Live SSH pull importer (never auto-detected — detect() is a no-op; reached
+# only when the operator picks the 'ssh' source type).
+register_importer(GenericSshImporter)
