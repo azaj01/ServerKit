@@ -67,6 +67,14 @@ _CATALOG = {
         'severity': 'warning',
         'category': 'system',
     },
+    # Daily doctor sweep found managed site domains that no longer resolve
+    # (see app/services/doctor_service.py:_dns_checks).
+    'dns.unresolved': {
+        'title': 'Site domains no longer resolve ({count})',
+        'template': 'generic',
+        'severity': 'warning',
+        'category': 'system',
+    },
     # Daily registry check found newer versions of installed extensions (#50).
     'extensions.updates_available': {
         'title': 'Extension updates available ({count})',
@@ -137,6 +145,65 @@ DEFAULT_ENTRY = {
     'severity': 'info',
     'category': 'system',
 }
+
+
+# --------------------------------------------------------------------------- #
+# Deep links (plan 24 Phase 5)
+#
+# Maps an ``event_key`` to the relative in-app path its notification should link
+# to. Resolved at send time and PERSISTED on the notification row (see
+# NotificationBusService.send) so a later route move never breaks old rows.
+# Producers may override per-send via ``action_path`` / ``action_label``.
+# --------------------------------------------------------------------------- #
+_LINKS = {
+    # backups / restores
+    'backup.completed': '/backups',
+    'backup.failed': '/backups',
+    'restore.completed': '/backups',
+    'restore.failed': '/backups',
+    # security
+    'security.alert': '/security',
+    # apps / deploys
+    'app.deployed': '/services',
+    # system / monitoring
+    'system.alert': '/monitoring',
+    'monitoring.alert': '/monitoring',
+    'drift.detected': '/monitoring/doctor',
+    'dns.sync_failed': '/domains',
+    'dns.unresolved': '/domains',
+    'cron.job_failed': '/cron',
+    'extensions.updates_available': '/marketplace',
+    'setup.incomplete': '/setup',
+    # account
+    'user.welcome': '/dashboard',
+    'user.invitation': '/dashboard',
+}
+
+# Button label for the deep link, keyed by destination path.
+_LINK_LABELS = {
+    '/backups': 'View backups',
+    '/security': 'View security',
+    '/services': 'View services',
+    '/monitoring': 'Open monitoring',
+    '/monitoring/doctor': 'Open doctor',
+    '/domains': 'View domains',
+    '/cron': 'View scheduled tasks',
+    '/marketplace': 'Open marketplace',
+    '/setup': 'Finish setup',
+    '/dashboard': 'Open dashboard',
+}
+
+_DEFAULT_LINK_LABEL = 'View details'
+
+
+def link_for(event_key, data=None):
+    """Return ``(action_path, action_label)`` for an event, or ``(None, None)``
+    when the event has no known deep link. ``data`` is accepted for future
+    per-event parameterization; the map is static today."""
+    path = _LINKS.get(event_key)
+    if not path:
+        return None, None
+    return path, _LINK_LABELS.get(path, _DEFAULT_LINK_LABEL)
 
 
 def register(event_key, title, template='generic', severity='info', category='system'):

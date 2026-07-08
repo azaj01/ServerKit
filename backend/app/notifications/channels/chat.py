@@ -38,6 +38,12 @@ class ChatAdapter(ChannelAdapter):
 
     def deliver(self, delivery, notification):
         target = (delivery.target or '').strip()
+        # Org-level chat/webhook connections (plan 24 Phase 4) address their
+        # destination as ``conn:<id>`` — resolve + deliver via the connection
+        # service (encrypted creds, HMAC signing, per-connection category).
+        if target.startswith('conn:'):
+            from app.services.chat_webhook_service import ChatWebhookService
+            return ChatWebhookService.deliver(delivery, notification)
         if not target:
             return DeliveryResult.skipped(f'no {self.key} target')
 

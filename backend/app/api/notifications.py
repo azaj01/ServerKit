@@ -296,7 +296,11 @@ def get_inbox():
     limit = min(request.args.get('limit', 20, type=int), 100)
     offset = request.args.get('offset', 0, type=int)
     unread_only = request.args.get('unread', '').lower() in ('1', 'true', 'yes')
-    items = NotificationBusService.inbox(user_id, limit=limit, offset=offset, unread_only=unread_only)
+    category = request.args.get('category') or None
+    severity = request.args.get('severity') or None
+    items = NotificationBusService.inbox(user_id, limit=limit, offset=offset,
+                                         unread_only=unread_only,
+                                         category=category, severity=severity)
     return jsonify({
         'items': items,
         'unread_count': NotificationBusService.unread_count(user_id),
@@ -324,10 +328,17 @@ def mark_inbox_read(delivery_id):
 @notifications_bp.route('/inbox/read-all', methods=['POST'])
 @jwt_required()
 def mark_inbox_all_read():
-    """Mark all of the current user's in-app notifications as read."""
+    """Mark all of the current user's in-app notifications as read.
+
+    Optional ``category`` / ``severity`` query params mark only that group.
+    """
     user_id = int(get_jwt_identity())
-    updated = NotificationBusService.mark_all_read(user_id)
-    return jsonify({'success': True, 'updated': updated, 'unread_count': 0}), 200
+    category = request.args.get('category') or None
+    severity = request.args.get('severity') or None
+    updated = NotificationBusService.mark_all_read(user_id, category=category,
+                                                   severity=severity)
+    return jsonify({'success': True, 'updated': updated,
+                    'unread_count': NotificationBusService.unread_count(user_id)}), 200
 
 
 # ==========================================
@@ -359,6 +370,49 @@ def admin_retry_delivery(delivery_id):
     if result is None:
         return jsonify({'error': 'Delivery not found'}), 404
     return jsonify({'success': True, 'delivery': result}), 200
+
+
+# ==========================================
+# ORG CHAT / WEBHOOK CONNECTIONS (admin)
+# ==========================================
+
+@notifications_bp.route('/admin/chat-connections', methods=['GET'])
+@jwt_required()
+@admin_required
+def list_chat_connections():
+    """List org chat/webhook connections + the catalog of supported kinds."""
+    from app.services.chat_webhook_service import ChatWebhookService
+    from app.models.chat_webhook import ChatWebhookConnection
+    return jsonify({
+        'connections': [c.to_dict() for c in ChatWebhookService.list_all()],
+        'kinds': list(ChatWebhookConnection.KINDS),
+    }), 200
+
+
+@notifications_bp.route('/admin/chat-connections', methods=['POST'])
+@jwt_required()
+@admin_required
+def add_chat_connection():
+    """Create a chat/webhook connection (destination + secret encrypted)."""
+    from app.services.chat_webhook_service import ChatWebhookService
+    data = request.get_json() or {}
+    data['created_by'] = int(get_jwt_identity())
+    try:
+        conn = ChatWebhookService.add(data)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'connection': conn.to_dict()}), 201
+
+
+@notifications_bp.route('/admin/chat-connections/<int:conn_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_chat_connection(conn_id):
+    """Delete a chat/webhook connection (promotes a new per-kind default)."""
+    from app.services.chat_webhook_service import ChatWebhookService
+    if not ChatWebhookService.delete(conn_id):
+        return jsonify({'error': 'Connection not found'}), 404
+    return jsonify({'success': True}), 200
 
 
 # ==========================================
