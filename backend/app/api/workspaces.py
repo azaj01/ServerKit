@@ -3,6 +3,9 @@ from flask_jwt_extended import jwt_required
 from app.services.workspace_service import WorkspaceService
 from app.services.audit_service import AuditService
 from app.models.audit_log import AuditLog
+# The workspace guards now live in middleware/rbac.py so any resource blueprint
+# can reuse them (plan 19 Decision 2). Re-exported here for existing callers.
+from app.middleware.rbac import require_workspace_access, require_workspace_role
 
 workspaces_bp = Blueprint('workspaces', __name__)
 
@@ -11,27 +14,6 @@ def get_current_user():
     from flask_jwt_extended import get_jwt_identity
     from app.models.user import User
     return User.query.get(get_jwt_identity())
-
-
-def require_workspace_access(workspace_id, user):
-    """Return 403 response tuple if user is not a workspace member or admin, else None."""
-    if user.is_admin:
-        return None
-    role = WorkspaceService.get_user_role(workspace_id, user.id)
-    if role is None:
-        return jsonify({'error': 'Workspace access denied'}), 403
-    return None
-
-
-def require_workspace_role(workspace_id, user, roles):
-    """Return 403 response tuple if user is not an admin and their workspace
-    membership role is not one of the allowed roles."""
-    if user.is_admin:
-        return None
-    role = WorkspaceService.get_user_role(workspace_id, user.id)
-    if role not in roles:
-        return jsonify({'error': 'Insufficient permissions'}), 403
-    return None
 
 
 @workspaces_bp.route('/', methods=['GET'])

@@ -1,4 +1,5 @@
-import { ServiceTile } from '@/components/ds';
+import { KpiBand, MetricCard } from '@/components/ds';
+import { Server, Boxes, Globe, Users } from 'lucide-react';
 
 const WorkspaceOverviewTab = ({ ws, since, members, srvIn, services, sites }) => (
     <div className="ws-detail__grid">
@@ -11,24 +12,12 @@ const WorkspaceOverviewTab = ({ ws, since, members, srvIn, services, sites }) =>
         </section>
         <section className="ws-detail__card">
             <h3>Resources</h3>
-            <div className="ws-resource-stats">
-                <div className="ws-resource-stats__item">
-                    <div className="ws-resource-stats__value">{srvIn.length}</div>
-                    <div className="ws-resource-stats__label">Servers</div>
-                </div>
-                <div className="ws-resource-stats__item">
-                    <div className="ws-resource-stats__value">{services.length}</div>
-                    <div className="ws-resource-stats__label">Services</div>
-                </div>
-                <div className="ws-resource-stats__item">
-                    <div className="ws-resource-stats__value">{sites.length}</div>
-                    <div className="ws-resource-stats__label">Sites</div>
-                </div>
-                <div className="ws-resource-stats__item">
-                    <div className="ws-resource-stats__value">{members.length}</div>
-                    <div className="ws-resource-stats__label">Members</div>
-                </div>
-            </div>
+            <KpiBand>
+                <MetricCard icon={<Server size={16} />} tone="accent" value={srvIn.length} label="Servers" />
+                <MetricCard icon={<Boxes size={16} />} tone="accent" value={services.length} label="Services" />
+                <MetricCard icon={<Globe size={16} />} tone="accent" value={sites.length} label="Sites" />
+                <MetricCard icon={<Users size={16} />} tone="accent" value={members.length} label="Members" />
+            </KpiBand>
         </section>
     </div>
 );
