@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Boxes, Network, RefreshCw, Server as ServerIcon } from 'lucide-react';
+import { AlertTriangle, Boxes, Network, RefreshCw, Router, Server as ServerIcon, Waypoints } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { Button } from '@/components/ui/button';
-import { DataTable, Pill } from '@/components/ds';
+import { DataTable, KpiBand, MetricCard, Pill } from '@/components/ds';
 import EmptyState from '../components/EmptyState';
 
 // Fleet-wide reverse-proxy dashboard (Phase 4 of C6). Aggregates every
@@ -106,18 +106,20 @@ const FleetProxy = () => {
         return counts;
     }, [rows]);
 
+    // Summary KPIs. Tone mirrors each proxy type's semantic color (Traefik→cyan,
+    // Caddy→violet from PROXY_TYPE_META); the neutral fleet counts read accent,
+    // and the mismatch tile turns amber only when there is something to act on.
     const summaryTiles = [
-        { key: 'total', label: 'Servers', value: summary.total, icon: ServerIcon, meta: typeMeta('nginx') },
-        { key: 'apps', label: 'Apps', value: summary.apps, icon: Boxes, meta: typeMeta('nginx') },
-        { key: 'traefik', label: 'Traefik', value: summary.traefik, meta: typeMeta('traefik') },
-        { key: 'caddy', label: 'Caddy', value: summary.caddy, meta: typeMeta('caddy') },
+        { key: 'total', label: 'Servers', value: summary.total, icon: <ServerIcon size={16} />, tone: 'accent' },
+        { key: 'apps', label: 'Apps', value: summary.apps, icon: <Boxes size={16} />, tone: 'accent' },
+        { key: 'traefik', label: 'Traefik', value: summary.traefik, icon: <Router size={16} />, tone: 'cyan' },
+        { key: 'caddy', label: 'Caddy', value: summary.caddy, icon: <Waypoints size={16} />, tone: 'violet' },
         {
             key: 'mismatches',
             label: 'Ingress mismatches',
             value: summary.mismatches,
-            icon: AlertTriangle,
-            meta: typeMeta('nginx'),
-            warn: summary.mismatches > 0,
+            icon: <AlertTriangle size={16} />,
+            tone: summary.mismatches > 0 ? 'amber' : 'green',
         },
     ];
 
@@ -148,25 +150,17 @@ const FleetProxy = () => {
                 </div>
             </header>
 
-            <div className="fleet-proxy__summary">
-                {summaryTiles.map((tile) => {
-                    const Icon = tile.icon;
-                    return (
-                        <div
-                            key={tile.key}
-                            className={`fleet-proxy__summary-tile${tile.warn ? ' fleet-proxy__summary-tile--warn' : ''}`}
-                        >
-                            <span className="fleet-proxy__summary-label">
-                                {Icon ? <Icon size={14} /> : (
-                                    <span className={`fleet-proxy__swatch fleet-proxy__swatch--${tile.meta.kind}`} />
-                                )}
-                                {tile.label}
-                            </span>
-                            <strong className="fleet-proxy__summary-value">{tile.value}</strong>
-                        </div>
-                    );
-                })}
-            </div>
+            <KpiBand max={5}>
+                {summaryTiles.map((tile) => (
+                    <MetricCard
+                        key={tile.key}
+                        icon={tile.icon}
+                        tone={tile.tone}
+                        value={tile.value}
+                        label={tile.label}
+                    />
+                ))}
+            </KpiBand>
 
             {error ? (
                 <div className="fleet-proxy__error">

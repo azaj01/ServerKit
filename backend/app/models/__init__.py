@@ -60,15 +60,21 @@ from app.models.cloudflare_worker import CloudflareWorker
 from app.models.cloudflare_tunnel import CloudflareTunnel
 from app.models.backup_policy import BackupPolicy
 from app.models.backup_run import BackupRun
+from app.models.restore_drill import RestoreDrill
 from app.queue_bus.models import QueueGroup, Queue, QueueMessage
 from app.notifications.models import Notification, NotificationDelivery
 from app.models.email_provider import EmailProviderConnection
+from app.models.chat_webhook import ChatWebhookConnection
 from app.models.system_event import SystemEvent
 from app.models.domain_registration import DomainRegistration
 from app.models.login_link import LoginLink
 from app.models.managed_database_user import ManagedDatabaseUser
 from app.models.site_import import SiteImport
 from app.models.site_bandwidth import SiteBandwidthDaily
+from app.models.cron_run import CronRun
+from app.models.fleet_doctor_result import FleetDoctorResult
+from app.models.server_survey import ServerSurvey
+from app.models.dns_cutover_snapshot import DnsCutoverSnapshot
 
 __all__ = [
     'User', 'Application', 'Domain', 'EnvironmentVariable', 'EnvironmentVariableHistory',
@@ -98,10 +104,11 @@ __all__ = [
     'WebhookEndpoint', 'WebhookDelivery',
     'WafPolicy',
     'CloudflareWorker', 'CloudflareTunnel',
-    'BackupPolicy', 'BackupRun',
+    'BackupPolicy', 'BackupRun', 'RestoreDrill',
     'QueueGroup', 'Queue', 'QueueMessage',
     'Notification', 'NotificationDelivery',
     'EmailProviderConnection',
+    'ChatWebhookConnection',
     'SystemEvent',
     'DomainRegistration',
     'Project', 'Environment',
@@ -112,5 +119,9 @@ __all__ = [
     'LoginLink',
     'ManagedDatabaseUser',
     'SiteImport',
+    'CronRun',
     'SiteBandwidthDaily',
+    'FleetDoctorResult',
+    'ServerSurvey',
+    'DnsCutoverSnapshot',
 ]

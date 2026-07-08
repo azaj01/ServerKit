@@ -1,0 +1,31 @@
+{
+  "name": "serverkit-runtime-demo",
+  "display_name": "Runtime Demo Extension",
+  "version": "1.0.0",
+  "description": "A tiny runtime-loadable ESM extension fixture (plan 25 #12). Ships a prebuilt, externalized frontend/dist/index.mjs used by backend tests and the screenshots render smoke test. Hand-checked-in — no build step needed.",
+  "author": "ServerKit",
+  "license": "MIT",
+  "category": "utility",
+  "sdk_version": "^1.0.0",
+  "frontend_entry": "dist/index.mjs",
+  "contributions": {
+    "nav": [
+      {
+        "id": "serverkit-runtime-demo",
+        "label": "Runtime Demo",
+        "route": "/serverkit-runtime-demo",
+        "category": "system",
+        "icon": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 8v8M8 12h8\"/>"
+      }
+    ],
+    "routes": [
+      {
+        "path": "serverkit-runtime-demo",
+        "component": "RuntimeDemoPage"
+      }
+    ],
+    "page_titles": {
+      "/serverkit-runtime-demo": "Runtime Demo"
+    }
+  }
+}

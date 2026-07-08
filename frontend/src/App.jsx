@@ -27,6 +27,7 @@ import Security from './pages/Security';
 import Services from './pages/Services';
 import NewService from './pages/NewService';
 import ImportWizard from './pages/ImportWizard';
+import Coexistence from './pages/Coexistence';
 import ServiceDetail from './pages/ServiceDetail';
 import Templates from './pages/Templates';
 import Servers from './pages/Servers';
@@ -81,6 +82,7 @@ const PAGE_TITLES = {
     '/services': 'Services',
     '/services/new': 'New Service',
     '/imports': 'Import a Site',
+    '/imports/coexistence': 'Running Alongside Another Panel',
     '/projects': 'Projects',
     '/shared-variables': 'Shared Variables',
     '/fleet-proxy': 'Fleet Proxy',
@@ -312,6 +314,7 @@ function AppRoutes() {
                     so the Settings left-nav is shareable and survives a refresh. */}
                 <Route path="services/:id/:tab/:section" element={<ServiceDetail />} />
                 <Route path="imports" element={<ImportWizard />} />
+                <Route path="imports/coexistence" element={<Coexistence />} />
                 <Route path="apps" element={<Navigate to="/services" replace />} />
                 <Route path="apps/:id" element={<LegacyAppRedirect />} />
                 <Route path="apps/:id/:tab" element={<LegacyAppRedirect />} />

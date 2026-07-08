@@ -82,16 +82,6 @@
         }
     }
 
-    // ── KPI strip ───────────────────────────────────────────
-    .mon-kpis {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: $space-4;
-
-        @media (max-width: $breakpoint-lg) { grid-template-columns: repeat(2, 1fr); }
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
-    }
-
     // ── section heads + panels ──────────────────────────────
     .mon-section-head {
         display: flex;

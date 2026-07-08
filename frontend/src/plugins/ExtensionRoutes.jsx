@@ -32,6 +32,8 @@ import {
     resolveCustomLayout,
     isInsideDashboard,
 } from './contributions';
+import { getRuntimeLoadState, isRuntimeFrontend } from './runtime/loader';
+import { ExtensionErrorBoundary, ExtensionFailureCard } from './runtime/ExtensionBoundary';
 
 function devWarn(msg) {
     if (import.meta.env.DEV) {
@@ -39,9 +41,28 @@ function devWarn(msg) {
     }
 }
 
-function buildRoute(contrib, key) {
+function buildRoute(contrib, key, frontends) {
     const Component = resolveComponent(contrib.plugin, contrib.component);
     if (!Component) {
+        // Fail soft, loudly (Decision 5): if the slug is delivered as a runtime
+        // bundle that failed to load, render a failure card on its routes rather
+        // than dropping them silently. Unknown (non-runtime) components still
+        // just skip + warn — a misconfigured builtin shouldn't card every route.
+        if (isRuntimeFrontend(frontends, contrib.plugin)) {
+            const state = getRuntimeLoadState(contrib.plugin);
+            return (
+                <Route
+                    key={key}
+                    path={contrib.path}
+                    element={(
+                        <ExtensionFailureCard
+                            slug={contrib.plugin}
+                            message={state?.error || `component "${contrib.component}" not found in bundle`}
+                        />
+                    )}
+                />
+            );
+        }
         devWarn(
             `Cannot resolve component "${contrib.component}" for plugin `
             + `"${contrib.plugin}" (route ${contrib.path})`
@@ -52,7 +73,11 @@ function buildRoute(contrib, key) {
         <Route
             key={key}
             path={contrib.path}
-            element={<Component />}
+            element={(
+                <ExtensionErrorBoundary slug={contrib.plugin}>
+                    <Component />
+                </ExtensionErrorBoundary>
+            )}
         />
     );
 }
@@ -64,7 +89,7 @@ const BUILTIN_LAYOUT_COMPONENTS = {
 };
 
 export default function useExtensionRoutes() {
-    const { routes, layouts } = useContributions();
+    const { routes, layouts, frontends } = useContributions();
 
     const dashboardRoutes = [];
     const groupRoutes = {};
@@ -77,7 +102,7 @@ export default function useExtensionRoutes() {
         // Tab-group nested route (#43): collected per core group id and
         // mounted by App.jsx inside that group's TabGroupLayout <Route>.
         if (contrib.group) {
-            const node = buildRoute(contrib, key);
+            const node = buildRoute(contrib, key, frontends);
             if (node) {
                 if (!groupRoutes[contrib.group]) groupRoutes[contrib.group] = [];
                 groupRoutes[contrib.group].push(node);
@@ -86,7 +111,7 @@ export default function useExtensionRoutes() {
         }
 
         if (isInsideDashboard(layoutId)) {
-            const node = buildRoute(contrib, key);
+            const node = buildRoute(contrib, key, frontends);
             if (node) dashboardRoutes.push(node);
             return;
         }
@@ -103,7 +128,7 @@ export default function useExtensionRoutes() {
             return;
         }
 
-        const node = buildRoute(contrib, key);
+        const node = buildRoute(contrib, key, frontends);
         if (!node) return;
 
         let group = groupsByLayout.get(layoutId);

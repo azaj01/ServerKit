@@ -33,6 +33,7 @@ const STATIC_PAGES = [
     // contributed by the serverkit-status / serverkit-cloud-provision /
     // serverkit-remote-access extensions.
     { label: 'Marketplace', path: '/marketplace', category: 'Pages', keywords: 'extensions plugins' },
+    { label: 'Import a Site', path: '/imports', category: 'Pages', keywords: 'import migrate cpanel directadmin hestia backup adoption move existing' },
     { label: 'Downloads', path: '/downloads', category: 'Pages', keywords: 'agent installer' },
     { label: 'Projects', path: '/projects', category: 'Pages', keywords: 'organization group' },
     { label: 'Shared Variables', path: '/shared-variables', category: 'Pages', keywords: 'env secrets shared' },

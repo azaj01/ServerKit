@@ -53,8 +53,10 @@ Relevant endpoints:
       "permissions": ["network"],               // declared host permissions (honesty is reviewed)
       "min_panel_version": "1.7.0",             // optional compat gate (inclusive)
       "max_panel_version": null,                // optional
+      "sdk_version": "^1.0.0",                   // optional (additive) — frontend SDK range the bundle targets
       "source": "https://github.com/owner/repo", // repo URL (latest release), release URL, or direct .zip
       "sha256": "…",                            // sha256 of the release zip — STRONGLY recommended
+      "release_notes": "…",                      // optional (additive) — shown in the update-diff modal
       "homepage": "https://…",
       "icon": "<svg-inner-markup/>",            // rendered on the detail view
       "screenshots": ["https://…/1.png"]        // rendered on the detail view
@@ -71,16 +73,22 @@ Notes:
   while prototyping.
 - `min_panel_version`/`max_panel_version` are compared against the panel's
   `VERSION`. An incompatible entry can be listed but not installed/updated.
+- `sdk_version` (additive) is the semver range of the frontend SDK a **runtime
+  bundle** targets — see [EXTENSIONS.md](EXTENSIONS.md) → *The SDK contract*. Checked
+  at install and at load. Older panels ignore it; older indexes omit it.
+- `release_notes` (additive) is free text shown in the Marketplace **update-diff**
+  modal alongside the version + permissions delta. Old panels ignore it.
 
 ---
 
 ## Publishing an extension
 
 1. **Structure the repo** per [`docs/EXTENSIONS.md`](EXTENSIONS.md): a `plugin.json`
-   at the archive root, plus `backend/` and/or `frontend/`. Remember the production
-   frontend constraint — a third-party extension that ships a frontend won't render
-   on a prebuilt panel until the Phase 3 delivery mechanism lands, so ship
-   backend-only (or a `bare`/custom-layout escape hatch) for now.
+   at the archive root, plus `backend/` and/or `frontend/`. A third-party extension
+   that ships a **prebuilt runtime bundle** (`frontend_entry: dist/index.mjs`,
+   externalized shared libs) now renders on a prebuilt panel **with no rebuild** —
+   see [`docs/EXTENSIONS_CI.md`](EXTENSIONS_CI.md) for the build→hash→publish recipe.
+   (Backend-only extensions need no frontend at all.)
 
 2. **Cut a release.** Tag a version and attach a plugin `.zip` as a release asset
    (the installer prefers a `.zip` asset over the source zipball). Record the
@@ -102,6 +110,11 @@ Notes:
 - **Checksum** — `sha256` present and matches the release asset.
 - **License** — a real OSS license (`license` field + a LICENSE in the repo).
 - **Compat** — `min_panel_version` reflects the oldest panel actually tested.
+- **Frontend bundle** — if the extension ships UI, it's a **runtime ESM bundle**
+  (`frontend_entry: dist/index.mjs`) that passes `--validate` (no embedded React,
+  shared libs externalized). Raw `.jsx` frontends don't render on prebuilt panels.
+- **SDK range** — `sdk_version` present for any extension shipping a runtime bundle
+  and reflects the SDK it was actually built + tested against.
 - **Brand-neutral** — no competitor names in the name/description (project policy).
 
 Free/OSS project: there are **no paid extensions, quotas, or billing** — ever.

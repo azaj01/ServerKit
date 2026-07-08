@@ -154,6 +154,40 @@ def _collect_job_failures():
     return {'recent_failures': failures}
 
 
+def _collect_restore_confidence():
+    """Per-policy restore-proof summary (plan 23): last run + verify level, last
+    drill age/status, cadence, offsite evidence level. Counts and states only —
+    no paths, no secrets, matching the bundle's scrub discipline."""
+    from datetime import datetime
+    from app.models.backup_policy import BackupPolicy
+    from app.models.backup_run import BackupRun
+
+    policies = []
+    for policy in BackupPolicy.query.order_by(BackupPolicy.id.asc()).all():
+        latest = (BackupRun.query
+                  .filter_by(policy_id=policy.id, status='success')
+                  .order_by(BackupRun.started_at.desc()).first())
+        offsite = (latest.get_metadata() or {}).get('offsite') if latest else None
+        last_drill_age_days = None
+        if policy.last_drill_at:
+            last_drill_age_days = (datetime.utcnow() - policy.last_drill_at).days
+        policies.append({
+            'target_type': policy.target_type,
+            'target_id': policy.target_id,
+            'enabled': policy.enabled,
+            'remote_copy': policy.remote_copy,
+            'drill_cadence': policy.drill_cadence or 'off',
+            'last_run_status': policy.last_status,
+            'latest_verify_level': latest.effective_verify_level() if latest else 'none',
+            'latest_verify_error': bool(latest and latest.verify_error),
+            'last_drill_status': policy.last_drill_status,
+            'last_drill_age_days': last_drill_age_days,
+            'offsite_evidence': (offsite or {}).get('evidence') if offsite else None,
+            'offsite_deep_evidence': (offsite or {}).get('deep_evidence') if offsite else None,
+        })
+    return {'policies': policies, 'total': len(policies)}
+
+
 def _collect_doctor():
     """Last doctor report, if the doctor service (built separately) exposes one."""
     try:
@@ -206,6 +240,7 @@ def build(out_path=None, passphrase=None):
         'settings_shapes.json': _safe('settings_shapes', _collect_settings_shapes),
         'jobs.json': _safe('jobs', _collect_job_failures),
         'doctor.json': _safe('doctor', _collect_doctor),
+        'restore_confidence.json': _safe('restore_confidence', _collect_restore_confidence),
     }
     log_tail = _safe('log_tail', _collect_log_tail, default='# log collection failed\n')
 

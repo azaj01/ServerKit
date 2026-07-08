@@ -6,17 +6,6 @@
 
 .ftp-server {
 
-    // ─── KPI strip (replaces the old StatStrip) ─────────
-    .ftp-kpis {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: $space-4;
-        margin: $space-5 0 $space-4;
-
-        @media (max-width: $breakpoint-lg) { grid-template-columns: repeat(2, 1fr); }
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
-    }
-
     // ─── Mono eyebrow section headers (Users / Connections / Logs) ───
     .section-header {
         display: flex;

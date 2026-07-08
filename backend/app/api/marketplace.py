@@ -51,6 +51,13 @@ def install_registry(slug):
             target_id=plugin.id,
             details={'name': plugin.name, 'version': plugin.version, 'source': 'registry'},
         )
+        # Opt-in anonymous install ping (default OFF; #17). Best-effort — never
+        # affects the install result.
+        try:
+            from app.services import registry_service
+            registry_service.record_install(plugin.slug, plugin.version)
+        except Exception:
+            pass
         return jsonify(plugin.to_dict()), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400

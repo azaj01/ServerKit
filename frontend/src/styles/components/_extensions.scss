@@ -1,0 +1,60 @@
+// Runtime-extension failure card (plan 25 Phase 2 #7). Rendered on an
+// extension's routes when its bundle fails to load or its component crashes.
+// Deliberately dependency-free styling — it must render even when the extension
+// (or the design system it leans on) is the thing that broke.
+
+.sk-ext-failcard {
+    display: flex;
+    gap: $spacing-md;
+    align-items: flex-start;
+    max-width: 640px;
+    margin: $spacing-xl auto;
+    padding: $spacing-lg;
+    background: $bg-card;
+    border: 1px solid $border-color;
+    border-left: 3px solid $color-danger;
+    border-radius: $radius-md;
+
+    &__icon {
+        flex: 0 0 auto;
+        font-size: 1.5rem;
+        line-height: 1;
+        color: $color-danger;
+    }
+
+    &__body {
+        min-width: 0;
+    }
+
+    &__title {
+        margin: 0 0 $spacing-xs;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: $text-primary;
+    }
+
+    &__desc {
+        margin: 0 0 $spacing-sm;
+        color: $text-secondary;
+
+        code {
+            padding: 0 4px;
+            background: $bg-hover;
+            border-radius: $radius-sm;
+            font-size: 0.9em;
+        }
+    }
+
+    &__reason {
+        color: $text-primary;
+        font-family: $font-mono;
+        font-size: 0.85em;
+        word-break: break-word;
+    }
+
+    &__hint {
+        margin: 0;
+        color: $text-muted;
+        font-size: 0.85rem;
+    }
+}

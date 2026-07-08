@@ -7,7 +7,13 @@
  * enforced by the parent PrivateRoute in App.jsx.
  */
 import { Outlet } from 'react-router-dom';
+import StagingBanner from '../components/StagingBanner';
 
-const StandaloneLayout = () => <Outlet />;
+const StandaloneLayout = () => (
+    <>
+        <StagingBanner />
+        <Outlet />
+    </>
+);
 
 export default StandaloneLayout;

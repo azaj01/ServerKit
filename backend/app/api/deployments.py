@@ -1,3 +1,5 @@
+# Bucket: PER-APP read (plan 29 #9). Per-app history gates via _access →
+# can_access_app. See docs/WORKSPACE_SCOPING.md.
 """Unified deployment surface (§3 unification).
 
 One read namespace over the deploy records that today live in three places:

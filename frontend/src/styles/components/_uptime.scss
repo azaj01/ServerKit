@@ -316,13 +316,8 @@
     }
 }
 
-// Stats Grid
-.uptime-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: $space-3;
-}
-
+// Legacy `.uptime-stats-grid` (double-defined) removed (Plan 20 #21) — unused;
+// summary metric grids use the KpiBand primitive (`.sk-kpiband`).
 .uptime-stat {
     display: flex;
     flex-direction: column;
@@ -432,10 +427,6 @@
 
     .counter-separator {
         font-size: 24px;
-    }
-
-    .uptime-stats-grid {
-        grid-template-columns: repeat(2, 1fr);
     }
 
     .uptime-legend {

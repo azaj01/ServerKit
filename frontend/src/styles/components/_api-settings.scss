@@ -189,36 +189,6 @@
     gap: $space-1;
 }
 
-.api-settings__stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: $space-3;
-    padding: $space-4;
-}
-
-.api-settings__stat-card {
-    display: flex;
-    flex-direction: column;
-    gap: $space-1;
-    padding: $space-3;
-    background: $bg-elevated;
-    border-radius: $radius-md;
-    text-align: center;
-}
-
-.api-settings__stat-value {
-    font-size: $font-size-xl;
-    font-weight: 700;
-    color: $text-primary;
-}
-
-.api-settings__stat-label {
-    font-size: $font-size-xs;
-    color: $text-tertiary;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
 .api-settings__chart {
     padding: $space-4;
 
@@ -512,10 +482,6 @@
 // ─── Responsive ────────────────────────────────────────
 
 @media (max-width: $breakpoint-md) {
-    .api-settings__stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     .api-settings__rate-limits {
         grid-template-columns: 1fr;
     }

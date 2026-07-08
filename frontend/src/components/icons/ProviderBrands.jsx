@@ -9,9 +9,10 @@
 import {
     SiGithub, SiGitlab, SiBitbucket, SiCloudflare, SiDigitalocean,
     SiHetzner, SiVultr, SiAkamai, SiGodaddy, SiNamecheap, SiBackblaze, SiDocker,
+    SiDiscord, SiSlack, SiTelegram,
 } from 'react-icons/si';
 import { FaAws } from 'react-icons/fa';
-import { Mail, HardDrive, Plug } from 'lucide-react';
+import { Mail, HardDrive, Plug, Webhook } from 'lucide-react';
 
 // provider id (matches providerCatalog) -> brand icon component. Several ids map
 // to the same brand wearing two hats (e.g. DigitalOcean as both a cloud host and
@@ -34,6 +35,10 @@ const PROVIDER_ICONS = {
     smtp: Mail,
     s3: HardDrive,
     b2: SiBackblaze,
+    chat_discord: SiDiscord,
+    chat_slack: SiSlack,
+    chat_telegram: SiTelegram,
+    chat_webhook: Webhook,
 };
 
 // Renders the brand icon for a provider, falling back to the generic lucide Plug

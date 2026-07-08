@@ -206,3 +206,17 @@ class Application(db.Model):
 
     def __repr__(self):
         return f'<Application {self.name}>'
+
+
+@db.event.listens_for(Application, 'before_delete')
+def _clear_cron_association(mapper, connection, target):
+    """Cron jobs are never silently deleted with an app — they fall back to the
+    System bucket. Clearing the association here (one place) covers every delete
+    path (apps/docker/python/git/workflow), since cron metadata lives in a JSON
+    store outside the DB and can't ride a FK cascade. Best-effort: a failure here
+    must never block deleting the app."""
+    try:
+        from app.services.cron_service import CronService
+        CronService.clear_application(target.id)
+    except Exception:  # noqa: BLE001 - cleanup must not block app deletion
+        pass

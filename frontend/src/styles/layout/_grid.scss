@@ -2,21 +2,8 @@
 // GRID LAYOUTS
 // ============================================
 
-// Stats strip (4-column grid)
-.stats-strip {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: $space-6;
-    margin-bottom: $space-8;
-
-    @media (max-width: $breakpoint-xl) {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    @media (max-width: $breakpoint-sm) {
-        grid-template-columns: 1fr;
-    }
-}
+// Legacy `.stats-strip` 4-column grid removed (Plan 20 #20) — unused; pages use
+// the KpiBand primitive (`.sk-kpiband`) for summary metric grids.
 
 // Dashboard grid (auto-fit cards)
 .dashboard-grid {

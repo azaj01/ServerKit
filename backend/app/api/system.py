@@ -183,6 +183,11 @@ def health_check():
     canonical_domain = SettingsService.get('canonical_domain', '') or ''
     https_enabled = bool(SettingsService.get('canonical_https_enabled', False))
 
+    # Staging instances (plan 37 testbed) run with SERVERKIT_STAGING set. Echo
+    # it here so the verify step can prove WHICH instance answered and the UI
+    # can show its STAGING banner.
+    staging = os.environ.get('SERVERKIT_STAGING', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
     return jsonify({
         'status': 'healthy',
         'service': 'serverkit-api',
@@ -190,6 +195,7 @@ def health_check():
         'canonical_domain': canonical_domain,
         'canonical_https_enabled': https_enabled,
         'canonical_origin': canonical_origin(canonical_domain, https_enabled) if canonical_domain else None,
+        'staging': staging,
     }), 200
 
 

@@ -1,11 +1,16 @@
+# Bucket: PER-APP read (plan 29 #9). Per-app bandwidth is scoped to callers who
+# can access the app (can_access_app); the cross-app overview stays panel-wide.
 """REST surface for per-domain bandwidth accounting.
 
 Mounted at /api/v1/bandwidth (registered in app/__init__.py).
 """
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity
 
 from ..middleware.rbac import admin_required, viewer_required
+from ..models import User, Application
 from ..services.bandwidth_service import BandwidthService
+from ..services.resource_grant_service import ResourceGrantService
 
 bandwidth_bp = Blueprint('bandwidth', __name__)
 
@@ -26,7 +31,12 @@ def get_apps_bandwidth():
 @bandwidth_bp.route('/apps/<int:app_id>', methods=['GET'])
 @viewer_required
 def get_app_bandwidth(app_id):
-    """Full daily series (default 90 days) + current-month total for one app."""
+    """Full daily series (default 90 days) + current-month total for one app,
+    scoped to the app's workspace visibility (plan 29 #9 — foreign caller 404)."""
+    app = Application.query.get(app_id)
+    user = User.query.get(get_jwt_identity())
+    if app is None or not ResourceGrantService.can_access_app(user, app):
+        return jsonify({'error': 'Not found'}), 404
     try:
         days = request.args.get('days', 90, type=int)
         series = BandwidthService.series(app_id=app_id, days=days)

@@ -14,6 +14,7 @@
       "permissions": ["agent.command:gui:screenshot", "agent.command:gui:capabilities"],
       "min_panel_version": "1.7.0",
       "max_panel_version": null,
+      "sdk_version": "^1.0.0",
       "source": "https://github.com/jhd3197/serverkit-gui",
       "sha256": null,
       "homepage": "https://github.com/jhd3197/serverkit-gui",

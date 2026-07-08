@@ -28,7 +28,42 @@
  * is skipped (and logged in dev).
  */
 
+// The SDK compatibility contract. Bump this (semver) whenever the exported
+// surface below changes in a way extensions can observe:
+//   MAJOR — a removed/renamed export or a breaking signature change.
+//   MINOR — a new export added (older extensions keep working).
+//   PATCH — a non-surface fix.
+// Extensions pin a compatible range in plugin.json (`sdk_version`, e.g. "^1.0.0"),
+// checked at install (manifest lint) and reported at runtime via
+// GET /api/v1/plugins/contributions. The backend mirror lives in
+// backend/app/utils/sdk.py — keep the two in lock-step (asserted by
+// backend/tests/test_sdk_contract.py).
+export const SDK_VERSION = '1.0.0';
+
 export { api, default as defaultApi } from '../../services/api';
+
+// Design-system primitives — the sanctioned building blocks for plugin pages.
+// A plugin page should look like a core page: PageTopbar + KpiBand +
+// DataTable/ResourceList. Extensions previously deep-imported '@/components/ds'
+// (still works, same modules); this is the blessed surface (Plan 20 Decision 4).
+export {
+    KpiBand,
+    MetricCard,
+    Gauge,
+    ScoreGauge,
+    Sparkline,
+    Pill,
+    PageTopbar,
+    DataTable,
+    ResourceCard,
+    ResourceList,
+    Drawer,
+} from '../../components/ds';
+
+// Scheduling — extensions schedule things (cert windows, report runs, cleanup
+// jobs) with the same friendly cron picker as core (Presets/Builder/Advanced +
+// server-side preview). Props: value, onChange(cronString), presets?, compact?.
+export { default as SchedulePicker } from '../../components/SchedulePicker';
 
 // Common UI primitives plugins are likely to want. Re-exports kept thin
 // on purpose — plugins can still reach for niche components directly,

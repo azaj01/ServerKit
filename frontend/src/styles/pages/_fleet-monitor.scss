@@ -2,17 +2,6 @@
 // FLEET PAGES (Agent Fleet + Fleet Monitor)
 // ============================================
 
-// KPI strip (MetricCard grid) on the Agent Fleet dashboard
-.fleet-kpis {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: $space-3;
-
-    @media (max-width: $breakpoint-md) {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
 // Amber warning row (queued commands, forecast errors)
 .fleet-warnrow {
     display: flex;
@@ -163,6 +152,62 @@
         &__row > :nth-child(5),
         &__row > :nth-child(6) {
             display: none;
+        }
+    }
+}
+
+// Fleet doctor rollup card (plan 26) — checks-by-status per server on the
+// Agent Fleet dashboard, consuming the same rows as the Doctor panel.
+.fleet-doctor-rollup {
+    margin-bottom: $space-4;
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    &__summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: $space-2;
+        margin-bottom: $space-3;
+    }
+
+    &__note {
+        margin-left: auto;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+    }
+
+    &__servers {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    &__server {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        width: 100%;
+        padding: $space-2 $space-3;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        cursor: pointer;
+        text-align: left;
+        transition: border-color 0.12s ease;
+
+        &:hover { border-color: $border-default; }
+
+        &-name { font-weight: 600; }
+
+        &-counts {
+            margin-left: auto;
+            font-size: $font-size-sm;
+            color: $text-secondary;
         }
     }
 }

@@ -1,3 +1,5 @@
+# Bucket: PER-APP (plan 29 #9). Per-app build routes gate via the app-grant
+# family (can_access_app / can_edit_app). See docs/WORKSPACE_SCOPING.md.
 """
 Build and Deployment API Endpoints
 

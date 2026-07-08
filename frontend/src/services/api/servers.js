@@ -219,6 +219,16 @@ export async function addRemoteCronJob(serverId, body) {
     });
 }
 
+// Edit an existing remote cron entry. Agent ids are content-derived, so a
+// schedule/command change returns a fresh Entry (new id) the caller adopts.
+// Gated on the agent's cron.update capability (agent >= 1.2.0).
+export async function updateRemoteCronJob(serverId, jobId, body) {
+    return this.request(`/servers/${serverId}/cron/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PUT',
+        body
+    });
+}
+
 export async function removeRemoteCronJob(serverId, jobId) {
     return this.request(`/servers/${serverId}/cron/jobs/${encodeURIComponent(jobId)}`, {
         method: 'DELETE'

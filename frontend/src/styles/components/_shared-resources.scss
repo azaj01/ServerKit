@@ -375,126 +375,36 @@
         display: flex;
         flex-direction: column;
         gap: $space-4;
-        padding: $space-4;
-        background: $bg-card;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-        min-height: 200px;
-    }
-
-    &__empty {
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-        text-align: center;
-        padding: $space-8;
-    }
-
-    &__detail-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: $space-4;
-
-        h3 {
-            margin: 0;
-        }
-    }
-
-    &__desc {
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-        margin: $space-1 0 0;
-    }
-
-    &__subhead {
-        margin: 0;
-        color: $text-secondary;
-        font-size: $font-size-sm;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    &__add-var,
-    &__attach {
-        display: flex;
-        gap: $space-2;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    &__var-key {
-        width: 160px;
-        font-family: $font-mono;
-        text-transform: uppercase;
-    }
-
-    &__var-value {
-        flex: 1;
-        min-width: 140px;
-    }
-
-    &__var-target {
-        width: 150px;
-        flex-shrink: 0;
-        font-family: $font-mono;
-    }
-
-    &__secret {
-        display: inline-flex;
-        align-items: center;
-        gap: $space-1;
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-    }
-
-    &__attach-type,
-    &__attach-id {
-        padding: $space-2 $space-3;
-        background: $bg-body;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-sm;
-        color: $text-primary;
-        font-size: $font-size-sm;
-    }
-
-    &__attach-id {
-        flex: 1;
-        min-width: 140px;
-    }
-
-    &__attachments {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: $space-2;
-    }
-
-    &__attachment {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: $space-2 $space-3;
-        background: $bg-hover;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-sm;
-
-        &-label {
-            font-family: $font-mono;
-            font-size: $font-size-sm;
-            color: $text-secondary;
-        }
-    }
-}
-
-// ---------- Embedded section (resource detail pages) ----------
-// Spacing for the reusable panels when dropped into a settings/overview
-// form-section (e.g. ServerDetail). The panels carry their own internal
-// layout; this just gives the section a sensible top gap.
-
-.shared-resources-section {
-    .shared-tags {
-        margin-top: $space-2;
-    }
-}
+  ty for '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.1|Debug|Parser|Quality parsed: Unknown v1
+2026-07-07 12:00:05.1|Debug|Parser|Release Group parsed: Anime Time
+2026-07-07 12:00:05.1|Debug|Parser|Parsing string '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.1|Debug|Parser|Episode Parsed. Attack on Titan - Season 04 
+2026-07-07 12:00:05.1|Debug|Parser|Languages parsed: Unknown
+2026-07-07 12:00:05.1|Debug|QualityParser|Trying to parse quality for '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.1|Debug|Parser|Quality parsed: Unknown v1
+2026-07-07 12:00:05.1|Debug|Parser|Release Group parsed: Anime Time
+2026-07-07 12:00:05.1|Debug|Parser|Parsing string '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.1|Debug|Parser|Episode Parsed. Attack on Titan - Season 04 
+2026-07-07 12:00:05.1|Debug|Parser|Languages parsed: Unknown
+2026-07-07 12:00:05.1|Debug|QualityParser|Trying to parse quality for '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.1|Debug|Parser|Quality parsed: Unknown v1
+2026-07-07 12:00:05.1|Debug|Parser|Release Group parsed: Anime Time
+2026-07-07 12:00:05.1|Debug|Parser|Parsing string '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.1|Debug|Parser|Episode Parsed. Attack on Titan - Season 04 
+2026-07-07 12:00:05.2|Debug|Parser|Languages parsed: Unknown
+2026-07-07 12:00:05.2|Debug|QualityParser|Trying to parse quality for '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.2|Debug|Parser|Quality parsed: Unknown v1
+2026-07-07 12:00:05.2|Debug|Parser|Release Group parsed: Anime Time
+2026-07-07 12:00:05.2|Debug|Parser|Parsing string '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.2|Debug|Parser|Episode Parsed. Attack on Titan - Season 04 
+2026-07-07 12:00:05.2|Debug|Parser|Languages parsed: Unknown
+2026-07-07 12:00:05.2|Debug|QualityParser|Trying to parse quality for '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.2|Debug|Parser|Quality parsed: Unknown v1
+2026-07-07 12:00:05.2|Debug|Parser|Release Group parsed: Anime Time
+2026-07-07 12:00:05.2|Debug|Parser|Parsing string '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.2|Debug|Parser|Episode Parsed. Attack on Titan - Season 04 
+2026-07-07 12:00:05.2|Debug|Parser|Languages parsed: Unknown
+2026-07-07 12:00:05.2|Debug|QualityParser|Trying to parse quality for '[Anime Time] Attack on Titan Season 4 - Finale 2'
+2026-07-07 12:00:05.2|Debug|Parser|Quality parsed: Unknown v1
+2026-07-07 12:00:05.2|Debug|Pars

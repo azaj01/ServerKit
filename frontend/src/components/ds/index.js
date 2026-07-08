@@ -5,6 +5,7 @@ export { Pill } from './Pill';
 export { EnvTag } from './EnvTag';
 export { SegControl } from './SegControl';
 export { MetricCard } from './MetricCard';
+export { KpiBand } from './KpiBand';
 export { Gauge } from './Gauge';
 export { ServiceTile } from './ServiceTile';
 export { Sparkline } from './Sparkline';

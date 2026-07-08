@@ -1,0 +1,8 @@
+// Runtime-extension shim for `react-dom/client` — re-exports the HOST instance.
+const m = (globalThis.__SK_VENDOR__ || {})['react-dom/client'];
+if (!m) {
+    throw new Error('[serverkit] host react-dom/client unavailable — vendorShare did not run');
+}
+export default m.default ?? m;
+export const createRoot = m.createRoot;
+export const hydrateRoot = m.hydrateRoot;

@@ -1,1086 +1,229 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Globe, AtSign, Forward, Server, Inbox, Mail, Send, KeyRound, ShieldAlert, ShieldCheck, AppWindow } from 'lucide-react';
-import useTabParam from '../hooks/useTabParam';
-import { api } from '../services/api';
-import { useToast } from '../contexts/ToastContext';
-import EmptyState from '../components/EmptyState';
-import ConfirmDialog from '../components/ConfirmDialog';
-import Modal from '@/components/Modal';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Pill, MetricCard, PageTopbar, DataTable } from '@/components/ds';
-
-const VALID_TABS = ['status', 'domains', 'accounts', 'aliases', 'forwarding', 'dns-providers', 'spam', 'webmail', 'queue'];
-
-const TAB_LABELS = {
-    'dns-providers': 'DNS Providers',
-    queue: 'Queue & Logs',
-};
-
-const SERVICE_ICONS = {
-    postfix: Send,
-    dovecot: Inbox,
-    opendkim: KeyRound,
-    spamassassin: ShieldAlert,
-    roundcube: AppWindow,
-};
-
-// running → green / stopped → red / not installed → gray
-function statusPill(data) {
-    if (data?.running) return <Pill kind="green">running</Pill>;
-    if (data?.installed) return <Pill kind="red">stopped</Pill>;
-    return <Pill kind="gray">not installed</Pill>;
-}
-
-// DKIM/SPF/DMARC presence (record configured vs missing)
-function dnsPill(value) {
-    return value
-        ? <Pill kind="green">set</Pill>
-        : <Pill kind="amber">missing</Pill>;
-}
-
-function Email() {
-    const [activeTab, setActiveTab] = useTabParam('/email', VALID_TABS);
-    const [status, setStatus] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [actionLoading, setActionLoading] = useState(false);
-    const [confirmDialog, setConfirmDialog] = useState(null);
-
-    // Domains
-    const [domains, setDomains] = useState([]);
-    const [showDomainForm, setShowDomainForm] = useState(false);
-    const [newDomain, setNewDomain] = useState({ name: '', dns_provider_id: '', dns_zone_id: '' });
-
-    // Accounts
-    const [selectedDomainId, setSelectedDomainId] = useState('');
-    const [accounts, setAccounts] = useState([]);
-    const [showAccountForm, setShowAccountForm] = useState(false);
-    const [newAccount, setNewAccount] = useState({ username: '', password: '', quota_mb: 1024 });
-    const [showPasswordModal, setShowPasswordModal] = useState(null);
-    const [newPassword, setNewPassword] = useState('');
-
-    // Aliases
-    const [aliases, setAliases] = useState([]);
-    const [showAliasForm, setShowAliasForm] = useState(false);
-    const [newAlias, setNewAlias] = useState({ source: '', destination: '' });
-    const [aliasDomainId, setAliasDomainId] = useState('');
-
-    // Forwarding
-    const [allAccounts, setAllAccounts] = useState([]);
-    const [selectedAccountId, setSelectedAccountId] = useState('');
-    const [forwardingRules, setForwardingRules] = useState([]);
-    const [showForwardForm, setShowForwardForm] = useState(false);
-    const [newForward, setNewForward] = useState({ destination: '', keep_copy: true });
-
-    // DNS Providers
-    const [providers, setProviders] = useState([]);
-    const [showProviderForm, setShowProviderForm] = useState(false);
-    const [newProvider, setNewProvider] = useState({ name: '', provider: 'cloudflare', api_key: '', api_secret: '', api_email: '', is_default: false });
-    const [providerZones, setProviderZones] = useState({});
-
-    // Spam
-    const [spamConfig, setSpamConfig] = useState(null);
-
-    // Webmail
-    const [webmailStatus, setWebmailStatus] = useState(null);
-    const [proxyDomain, setProxyDomain] = useState('');
-    const [installHostname, setInstallHostname] = useState('');
-
-    // Queue & Logs
-    const [queue, setQueue] = useState([]);
-    const [logs, setLogs] = useState([]);
-    const [logLines, setLogLines] = useState(100);
-
-    const toast = useToast();
-
-    useEffect(() => { loadStatus(); }, []);
-
-    const loadStatus = async () => {
-        setLoading(true);
-        try {
-            const data = await api.getEmailStatus();
-            setStatus(data);
-        } catch (err) {
-            console.error('Failed to load email status:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadDomains = useCallback(async () => {
-        try {
-            const data = await api.getEmailDomains();
-            setDomains(data.domains || []);
-        } catch (err) { toast.error('Failed to load domains'); }
-    }, []);
-
-    useEffect(() => { if (activeTab === 'domains') loadDomains(); }, [activeTab]);
-
-    const loadAccounts = useCallback(async (domainId) => {
-        if (!domainId) return;
-        try {
-            const data = await api.getEmailAccounts(domainId);
-            setAccounts(data.accounts || []);
-        } catch (err) { toast.error('Failed to load accounts'); }
-    }, []);
-
-    useEffect(() => { if (activeTab === 'accounts' && selectedDomainId) loadAccounts(selectedDomainId); }, [activeTab, selectedDomainId]);
-    useEffect(() => {
-        if (activeTab === 'accounts' && domains.length === 0) loadDomains();
-    }, [activeTab]);
-
-    const loadAliases = useCallback(async (domainId) => {
-        if (!domainId) return;
-        try {
-            const data = await api.getEmailAliases(domainId);
-            setAliases(data.aliases || []);
-        } catch (err) { toast.error('Failed to load aliases'); }
-    }, []);
-
-    useEffect(() => { if (activeTab === 'aliases' && aliasDomainId) loadAliases(aliasDomainId); }, [activeTab, aliasDomainId]);
-    useEffect(() => {
-        if (activeTab === 'aliases' && domains.length === 0) loadDomains();
-    }, [activeTab]);
-
-    const loadForwarding = useCallback(async (accountId) => {
-        if (!accountId) return;
-        try {
-            const data = await api.getEmailForwarding(accountId);
-            setForwardingRules(data.rules || []);
-        } catch (err) { toast.error('Failed to load forwarding rules'); }
-    }, []);
-
-    useEffect(() => {
-        if (activeTab === 'forwarding') {
-            if (domains.length === 0) loadDomains();
-            // Load all accounts from all domains
-            const loadAll = async () => {
-                try {
-                    const d = await api.getEmailDomains();
-                    const all = [];
-                    for (const dom of (d.domains || [])) {
-                        const accts = await api.getEmailAccounts(dom.id);
-                        all.push(...(accts.accounts || []).map(a => ({ ...a, domain_name: dom.name })));
-                    }
-                    setAllAccounts(all);
-                } catch (err) { console.error(err); }
-            };
-            loadAll();
-        }
-    }, [activeTab]);
-
-    useEffect(() => { if (selectedAccountId) loadForwarding(selectedAccountId); }, [selectedAccountId]);
-
-    useEffect(() => {
-        if (activeTab === 'dns-providers') {
-            api.getEmailDNSProviders().then(d => setProviders(d.providers || [])).catch(() => {});
-        }
-    }, [activeTab]);
-
-    useEffect(() => {
-        if (activeTab === 'spam') {
-            api.getSpamConfig().then(d => setSpamConfig(d.config || null)).catch(() => {});
-        }
-    }, [activeTab]);
-
-    useEffect(() => {
-        if (activeTab === 'webmail') {
-            api.getWebmailStatus().then(d => setWebmailStatus(d)).catch(() => {});
-        }
-    }, [activeTab]);
-
-    useEffect(() => {
-        if (activeTab === 'queue') {
-            api.getMailQueue().then(d => setQueue(d.queue || [])).catch(() => {});
-            api.getMailLogs(logLines).then(d => setLogs(d.logs || [])).catch(() => {});
-        }
-    }, [activeTab, logLines]);
-
-    // ── Actions ──
-
-    const handleInstall = async () => {
-        setActionLoading(true);
-        try {
-            await api.installEmailServer({ hostname: installHostname || undefined });
-            toast.success('Email server installed');
-            loadStatus();
-        } catch (err) { toast.error(err.message || 'Installation failed'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleServiceControl = async (component, action) => {
-        setActionLoading(true);
-        try {
-            await api.controlEmailService(component, action);
-            toast.success(`${component} ${action} successful`);
-            loadStatus();
-        } catch (err) { toast.error(err.message || `Failed to ${action} ${component}`); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleAddDomain = async (e) => {
-        e.preventDefault();
-        setActionLoading(true);
-        try {
-            await api.addEmailDomain(newDomain);
-            toast.success('Domain added');
-            setShowDomainForm(false);
-            setNewDomain({ name: '', dns_provider_id: '', dns_zone_id: '' });
-            loadDomains();
-        } catch (err) { toast.error(err.message || 'Failed to add domain'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleDeleteDomain = (domainId, name) => {
-        setConfirmDialog({
-            message: `Delete domain "${name}" and all its accounts and aliases?`,
-            onConfirm: async () => {
-                try {
-                    await api.deleteEmailDomain(domainId);
-                    toast.success('Domain deleted');
-                    loadDomains();
-                } catch (err) { toast.error('Failed to delete domain'); }
-                setConfirmDialog(null);
-            },
-            onCancel: () => setConfirmDialog(null),
-        });
-    };
-
-    const handleVerifyDNS = async (domainId) => {
-        setActionLoading(true);
-        try {
-            const result = await api.verifyEmailDNS(domainId);
-            if (result.all_verified) toast.success('All DNS records verified');
-            else toast.error('Some DNS records are missing');
-            loadDomains();
-        } catch (err) { toast.error('DNS verification failed'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleDeployDNS = async (domainId) => {
-        setActionLoading(true);
-        try {
-            await api.deployEmailDNS(domainId);
-            toast.success('DNS records deployed');
-        } catch (err) { toast.error(err.message || 'DNS deployment failed'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleCreateAccount = async (e) => {
-        e.preventDefault();
-        setActionLoading(true);
-        try {
-            await api.createEmailAccount(selectedDomainId, newAccount);
-            toast.success('Account created');
-            setShowAccountForm(false);
-            setNewAccount({ username: '', password: '', quota_mb: 1024 });
-            loadAccounts(selectedDomainId);
-        } catch (err) { toast.error(err.message || 'Failed to create account'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleDeleteAccount = (accountId, email) => {
-        setConfirmDialog({
-            message: `Delete account "${email}"? This will remove the mailbox.`,
-            onConfirm: async () => {
-                try {
-                    await api.deleteEmailAccount(accountId);
-                    toast.success('Account deleted');
-                    loadAccounts(selectedDomainId);
-                } catch (err) { toast.error('Failed to delete account'); }
-                setConfirmDialog(null);
-            },
-            onCancel: () => setConfirmDialog(null),
-        });
-    };
-
-    const handleChangePassword = async () => {
-        if (!showPasswordModal || !newPassword) return;
-        setActionLoading(true);
-        try {
-            await api.changeEmailPassword(showPasswordModal, newPassword);
-            toast.success('Password changed');
-            setShowPasswordModal(null);
-            setNewPassword('');
-        } catch (err) { toast.error('Failed to change password'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleCreateAlias = async (e) => {
-        e.preventDefault();
-        setActionLoading(true);
-        try {
-            await api.createEmailAlias(aliasDomainId, newAlias);
-            toast.success('Alias created');
-            setShowAliasForm(false);
-            setNewAlias({ source: '', destination: '' });
-            loadAliases(aliasDomainId);
-        } catch (err) { toast.error(err.message || 'Failed to create alias'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleDeleteAlias = (aliasId) => {
-        setConfirmDialog({
-            message: 'Delete this alias?',
-            onConfirm: async () => {
-                try {
-                    await api.deleteEmailAlias(aliasId);
-                    toast.success('Alias deleted');
-                    loadAliases(aliasDomainId);
-                } catch (err) { toast.error('Failed to delete alias'); }
-                setConfirmDialog(null);
-            },
-            onCancel: () => setConfirmDialog(null),
-        });
-    };
-
-    const handleCreateForwarding = async (e) => {
-        e.preventDefault();
-        setActionLoading(true);
-        try {
-            await api.createEmailForwarding(selectedAccountId, newForward);
-            toast.success('Forwarding rule created');
-            setShowForwardForm(false);
-            setNewForward({ destination: '', keep_copy: true });
-            loadForwarding(selectedAccountId);
-        } catch (err) { toast.error(err.message || 'Failed to create forwarding rule'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleDeleteForwarding = (ruleId) => {
-        setConfirmDialog({
-            message: 'Delete this forwarding rule?',
-            onConfirm: async () => {
-                try {
-                    await api.deleteEmailForwarding(ruleId);
-                    toast.success('Rule deleted');
-                    loadForwarding(selectedAccountId);
-                } catch (err) { toast.error('Failed to delete rule'); }
-                setConfirmDialog(null);
-            },
-            onCancel: () => setConfirmDialog(null),
-        });
-    };
-
-    const handleAddProvider = async (e) => {
-        e.preventDefault();
-        setActionLoading(true);
-        try {
-            await api.addEmailDNSProvider(newProvider);
-            toast.success('DNS provider added');
-            setShowProviderForm(false);
-            setNewProvider({ name: '', provider: 'cloudflare', api_key: '', api_secret: '', api_email: '', is_default: false });
-            const d = await api.getEmailDNSProviders();
-            setProviders(d.providers || []);
-        } catch (err) { toast.error(err.message || 'Failed to add provider'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleDeleteProvider = (providerId) => {
-        setConfirmDialog({
-            message: 'Delete this DNS provider?',
-            onConfirm: async () => {
-                try {
-                    await api.deleteEmailDNSProvider(providerId);
-                    toast.success('Provider deleted');
-                    const d = await api.getEmailDNSProviders();
-                    setProviders(d.providers || []);
-                } catch (err) { toast.error('Failed to delete provider'); }
-                setConfirmDialog(null);
-            },
-            onCancel: () => setConfirmDialog(null),
-        });
-    };
-
-    const handleTestProvider = async (providerId) => {
-        setActionLoading(true);
-        try {
-            const result = await api.testEmailDNSProvider(providerId);
-            if (result.success) toast.success('Connection successful');
-            else toast.error(result.error || 'Connection failed');
-        } catch (err) { toast.error('Test failed'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleListZones = async (providerId) => {
-        try {
-            const result = await api.getEmailDNSZones(providerId);
-            setProviderZones(prev => ({ ...prev, [providerId]: result.zones || [] }));
-        } catch (err) { toast.error('Failed to list zones'); }
-    };
-
-    const handleUpdateSpam = async () => {
-        setActionLoading(true);
-        try {
-            await api.updateSpamConfig(spamConfig);
-            toast.success('SpamAssassin config updated');
-        } catch (err) { toast.error('Failed to update config'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleUpdateSpamRules = async () => {
-        setActionLoading(true);
-        try {
-            const result = await api.updateSpamRules();
-            toast.success(result.message || 'Rules updated');
-        } catch (err) { toast.error('Failed to update rules'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleWebmailInstall = async () => {
-        setActionLoading(true);
-        try {
-            await api.installWebmail({});
-            toast.success('Roundcube installed');
-            const d = await api.getWebmailStatus();
-            setWebmailStatus(d);
-        } catch (err) { toast.error('Installation failed'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleWebmailControl = async (action) => {
-        setActionLoading(true);
-        try {
-            await api.controlWebmail(action);
-            toast.success(`Roundcube ${action} successful`);
-            const d = await api.getWebmailStatus();
-            setWebmailStatus(d);
-        } catch (err) { toast.error(`Failed to ${action}`); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleConfigureProxy = async () => {
-        if (!proxyDomain) return;
-        setActionLoading(true);
-        try {
-            await api.configureWebmailProxy(proxyDomain);
-            toast.success('Proxy configured');
-        } catch (err) { toast.error('Failed to configure proxy'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleFlushQueue = async () => {
-        setActionLoading(true);
-        try {
-            await api.flushMailQueue();
-            toast.success('Queue flushed');
-            const d = await api.getMailQueue();
-            setQueue(d.queue || []);
-        } catch (err) { toast.error('Failed to flush queue'); }
-        finally { setActionLoading(false); }
-    };
-
-    const handleDeleteQueueItem = async (queueId) => {
-        try {
-            await api.deleteMailQueueItem(queueId);
-            toast.success('Message deleted');
-            const d = await api.getMailQueue();
-            setQueue(d.queue || []);
-        } catch (err) { toast.error('Failed to delete message'); }
-    };
-
-    // ── Render ──
-
-    if (loading) return <div className="page-container email-page"><EmptyState loading title="Loading email settings" /></div>;
-
-    const isInstalled = status?.installed;
-
-    // Real counts from the loaded domains payload (KPI strip, Domains tab)
-    const totalMailboxes = domains.reduce((n, d) => n + (d.accounts_count || 0), 0);
-    const totalAliases = domains.reduce((n, d) => n + (d.aliases_count || 0), 0);
-    const dnsReadyCount = domains.filter(d => d.dkim_public_key && d.spf_record && d.dmarc_record).length;
-
-    const ServiceCard = ({ name, data, component }) => {
-        const Icon = SERVICE_ICONS[component] || Server;
-        return (
-            <div className="email-service-card">
-                <div className="email-service-header">
-                    <span className="email-service-ico"><Icon size={15} /></span>
-                    <div className="email-service-id">
-                        <h3>{name}</h3>
-                        {data?.version && <span className="version">v{data.version}</span>}
-                    </div>
-                    {statusPill(data)}
-                </div>
-                {data?.installed && (
-                    <div className="email-service-actions">
-                        <Button size="sm" variant="outline" onClick={() => handleServiceControl(component, 'restart')} disabled={actionLoading}>Restart</Button>
-                        {data?.running
-                            ? <Button size="sm" variant="outline" onClick={() => handleServiceControl(component, 'stop')} disabled={actionLoading}>Stop</Button>
-                            : <Button size="sm" onClick={() => handleServiceControl(component, 'start')} disabled={actionLoading}>Start</Button>
-                        }
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    return (
-        <div className="page-container email-page">
-            <PageTopbar
-                icon={<Mail size={18} />}
-                title="Email Server"
-                meta={<>Postfix · Dovecot · DKIM · SpamAssassin · Roundcube</>}
-                actions={<Button size="sm" variant="outline" onClick={loadStatus}>Refresh</Button>}
-            />
-
-            {!isInstalled ? (
-                <div className="not-installed">
-                    <div className="not-installed__icon"><Mail size={22} /></div>
-                    <h2>Email Server Not Installed</h2>
-                    <p>Install Postfix, Dovecot, OpenDKIM, and SpamAssassin to enable email hosting.</p>
-                    <div className="install-form">
-                        <div className="form-group w-full">
-                            <label>Hostname (e.g. mail.example.com)</label>
-                            <Input type="text" value={installHostname} onChange={e => setInstallHostname(e.target.value)} placeholder="mail.example.com" />
-                        </div>
-                        <Button onClick={handleInstall} disabled={actionLoading}>
-                            {actionLoading ? 'Installing...' : 'Install Email Server'}
-                        </Button>
-                    </div>
-                </div>
-            ) : (
-                <>
-                    <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList>
-                            {VALID_TABS.map(tab => (
-                                <TabsTrigger key={tab} value={tab}>
-                                    {TAB_LABELS[tab] || tab.charAt(0).toUpperCase() + tab.slice(1)}
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
-
-                        {/* Status Tab */}
-                        <TabsContent value="status">
-                            <div className="email-status">
-                                <div className="status-grid">
-                                    <ServiceCard name="Postfix (SMTP)" data={status?.postfix} component="postfix" />
-                                    <ServiceCard name="Dovecot (IMAP)" data={status?.dovecot} component="dovecot" />
-                                    <ServiceCard name="OpenDKIM" data={status?.dkim} component="opendkim" />
-                                    <ServiceCard name="SpamAssassin" data={status?.spamassassin} component="spamassassin" />
-                                    <ServiceCard name="Roundcube" data={status?.roundcube} component="roundcube" />
-                                </div>
-                            </div>
-                        </TabsContent>
-
-                        {/* Domains Tab */}
-                        <TabsContent value="domains">
-                            <div className="email-domains">
-                                {domains.length > 0 && (
-                                    <div className="email-kpis">
-                                        <MetricCard icon={<Globe size={17} />} tone="accent" value={domains.length} label="Mail domains" />
-                                        <MetricCard icon={<AtSign size={17} />} tone="cyan" value={totalMailboxes} label="Mailboxes" />
-                                        <MetricCard icon={<Forward size={17} />} tone="violet" value={totalAliases} label="Aliases" />
-                                        <MetricCard icon={<ShieldCheck size={17} />} tone="green" value={dnsReadyCount} unit={`/ ${domains.length}`} label="DNS configured" />
-                                    </div>
-                                )}
-                                <div className="section-header">
-                                    <h2>Email Domains</h2>
-                                    <Button size="sm" variant={showDomainForm ? 'outline' : 'default'} onClick={() => setShowDomainForm(!showDomainForm)}>
-                                        {showDomainForm ? 'Cancel' : 'Add Domain'}
-                                    </Button>
-                                </div>
-                                {showDomainForm && (
-                                    <form className="email-form" onSubmit={handleAddDomain}>
-                                        <div className="form-grid">
-                                            <div className="form-group">
-                                                <label>Domain Name</label>
-                                                <Input type="text" value={newDomain.name} onChange={e => setNewDomain({ ...newDomain, name: e.target.value })} placeholder="example.com" required />
-                                            </div>
-                                        </div>
-                                        <div className="form-actions">
-                                            <Button type="submit" size="sm" disabled={actionLoading}>Add Domain</Button>
-                                        </div>
-                                    </form>
-                                )}
-                                {domains.length === 0 ? (
-                                    <EmptyState icon={Globe} title="No domains configured" />
-                                ) : (
-                                    <div className="email-table-card">
-                                        <DataTable
-                                            tableClassName="sk-dtable"
-                                            sortable={false}
-                                            data={domains}
-                                            keyField="id"
-                                            columns={[
-                                                {
-                                                    key: 'domain',
-                                                    header: 'Domain',
-                                                    render: (d) => (
-                                                        <div className="sk-cell-name">
-                                                            <span className="email-fav"><Globe size={15} /></span>
-                                                            {d.name}
-                                                        </div>
-                                                    ),
-                                                },
-                                                { key: 'accounts', header: 'Mailboxes', render: (d) => <span className="sk-cell-mono">{d.accounts_count}</span> },
-                                                { key: 'aliases', header: 'Aliases', render: (d) => <span className="sk-cell-mono">{d.aliases_count}</span> },
-                                                { key: 'dkim', header: 'DKIM', render: (d) => dnsPill(d.dkim_public_key) },
-                                                { key: 'spf', header: 'SPF', render: (d) => dnsPill(d.spf_record) },
-                                                { key: 'dmarc', header: 'DMARC', render: (d) => dnsPill(d.dmarc_record) },
-                                                {
-                                                    key: 'status',
-                                                    header: 'Status',
-                                                    render: (d) => <Pill kind={d.is_active ? 'green' : 'gray'}>{d.is_active ? 'active' : 'inactive'}</Pill>,
-                                                },
-                                                {
-                                                    key: 'actions',
-                                                    header: '',
-                                                    render: (d) => (
-                                                        <div className="email-row-actions">
-                                                            <Button size="sm" variant="outline" onClick={() => handleVerifyDNS(d.id)} disabled={actionLoading}>Verify DNS</Button>
-                                                            {d.dns_provider_id && <Button size="sm" onClick={() => handleDeployDNS(d.id)} disabled={actionLoading}>Deploy DNS</Button>}
-                                                            <Button size="sm" variant="destructive" onClick={() => handleDeleteDomain(d.id, d.name)}>Delete</Button>
-                                                        </div>
-                                                    ),
-                                                },
-                                            ]}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </TabsContent>
-
-                        {/* Accounts Tab */}
-                        <TabsContent value="accounts">
-                            <div className="email-accounts">
-                                <div className="domain-selector">
-                                    <div className="form-group">
-                                        <label>Select Domain</label>
-                                        <select value={selectedDomainId} onChange={e => setSelectedDomainId(e.target.value)}>
-                                            <option value="">-- Select --</option>
-                                            {domains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                {selectedDomainId && (
-                                    <>
-                                        <div className="section-header">
-                                            <h2>Accounts</h2>
-                                            <Button size="sm" variant={showAccountForm ? 'outline' : 'default'} onClick={() => setShowAccountForm(!showAccountForm)}>
-                                                {showAccountForm ? 'Cancel' : 'Create Account'}
-                                            </Button>
-                                        </div>
-                                        {showAccountForm && (
-                                            <form className="email-form" onSubmit={handleCreateAccount}>
-                                                <div className="form-grid">
-                                                    <div className="form-group">
-                                                        <label>Username</label>
-                                                        <Input type="text" value={newAccount.username} onChange={e => setNewAccount({ ...newAccount, username: e.target.value })} placeholder="user" required />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label>Password</label>
-                                                        <Input type="password" value={newAccount.password} onChange={e => setNewAccount({ ...newAccount, password: e.target.value })} required />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label>Quota (MB)</label>
-                                                        <Input type="number" value={newAccount.quota_mb} onChange={e => setNewAccount({ ...newAccount, quota_mb: parseInt(e.target.value) || 1024 })} />
-                                                    </div>
-                                                </div>
-                                                <div className="form-actions">
-                                                    <Button type="submit" size="sm" disabled={actionLoading}>Create</Button>
-                                                </div>
-                                            </form>
-                                        )}
-                                        {accounts.length === 0 ? (
-                                            <EmptyState icon={AtSign} title="No accounts for this domain" />
-                                        ) : (
-                                            <div className="email-table-card">
-                                                <table className="sk-dtable">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Address</th>
-                                                            <th>Quota</th>
-                                                            <th>Status</th>
-                                                            <th />
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {accounts.map(a => (
-                                                            <tr key={a.id}>
-                                                                <td>
-                                                                    <div className="sk-cell-name">
-                                                                        <span className="email-fav email-fav--cyan"><AtSign size={14} /></span>
-                                                                        <span className="email-addr">{a.email}</span>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="sk-cell-mono">{a.quota_mb} MB</td>
-                                                                <td><Pill kind={a.is_active ? 'green' : 'gray'}>{a.is_active ? 'active' : 'disabled'}</Pill></td>
-                                                                <td>
-                                                                    <div className="email-row-actions">
-                                                                        <Button size="sm" variant="outline" onClick={() => { setShowPasswordModal(a.id); setNewPassword(''); }}>Password</Button>
-                                                                        <Button size="sm" variant="destructive" onClick={() => handleDeleteAccount(a.id, a.email)}>Delete</Button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                                <Modal open={!!showPasswordModal} onClose={() => setShowPasswordModal(null)} title="Change Password">
-                                    <div className="form-group">
-                                        <label>New Password</label>
-                                        <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-                                    </div>
-                                    <div className="form-actions">
-                                        <Button size="sm" variant="outline" onClick={() => setShowPasswordModal(null)}>Cancel</Button>
-                                        <Button size="sm" onClick={handleChangePassword} disabled={actionLoading || !newPassword}>Change</Button>
-                                    </div>
-                                </Modal>
-                            </div>
-                        </TabsContent>
-
-                        {/* Aliases Tab */}
-                        <TabsContent value="aliases">
-                            <div className="email-aliases">
-                                <div className="domain-selector">
-                                    <div className="form-group">
-                                        <label>Select Domain</label>
-                                        <select value={aliasDomainId} onChange={e => setAliasDomainId(e.target.value)}>
-                                            <option value="">-- Select --</option>
-                                            {domains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                {aliasDomainId && (
-                                    <>
-                                        <div className="section-header">
-                                            <h2>Aliases</h2>
-                                            <Button size="sm" variant={showAliasForm ? 'outline' : 'default'} onClick={() => setShowAliasForm(!showAliasForm)}>
-                                                {showAliasForm ? 'Cancel' : 'Create Alias'}
-                                            </Button>
-                                        </div>
-                                        {showAliasForm && (
-                                            <form className="email-form" onSubmit={handleCreateAlias}>
-                                                <div className="form-grid">
-                                                    <div className="form-group">
-                                                        <label>Source</label>
-                                                        <Input type="text" value={newAlias.source} onChange={e => setNewAlias({ ...newAlias, source: e.target.value })} placeholder="info@example.com" required />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label>Destination</label>
-                                                        <Input type="text" value={newAlias.destination} onChange={e => setNewAlias({ ...newAlias, destination: e.target.value })} placeholder="user@example.com" required />
-                                                    </div>
-                                                </div>
-                                                <div className="form-actions">
-                                                    <Button type="submit" size="sm" disabled={actionLoading}>Create</Button>
-                                                </div>
-                                            </form>
-                                        )}
-                                        {aliases.length === 0 ? (
-                                            <EmptyState icon={Forward} title="No aliases for this domain" />
-                                        ) : (
-                                            <div className="email-table-card">
-                                                <table className="sk-dtable">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Source</th>
-                                                            <th style={{ width: 30 }} />
-                                                            <th>Destination</th>
-                                                            <th />
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {aliases.map(a => (
-                                                            <tr key={a.id}>
-                                                                <td className="sk-cell-mono">{a.source}</td>
-                                                                <td className="email-arrow">&rarr;</td>
-                                                                <td className="sk-cell-mono">{a.destination}</td>
-                                                                <td>
-                                                                    <div className="email-row-actions">
-                                                                        <Button size="sm" variant="destructive" onClick={() => handleDeleteAlias(a.id)}>Delete</Button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </TabsContent>
-
-                        {/* Forwarding Tab */}
-                        <TabsContent value="forwarding">
-                            <div className="email-forwarding">
-                                <div className="domain-selector">
-                                    <div className="form-group">
-                                        <label>Select Account</label>
-                                        <select value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)}>
-                                            <option value="">-- Select --</option>
-                                            {allAccounts.map(a => <option key={a.id} value={a.id}>{a.email}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                {selectedAccountId && (
-                                    <>
-                                        <div className="section-header">
-                                            <h2>Forwarding Rules</h2>
-                                            <Button size="sm" variant={showForwardForm ? 'outline' : 'default'} onClick={() => setShowForwardForm(!showForwardForm)}>
-                                                {showForwardForm ? 'Cancel' : 'Add Rule'}
-                                            </Button>
-                                        </div>
-                                        {showForwardForm && (
-                                            <form className="email-form" onSubmit={handleCreateForwarding}>
-                                                <div className="form-grid">
-                                                    <div className="form-group">
-                                                        <label>Forward To</label>
-                                                        <Input type="email" value={newForward.destination} onChange={e => setNewForward({ ...newForward, destination: e.target.value })} required />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label className="email-check">
-                                                            <input type="checkbox" checked={newForward.keep_copy} onChange={e => setNewForward({ ...newForward, keep_copy: e.target.checked })} />
-                                                            {' '}Keep a copy in mailbox
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <div className="form-actions">
-                                                    <Button type="submit" size="sm" disabled={actionLoading}>Add</Button>
-                                                </div>
-                                            </form>
-                                        )}
-                                        {forwardingRules.length === 0 ? (
-                                            <EmptyState icon={Forward} title="No forwarding rules" />
-                                        ) : (
-                                            <div className="email-table-card">
-                                                <table className="sk-dtable">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Mailbox</th>
-                                                            <th style={{ width: 30 }} />
-                                                            <th>Forward To</th>
-                                                            <th>Copy</th>
-                                                            <th>Status</th>
-                                                            <th />
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {forwardingRules.map(r => (
-                                                            <tr key={r.id}>
-                                                                <td className="sk-cell-mono">{r.account_email}</td>
-                                                                <td className="email-arrow">&rarr;</td>
-                                                                <td className="sk-cell-mono">{r.destination}</td>
-                                                                <td><Pill kind={r.keep_copy ? 'cyan' : 'gray'} dot={false}>{r.keep_copy ? 'keeps copy' : 'no copy'}</Pill></td>
-                                                                <td><Pill kind={r.is_active ? 'green' : 'gray'}>{r.is_active ? 'active' : 'inactive'}</Pill></td>
-                                                                <td>
-                                                                    <div className="email-row-actions">
-                                                                        <Button size="sm" variant="destructive" onClick={() => handleDeleteForwarding(r.id)}>Delete</Button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </TabsContent>
-
-                        {/* DNS Providers Tab */}
-                        <TabsContent value="dns-providers">
-                            <div className="email-dns-providers">
-                                <div className="section-header">
-                                    <h2>DNS Providers</h2>
-                                    <Button size="sm" variant={showProviderForm ? 'outline' : 'default'} onClick={() => setShowProviderForm(!showProviderForm)}>
-                                        {showProviderForm ? 'Cancel' : 'Add Provider'}
-                                    </Button>
-                                </div>
-                                {showProviderForm && (
-                                    <form className="email-form" onSubmit={handleAddProvider}>
-                                        <div className="form-grid">
-                                            <div className="form-group"><label>Name</label><Input type="text" value={newProvider.name} onChange={e => setNewProvider({ ...newProvider, name: e.target.value })} required /></div>
-                                            <div className="form-group">
-                                                <label>Provider</label>
-                                                <select value={newProvider.provider} onChange={e => setNewProvider({ ...newProvider, provider: e.target.value })}>
-                                                    <option value="cloudflare">Cloudflare</option>
-                                                    <option value="route53">Route53</option>
-                                                </select>
-                                            </div>
-                                            <div className="form-group"><label>API Key</label><Input type="password" value={newProvider.api_key} onChange={e => setNewProvider({ ...newProvider, api_key: e.target.value })} required /></div>
-                                            <div className="form-group"><label>API Secret (Route53)</label><Input type="password" value={newProvider.api_secret} onChange={e => setNewProvider({ ...newProvider, api_secret: e.target.value })} /></div>
-                                            <div className="form-group"><label>API Email (Cloudflare)</label><Input type="email" value={newProvider.api_email} onChange={e => setNewProvider({ ...newProvider, api_email: e.target.value })} /></div>
-                                        </div>
-                                        <div className="form-actions"><Button type="submit" size="sm" disabled={actionLoading}>Add</Button></div>
-                                    </form>
-                                )}
-                                <div className="provider-list">
-                                    {providers.length === 0 ? (
-                                        <EmptyState icon={Server} title="No DNS providers configured" />
-                                    ) : providers.map(p => (
-                                        <div key={p.id} className="provider-card">
-                                            <div className="provider-header">
-                                                <span className="email-fav email-fav--violet"><Server size={15} /></span>
-                                                <h3>{p.name}</h3>
-                                                <span className="provider-type">{p.provider}</span>
-                                                {p.is_default && <Pill kind="cyan" dot={false}>default</Pill>}
-                                            </div>
-                                            <div className="provider-meta">
-                                                <div className="meta-row"><span className="k">API key</span><span className="v">{p.api_key}</span></div>
-                                            </div>
-                                            <div className="provider-actions">
-                                                <Button size="sm" variant="outline" onClick={() => handleTestProvider(p.id)} disabled={actionLoading}>Test</Button>
-                                                <Button size="sm" variant="outline" onClick={() => handleListZones(p.id)}>Zones</Button>
-                                                <Button size="sm" variant="destructive" onClick={() => handleDeleteProvider(p.id)}>Delete</Button>
-                                            </div>
-                                            {providerZones[p.id] && (
-                                                <div className="zones-list">
-                                                    {providerZones[p.id].map(z => (
-                                                        <div key={z.id} className="zone-item"><span>{z.name}</span><span>{z.id}</span></div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </TabsContent>
-
-                        {/* Spam Tab */}
-                        <TabsContent value="spam">
-                            {spamConfig && (
-                                <div className="email-spam">
-                                    <div className="section-header">
-                                        <h2>SpamAssassin Configuration</h2>
-                                        <div className="section-actions">
-                                            <Button size="sm" variant="outline" onClick={handleUpdateSpamRules} disabled={actionLoading}>Update Rules</Button>
-                                            <Button size="sm" onClick={handleUpdateSpam} disabled={actionLoading}>Save</Button>
-                                        </div>
-                                    </div>
-                                    <div className="spam-config">
-                                        <div className="form-grid">
-                                            <div className="form-group">
-                                                <label>Required Score</label>
-                                                <Input type="number" step="0.1" value={spamConfig.required_score} onChange={e => setSpamConfig({ ...spamConfig, required_score: parseFloat(e.target.value) })} />
-                                            </div>
-                                            <div className="form-group">
-                                                <label>Rewrite Subject</label>
-                                                <Input type="text" value={spamConfig.rewrite_subject} onChange={e => setSpamConfig({ ...spamConfig, rewrite_subject: e.target.value })} />
-                                            </div>
-                                            <div className="form-group checkbox-field">
-                                                <input type="checkbox" checked={!!spamConfig.use_bayes} onChange={e => setSpamConfig({ ...spamConfig, use_bayes: e.target.checked ? 1 : 0 })} />
-                                                <label>Enable Bayesian Filter</label>
-                                            </div>
-                                            <div className="form-group checkbox-field">
-                                                <input type="checkbox" checked={!!spamConfig.bayes_auto_learn} onChange={e => setSpamConfig({ ...spamConfig, bayes_auto_learn: e.target.checked ? 1 : 0 })} />
-                                                <label>Auto-learn</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </TabsContent>
-
-                        {/* Webmail Tab */}
-                        <TabsContent value="webmail">
-                            <div className="email-webmail">
-                                <div className="section-header"><h2>Roundcube Webmail</h2></div>
-                                <div className="webmail-card">
-                                    <div className="webmail-status-row">
-                                        {statusPill(webmailStatus)}
-                                        {webmailStatus?.port && <span className="webmail-port">Port: {webmailStatus.port}</span>}
-                                    </div>
-                                    <div className="webmail-actions">
-                                        {!webmailStatus?.installed ? (
-                                            <Button size="sm" onClick={handleWebmailInstall} disabled={actionLoading}>Install Roundcube</Button>
-                                        ) : (
-                                            <>
-                                                {webmailStatus?.running
-                                                    ? <Button size="sm" variant="outline" onClick={() => handleWebmailControl('stop')} disabled={actionLoading}>Stop</Button>
-                                                    : <Button size="sm" onClick={() => handleWebmailControl('start')} disabled={actionLoading}>Start</Button>
-                                                }
-                                                <Button size="sm" variant="outline" onClick={() => handleWebmailControl('restart')} disabled={actionLoading}>Restart</Button>
-                                            </>
-                                        )}
-                                    </div>
-                                    {webmailStatus?.installed && (
-                                        <div className="proxy-form">
-                                            <div className="form-group">
-                                                <label>Proxy Domain</label>
-                                                <Input type="text" value={proxyDomain} onChange={e => setProxyDomain(e.target.value)} placeholder="webmail.example.com" />
-                                            </div>
-                                            <Button size="sm" onClick={handleConfigureProxy} disabled={actionLoading || !proxyDomain}>Configure Nginx Proxy</Button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </TabsContent>
-
-                        {/* Queue & Logs Tab */}
-                        <TabsContent value="queue">
-                            <div>
-                                <div className="email-queue">
-                                    <div className="section-header">
-                                        <h2>Mail Queue ({queue.length})</h2>
-                                        <Button size="sm" variant="outline" onClick={handleFlushQueue} disabled={actionLoading}>Flush Queue</Button>
-                                    </div>
-                                    {queue.length === 0 ? (
-                                        <EmptyState icon={Inbox} title="Queue is empty" />
-                                    ) : (
-                                        <div className="email-table-card">
-                                            <table className="sk-dtable">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Queue ID</th>
-                                                        <th>From</th>
-                                                        <th>Recipients</th>
-                                                        <th>Size</th>
-                                                        <th>Arrived</th>
-                                                        <th />
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {queue.map(item => (
-                                                        <tr key={item.queue_id}>
-                                                            <td className="sk-cell-mono email-qid">{item.queue_id}</td>
-                                                            <td className="sk-cell-mono">{item.sender}</td>
-                                                            <td>
-                                                                <span className="sk-cell-mono">{(item.recipients || []).join(', ') || '—'}</span>
-                                                                {item.error && <div className="email-qerr">{item.error}</div>}
-                                                            </td>
-                                                            <td className="sk-cell-mono">{item.size}B</td>
-                                                            <td className="sk-cell-mono">{item.arrival_time}</td>
-                                                            <td>
-                                                                <div className="email-row-actions">
-                                                                    <Button size="sm" variant="destructive" onClick={() => handleDeleteQueueItem(item.queue_id)}>Delete</Button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="email-logs">
-                                    <div className="section-header">
-                                        <h2>Mail Logs</h2>
-                                        <div className="log-controls">
-                                            <select value={logLines} onChange={e => setLogLines(parseInt(e.target.value))}>
-                                                <option value={50}>50 lines</option>
-                                                <option value={100}>100 lines</option>
-                                                <option value={500}>500 lines</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <pre className="log-output">{logs.length > 0 ? logs.join('\n') : 'No logs available'}</pre>
-                                </div>
-                            </div>
-                        </TabsContent>
-                    </Tabs>
-                </>
-            )}
-
-            {confirmDialog && <ConfirmDialog {...confirmDialog} />}
-        </div>
-    );
-}
-
-export default Email;
+37351300Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/2011e743b9a906d10e8df98b7a17753e65677e80337d09fa3af0782679502e96/stats?stream=false","time":"2026-07-07T12:05:42.534351600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.537351300Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/2011e743b9a906d10e8df98b7a17753e65677e80337d09fa3af0782679502e96/stats?stream=false","time":"2026-07-07T12:05:42.534850700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.537850500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/bae5f09c587ab399f10ac3dff542e6e4594f10d6d622220d3c06fe92d6cce431/stats?stream=false","time":"2026-07-07T12:05:42.537850500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.537850500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/bae5f09c587ab399f10ac3dff542e6e4594f10d6d622220d3c06fe92d6cce431/stats?stream=false","time":"2026-07-07T12:05:42.537850500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.539351800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/0afa7db65bebc5836d86dbc30e11d38449b245e2b9316cb5db78bf4986733413/stats?stream=false","time":"2026-07-07T12:05:42.538851400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.539351800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/0afa7db65bebc5836d86dbc30e11d38449b245e2b9316cb5db78bf4986733413/stats?stream=false","time":"2026-07-07T12:05:42.538851400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.541855100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/9c42dc147dad5af62095815335cc937aefe50e2662a922252783be8849046e3c/stats?stream=false","time":"2026-07-07T12:05:42.541855100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.542351100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/9c42dc147dad5af62095815335cc937aefe50e2662a922252783be8849046e3c/stats?stream=false","time":"2026-07-07T12:05:42.542351100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.544350800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/07aa3fb78a059874554d2bc65ae5dac547376960a8a3dc0005b6d80e1088e69e/stats?stream=false","time":"2026-07-07T12:05:42.544350800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.544350800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/07aa3fb78a059874554d2bc65ae5dac547376960a8a3dc0005b6d80e1088e69e/stats?stream=false","time":"2026-07-07T12:05:42.544350800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.546350500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/6e60e4feeea218cfff786169045ef21512e95f495b52a4ae49072094052fbc19/stats?stream=false","time":"2026-07-07T12:05:42.546350500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.546350500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/6e60e4feeea218cfff786169045ef21512e95f495b52a4ae49072094052fbc19/stats?stream=false","time":"2026-07-07T12:05:42.546350500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.548350700Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/de0de76f2c3f6e951167c08648e3c84bb4a0a8ff40b73af511130db08b0e3983/stats?stream=false","time":"2026-07-07T12:05:42.548350700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.548350700Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/de0de76f2c3f6e951167c08648e3c84bb4a0a8ff40b73af511130db08b0e3983/stats?stream=false","time":"2026-07-07T12:05:42.548350700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.560850900Z] {"component":"apiproxy","level":"info","msg":"Context canceled, closing connection for \"/v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D\"","time":"2026-07-07T12:05:42.560350900-04:00"}
+[2026-07-07T16:05:42.562851200Z] {"component":"apiproxy","duration":2283618700,"level":"info","msg":"<< GET /v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D","time":"2026-07-07T12:05:42.562352000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:42.563352000Z] {"component":"apiproxy","level":"info","msg":"Context canceled, closing connection for \"/v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D\"","time":"2026-07-07T12:05:42.562851200-04:00"}
+[2026-07-07T16:05:42.565350900Z] {"component":"apiproxy","duration":2031198000,"level":"info","msg":"<< GET /v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D","time":"2026-07-07T12:05:42.565350900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.424151100Z] {"component":"apiproxy","level":"info","msg":">> HEAD /_ping","time":"2026-07-07T12:05:49.423150100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.427150300Z] {"component":"apiproxy","level":"info","msg":"<< HEAD /_ping","time":"2026-07-07T12:05:49.427150300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.428650100Z] Failed to fire hook: writing to log file: rotating log file: rename C:\Users\Juan\AppData\Local\Docker\log\host\com.docker.backend.exe.log.7 C:\Users\Juan\AppData\Local\Docker\log\host\com.docker.backend.exe.log.8: Access is denied.
+[2026-07-07T16:05:49.428650100Z] [16:05:49.427650100Z][main.idle             ] event handler ef70ee0c-f0bc-4b8c-adb5-d3a1b890d93b: request: GET /v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D
+[2026-07-07T16:05:49.428650100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D","time":"2026-07-07T12:05:49.428650100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.432150200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/json?all=1","time":"2026-07-07T12:05:49.431651400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.659805600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/json?all=1","time":"2026-07-07T12:05:49.659306600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.661806300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/de0de76f2c3f6e951167c08648e3c84bb4a0a8ff40b73af511130db08b0e3983/stats?stream=false","time":"2026-07-07T12:05:49.661806300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.663306000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/f66ec08ca4259eaf57b8a2b27679dc28f1d7e972d4b2cd8af537d9aa63fc48bb/stats?stream=false","time":"2026-07-07T12:05:49.663306000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.663306000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1897ddf479a04f75d004a1e7c4066deafc2f631bee034cfd7842875efcb33a40/stats?stream=false","time":"2026-07-07T12:05:49.663306000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.663807100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/9c42dc147dad5af62095815335cc937aefe50e2662a922252783be8849046e3c/stats?stream=false","time":"2026-07-07T12:05:49.663306000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.663807100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/5cdebd7687374908b64c0edde38db9fd942e92d07be0244256f7b901ed1bad61/stats?stream=false","time":"2026-07-07T12:05:49.663807100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.663807100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/d3e23e5fcfa023038e5095964239682218ec3edd4aa1239faa1849fb09aebfdc/stats?stream=false","time":"2026-07-07T12:05:49.663807100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.664306400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/319a6aa5d00c6e227fe733dec61fdd8625224ad68b276a2d821af25112d99e13/stats?stream=false","time":"2026-07-07T12:05:49.664306400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.664306400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1b9bfb7ad2442236ceb00d23c991ae6bd68a6a3bc2c80371f0bfcaf9ade0e2d2/stats?stream=false","time":"2026-07-07T12:05:49.664306400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.665806300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/4b42b6b63e3517db23802e60f8eccc00df3d41be264d7537afc8056e8fc33f31/stats?stream=false","time":"2026-07-07T12:05:49.665306500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.665806300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/7dbb738017e9046b355407bc2e680d6cfda66b49205ebe342e12767f0d9c3846/stats?stream=false","time":"2026-07-07T12:05:49.665306500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.665806300Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/f66ec08ca4259eaf57b8a2b27679dc28f1d7e972d4b2cd8af537d9aa63fc48bb/stats?stream=false","time":"2026-07-07T12:05:49.665806300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.666306900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1ddef6d262c0ffde2f0b6849424e3aae985d44108001f602814d66eaf1e2941b/stats?stream=false","time":"2026-07-07T12:05:49.666306900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.666806500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/d3e23e5fcfa023038e5095964239682218ec3edd4aa1239faa1849fb09aebfdc/stats?stream=false","time":"2026-07-07T12:05:49.666806500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.666806500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/95bb5651be773b3d73d2e1e23c4b179611f580b5e60e5cf3f5faea0818608e95/stats?stream=false","time":"2026-07-07T12:05:49.666806500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.667307000Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/4b42b6b63e3517db23802e60f8eccc00df3d41be264d7537afc8056e8fc33f31/stats?stream=false","time":"2026-07-07T12:05:49.667307000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.668306100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/7d578945e54274b8f795edcfac17d34c88750a238250b8af1fc0a6926b6f274b/stats?stream=false","time":"2026-07-07T12:05:49.667808400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.668306100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/e289c1dc949d115e22407168e713263b038d5410ea84c192b45b72797259f85b/stats?stream=false","time":"2026-07-07T12:05:49.668306100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.668805700Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/7dbb738017e9046b355407bc2e680d6cfda66b49205ebe342e12767f0d9c3846/stats?stream=false","time":"2026-07-07T12:05:49.668805700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.669305500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/cdb69b89e3cfb418d3587d790edbb779cd6d754586084d3d53d791aa18c995c0/stats?stream=false","time":"2026-07-07T12:05:49.668805700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.669305500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/07aa3fb78a059874554d2bc65ae5dac547376960a8a3dc0005b6d80e1088e69e/stats?stream=false","time":"2026-07-07T12:05:49.669305500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.669305500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/30d89f7af8ed07a940ca17d70db16f4ffd3621e5f352a3184edf12827b1c01bb/stats?stream=false","time":"2026-07-07T12:05:49.669305500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.669305500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/618978779c019f85500778b5eb5c2faa6ba7ec6fa088c9e622ec630570f674b2/stats?stream=false","time":"2026-07-07T12:05:49.669305500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.670805500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/7d578945e54274b8f795edcfac17d34c88750a238250b8af1fc0a6926b6f274b/stats?stream=false","time":"2026-07-07T12:05:49.670306300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.670805500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/95bb5651be773b3d73d2e1e23c4b179611f580b5e60e5cf3f5faea0818608e95/stats?stream=false","time":"2026-07-07T12:05:49.670306300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.676321100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/e289c1dc949d115e22407168e713263b038d5410ea84c192b45b72797259f85b/stats?stream=false","time":"2026-07-07T12:05:49.672310500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.676321100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/3f11e1aef5527d3eb7e35cce702cb5512e9ff949ddc8d630b6deab7293515f26/stats?stream=false","time":"2026-07-07T12:05:49.672310500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.676321100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/b8fdd21ecf8988898b9b477386de2c501178d8ba40dc3d2325e477de002b6c25/stats?stream=false","time":"2026-07-07T12:05:49.672809900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.681245500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/df1a85c33907efa5531d24d0570490ff5c52f6d1e59085a5842f7d4f713f136f/stats?stream=false","time":"2026-07-07T12:05:49.676321100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.681245500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/ed043d293fbfef9d26603c204ed8f253b54a95e70d44a4d4887d77bc5e6b339a/stats?stream=false","time":"2026-07-07T12:05:49.676321100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.681245500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/b47b214864e4c56d10980acf6a27f6714d412a749d182f54d769c4d00f09753f/stats?stream=false","time":"2026-07-07T12:05:49.677365000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.689736300Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/30d89f7af8ed07a940ca17d70db16f4ffd3621e5f352a3184edf12827b1c01bb/stats?stream=false","time":"2026-07-07T12:05:49.687831900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.689736300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/7f5f6acc7bac00247cee5873f9c0098a7a214c6781940fe99f3f7409ce1c0a82/stats?stream=false","time":"2026-07-07T12:05:49.688830600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.692249400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/65fd05f3f4bffd3426c08a6ae7673a8410e821e52a3351a14dc57f329c404762/stats?stream=false","time":"2026-07-07T12:05:49.690240600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.693308700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/3fe802f478b2d1fbe7d2436f7bcc1399f03cd2ae71c8f573269778a020ea4d6e/stats?stream=false","time":"2026-07-07T12:05:49.693308700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.693308700Z] {"component":"apiproxy","level":"info","msg":"Context canceled, closing connection for \"/v1.53/containers/df1a85c33907efa5531d24d0570490ff5c52f6d1e59085a5842f7d4f713f136f/stats?stream=false\"","time":"2026-07-07T12:05:49.693308700-04:00"}
+[2026-07-07T16:05:49.693807700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/29c5c3875063e15c1cd17d76d22a9fc1f9ff59dfd383dd79a0acfeb5be59b041/stats?stream=false","time":"2026-07-07T12:05:49.693308700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.694307800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/bfe425e53d8f6841d0269cc036a2a1879be28cdc376596571f854245a1fe8486/stats?stream=false","time":"2026-07-07T12:05:49.693807700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.695811600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/df1a85c33907efa5531d24d0570490ff5c52f6d1e59085a5842f7d4f713f136f/stats?stream=false","time":"2026-07-07T12:05:49.695811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.695811600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/b47b214864e4c56d10980acf6a27f6714d412a749d182f54d769c4d00f09753f/stats?stream=false","time":"2026-07-07T12:05:49.695811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.696312100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/7f5f6acc7bac00247cee5873f9c0098a7a214c6781940fe99f3f7409ce1c0a82/stats?stream=false","time":"2026-07-07T12:05:49.695811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.696312100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/ed043d293fbfef9d26603c204ed8f253b54a95e70d44a4d4887d77bc5e6b339a/stats?stream=false","time":"2026-07-07T12:05:49.695811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.697811400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/99a91313224dbb114148c5c4f599f813dde92731c5aa07a5d3d13f1c1084da54/stats?stream=false","time":"2026-07-07T12:05:49.697312100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.697811400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/6e60e4feeea218cfff786169045ef21512e95f495b52a4ae49072094052fbc19/stats?stream=false","time":"2026-07-07T12:05:49.697811400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.697811400Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/65fd05f3f4bffd3426c08a6ae7673a8410e821e52a3351a14dc57f329c404762/stats?stream=false","time":"2026-07-07T12:05:49.697811400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.697811400Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/29c5c3875063e15c1cd17d76d22a9fc1f9ff59dfd383dd79a0acfeb5be59b041/stats?stream=false","time":"2026-07-07T12:05:49.697811400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.698313300Z] {"component":"apiproxy","level":"info","msg":"Context canceled, closing connection for \"/v1.53/containers/65fd05f3f4bffd3426c08a6ae7673a8410e821e52a3351a14dc57f329c404762/stats?stream=false\"","time":"2026-07-07T12:05:49.697811400-04:00"}
+[2026-07-07T16:05:49.698811600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/3fe802f478b2d1fbe7d2436f7bcc1399f03cd2ae71c8f573269778a020ea4d6e/stats?stream=false","time":"2026-07-07T12:05:49.697811400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.699314100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/c48146dd4419e53669d117e9a0821f1bec21c0729c84cdc11149ecdef46274b2/stats?stream=false","time":"2026-07-07T12:05:49.699314100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.699314100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/bfe425e53d8f6841d0269cc036a2a1879be28cdc376596571f854245a1fe8486/stats?stream=false","time":"2026-07-07T12:05:49.699314100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.699314100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/e49793440273cdd5114de5708befd654666569423f470a9990b3d864b822b00e/stats?stream=false","time":"2026-07-07T12:05:49.699314100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.700311700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1a1e53f6caae1af87c8bb17ee09f4f5d13ab63ea18d97a84fef52b55d3327c0c/stats?stream=false","time":"2026-07-07T12:05:49.699812900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.700311700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/fa537256d19cfc24492a6ffede0f1657b0cf3ab9ece8e92e3b309d912a2b7135/stats?stream=false","time":"2026-07-07T12:05:49.700311700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.700311700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/bae5f09c587ab399f10ac3dff542e6e4594f10d6d622220d3c06fe92d6cce431/stats?stream=false","time":"2026-07-07T12:05:49.700311700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.700811500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/2011e743b9a906d10e8df98b7a17753e65677e80337d09fa3af0782679502e96/stats?stream=false","time":"2026-07-07T12:05:49.700811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.701311100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/78da6e0498e8dc114209489e59fd838e5a60ac024afb51918ae8f11fbf1cb6b3/stats?stream=false","time":"2026-07-07T12:05:49.701311100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.701311100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/e49793440273cdd5114de5708befd654666569423f470a9990b3d864b822b00e/stats?stream=false","time":"2026-07-07T12:05:49.701311100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.701311100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/28aa1baebd4d2ce9f097d8e106001e02b2509acea45eb1eeb08415a8902f13c5/stats?stream=false","time":"2026-07-07T12:05:49.701311100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.701811400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/e9cc40974672329916e4a0f1ed653c35e2afef3d3fe213936b3bf80159dc0453/stats?stream=false","time":"2026-07-07T12:05:49.701311100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.702312600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/da2e874ccaa518f7256c7fa9bf9621454af0fc301c37460af78092f298b60be9/stats?stream=false","time":"2026-07-07T12:05:49.701811400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.702312600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/d20a4928619517bc6061d817e539f6889ab6af53ceb36503c3a6a6add33ef8b6/stats?stream=false","time":"2026-07-07T12:05:49.701811400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.702312600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/8a94910e82b4998559c2def506bcecbfc1a25f790371bbbf882f155db7ea8f05/stats?stream=false","time":"2026-07-07T12:05:49.702312600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.702811500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/1a1e53f6caae1af87c8bb17ee09f4f5d13ab63ea18d97a84fef52b55d3327c0c/stats?stream=false","time":"2026-07-07T12:05:49.702312600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.702811500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/fa537256d19cfc24492a6ffede0f1657b0cf3ab9ece8e92e3b309d912a2b7135/stats?stream=false","time":"2026-07-07T12:05:49.702811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.702811500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/78da6e0498e8dc114209489e59fd838e5a60ac024afb51918ae8f11fbf1cb6b3/stats?stream=false","time":"2026-07-07T12:05:49.702811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703312200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/28aa1baebd4d2ce9f097d8e106001e02b2509acea45eb1eeb08415a8902f13c5/stats?stream=false","time":"2026-07-07T12:05:49.702811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703312200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/0afa7db65bebc5836d86dbc30e11d38449b245e2b9316cb5db78bf4986733413/stats?stream=false","time":"2026-07-07T12:05:49.703312200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703312200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/e9cc40974672329916e4a0f1ed653c35e2afef3d3fe213936b3bf80159dc0453/stats?stream=false","time":"2026-07-07T12:05:49.703312200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703817900Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/da2e874ccaa518f7256c7fa9bf9621454af0fc301c37460af78092f298b60be9/stats?stream=false","time":"2026-07-07T12:05:49.703817900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703817900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/c8aabd5a036fc2daa93a384fcef7fa0eba84ccd0c821fdaf31a13af7be365d91/stats?stream=false","time":"2026-07-07T12:05:49.703817900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703817900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1f9b7a90efc26e497c63b73db37410e19ea17272eaa26ac8a9c5f83aa51ef0ec/stats?stream=false","time":"2026-07-07T12:05:49.703817900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703817900Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/8a94910e82b4998559c2def506bcecbfc1a25f790371bbbf882f155db7ea8f05/stats?stream=false","time":"2026-07-07T12:05:49.703817900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.703817900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/f12cb2506fd59ccd02fa557f943f0ddab61ff614cfad92c8d4e7b5f0768c98ad/stats?stream=false","time":"2026-07-07T12:05:49.703817900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.705312100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/c8aabd5a036fc2daa93a384fcef7fa0eba84ccd0c821fdaf31a13af7be365d91/stats?stream=false","time":"2026-07-07T12:05:49.705312100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.705312100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/1f9b7a90efc26e497c63b73db37410e19ea17272eaa26ac8a9c5f83aa51ef0ec/stats?stream=false","time":"2026-07-07T12:05:49.705312100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.709312100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/2ec4cc4f1cd1bd3ff36a2af7cad6281ec67dafd093593fa65b21d0dd87576108/stats?stream=false","time":"2026-07-07T12:05:49.709312100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.709312100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/e0a36bfba5d39b37316e5eb977e903570c0f931b8bc6cade7f07ed8db88f0375/stats?stream=false","time":"2026-07-07T12:05:49.709312100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.709312100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/be233c60b58b255012b9d8365979e2300c367a6682780b433b6eabe62a316db9/stats?stream=false","time":"2026-07-07T12:05:49.709312100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.709811800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/a824babc925b0e3e624cfdf6091d7b685eb956691d3307650c9d2981200fc178/stats?stream=false","time":"2026-07-07T12:05:49.709811800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.710311400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/27ee25d3e308c7f164602f5b50040550b3cfac5ff6e1b4f24078ad40bd4995b9/stats?stream=false","time":"2026-07-07T12:05:49.710311400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.710811500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/956b65bf88f81876e97c02e66275cccb3b2e08b346609720f258001d24fd2597/stats?stream=false","time":"2026-07-07T12:05:49.710811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.710811500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/3cd53586fe9d664307246dd3ef4c1c62079c3bd624ba90fc5b437ec24f88b5b2/stats?stream=false","time":"2026-07-07T12:05:49.710811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.710811500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/a7236acfa587c1c2c955bcf73c9a0318aeaf0ed45c37ec07293cd433a710db4a/stats?stream=false","time":"2026-07-07T12:05:49.710811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.710811500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/75abb1122c4e47e4e784d3cc948a1121c41d2ff12516502d075ddd368358370c/stats?stream=false","time":"2026-07-07T12:05:49.710811500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.711312000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/6a4b2bd525a3bdef61d59d9f341cc4d558991d0238056b98023d23118d66e718/stats?stream=false","time":"2026-07-07T12:05:49.711312000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.711811600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/e0a36bfba5d39b37316e5eb977e903570c0f931b8bc6cade7f07ed8db88f0375/stats?stream=false","time":"2026-07-07T12:05:49.711312000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.711811600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/0c51944dbd4521b565ac5d02d5349f7ae52a0a463eb6219087f9850cb0d15f18/stats?stream=false","time":"2026-07-07T12:05:49.711811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.711811600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/a824babc925b0e3e624cfdf6091d7b685eb956691d3307650c9d2981200fc178/stats?stream=false","time":"2026-07-07T12:05:49.711811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.712312500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/956b65bf88f81876e97c02e66275cccb3b2e08b346609720f258001d24fd2597/stats?stream=false","time":"2026-07-07T12:05:49.711811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.712312500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/3cd53586fe9d664307246dd3ef4c1c62079c3bd624ba90fc5b437ec24f88b5b2/stats?stream=false","time":"2026-07-07T12:05:49.712312500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.712312500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/a7236acfa587c1c2c955bcf73c9a0318aeaf0ed45c37ec07293cd433a710db4a/stats?stream=false","time":"2026-07-07T12:05:49.712312500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.712811700Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/75abb1122c4e47e4e784d3cc948a1121c41d2ff12516502d075ddd368358370c/stats?stream=false","time":"2026-07-07T12:05:49.712811700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.713312600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/6a4b2bd525a3bdef61d59d9f341cc4d558991d0238056b98023d23118d66e718/stats?stream=false","time":"2026-07-07T12:05:49.713312600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.713812400Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/0c51944dbd4521b565ac5d02d5349f7ae52a0a463eb6219087f9850cb0d15f18/stats?stream=false","time":"2026-07-07T12:05:49.713312600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.714311900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/37fe9457cd4255583bc9397aac66f7fdbb62131658360631a5acb4d51b5f830f/stats?stream=false","time":"2026-07-07T12:05:49.714311900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.714311900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/ab2931529b5f368890bd68b999aa9e18413f6d6dadea9c402c48094a0bcfacae/stats?stream=false","time":"2026-07-07T12:05:49.714311900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.714311900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/2d7975a6ad610d8660f69e2c23c6ca917f5e101085ccb98f2df3aab3adfbf036/stats?stream=false","time":"2026-07-07T12:05:49.714311900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.715811000Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/37fe9457cd4255583bc9397aac66f7fdbb62131658360631a5acb4d51b5f830f/stats?stream=false","time":"2026-07-07T12:05:49.715811000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.716311200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/dd2f3d17322a75adc324fcd8cb73df97fe6c97ef5e22fdc9e8ea4b00f0af88b0/stats?stream=false","time":"2026-07-07T12:05:49.716311200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.716311200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/ab2931529b5f368890bd68b999aa9e18413f6d6dadea9c402c48094a0bcfacae/stats?stream=false","time":"2026-07-07T12:05:49.716311200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.716311200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/2d7975a6ad610d8660f69e2c23c6ca917f5e101085ccb98f2df3aab3adfbf036/stats?stream=false","time":"2026-07-07T12:05:49.716311200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.716811800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/022771b7aecf90d1b44ffaf3c7e1972d5eac4a99f7521b9fdc9f00631b704937/stats?stream=false","time":"2026-07-07T12:05:49.716811800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.718312000Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/022771b7aecf90d1b44ffaf3c7e1972d5eac4a99f7521b9fdc9f00631b704937/stats?stream=false","time":"2026-07-07T12:05:49.718312000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.718813600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/d8879985ec611018d465f8780088a8d591d646e90a158f8fc6d8204135a1332c/stats?stream=false","time":"2026-07-07T12:05:49.718813600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.718813600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/4455426bebee54eaa08e820cc1763b4098b6fea1e8336fac292c94506fc1d5da/stats?stream=false","time":"2026-07-07T12:05:49.718813600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.719311400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/de80eb6ef6871aee97cac5ead28f53c263571448d47eda47db325bd01e766fc1/stats?stream=false","time":"2026-07-07T12:05:49.719311400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.719311400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/4d9e8450685962877fe3dea83bdcae58767922513e541772a92cf4debd4bf44b/stats?stream=false","time":"2026-07-07T12:05:49.719311400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.720811200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/4455426bebee54eaa08e820cc1763b4098b6fea1e8336fac292c94506fc1d5da/stats?stream=false","time":"2026-07-07T12:05:49.720811200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.720811200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/de80eb6ef6871aee97cac5ead28f53c263571448d47eda47db325bd01e766fc1/stats?stream=false","time":"2026-07-07T12:05:49.720811200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.720811200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/4d9e8450685962877fe3dea83bdcae58767922513e541772a92cf4debd4bf44b/stats?stream=false","time":"2026-07-07T12:05:49.720811200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.721311400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/857b4d0c57a027589ce9ad5802198546bcaeb251d54802ff17502e1b71ed68e6/stats?stream=false","time":"2026-07-07T12:05:49.721311400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.721311400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/dd2566b2cfe9f00377b01d57434f22488d3cda187812c117eb431e694ce08829/stats?stream=false","time":"2026-07-07T12:05:49.721311400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.722313600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1fb466a4ab069dd7afa0fc775653d87c98aaa205ec80ea5451af84376502fca5/stats?stream=false","time":"2026-07-07T12:05:49.721811700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.722811900Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/dd2566b2cfe9f00377b01d57434f22488d3cda187812c117eb431e694ce08829/stats?stream=false","time":"2026-07-07T12:05:49.722811900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.723811600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/1fb466a4ab069dd7afa0fc775653d87c98aaa205ec80ea5451af84376502fca5/stats?stream=false","time":"2026-07-07T12:05:49.723811600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.724314300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/ab039fdd99569f465b6f4db62fed11392111d3334f1f4cd53df87cc8069d89c9/stats?stream=false","time":"2026-07-07T12:05:49.724314300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.725812100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/ab039fdd99569f465b6f4db62fed11392111d3334f1f4cd53df87cc8069d89c9/stats?stream=false","time":"2026-07-07T12:05:49.725812100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.726312500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/2d35647943f8fbe254b8f38376793451d23d3fb6b7dbdf60fd54c0ff0a509cf5/stats?stream=false","time":"2026-07-07T12:05:49.726312500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.729312400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/45ae5a57f2280ade7155f0dcd060c1798ab276b24fc1fe2297a674a5f9b8f962/stats?stream=false","time":"2026-07-07T12:05:49.729312400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.729812100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/791851df45140baf4b40ac68081b92e0e34c7306ca51ff5c78bf5b0246b74174/stats?stream=false","time":"2026-07-07T12:05:49.729812100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.729812100Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/8ec27e2dae5fb18b52c837de19f5e9432d8bfbf00505df90fe00c0b33132a7f4/stats?stream=false","time":"2026-07-07T12:05:49.729812100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.730811200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/2e0776bf823d829b18412bb129a22e0cbbdd7cd138f92996a4a137c62b18bf5f/stats?stream=false","time":"2026-07-07T12:05:49.730811200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.731811800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/8ec27e2dae5fb18b52c837de19f5e9432d8bfbf00505df90fe00c0b33132a7f4/stats?stream=false","time":"2026-07-07T12:05:49.731315000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.731811800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/45ae5a57f2280ade7155f0dcd060c1798ab276b24fc1fe2297a674a5f9b8f962/stats?stream=false","time":"2026-07-07T12:05:49.731315000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.731811800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/a9a2f80aaf83e9e218febe154dbdb8cb60d083b281566abd03441d9231291d43/stats?stream=false","time":"2026-07-07T12:05:49.731811800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.732312800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/b2a0d27b9f227a6430500b1e317b05ba34e34406ef9ca72e6f9f290bd32cef71/stats?stream=false","time":"2026-07-07T12:05:49.732312800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.733311600Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/2e0776bf823d829b18412bb129a22e0cbbdd7cd138f92996a4a137c62b18bf5f/stats?stream=false","time":"2026-07-07T12:05:49.732814300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.733311600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/f7770807cd18e5c6fbb0d89357aebb877f6a22b827e50329af5c8163b4160271/stats?stream=false","time":"2026-07-07T12:05:49.733311600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.734311300Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/a9a2f80aaf83e9e218febe154dbdb8cb60d083b281566abd03441d9231291d43/stats?stream=false","time":"2026-07-07T12:05:49.734311300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.734311300Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/b2a0d27b9f227a6430500b1e317b05ba34e34406ef9ca72e6f9f290bd32cef71/stats?stream=false","time":"2026-07-07T12:05:49.734311300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.739836800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/3d69ccb869d033a30e1cdac6c25e242e99d37990a79acbe03ae7311bced86abd/stats?stream=false","time":"2026-07-07T12:05:49.739836800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.739836800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/5ddc4d0cbeeb6bf01f0fc23b4b321297b94a0f6ff7e39f19a6f20e289b96155f/stats?stream=false","time":"2026-07-07T12:05:49.739836800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.740338300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/8c3dcf57e6d9dacf4c8fca2f304d5e913aff5f6baad2a2200fcc9ac98b72cd45/stats?stream=false","time":"2026-07-07T12:05:49.740338300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.740338300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/afe0c30318574abb30c2d23298a819c2cdf1f7ee714035159e2689e87e433bb5/stats?stream=false","time":"2026-07-07T12:05:49.740338300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.740338300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/fd57a7726d14bd16c6a2c47ba35d75c4bb61165eaf87b3def8fbe99b7cbe2c21/stats?stream=false","time":"2026-07-07T12:05:49.740338300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.741837200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/bfa70fac777075ef7bab3a1c901cee985a4fd3efae131bf8e60d5ba3f0eb24bb/stats?stream=false","time":"2026-07-07T12:05:49.741338100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.741837200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/bd92aed64536975bd6eab770f7dad897de7ca087073c0f2ef2180905f299d5c7/stats?stream=false","time":"2026-07-07T12:05:49.741837200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.742336200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/fd57a7726d14bd16c6a2c47ba35d75c4bb61165eaf87b3def8fbe99b7cbe2c21/stats?stream=false","time":"2026-07-07T12:05:49.742336200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.742336200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/afe0c30318574abb30c2d23298a819c2cdf1f7ee714035159e2689e87e433bb5/stats?stream=false","time":"2026-07-07T12:05:49.742336200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.742836700Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/8c3dcf57e6d9dacf4c8fca2f304d5e913aff5f6baad2a2200fcc9ac98b72cd45/stats?stream=false","time":"2026-07-07T12:05:49.742336200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.749886900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/cd1fb9ee3f831a84ad3f02da708b5ed3a5183e4d429482e96232e59e702b7b41/stats?stream=false","time":"2026-07-07T12:05:49.749386700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.749886900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/f3a5fe9289ae460f7bcb4e9df8a1c9137386ab92617223cb18a411adddb5727e/stats?stream=false","time":"2026-07-07T12:05:49.749886900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.750387400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/965b44998dab520a67ddc121f2c4a0a2a5d0dded0c6b16e10705a019374bf467/stats?stream=false","time":"2026-07-07T12:05:49.750387400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.751388500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/f3a6e34730250b29aee697640d5b87dd6c817c9327de95dc5680a8aa20b8f505/stats?stream=false","time":"2026-07-07T12:05:49.751388500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.752387200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/f3a5fe9289ae460f7bcb4e9df8a1c9137386ab92617223cb18a411adddb5727e/stats?stream=false","time":"2026-07-07T12:05:49.752387200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.752387200Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/965b44998dab520a67ddc121f2c4a0a2a5d0dded0c6b16e10705a019374bf467/stats?stream=false","time":"2026-07-07T12:05:49.752387200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.752387200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/fb71556a39239d6dcb3076b1d609e904899a71ca2da4d5aa16c2424d2c6e4fbe/stats?stream=false","time":"2026-07-07T12:05:49.752387200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.753388500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/f3a6e34730250b29aee697640d5b87dd6c817c9327de95dc5680a8aa20b8f505/stats?stream=false","time":"2026-07-07T12:05:49.753388500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.754388800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/fb71556a39239d6dcb3076b1d609e904899a71ca2da4d5aa16c2424d2c6e4fbe/stats?stream=false","time":"2026-07-07T12:05:49.754388800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.754886500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/84b4c4629e109711ccf8865fa536721f3fbd346ee226714b32ffe06e7bb59570/stats?stream=false","time":"2026-07-07T12:05:49.754886500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.756386400Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/84b4c4629e109711ccf8865fa536721f3fbd346ee226714b32ffe06e7bb59570/stats?stream=false","time":"2026-07-07T12:05:49.756386400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.756887800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/21b5da26ffaa50f01a4ab36f58d1e2c2a3c8e1ffc3c6c9cc21df44a4e225749a/stats?stream=false","time":"2026-07-07T12:05:49.756887800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:49.759387600Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/da1ae27f16abc9d29d992b79140fd1d5d277998c6769e8618ed6c51596c259f9/stats?stream=false","time":"2026-07-07T12:05:49.759387600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.106215700Z] {"component":"apiproxy","level":"info","msg":">> HEAD /_ping","time":"2026-07-07T12:05:50.106215700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.108716100Z] {"component":"apiproxy","level":"info","msg":"<< HEAD /_ping","time":"2026-07-07T12:05:50.108716100-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.109716400Z] Failed to fire hook: writing to log file: rotating log file: rename C:\Users\Juan\AppData\Local\Docker\log\host\com.docker.backend.exe.log.7 C:\Users\Juan\AppData\Local\Docker\log\host\com.docker.backend.exe.log.8: Access is denied.
+[2026-07-07T16:05:50.109716400Z] [16:05:50.109215000Z][main.idle             ] event handler fac12ea2-04b9-446f-aa2b-ffcf85a8a6c1: request: GET /v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D
+[2026-07-07T16:05:50.109716400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/events?filters=%7B%22type%22%3A%7B%22container%22%3Atrue%7D%7D","time":"2026-07-07T12:05:50.109716400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.112214800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/json?all=1","time":"2026-07-07T12:05:50.111715400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.342051400Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/json?all=1","time":"2026-07-07T12:05:50.342051400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.346051000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/3f11e1aef5527d3eb7e35cce702cb5512e9ff949ddc8d630b6deab7293515f26/stats?stream=false","time":"2026-07-07T12:05:50.345550500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.346051000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/dd2f3d17322a75adc324fcd8cb73df97fe6c97ef5e22fdc9e8ea4b00f0af88b0/stats?stream=false","time":"2026-07-07T12:05:50.346051000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.346551000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/45ae5a57f2280ade7155f0dcd060c1798ab276b24fc1fe2297a674a5f9b8f962/stats?stream=false","time":"2026-07-07T12:05:50.346051000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.346551000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/f12cb2506fd59ccd02fa557f943f0ddab61ff614cfad92c8d4e7b5f0768c98ad/stats?stream=false","time":"2026-07-07T12:05:50.346551000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.348055800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/857b4d0c57a027589ce9ad5802198546bcaeb251d54802ff17502e1b71ed68e6/stats?stream=false","time":"2026-07-07T12:05:50.348055800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.350051500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/8c3dcf57e6d9dacf4c8fca2f304d5e913aff5f6baad2a2200fcc9ac98b72cd45/stats?stream=false","time":"2026-07-07T12:05:50.349552900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.350051500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/de0de76f2c3f6e951167c08648e3c84bb4a0a8ff40b73af511130db08b0e3983/stats?stream=false","time":"2026-07-07T12:05:50.350051500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.350550700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/fd57a7726d14bd16c6a2c47ba35d75c4bb61165eaf87b3def8fbe99b7cbe2c21/stats?stream=false","time":"2026-07-07T12:05:50.350550700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.350550700Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/45ae5a57f2280ade7155f0dcd060c1798ab276b24fc1fe2297a674a5f9b8f962/stats?stream=false","time":"2026-07-07T12:05:50.350550700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.351551200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/da2e874ccaa518f7256c7fa9bf9621454af0fc301c37460af78092f298b60be9/stats?stream=false","time":"2026-07-07T12:05:50.351051600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.351551200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/29c5c3875063e15c1cd17d76d22a9fc1f9ff59dfd383dd79a0acfeb5be59b041/stats?stream=false","time":"2026-07-07T12:05:50.351551200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.352550700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/bfe425e53d8f6841d0269cc036a2a1879be28cdc376596571f854245a1fe8486/stats?stream=false","time":"2026-07-07T12:05:50.352051000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.352550700Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/8c3dcf57e6d9dacf4c8fca2f304d5e913aff5f6baad2a2200fcc9ac98b72cd45/stats?stream=false","time":"2026-07-07T12:05:50.352550700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.352550700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/3cd53586fe9d664307246dd3ef4c1c62079c3bd624ba90fc5b437ec24f88b5b2/stats?stream=false","time":"2026-07-07T12:05:50.352550700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.353050500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/fd57a7726d14bd16c6a2c47ba35d75c4bb61165eaf87b3def8fbe99b7cbe2c21/stats?stream=false","time":"2026-07-07T12:05:50.353050500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.353551000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1897ddf479a04f75d004a1e7c4066deafc2f631bee034cfd7842875efcb33a40/stats?stream=false","time":"2026-07-07T12:05:50.353551000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.354050100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/da2e874ccaa518f7256c7fa9bf9621454af0fc301c37460af78092f298b60be9/stats?stream=false","time":"2026-07-07T12:05:50.353551000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.354050100Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/29c5c3875063e15c1cd17d76d22a9fc1f9ff59dfd383dd79a0acfeb5be59b041/stats?stream=false","time":"2026-07-07T12:05:50.353551000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.354550900Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/bfe425e53d8f6841d0269cc036a2a1879be28cdc376596571f854245a1fe8486/stats?stream=false","time":"2026-07-07T12:05:50.354550900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.355051500Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/3cd53586fe9d664307246dd3ef4c1c62079c3bd624ba90fc5b437ec24f88b5b2/stats?stream=false","time":"2026-07-07T12:05:50.354550900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.355051500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/cdb69b89e3cfb418d3587d790edbb779cd6d754586084d3d53d791aa18c995c0/stats?stream=false","time":"2026-07-07T12:05:50.354550900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.355051500Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/5cdebd7687374908b64c0edde38db9fd942e92d07be0244256f7b901ed1bad61/stats?stream=false","time":"2026-07-07T12:05:50.355051500-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.355550400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/791851df45140baf4b40ac68081b92e0e34c7306ca51ff5c78bf5b0246b74174/stats?stream=false","time":"2026-07-07T12:05:50.355550400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.356051300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/b8fdd21ecf8988898b9b477386de2c501178d8ba40dc3d2325e477de002b6c25/stats?stream=false","time":"2026-07-07T12:05:50.356051300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.356051300Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/2011e743b9a906d10e8df98b7a17753e65677e80337d09fa3af0782679502e96/stats?stream=false","time":"2026-07-07T12:05:50.356051300-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.356550800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/99a91313224dbb114148c5c4f599f813dde92731c5aa07a5d3d13f1c1084da54/stats?stream=false","time":"2026-07-07T12:05:50.356550800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.357550200Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/75abb1122c4e47e4e784d3cc948a1121c41d2ff12516502d075ddd368358370c/stats?stream=false","time":"2026-07-07T12:05:50.357550200-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.358050000Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1a1e53f6caae1af87c8bb17ee09f4f5d13ab63ea18d97a84fef52b55d3327c0c/stats?stream=false","time":"2026-07-07T12:05:50.358050000-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.359550800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/75abb1122c4e47e4e784d3cc948a1121c41d2ff12516502d075ddd368358370c/stats?stream=false","time":"2026-07-07T12:05:50.359050600-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.359550800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/8a94910e82b4998559c2def506bcecbfc1a25f790371bbbf882f155db7ea8f05/stats?stream=false","time":"2026-07-07T12:05:50.359550800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.359550800Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/1a1e53f6caae1af87c8bb17ee09f4f5d13ab63ea18d97a84fef52b55d3327c0c/stats?stream=false","time":"2026-07-07T12:05:50.359550800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.360050800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/84b4c4629e109711ccf8865fa536721f3fbd346ee226714b32ffe06e7bb59570/stats?stream=false","time":"2026-07-07T12:05:50.360050800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.360050800Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/1b9bfb7ad2442236ceb00d23c991ae6bd68a6a3bc2c80371f0bfcaf9ade0e2d2/stats?stream=false","time":"2026-07-07T12:05:50.360050800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.360550700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/95bb5651be773b3d73d2e1e23c4b179611f580b5e60e5cf3f5faea0818608e95/stats?stream=false","time":"2026-07-07T12:05:50.360050800-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.360550700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/0afa7db65bebc5836d86dbc30e11d38449b245e2b9316cb5db78bf4986733413/stats?stream=false","time":"2026-07-07T12:05:50.360550700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.360550700Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/3fe802f478b2d1fbe7d2436f7bcc1399f03cd2ae71c8f573269778a020ea4d6e/stats?stream=false","time":"2026-07-07T12:05:50.360550700-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.361550400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/21b5da26ffaa50f01a4ab36f58d1e2c2a3c8e1ffc3c6c9cc21df44a4e225749a/stats?stream=false","time":"2026-07-07T12:05:50.361550400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.361550400Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/8a94910e82b4998559c2def506bcecbfc1a25f790371bbbf882f155db7ea8f05/stats?stream=false","time":"2026-07-07T12:05:50.361550400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.361550400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/2e0776bf823d829b18412bb129a22e0cbbdd7cd138f92996a4a137c62b18bf5f/stats?stream=false","time":"2026-07-07T12:05:50.361550400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.361550400Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/d20a4928619517bc6061d817e539f6889ab6af53ceb36503c3a6a6add33ef8b6/stats?stream=false","time":"2026-07-07T12:05:50.361550400-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.362049900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/fa537256d19cfc24492a6ffede0f1657b0cf3ab9ece8e92e3b309d912a2b7135/stats?stream=false","time":"2026-07-07T12:05:50.362049900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.362049900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/c48146dd4419e53669d117e9a0821f1bec21c0729c84cdc11149ecdef46274b2/stats?stream=false","time":"2026-07-07T12:05:50.362049900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.362551900Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/95bb5651be773b3d73d2e1e23c4b179611f580b5e60e5cf3f5faea0818608e95/stats?stream=false","time":"2026-07-07T12:05:50.362049900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.362551900Z] {"component":"apiproxy","level":"info","msg":"<< GET /v1.53/containers/84b4c4629e109711ccf8865fa536721f3fbd346ee226714b32ffe06e7bb59570/stats?stream=false","time":"2026-07-07T12:05:50.362049900-04:00","user_agent":"Docker-Client/29.2.1 (windows)"}
+[2026-07-07T16:05:50.362551900Z] {"component":"apiproxy","level":"info","msg":">> GET /v1.53/containers/7

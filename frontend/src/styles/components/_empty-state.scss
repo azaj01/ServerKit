@@ -31,6 +31,30 @@
         margin-top: $spacing-sm;
     }
 
+    // Stacked primary action + a subtle secondary cross-link (e.g. "Import them")
+    &__actions {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: $spacing-sm;
+        margin-top: $spacing-sm;
+    }
+
+    &__link {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-size: $font-size-sm;
+        color: $text-tertiary;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+
+        &:hover {
+            color: $primary-color;
+        }
+    }
+
     // Large variant — for full-page "not installed" / "unavailable" states
     &--lg {
         padding: $space-16 $space-8;

@@ -46,6 +46,12 @@ export async function getApp(id) {
     return this.request(`/apps/${id}`);
 }
 
+// Member-visible summary of an app's related resources (domains, managed DBs,
+// backup status, deployments). Read-only; any workspace member can load it.
+export async function getAppRelatedResources(id) {
+    return this.request(`/apps/${id}/related`);
+}
+
 export async function createApp(appData) {
     return this.request('/apps', {
         method: 'POST',
