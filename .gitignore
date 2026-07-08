@@ -156,3 +156,7 @@ docs/SERVICES_ROADMAP.md
 # exception so `cp example.env <name>.env` always has a starting point.
 /deploy/targets/*.env
 !/deploy/targets/example.env
+
+# Vite dependency pre-bundle cache (regenerated on every dev run; never commit)
+.vite/
+**/.vite/
