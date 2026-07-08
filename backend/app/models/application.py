@@ -65,6 +65,11 @@ class Application(db.Model):
     # Traefik/Caddy). NULL is treated as the default. See app/utils/ingress.py.
     ingress_plane = db.Column(db.String(20), nullable=True)
 
+    # Appliance tier (plan 35): typed port declarations (JSON list of
+    # {container, host, protocol, ...}) and a one-shot bootstrap-completed flag.
+    ports = db.Column(db.Text, nullable=True)
+    bootstrap_done = db.Column(db.Boolean, nullable=False, server_default='0', default=False)
+
     # Upload versioning
     version = db.Column(db.Integer, default=0, nullable=False)
     upload_path = db.Column(db.String(500), nullable=True)

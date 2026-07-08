@@ -4,6 +4,10 @@ from flask import g, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from app.models import User
 
+# App capability tiers, ranked low->high. The single ordering behind
+# app_access_tier / require_app_member and the membership visibility model.
+_APP_ROLE_RANK = {'viewer': 1, 'member': 2, 'admin': 3, 'owner': 4}
+
 
 def get_current_user():
     """Get the current authenticated user (via API key or JWT)."""
@@ -157,3 +161,92 @@ def viewer_required(fn):
             return jsonify({'error': 'Access denied'}), 403
         return fn(*args, **kwargs)
     return wrapper
+
+
+def require_workspace_access(workspace_id, user):
+    """Return a 403 response tuple if `user` is neither a panel admin nor a member
+    of the workspace, else None. Plain guard (not a decorator) so callers that
+    already resolved the workspace id can drop it inline."""
+    from app.services.workspace_service import WorkspaceService
+    if user.is_admin:
+        return None
+    if WorkspaceService.get_user_role(workspace_id, user.id) is None:
+        return jsonify({'error': 'Workspace access denied'}), 403
+    return None
+
+
+def require_workspace_role(workspace_id, user, roles):
+    """Return a 403 response tuple unless `user` is a panel admin or their
+    workspace membership role is one of `roles`, else None."""
+    from app.services.workspace_service import WorkspaceService
+    if user.is_admin:
+        return None
+    if WorkspaceService.get_user_role(workspace_id, user.id) not in roles:
+        return jsonify({'error': 'Insufficient permissions'}), 403
+    return None
+
+
+def app_access_tier(user, application):
+    """Fold every path to an application into ONE capability tier
+    ('owner'|'admin'|'member'|'viewer') or None (no access):
+
+    - panel admin or the app's owner  -> 'owner'
+    - ResourceGrant 'editor'          -> 'member' (may operate, not administer)
+    - ResourceGrant 'viewer'          -> 'viewer' (read-only)
+    - member of the app's workspace   -> that workspace role
+    - otherwise                       -> None
+
+    The highest tier wins. This is the single seam behind require_app_member and
+    the membership visibility model (plan 19 Decision 2).
+    """
+    if user.is_admin or application.user_id == user.id:
+        return 'owner'
+
+    from app.services.resource_grant_service import ResourceGrantService
+    from app.services.workspace_service import WorkspaceService
+
+    best = None
+    grant_role = ResourceGrantService.grant_role(user.id, 'application', application.id)
+    if grant_role == 'editor':
+        best = 'member'
+    elif grant_role == 'viewer':
+        best = 'viewer'
+
+    ws_id = getattr(application, 'workspace_id', None)
+    if ws_id is not None:
+        ws_role = WorkspaceService.get_user_role(ws_id, user.id)
+        if ws_role:
+            if best is None or _APP_ROLE_RANK[ws_role] > _APP_ROLE_RANK[best]:
+                best = ws_role
+    return best
+
+
+def require_app_member(min_role='viewer', arg='app_id'):
+    """Decorator: the caller must reach the application named by view kwarg `arg`
+    with an effective tier >= `min_role` (see app_access_tier). Resolves the app,
+    404s when it is missing (no info leak), 403s on insufficient access, and
+    stashes the resolved Application on `g.current_application` for the view.
+
+    Tiers: read surfaces use min_role='viewer'; member-write surfaces 'member';
+    app-scoped destructive surfaces 'admin' (workspace admin/owner or panel admin).
+    """
+    def decorator(fn):
+        @wraps(fn)
+        @auth_required()
+        def wrapper(*args, **kwargs):
+            user = get_current_user()
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            if not user.is_active:
+                return jsonify({'error': 'Account is deactivated'}), 403
+            from app.models.application import Application
+            application = Application.query.get(kwargs.get(arg))
+            if application is None:
+                return jsonify({'error': 'Not found'}), 404
+            tier = app_access_tier(user, application)
+            if tier is None or _APP_ROLE_RANK[tier] < _APP_ROLE_RANK[min_role]:
+                return jsonify({'error': 'Access denied'}), 403
+            g.current_application = application
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
