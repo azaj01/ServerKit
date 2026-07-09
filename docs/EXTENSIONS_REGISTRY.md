@@ -23,6 +23,15 @@ This document is the format spec (task #16) and the publisher guide (task #21).
 - Installing a registry entry downloads its `source`, verifies `sha256` (when
   present) before extraction, and checks the panel version against
   `min_panel_version` / `max_panel_version`.
+- **Installing straight from GitHub** (Marketplace → *Install manually* → URL)
+  works with a repo URL, a release URL, a direct `.zip`, or `owner/repo` /
+  `owner/repo@tag` shorthand. The panel first **previews** the extension —
+  resolving the download, reading `plugin.json`, and showing the version,
+  declared permissions, panel-version compatibility, and any warnings — then
+  installs the *exact previewed bytes* (checksum-pinned). Set the optional
+  **`SERVERKIT_GITHUB_TOKEN`** env var to lift GitHub's 60/hr anonymous API
+  rate limit and enable private-repo installs; the token is attached only to
+  GitHub hosts and is never logged or returned by the API.
 
 Relevant endpoints:
 

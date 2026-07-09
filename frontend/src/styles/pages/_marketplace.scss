@@ -687,6 +687,104 @@
     font-size: $font-size-sm;
 }
 
+// Two-step GitHub install: consent card shown after resolve, before install.
+.plugin-install-consent {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+    padding: $space-4;
+    border: 1px solid $border-color;
+    border-radius: $radius-lg;
+    background: $bg-elevated;
+
+    &__head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: $space-3;
+
+        h4 {
+            margin: 0 0 $space-1;
+            font-size: $font-size-lg;
+        }
+    }
+
+    &__meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: $space-3;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+
+        code {
+            font-family: $font-mono;
+        }
+    }
+
+    &__badge {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-1;
+        white-space: nowrap;
+
+        svg {
+            width: 13px;
+            height: 13px;
+        }
+    }
+
+    &__desc {
+        margin: 0;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+        line-height: $line-height-normal;
+    }
+
+    &__label {
+        margin: 0 0 $space-2;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+        color: $text-secondary;
+    }
+
+    &__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+    }
+
+    &__warnings {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+
+        li {
+            display: flex;
+            align-items: flex-start;
+            gap: $space-2;
+            font-size: $font-size-sm;
+            color: $warning;
+
+            svg {
+                flex-shrink: 0;
+                width: 15px;
+                height: 15px;
+                margin-top: 2px;
+            }
+        }
+    }
+
+    &__actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: $space-3;
+    }
+}
+
 // Keep-vs-purge data policy dialog on plugin uninstall.
 .plugin-uninstall-dialog {
     display: flex;

@@ -9,10 +9,22 @@ export async function getPlugin(pluginId) {
     return this.request(`/plugins/${pluginId}`);
 }
 
-export async function installPlugin(url) {
-    return this.request('/plugins/install', {
+// Preview a GitHub/zip extension without installing. Returns the manifest
+// metadata (slug, version, permissions, panel gate), the resolved download URL,
+// its sha256, and any warnings — used to render the consent card.
+export async function previewPlugin(url) {
+    return this.request('/plugins/preview', {
         method: 'POST',
         body: JSON.stringify({ url }),
+    });
+}
+
+// Install a plugin from a URL. Pass `sha256` (from previewPlugin) to pin the
+// install to the exact previewed bytes.
+export async function installPlugin(url, sha256 = null) {
+    return this.request('/plugins/install', {
+        method: 'POST',
+        body: JSON.stringify(sha256 ? { url, sha256 } : { url }),
     });
 }
 

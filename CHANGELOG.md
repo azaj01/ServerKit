@@ -20,6 +20,16 @@ awaiting a stable release:
 
 ### Added
 
+- **Install extensions straight from GitHub, with a preview + consent step** —
+  the manual-install URL flow is now two-step: paste a repo (`owner/repo`,
+  `owner/repo@tag`, a release URL, or a direct `.zip`), **Preview** resolves and
+  reads the extension, then a consent card shows its version, declared
+  permissions, panel-version compatibility, and warnings (no release found,
+  slug already installed, version-gate mismatch) before you install. The install
+  is pinned to the exact previewed bytes via sha256. A new
+  `POST /api/v1/plugins/preview` endpoint powers it. Set the optional
+  `SERVERKIT_GITHUB_TOKEN` to lift GitHub's anonymous rate limit and install
+  from private repos (the token is only ever sent to GitHub, never logged).
 - **Public extension index (registry v2)** — the extension registry schema gains
   optional `logo`, `repo`, and `bundled` fields (additive; v1 entries stay
   valid). The Marketplace now surfaces extension logos (shown first in the art
