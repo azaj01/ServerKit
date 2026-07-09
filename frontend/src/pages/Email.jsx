@@ -7,16 +7,17 @@
 // covers the same surface area: server/service status, mail domains with
 // SPF/DKIM/DMARC/PTR presence pills + DNS verify/deploy, accounts, aliases,
 // outbound relay (smarthost), SpamAssassin, webmail, and the mail queue.
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Mail, RefreshCw, Plus, Trash2, ShieldCheck, Server, Globe, Users,
-    Send, Filter, Inbox, ExternalLink, CheckCircle2, XCircle, HelpCircle,
+    Send, Filter, Inbox, ExternalLink, CheckCircle2, XCircle, HelpCircle, Search,
 } from 'lucide-react';
 import api from '../services/api';
 import useTabParam from '../hooks/useTabParam';
-import { PageTopbar, Pill, MetricCard, KpiBand } from '@/components/ds';
+import { PageTopbar, Pill, MetricCard, KpiBand, DataTable } from '@/components/ds';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import EmptyState from '../components/EmptyState';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../hooks/useConfirm';
 
@@ -174,15 +175,54 @@ function OverviewTab({ status, installed, onChange }) {
 
     if (!installed) {
         return (
-            <div className="sk-email__empty">
-                <Server size={24} aria-hidden="true" />
-                <p>The mail server stack is not installed on this host.</p>
-                <Button size="sm" onClick={install}>
-                    <Plus size={14} /> Install mail server
-                </Button>
+            <div className="sk-email__hero">
+                <EmptyState
+                    icon={Server}
+                    title="Mail server not installed"
+                    description="Most panels never run a mail server, install it when you need it."
+                    action={(
+                        <Button size="sm" onClick={install}>
+                            <Plus size={14} /> Install mail server
+                        </Button>
+                    )}
+                />
+                <p className="sk-email__hero-note">
+                    A deliverability preflight (PTR, port 25, RBL) gates outbound sending before mail
+                    can leave this host.
+                </p>
             </div>
         );
     }
+
+    const serviceRows = names.map((name) => {
+        const running = components[name]?.running ?? components[name] === 'running';
+        return { id: name, name, running };
+    });
+
+    const serviceColumns = [
+        { key: 'component', header: 'Component', render: (r) => r.name },
+        {
+            key: 'state',
+            header: 'State',
+            render: (r) => <Pill kind={r.running ? 'green' : 'red'}>{r.running ? 'Running' : 'Stopped'}</Pill>,
+        },
+        {
+            key: 'actions',
+            header: '',
+            className: 'sk-email__actions-col',
+            cellClassName: 'sk-email__actions-cell',
+            render: (r) => (
+                <div className="sk-email__actions">
+                    <Button variant="ghost" size="sm" onClick={() => control(r.name, r.running ? 'restart' : 'start')}>
+                        {r.running ? 'Restart' : 'Start'}
+                    </Button>
+                    {r.running && (
+                        <Button variant="ghost" size="sm" onClick={() => control(r.name, 'stop')}>Stop</Button>
+                    )}
+                </div>
+            ),
+        },
+    ];
 
     return (
         <section className="sk-email__section">
@@ -193,34 +233,13 @@ function OverviewTab({ status, installed, onChange }) {
             </KpiBand>
 
             <h2 className="sk-email__section-title"><Server size={16} /> Services</h2>
-            {names.length === 0 ? (
-                <div className="sk-email__empty">No service components reported.</div>
-            ) : (
-                <table className="sk-email__table">
-                    <thead>
-                        <tr><th>Component</th><th>State</th><th aria-label="Actions" /></tr>
-                    </thead>
-                    <tbody>
-                        {names.map((name) => {
-                            const running = components[name]?.running ?? components[name] === 'running';
-                            return (
-                                <tr key={name}>
-                                    <td>{name}</td>
-                                    <td><Pill kind={running ? 'green' : 'red'}>{running ? 'Running' : 'Stopped'}</Pill></td>
-                                    <td className="sk-email__actions">
-                                        <Button variant="ghost" size="sm" onClick={() => control(name, running ? 'restart' : 'start')}>
-                                            {running ? 'Restart' : 'Start'}
-                                        </Button>
-                                        {running && (
-                                            <Button variant="ghost" size="sm" onClick={() => control(name, 'stop')}>Stop</Button>
-                                        )}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            )}
+            <DataTable
+                columns={serviceColumns}
+                data={serviceRows}
+                keyField="id"
+                sortable={false}
+                emptyState={<div className="sk-email__empty">No service components reported.</div>}
+            />
         </section>
     );
 }
@@ -361,6 +380,7 @@ function AccountsTab({ domains }) {
     const [domainId, setDomainId] = useState(domains[0]?.id ? String(domains[0].id) : '');
     const [accounts, setAccounts] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState('');
     const [form, setForm] = useState({ username: '', password: '', quota_mb: 1024 });
 
     const load = useCallback(async () => {
@@ -408,6 +428,35 @@ function AccountsTab({ domains }) {
         }
     };
 
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return accounts;
+        return accounts.filter((a) => (a.email || '').toLowerCase().includes(q));
+    }, [accounts, search]);
+
+    const accountColumns = [
+        { key: 'email', header: 'Address', render: (a) => <span className="sk-email__mono">{a.email}</span> },
+        { key: 'quota', header: 'Quota', render: (a) => `${a.quota_used_mb ?? 0} / ${a.quota_mb ?? 0} MB` },
+        {
+            key: 'state',
+            header: 'State',
+            render: (a) => <Pill kind={a.is_active ? 'green' : 'gray'}>{a.is_active ? 'Active' : 'Disabled'}</Pill>,
+        },
+        {
+            key: 'actions',
+            header: '',
+            className: 'sk-email__actions-col',
+            cellClassName: 'sk-email__actions-cell',
+            render: (a) => (
+                <div className="sk-email__actions">
+                    <Button variant="ghost" size="sm" onClick={() => remove(a)}>
+                        <Trash2 size={14} /> Delete
+                    </Button>
+                </div>
+            ),
+        },
+    ];
+
     if (domains.length === 0) {
         return (
             <div className="sk-email__empty">
@@ -425,6 +474,16 @@ function AccountsTab({ domains }) {
                     <select value={domainId} onChange={(e) => setDomainId(e.target.value)}>
                         {domains.map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
                     </select>
+                </label>
+                <label className="search-box">
+                    <Search size={16} />
+                    <Input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search accounts by address..."
+                        aria-label="Search accounts"
+                    />
                 </label>
             </div>
 
@@ -452,31 +511,18 @@ function AccountsTab({ domains }) {
                 <Button type="submit" size="sm"><Plus size={14} /> Create</Button>
             </form>
 
-            {loading ? (
-                <div className="sk-email__empty">Loading…</div>
-            ) : accounts.length === 0 ? (
-                <div className="sk-email__empty">No accounts in this domain.</div>
-            ) : (
-                <table className="sk-email__table">
-                    <thead>
-                        <tr><th>Address</th><th>Quota</th><th>State</th><th aria-label="Actions" /></tr>
-                    </thead>
-                    <tbody>
-                        {accounts.map((account) => (
-                            <tr key={account.id}>
-                                <td>{account.email}</td>
-                                <td>{account.quota_used_mb ?? 0} / {account.quota_mb ?? 0} MB</td>
-                                <td><Pill kind={account.is_active ? 'green' : 'gray'}>{account.is_active ? 'Active' : 'Disabled'}</Pill></td>
-                                <td className="sk-email__actions">
-                                    <Button variant="ghost" size="sm" onClick={() => remove(account)}>
-                                        <Trash2 size={14} /> Delete
-                                    </Button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
+            <DataTable
+                columns={accountColumns}
+                data={filtered}
+                keyField="id"
+                sortable={false}
+                loading={loading}
+                emptyState={(
+                    <div className="sk-email__empty">
+                        {accounts.length === 0 ? 'No accounts in this domain.' : 'No accounts match this search.'}
+                    </div>
+                )}
+            />
         </section>
     );
 }
@@ -673,6 +719,7 @@ function QueueTab() {
     const toast = useToast();
     const [queue, setQueue] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -707,42 +754,67 @@ function QueueTab() {
         }
     };
 
+    const filtered = queue.filter((item) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        const id = String(item.id || item.queue_id || '').toLowerCase();
+        const sender = String(item.sender || '').toLowerCase();
+        const recipient = String(item.recipient || '').toLowerCase();
+        return id.includes(q) || sender.includes(q) || recipient.includes(q);
+    });
+
+    const queueColumns = [
+        { key: 'id', header: 'ID', render: (item) => <span className="sk-email__mono">{item.id || item.queue_id}</span> },
+        { key: 'sender', header: 'Sender', render: (item) => item.sender || '-' },
+        { key: 'recipient', header: 'Recipient', render: (item) => item.recipient || '-' },
+        { key: 'size', header: 'Size', render: (item) => item.size || '-' },
+        {
+            key: 'actions',
+            header: '',
+            className: 'sk-email__actions-col',
+            cellClassName: 'sk-email__actions-cell',
+            render: (item) => (
+                <div className="sk-email__actions">
+                    <Button variant="ghost" size="sm" onClick={() => remove(item.id || item.queue_id)}>
+                        <Trash2 size={14} /> Delete
+                    </Button>
+                </div>
+            ),
+        },
+    ];
+
     return (
         <section className="sk-email__section">
-            <div className="sk-email__actions">
-                <Button variant="outline" size="sm" onClick={load}><RefreshCw size={14} /> Refresh</Button>
-                <Button variant="outline" size="sm" onClick={flush}>Flush queue</Button>
+            <div className="sk-email__filters">
+                <label className="search-box">
+                    <Search size={16} />
+                    <Input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search queue by sender, recipient, or ID..."
+                        aria-label="Search mail queue"
+                    />
+                </label>
+                <div className="sk-email__actions">
+                    <Button variant="outline" size="sm" onClick={load}><RefreshCw size={14} /> Refresh</Button>
+                    <Button variant="outline" size="sm" onClick={flush}>Flush queue</Button>
+                </div>
             </div>
 
-            {loading ? (
-                <div className="sk-email__empty">Loading…</div>
-            ) : queue.length === 0 ? (
-                <div className="sk-email__empty">
-                    <Inbox size={24} aria-hidden="true" />
-                    <p>The mail queue is empty.</p>
-                </div>
-            ) : (
-                <table className="sk-email__table">
-                    <thead>
-                        <tr><th>ID</th><th>Sender</th><th>Recipient</th><th>Size</th><th aria-label="Actions" /></tr>
-                    </thead>
-                    <tbody>
-                        {queue.map((item) => (
-                            <tr key={item.id || item.queue_id}>
-                                <td className="sk-email__mono">{item.id || item.queue_id}</td>
-                                <td>{item.sender || '—'}</td>
-                                <td>{item.recipient || '—'}</td>
-                                <td>{item.size || '—'}</td>
-                                <td className="sk-email__actions">
-                                    <Button variant="ghost" size="sm" onClick={() => remove(item.id || item.queue_id)}>
-                                        <Trash2 size={14} /> Delete
-                                    </Button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
+            <DataTable
+                columns={queueColumns}
+                data={filtered}
+                keyField={(item) => item.id || item.queue_id}
+                sortable={false}
+                loading={loading}
+                emptyState={(
+                    <div className="sk-email__empty">
+                        <Inbox size={24} aria-hidden="true" />
+                        <p>{queue.length === 0 ? 'The mail queue is empty.' : 'No messages match this search.'}</p>
+                    </div>
+                )}
+            />
         </section>
     );
 }
