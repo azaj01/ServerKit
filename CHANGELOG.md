@@ -18,6 +18,24 @@ and the project aims to follow [Semantic Versioning](https://semver.org/spec/v2.
 The `dev` branch is well ahead of the last `main` release. The headline work
 awaiting a stable release:
 
+### Changed
+
+- **UI consistency round (Jobs, Queue Bus, Email, Marketplace)** — brought four
+  drifted pages back onto the shared host idiom. The **Jobs** page was rebuilt
+  to the /servers–/domains table-with-search pattern (SegControl status filter,
+  kind select, debounced search, DataTable rows, clickable KPIs) and now pages
+  server-side against the job store; a new `builtin.job_retention` scheduled job
+  prunes old terminal jobs (`jobs.retention_days`, default 14; failed kept 3×)
+  so the total count stops growing without bound. **Queue Bus** counts render in
+  a compact notation (107,814 → "107.8K", exact value on hover) via a new
+  `formatCompact` util and an opt-in `compact` prop on the KPI tile, so six-digit
+  totals no longer burst the rail. The **Email Server** page was reskinned to the
+  `sk-email` design system (its rebuilt classes had been wearing dead selectors),
+  with a designed not-installed state and DataTable lists. The **Marketplace** got
+  a density pass — Installed promoted to a top-bar tab, one toolbar row, compact
+  cards — plus per-extension cover art (deterministic per-slug gradients with
+  brand marks, optional registry `logo`).
+
 ### Fixed
 
 - **July‑5–7 recovery rebuild** — a scattered subset of the July‑5–7 work
