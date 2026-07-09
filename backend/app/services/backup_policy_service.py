@@ -267,6 +267,17 @@ class BackupPolicyService:
                         file_paths = [host_path]
                 except Exception:
                     pass
+            # Unit disks live in a synthetic per-container docker volume (plan 35);
+            # resolve its live mountpoint directly by name.
+            docker_volume = meta.get('docker_volume')
+            if docker_volume:
+                try:
+                    from app.services.docker_service import DockerService
+                    live = DockerService.inspect_volume(docker_volume)
+                    if live.get('present') and live.get('mountpoint'):
+                        file_paths = [live['mountpoint']]
+                except Exception:
+                    pass
             if not file_paths:
                 raise BackupPolicyError('Files target has no paths configured')
             return {

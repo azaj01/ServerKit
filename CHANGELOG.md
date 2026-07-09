@@ -38,6 +38,16 @@ awaiting a stable release:
   --rm`) after volumes exist — for appliances that generate a config tree on
   first boot — and stamps the app so it never re-runs; re-arm it with
   `POST /manifests/bootstrap/reset` (type the app name to confirm).
+- **Appliance tier — multi-container units** — a service can now declare a
+  `containers:` map and become one Application rendered as one compose project
+  with a private network and health-gated `dependsOn`. Each container takes the
+  full vocabulary (`image`, `ports`, `disks`, `envVars`, `bootstrap`,
+  `hostRequirements`, `healthCheck`, `dependsOn`); `healthCheck.cmd` becomes a
+  `CMD-SHELL` probe and `healthCheck.httpPath` a `wget` probe; dependsOn is
+  validated against sibling containers and rejected on cycles. Per-container
+  named volumes (`{unit}-{container}-{disk}`) let two containers mount the same
+  path without colliding. `dependsOn` cycles and buildpack-key mixing are
+  plan-time errors.
 - **New Service wizard clarity** — each source card now shows a short explainer
   strip when selected (what it does, what to have ready, the next steps), and a
   "Docs" link to the matching serverkit.ai guide (hidden under White Label). The

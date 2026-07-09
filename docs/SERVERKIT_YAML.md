@@ -186,6 +186,44 @@ not the empty in-container path. `schedule` is one of
 `hourly` / `daily` / `weekly` / `monthly`; `retain` is the number of backups to
 keep.
 
+## Multi-container units
+
+Some services are not one image — a web frontend, a signaling process, a media
+bridge. A `containers:` map makes ONE service a **unit**: one Application, one
+compose project, one private network (the compose default), with health-gated
+start order. It is mutually exclusive with the buildpack keys (`runtime`,
+`buildCommand`, `startCommand`).
+
+```yaml
+services:
+  - name: meet
+    type: docker
+    containers:
+      web:
+        image: jitsi/web:stable
+        ports:
+          - { port: 8443, containerPort: 443, expose: local }
+        dependsOn:
+          - { service: prosody, condition: healthy }
+        healthCheck: { httpPath: /, interval: 30s, retries: 5 }
+        disks:
+          - { name: web-config, mountPath: /config, size: 1GB, backup: { schedule: daily, retain: 7 } }
+      prosody:
+        image: jitsi/prosody:stable
+        bootstrap: { command: "/opt/gen-config.sh", timeoutSeconds: 120 }
+        healthCheck: { cmd: "prosodyctl status" }
+```
+
+Each container takes the same vocabulary as a service:
+`image` / `registry` / `ports` / `disks` / `envVars` / `bootstrap` /
+`hostRequirements` / `healthCheck` (`cmd` → `CMD-SHELL`, `httpPath` → a `wget`
+probe) / `dependsOn` (`{ service, condition: healthy|started }`, validated
+against sibling containers and checked for cycles). Container names resolve on
+the unit's private network; `container_name` is `{unit}-{container}`. A
+container's disks become **per-container** named volumes
+(`{unit}-{container}-{disk}`), so two containers can both mount `/config`
+without colliding.
+
 ## First-boot bootstrap
 
 Some appliances generate a config/certificate tree exactly once. A compose init

@@ -65,6 +65,43 @@ class ManifestApplyService:
                 literal_env[var['key']] = var['value']
             else:
                 env_refs.append(var)
+
+        containers = svc.get('containers') or []
+        ports = list(svc.get('ports') or [])
+        disks = list(svc.get('disks') or [])
+        bootstraps: List[Dict[str, Any]] = []
+        if svc.get('bootstrap'):
+            bootstraps.append({'service': svc['name'], **svc['bootstrap']})
+        host_requirements = list(
+            [svc['host_requirements']] if svc.get('host_requirements') else [])
+        # unit resources (#8 `_effective_resources`): a unit is ONE Application,
+        # so per-container publishes/bootstraps/host-requirements flatten up to
+        # the unit. Container DISKS stay inside the generated compose (synthetic
+        # per-container named volumes) to avoid mount-path collisions — so unit
+        # disks are NOT folded into `disks` here; their backups route via the
+        # docker volume name instead.
+        unit_backups: List[Dict[str, Any]] = []
+        for c in containers:
+            ports.extend(c.get('ports') or [])
+            if c.get('bootstrap'):
+                bootstraps.append({'service': c['name'], **c['bootstrap']})
+            if c.get('host_requirements'):
+                host_requirements.append(c['host_requirements'])
+            for var in c.get('env_vars') or []:
+                if var['source'] == 'value':
+                    literal_env.setdefault(var['key'], var['value'])
+                else:
+                    env_refs.append(var)
+            for disk in c.get('disks') or []:
+                if disk.get('backup') and disk.get('mount_path'):
+                    unit_backups.append({
+                        'container': c['name'],
+                        'mount_path': disk['mount_path'],
+                        'docker_volume': f'{svc["name"]}-{c["name"]}-'
+                                         f'{disk.get("name") or cls._slug(disk["mount_path"])}',
+                        'backup': disk['backup'],
+                    })
+
         return {
             'name': svc['name'],
             'kind': svc['kind'],
@@ -73,8 +110,14 @@ class ManifestApplyService:
             'engine_version': svc.get('engine_version'),
             'runtime': svc.get('runtime'),
             'port': svc.get('port'),
-            'ports': svc.get('ports', []),
+            'ports': ports,
             'bootstrap': svc.get('bootstrap'),
+            'bootstraps': bootstraps,
+            'image': svc.get('image'),
+            'registry': svc.get('registry'),
+            'host_requirements': host_requirements,
+            'containers': containers,
+            'unit_backups': unit_backups,
             'healthcheck_path': svc.get('healthcheck_path'),
             'build_command': svc.get('build_command'),
             'start_command': svc.get('start_command'),
@@ -83,9 +126,29 @@ class ManifestApplyService:
             'auto_deploy': svc.get('auto_deploy', False),
             'env': literal_env,
             'env_refs': env_refs,
-            'disks': svc.get('disks', []),
+            'disks': disks,
             'server': svc.get('server'),
         }
+
+    # -- multi-container unit seams (#9) ------------------------------------
+
+    @classmethod
+    def unit_compose(cls, app) -> Optional[Dict[str, Any]]:
+        """The generated compose project for a manifest-managed UNIT app, or None
+        when the app is not a unit. Lets a deploy/UI render the unit verbatim."""
+        resolved = cls.resolved_for_app(app)
+        if not resolved or not resolved.get('containers'):
+            return None
+        from app.services.unit_compose_service import UnitComposeService
+        return UnitComposeService.render(app.name, resolved['containers'])
+
+    @classmethod
+    def unit_container_names(cls, app) -> List[str]:
+        """Container names of a unit app (``{app}-{container}``), or []."""
+        resolved = cls.resolved_for_app(app)
+        if not resolved or not resolved.get('containers'):
+            return []
+        return [f'{app.name}-{c["name"]}' for c in resolved['containers']]
 
     # -- drift comparison (#18) --------------------------------------------
 
@@ -329,15 +392,21 @@ class ManifestApplyService:
                     'files', app.id if app else None, backup):
                 steps.append(cls._files_backup_step(name, app, mount, backup))
 
-        # first-boot bootstrap (appliance tier, plan 35) — once per app
-        bootstrap = resolved.get('bootstrap')
-        if bootstrap and (app is None or not getattr(app, 'bootstrap_done', False)):
+        # unit disk backups (plan 35) — the bytes live in a synthetic per-container
+        # docker volume, so the backup routes at that volume name.
+        for ub in resolved.get('unit_backups') or []:
+            if not cls._backup_policy_current('files', app.id if app else None, ub['backup']):
+                steps.append(cls._unit_backup_step(name, app, ub))
+
+        # first-boot bootstrap (appliance tier, plan 35) — once per app; a unit
+        # runs each of its containers' bootstraps under the one bootstrap_done flag
+        bootstraps = resolved.get('bootstraps') or []
+        if bootstraps and (app is None or not getattr(app, 'bootstrap_done', False)):
+            suffix = f' ({len(bootstraps)} container(s))' if len(bootstraps) > 1 else ''
             steps.append({
                 'type': 'bootstrap', 'service': name,
-                'description': f'Run first-boot bootstrap on `{name}`',
-                'payload': {'app_id': app.id if app else None,
-                            'command': bootstrap['command'],
-                            'timeout_seconds': bootstrap.get('timeout_seconds')},
+                'description': f'Run first-boot bootstrap on `{name}`{suffix}',
+                'payload': {'app_id': app.id if app else None, 'bootstraps': bootstraps},
             })
 
         return steps
@@ -380,6 +449,19 @@ class ManifestApplyService:
                         'schedule': backup['schedule'], 'retain': backup['retain']},
         }
 
+    @classmethod
+    def _unit_backup_step(cls, name, app, ub):
+        backup = ub['backup']
+        return {
+            'type': 'upsert_backup_policy', 'service': name,
+            'description': f'Backup policy for unit disk `{ub["mount_path"]}` on '
+                           f'`{name}` ({backup["schedule"]})',
+            'payload': {'target': 'files', 'app_id': app.id if app else None,
+                        'mount_path': ub['mount_path'],
+                        'docker_volume': ub['docker_volume'],
+                        'schedule': backup['schedule'], 'retain': backup['retain']},
+        }
+
     # -- blockers engine (appliance tier, plan 35) --------------------------
 
     # An appliance FEATURE is anything the manifest can now express that a
@@ -391,7 +473,7 @@ class ManifestApplyService:
             feats.append('raw port publishes')
         if resolved.get('host_requirements'):
             feats.append('host requirements')
-        if resolved.get('bootstrap'):
+        if resolved.get('bootstraps'):
             feats.append('a first-boot bootstrap')
         if resolved.get('containers'):
             feats.append('a multi-container unit')
@@ -724,13 +806,22 @@ class ManifestApplyService:
             raise RuntimeError('app not found')
         if getattr(app, 'bootstrap_done', False):
             return {'skipped': 'already bootstrapped'}
-        result = BootstrapService.run_once(
-            app, payload['command'], timeout_seconds=payload.get('timeout_seconds'))
-        if not result.get('success'):
-            raise RuntimeError(result.get('error') or 'bootstrap failed')
+        bootstraps = payload.get('bootstraps')
+        if bootstraps is None and payload.get('command'):
+            bootstraps = [{'service': app.name, 'command': payload['command'],
+                           'timeout_seconds': payload.get('timeout_seconds')}]
+        outputs = []
+        for b in bootstraps or []:
+            result = BootstrapService.run_once(
+                app, b['command'], timeout_seconds=b.get('timeout_seconds'),
+                service=b.get('service'))
+            if not result.get('success'):
+                raise RuntimeError(result.get('error')
+                                   or f'bootstrap failed for {b.get("service")}')
+            outputs.append(result.get('output'))
         app.bootstrap_done = True
         db.session.commit()
-        return {'bootstrapped': True, 'output': result.get('output')}
+        return {'bootstrapped': len(bootstraps or []), 'outputs': outputs}
 
     @classmethod
     def _do_open_port(cls, project, env, payload, user_id):
@@ -766,6 +857,8 @@ class ManifestApplyService:
         if payload.get('volume_mount'):
             meta['volume_mount'] = payload['volume_mount']
             meta['app_id'] = app_id
+        if payload.get('docker_volume'):
+            meta['docker_volume'] = payload['docker_volume']
         policy = BackupPolicyService.get_or_create_policy(
             target_type='files', target_id=app_id, target_subtype='pathlist',
             target_meta=meta)

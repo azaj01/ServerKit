@@ -108,6 +108,11 @@ MANIFEST_SCHEMA: Dict[str, Any] = {
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
                 "ports": {"type": "array", "items": {"$ref": "#/definitions/portDecl"}},
                 "bootstrap": {"$ref": "#/definitions/bootstrap"},
+                "containers": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {"$ref": "#/definitions/container"},
+                },
                 "healthCheckPath": {"type": "string"},
                 "autoDeploy": {"type": "boolean"},
                 "version": {"type": ["string", "number"]},
@@ -132,6 +137,52 @@ MANIFEST_SCHEMA: Dict[str, Any] = {
             "properties": {
                 "command": {"type": "string", "minLength": 1},
                 "timeoutSeconds": {"type": "integer", "minimum": 1},
+            },
+        },
+        "container": {
+            "type": "object",
+            "additionalProperties": True,
+            "properties": {
+                "image": {"type": "string"},
+                "registry": {"type": "string"},
+                "ports": {"type": "array", "items": {"$ref": "#/definitions/portDecl"}},
+                "disks": {"type": "array", "items": {"$ref": "#/definitions/disk"}},
+                "envVars": {"type": "array", "items": {"$ref": "#/definitions/envVar"}},
+                "bootstrap": {"$ref": "#/definitions/bootstrap"},
+                "hostRequirements": {"$ref": "#/definitions/hostRequirements"},
+                "healthCheck": {"$ref": "#/definitions/healthCheck"},
+                "dependsOn": {"type": "array", "items": {"$ref": "#/definitions/dependsOn"}},
+            },
+        },
+        "healthCheck": {
+            "type": "object",
+            "additionalProperties": True,
+            "properties": {
+                "cmd": {"type": "string"},
+                "httpPath": {"type": "string"},
+                "interval": {"type": "string"},
+                "timeout": {"type": "string"},
+                "retries": {"type": "integer", "minimum": 1},
+            },
+        },
+        "dependsOn": {
+            "type": "object",
+            "required": ["service"],
+            "additionalProperties": True,
+            "properties": {
+                "service": {"type": "string"},
+                "condition": {"enum": ["healthy", "started"]},
+            },
+        },
+        "hostRequirements": {
+            "type": "object",
+            "additionalProperties": True,
+            "properties": {
+                "privileged": {"type": "boolean"},
+                "capAdd": {"type": "array", "items": {"type": "string"}},
+                "sysctls": {"type": "object"},
+                "devices": {"type": "array", "items": {"type": "string"}},
+                "kernelModules": {"type": "array", "items": {"type": "string"}},
             },
         },
         "portDecl": {
@@ -393,6 +444,11 @@ class ManifestSpecService:
 
         ports = cls._normalize_ports(svc.get('ports'), prefix, errors)
         bootstrap = cls._normalize_bootstrap(svc.get('bootstrap'))
+        image = svc.get('image')
+        registry = svc.get('registry')
+        host_requirements = cls._normalize_host_requirements(svc.get('hostRequirements')
+                                                             or svc.get('host_requirements'))
+        containers = cls._normalize_containers(svc, prefix, errors)
 
         return {
             'name': name,
@@ -406,6 +462,10 @@ class ManifestSpecService:
             'port': svc.get('port'),
             'ports': ports,
             'bootstrap': bootstrap,
+            'image': image,
+            'registry': registry,
+            'host_requirements': host_requirements,
+            'containers': containers,
             'healthcheck_path': cls._alias(svc, 'healthCheckPath', 'healthcheck_path'),
             'auto_deploy': bool(cls._alias(svc, 'autoDeploy', 'auto_deploy', default=False)),
             'engine_version': cls._stringify(svc.get('version')),
@@ -464,6 +524,142 @@ class ManifestSpecService:
             'command': command,
             'timeout_seconds': int(timeout) if timeout else None,
         }
+
+    @classmethod
+    def _normalize_host_requirements(cls, raw: Any) -> Optional[Dict[str, Any]]:
+        """hostRequirements (plan 35): privileged/capAdd/sysctls/devices/kernelModules."""
+        if not isinstance(raw, dict):
+            return None
+        hr = {
+            'privileged': bool(raw.get('privileged')),
+            'cap_add': list(cls._alias(raw, 'capAdd', 'cap_add') or []),
+            'sysctls': dict(raw.get('sysctls') or {}),
+            'devices': list(raw.get('devices') or []),
+            'kernel_modules': list(cls._alias(raw, 'kernelModules', 'kernel_modules') or []),
+        }
+        # collapse to None when nothing is actually requested
+        if (not hr['privileged'] and not hr['cap_add'] and not hr['sysctls']
+                and not hr['devices'] and not hr['kernel_modules']):
+            return None
+        return hr
+
+    @classmethod
+    def _normalize_healthcheck(cls, raw: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return None
+        cmd = raw.get('cmd')
+        http_path = cls._alias(raw, 'httpPath', 'http_path')
+        if not cmd and not http_path:
+            return None
+        return {
+            'cmd': cmd,
+            'http_path': http_path,
+            'interval': raw.get('interval'),
+            'timeout': raw.get('timeout'),
+            'retries': raw.get('retries'),
+        }
+
+    @classmethod
+    def _normalize_depends_on(cls, raw: Any) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        if not isinstance(raw, list):
+            return out
+        for entry in raw:
+            if not isinstance(entry, dict) or not entry.get('service'):
+                continue
+            out.append({'service': entry['service'],
+                        'condition': entry.get('condition') or 'started'})
+        return out
+
+    @classmethod
+    def _normalize_containers(cls, svc: Dict[str, Any], prefix: str,
+                              errors: List[str]) -> List[Dict[str, Any]]:
+        """A multi-container unit (plan 35, Decision 6). ``containers`` is a
+        mapping of name -> container spec, rendered as ONE compose project.
+
+        Mutually exclusive with the buildpack keys; dependsOn must reference a
+        sibling container and must be acyclic.
+        """
+        raw = svc.get('containers')
+        if not isinstance(raw, dict) or not raw:
+            return []
+
+        # mutual exclusion with the single-image build path
+        for key in ('buildCommand', 'build_command', 'startCommand', 'start_command',
+                    'runtime'):
+            if svc.get(key):
+                errors.append(f'{prefix}: `containers` cannot be combined with `{key}` '
+                              f'— a unit declares its own container images')
+                break
+
+        containers: List[Dict[str, Any]] = []
+        names = list(raw.keys())
+        for cname in names:
+            spec = raw[cname] or {}
+            cprefix = f'{prefix}/containers/{cname}'
+            containers.append({
+                'name': cname,
+                'image': spec.get('image'),
+                'registry': spec.get('registry'),
+                'ports': cls._normalize_ports(spec.get('ports'), cprefix, errors),
+                'disks': [cls._normalize_disk(d) for d in (spec.get('disks') or [])],
+                'env_vars': [cls._normalize_env_var(v, f'{cprefix}/env[{i}]', errors)
+                             for i, v in enumerate(spec.get('envVars')
+                                                   or spec.get('env_vars') or [])],
+                'bootstrap': cls._normalize_bootstrap(spec.get('bootstrap')),
+                'host_requirements': cls._normalize_host_requirements(
+                    spec.get('hostRequirements') or spec.get('host_requirements')),
+                'health_check': cls._normalize_healthcheck(
+                    spec.get('healthCheck') or spec.get('health_check')),
+                'depends_on': cls._normalize_depends_on(
+                    spec.get('dependsOn') or spec.get('depends_on')),
+            })
+
+        name_set = set(names)
+        graph: Dict[str, List[str]] = {}
+        for c in containers:
+            deps = []
+            for d in c['depends_on']:
+                if d['service'] not in name_set:
+                    errors.append(f'{prefix}/containers/{c["name"]}: dependsOn unknown '
+                                  f'container `{d["service"]}`')
+                else:
+                    deps.append(d['service'])
+            graph[c['name']] = deps
+
+        cycle = cls._first_cycle(graph)
+        if cycle:
+            errors.append(f'{prefix}: dependsOn cycle detected ({" -> ".join(cycle)})')
+
+        return containers
+
+    @staticmethod
+    def _first_cycle(graph: Dict[str, List[str]]) -> Optional[List[str]]:
+        """DFS back-edge detection; returns a representative cycle path or None."""
+        WHITE, GREY, BLACK = 0, 1, 2
+        color = {n: WHITE for n in graph}
+        stack: List[str] = []
+
+        def visit(node: str) -> Optional[List[str]]:
+            color[node] = GREY
+            stack.append(node)
+            for nxt in graph.get(node, []):
+                if color.get(nxt) == GREY:
+                    return stack[stack.index(nxt):] + [nxt]
+                if color.get(nxt) == WHITE:
+                    found = visit(nxt)
+                    if found:
+                        return found
+            stack.pop()
+            color[node] = BLACK
+            return None
+
+        for n in graph:
+            if color[n] == WHITE:
+                found = visit(n)
+                if found:
+                    return found
+        return None
 
     @classmethod
     def _normalize_env_var(cls, var: Dict[str, Any], where: str, errors: List[str]) -> Dict[str, Any]:

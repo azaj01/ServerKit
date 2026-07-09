@@ -82,6 +82,12 @@
           "description": "First-boot bootstrap (appliance tier). Runs once via `docker compose run --rm` after volumes exist and before the first up — for appliances that generate a config tree once.",
           "$ref": "#/definitions/bootstrap"
         },
+        "containers": {
+          "description": "A multi-container UNIT (appliance tier): one service rendered as one compose project with a private network and health-gated dependsOn. Mutually exclusive with the buildpack keys. Keyed by container name.",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/container" }
+        },
         "healthCheckPath": {
           "description": "HTTP path used for health checks and the zero-downtime restart gate.",
           "type": "string"
@@ -145,6 +151,52 @@
           "type": "integer",
           "minimum": 1
         }
+      }
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "image": { "description": "Container image reference.", "type": "string" },
+        "registry": { "description": "Named private registry to authenticate against before pulling.", "type": "string" },
+        "ports": { "type": "array", "items": { "$ref": "#/definitions/portDecl" } },
+        "disks": { "type": "array", "items": { "$ref": "#/definitions/disk" } },
+        "envVars": { "type": "array", "items": { "$ref": "#/definitions/envVar" } },
+        "bootstrap": { "$ref": "#/definitions/bootstrap" },
+        "hostRequirements": { "$ref": "#/definitions/hostRequirements" },
+        "healthCheck": { "$ref": "#/definitions/healthCheck" },
+        "dependsOn": { "type": "array", "items": { "$ref": "#/definitions/dependsOn" } }
+      }
+    },
+    "healthCheck": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "cmd": { "description": "Shell command probe (rendered as CMD-SHELL).", "type": "string" },
+        "httpPath": { "description": "HTTP path probed with wget on localhost.", "type": "string" },
+        "interval": { "description": "e.g. 30s.", "type": "string" },
+        "timeout": { "description": "e.g. 5s.", "type": "string" },
+        "retries": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "dependsOn": {
+      "type": "object",
+      "required": ["service"],
+      "additionalProperties": true,
+      "properties": {
+        "service": { "description": "Sibling container name in the same unit.", "type": "string" },
+        "condition": { "description": "healthy waits for the dependency's healthcheck; started only waits for it to start.", "enum": ["healthy", "started"] }
+      }
+    },
+    "hostRequirements": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "privileged": { "description": "Run privileged (big hammer — always shown in the plan, never silent).", "type": "boolean" },
+        "capAdd": { "description": "Linux capabilities to add.", "type": "array", "items": { "type": "string" } },
+        "sysctls": { "description": "sysctl key/value pairs.", "type": "object" },
+        "devices": { "description": "Host devices to expose.", "type": "array", "items": { "type": "string" } },
+        "kernelModules": { "description": "Kernel modules the workload needs (advisory /proc/modules check only).", "type": "array", "items": { "type": "string" } }
       }
     },
     "portDecl": {
