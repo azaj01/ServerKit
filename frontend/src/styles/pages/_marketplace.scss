@@ -574,6 +574,10 @@
     gap: $space-3;
     margin-bottom: $space-4;
 
+    .plugin-install-form__docs {
+        margin-left: auto;
+    }
+
     h3 {
         margin: 0 0 $space-1;
         color: $text-primary;
