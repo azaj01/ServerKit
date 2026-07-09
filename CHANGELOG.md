@@ -48,6 +48,14 @@ awaiting a stable release:
   named volumes (`{unit}-{container}-{disk}`) let two containers mount the same
   path without colliding. `dependsOn` cycles and buildpack-key mixing are
   plan-time errors.
+- **Appliance tier — BYO image + host requirements** — a service (or unit
+  container) can declare a ready-made `image:` with an optional private
+  `registry:` (an unknown/uncredentialed registry is a plan-time blocker; ECR is
+  accepted via its key-pair exchange), and `hostRequirements:`
+  (`privileged`/`capAdd`/`sysctls`/`devices`/`kernelModules`). Host requirements
+  are listed in plain words in the plan and written to a
+  `manifest.host_requirements` audit line on apply — never applied silently;
+  `kernelModules` are an advisory `/proc/modules` check.
 - **New Service wizard clarity** — each source card now shows a short explainer
   strip when selected (what it does, what to have ready, the next steps), and a
   "Docs" link to the matching serverkit.ai guide (hidden under White Label). The

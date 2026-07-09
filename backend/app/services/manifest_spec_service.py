@@ -107,6 +107,9 @@ MANIFEST_SCHEMA: Dict[str, Any] = {
                 "startCommand": {"type": "string"},
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
                 "ports": {"type": "array", "items": {"$ref": "#/definitions/portDecl"}},
+                "image": {"type": "string"},
+                "registry": {"type": "string"},
+                "hostRequirements": {"$ref": "#/definitions/hostRequirements"},
                 "bootstrap": {"$ref": "#/definitions/bootstrap"},
                 "containers": {
                     "type": "object",

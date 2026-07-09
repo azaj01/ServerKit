@@ -186,6 +186,34 @@ not the empty in-container path. `schedule` is one of
 `hourly` / `daily` / `weekly` / `monthly`; `retain` is the number of backups to
 keep.
 
+## BYO image & host requirements
+
+`image:` is a first-class peer of the buildpack path — declare a ready-made
+image instead of building one. `registry:` names a private registry to
+authenticate against before pulling; an unknown or uncredentialed registry is a
+plan-time **blocker** (`registry_credential`). ECR registries authenticate via a
+key-pair exchange, so they need no stored secret.
+
+`hostRequirements:` exposes the elevated compose fields real appliances need:
+
+```yaml
+services:
+  - name: vpn
+    type: docker
+    image: ghcr.io/acme/vpn:1.2
+    registry: acme-ghcr
+    hostRequirements:
+      capAdd: [NET_ADMIN]
+      sysctls: { net.ipv4.ip_forward: "1" }
+      devices: [/dev/net/tun]
+      kernelModules: [wireguard]   # advisory /proc/modules check only
+```
+
+Every host requirement is **listed in plain words in the plan** and written to a
+`manifest.host_requirements` audit line on apply — `privileged` is a big hammer
+and it never applies silently. `kernelModules` are advisory: an unconfirmed
+module is a warning, never a silent pass, and is unverifiable off-Linux.
+
 ## Multi-container units
 
 Some services are not one image — a web frontend, a signaling process, a media

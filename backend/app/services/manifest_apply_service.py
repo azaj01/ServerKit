@@ -298,6 +298,12 @@ class ManifestApplyService:
                        ('app_type', 'port', 'healthcheck_path', 'runtime',
                         'build_command', 'start_command', 'cpu', 'memory')}
             payload['name'] = name
+            # BYO image (plan 35): stamp the declared image + private registry
+            if resolved.get('image'):
+                payload['image'] = resolved['image']
+                if resolved.get('registry'):
+                    reg = cls._resolve_registry(resolved['registry'])
+                    payload['registry_id'] = reg.id if reg else None
             # fleet targeting (#21): route the app to a server when declared
             server_ref = resolved.get('server')
             if server_ref:
@@ -541,6 +547,32 @@ class ManifestApplyService:
                         'service': name, 'kind': 'firewall_none',
                         'message': f'no manageable firewall detected — public ports for {name} '
                                    f'will be published but not firewall-managed.'})
+
+            # BYO image (plan 35): a private registry must be known + credentialed.
+            for ref in cls._image_registry_refs(resolved):
+                reg_name = ref.get('registry')
+                if not reg_name:
+                    continue  # anonymous pull is fine
+                reg = cls._resolve_registry(reg_name)
+                if reg is None or not cls._registry_has_credential(reg):
+                    blockers.append({
+                        'kind': 'registry_credential', 'service': name, 'registry': reg_name,
+                        'message': f'service {name} pulls `{ref["image"]}` from registry '
+                                   f'`{reg_name}`, which is '
+                                   + ('unknown' if reg is None else 'missing a stored credential')
+                                   + f' — add the registry credential, then re-apply.'})
+
+            # Host requirements (plan 35): listed in plain words, never silent.
+            for hr in resolved.get('host_requirements') or []:
+                for phrase in cls._hostreq_phrases(hr):
+                    issues.append({'service': name, 'kind': 'host_requirement',
+                                   'message': f'{name} requests {phrase}'})
+                for mod in hr.get('kernel_modules') or []:
+                    if not cls._kernel_module_present(mod):
+                        issues.append({
+                            'service': name, 'kind': 'kernel_module',
+                            'message': f'{name} needs kernel module `{mod}` — not confirmed '
+                                       f'loaded on the host (advisory; verify before relying on it).'})
         return blockers, issues
 
     # -- blocker seams (patched in tests) -----------------------------------
@@ -588,6 +620,60 @@ class ManifestApplyService:
             return None
         return (Server.query.filter_by(id=server_ref).first()
                 or Server.query.filter_by(name=server_ref).first())
+
+    @staticmethod
+    def _image_registry_refs(resolved: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Every (image, registry) pair a service pulls — top-level + containers."""
+        refs: List[Dict[str, Any]] = []
+        if resolved.get('image'):
+            refs.append({'image': resolved['image'], 'registry': resolved.get('registry')})
+        for c in resolved.get('containers') or []:
+            if c.get('image'):
+                refs.append({'image': c['image'], 'registry': c.get('registry')})
+        return refs
+
+    @staticmethod
+    def _resolve_registry(name: Optional[str]):
+        if not name:
+            return None
+        try:
+            from app.models.container_registry import ContainerRegistry
+        except Exception:
+            return None
+        return (ContainerRegistry.query.filter_by(id=name).first()
+                if str(name).isdigit() else None) \
+            or ContainerRegistry.query.filter_by(name=name).first()
+
+    @staticmethod
+    def _registry_has_credential(reg) -> bool:
+        # ECR authenticates via a key-pair exchange, so no stored secret needed.
+        if getattr(reg, 'provider', None) == 'ecr':
+            return True
+        return bool(getattr(reg, 'secret_encrypted', None))
+
+    @staticmethod
+    def _hostreq_phrases(hr: Dict[str, Any]) -> List[str]:
+        phrases: List[str] = []
+        if hr.get('privileged'):
+            phrases.append('a PRIVILEGED container')
+        for cap in hr.get('cap_add') or []:
+            phrases.append(f'capability {cap}')
+        for k, v in (hr.get('sysctls') or {}).items():
+            phrases.append(f'sysctl {k}={v}')
+        for dev in hr.get('devices') or []:
+            phrases.append(f'device {dev}')
+        return phrases
+
+    @staticmethod
+    def _kernel_module_present(module: str) -> bool:
+        """Advisory /proc/modules check. Unverifiable (non-Linux / unreadable)
+        returns False so the plan warns rather than silently passing."""
+        try:
+            with open('/proc/modules') as fh:
+                loaded = {line.split()[0] for line in fh if line.strip()}
+            return module in loaded
+        except Exception:
+            return False
 
     @staticmethod
     def _ports_differ(current: List[Dict[str, Any]], desired: List[Dict[str, Any]]) -> bool:
@@ -642,6 +728,18 @@ class ManifestApplyService:
         cls._snapshot_existing(project, normalized, tag='after')
 
         cls._finish_job(job, failed, results)
+
+        # Host requirements never apply silently (plan 35): audit every one.
+        hr_issues = [i for i in plan.get('issues', []) if i.get('kind') == 'host_requirement']
+        if hr_issues:
+            try:
+                from app.services.audit_service import AuditService
+                AuditService.log('manifest.host_requirements', user_id=user_id,
+                                 target_type='project', target_id=project.id,
+                                 details={'requirements': [i['message'] for i in hr_issues]})
+            except Exception:
+                pass
+
         if manifest_row is not None:
             manifest_row.status = STATUS_ERROR if failed else STATUS_APPLIED
             if not failed:
@@ -717,6 +815,8 @@ class ManifestApplyService:
             healthcheck_path=payload.get('healthcheck_path'),
             cpu_limit=payload.get('cpu'),
             memory_limit=payload.get('memory'),
+            docker_image=payload.get('image'),
+            registry_id=payload.get('registry_id'),
             buildpack_overrides=json.dumps(overrides) if overrides else None,
             source='manifest',
             user_id=user_id,
@@ -743,6 +843,8 @@ class ManifestApplyService:
             app.cpu_limit = changes['cpu']
         if 'memory' in changes:
             app.memory_limit = changes['memory']
+        if 'image' in changes:
+            app.docker_image = changes['image']
         if 'build_command' in changes or 'start_command' in changes:
             overrides = {}
             if app.buildpack_overrides:
@@ -944,6 +1046,8 @@ class ManifestApplyService:
             changes['cpu'] = resolved['cpu']
         if resolved.get('memory') and app.memory_limit != resolved['memory']:
             changes['memory'] = resolved['memory']
+        if resolved.get('image') and app.docker_image != resolved['image']:
+            changes['image'] = resolved['image']
         overrides = {}
         if app.buildpack_overrides:
             try:

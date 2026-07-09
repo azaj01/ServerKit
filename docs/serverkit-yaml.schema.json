@@ -78,6 +78,18 @@
           "type": "array",
           "items": { "$ref": "#/definitions/portDecl" }
         },
+        "image": {
+          "description": "Container image reference for a BYO-image app (appliance tier) — a first-class peer of the buildpack path.",
+          "type": "string"
+        },
+        "registry": {
+          "description": "Named private registry to authenticate against before pulling `image`. A registry that is unknown or has no stored credential is a plan-time blocker.",
+          "type": "string"
+        },
+        "hostRequirements": {
+          "description": "Elevated host requirements (appliance tier) — privileged/capAdd/sysctls/devices/kernelModules. Always listed in plain words in the plan; never applied silently.",
+          "$ref": "#/definitions/hostRequirements"
+        },
         "bootstrap": {
           "description": "First-boot bootstrap (appliance tier). Runs once via `docker compose run --rm` after volumes exist and before the first up — for appliances that generate a config tree once.",
           "$ref": "#/definitions/bootstrap"

@@ -1220,7 +1220,8 @@ class DockerService:
 
     @staticmethod
     def create_docker_app(app_path, app_name, image, ports=None, volumes=None, env=None,
-                          named_volumes=None, cpu_limit=None, memory_limit=None):
+                          named_volumes=None, cpu_limit=None, memory_limit=None,
+                          host_requirements=None):
         """Create a Docker-based application with docker-compose.
 
         ``named_volumes`` is a list of managed Docker volume names to declare as
@@ -1230,6 +1231,10 @@ class DockerService:
 
         ``cpu_limit`` / ``memory_limit`` (task #23) emit ``cpus`` / ``mem_limit``
         on the app's service block so Docker enforces the caps.
+
+        ``host_requirements`` (appliance tier, plan 35) emits
+        ``privileged`` / ``cap_add`` / ``sysctls`` / ``devices`` — exactly the
+        fields catalog templates already pass through.
         """
         try:
             os.makedirs(app_path, exist_ok=True)
@@ -1265,6 +1270,18 @@ class DockerService:
                 # Top-level named volumes so a redeploy reuses the same volume
                 # instead of a fresh anonymous one.
                 compose['volumes'] = {name: {} for name in named_volumes}
+
+            if host_requirements:
+                hr = host_requirements
+                svc = compose['services'][app_name]
+                if hr.get('privileged'):
+                    svc['privileged'] = True
+                if hr.get('cap_add'):
+                    svc['cap_add'] = list(hr['cap_add'])
+                if hr.get('sysctls'):
+                    svc['sysctls'] = dict(hr['sysctls'])
+                if hr.get('devices'):
+                    svc['devices'] = list(hr['devices'])
 
             compose_path = os.path.join(app_path, 'docker-compose.yml')
             with open(compose_path, 'w') as f:
