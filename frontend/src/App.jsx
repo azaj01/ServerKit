@@ -44,6 +44,7 @@ import { MARKET_TABS } from './components/marketplace/marketTabs';
 import { BACKUP_TABS } from './components/backups/backupTabs';
 import { SECURITY_TABS } from './components/security/securityTabs';
 import { ORG_TABS } from './components/organization/organizationTabs';
+import { JOBS_TABS } from './components/jobs/jobsTabs';
 import Downloads from './pages/Downloads';
 import SSLCertificates from './pages/SSLCertificates';
 import SSOCallback from './pages/SSOCallback';
@@ -432,7 +433,10 @@ function AppRoutes() {
                 <Route path="queue/:groupSlug/:queueSlug" element={<QueueDetail />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="admin/notifications" element={<DeliveryLog />} />
-                <Route path="jobs" element={<Jobs />} />
+                <Route element={<TabGroupLayout tabs={JOBS_TABS} />}>
+                    <Route path="jobs" element={<Jobs />} />
+                    <Route path="jobs/scheduled" element={<Jobs />} />
+                </Route>
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />
                 {dashboardRoutes}

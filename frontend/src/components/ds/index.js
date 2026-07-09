@@ -13,6 +13,10 @@ export { AreaChart } from './AreaChart';
 export { ScoreGauge } from './ScoreGauge';
 export { Feed, FeedItem } from './Feed';
 export { Drawer } from './Drawer';
+export { SearchField } from './SearchField';
+export {
+    FilterDrawer, FilterButton, countActiveFilters, emptyFilterValue,
+} from './FilterDrawer';
 export { PageTopbar } from './PageTopbar';
 export { DataTable } from './DataTable';
 export { ResourceCard, ResourceList } from './ResourceCard';

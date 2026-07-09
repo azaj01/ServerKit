@@ -4,51 +4,20 @@
 // file only lays out the page shell, the command bar, pagination, the
 // scheduled-jobs section, and the row cell tints.
 
+// The page shell (.page-container in Jobs.jsx) handles max-width + centering and
+// .main-content supplies the outer padding — matching /cron and /domains — so
+// this wrapper only owns the internal vertical rhythm.
 .sk-jobs {
-    padding: $space-5;
-
     .sk-kpiband-wrap { margin-bottom: $space-5; }
 }
 
-// ── Command bar: status seg + kind select + search, results summary ─────
-.sk-jobs__command-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: $space-3;
-    margin: $space-5 0 $space-4;
-    flex-wrap: wrap;
-}
-
-.sk-jobs__filters {
+// ── Slim reset bar (search + filters live in the page top bar; shown only
+//    while filtering) ────────────────────────────────────────────────────
+.sk-jobs__resultbar {
     display: flex;
     align-items: center;
-    gap: $space-3;
-    flex: 1;
-    flex-wrap: wrap;
-    min-width: 0;
+    margin-bottom: $space-3;
 }
-
-.sk-jobs__search {
-    flex: 1;
-    min-width: 220px;
-    max-width: 360px;
-}
-
-.sk-jobs__kind-select { min-width: 150px; }
-
-.sk-jobs__results-summary {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    color: $text-tertiary;
-    font-size: $font-size-sm;
-    white-space: nowrap;
-
-    strong { color: $text-primary; font-family: $font-mono; }
-}
-
-.sk-jobs__clear-filters { margin-left: $space-2; }
 
 // ── Row cell tints ──────────────────────────────────────────────────────
 .sk-jobs__kind { color: $text-secondary; }
@@ -92,21 +61,6 @@
     margin-top: $space-4;
 
     &-label { color: $text-tertiary; font-size: $font-size-sm; }
-}
-
-// ── Scheduled jobs section ──────────────────────────────────────────────
-.sk-jobs__scheduled { margin-top: $space-6; }
-
-.sk-jobs__section-title {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    margin: 0 0 $space-3;
-    font-size: $font-size-md;
-    font-weight: $font-weight-semibold;
-    color: $text-primary;
-
-    svg { color: $text-tertiary; }
 }
 
 .sk-jobs__empty {

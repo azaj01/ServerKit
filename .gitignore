@@ -123,6 +123,11 @@ SECURITY_AND_CODE_AUDIT.md
 !/docs/screenshots/
 !/docs/screenshots/*.png
 
+# …and the bundled marketplace extension cover icons — real source assets
+# imported/hashed by Vite, so they must be committed.
+!/frontend/src/assets/extension-icons/
+!/frontend/src/assets/extension-icons/*.png
+
 # MSI / build artifacts that should not be committed.
 /agent/packaging/msi/output/
 /agent/packaging/msi/*.wixpdb

@@ -836,7 +836,9 @@ $lk-default:  #646b7a;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: $space-3 $space-4;
+    // No top padding — the topbar pins flush to the top like the tab-group
+    // pages (Marketplace/Domains); only inset the sides and bottom.
+    padding: 0 $space-4 $space-4;
     overflow: hidden;
 
     > .sk-topbar { flex-shrink: 0; }

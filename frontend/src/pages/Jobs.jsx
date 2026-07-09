@@ -1,22 +1,27 @@
 // Jobs — admin view over the unified job system (job orchestration, "Phase 9").
 //
-// Host-idiom rebuild (plan 39): the Servers/Domains table-with-search treatment
-// — SegControl status filter + kind select + debounced search, DataTable rows,
-// clickable compact KPIs, and server-side pagination against a job store that
-// can hold six figures of scheduler-tick rows. Wired to the real ApiService job
-// methods (see frontend/src/services/api/jobs.js).
+// Tab-group page (the Marketplace/Domains pattern): a shared PageTopbar carries
+// the Activity/Scheduled sub-nav (JOBS_TABS) plus the reusable SearchField +
+// FilterDrawer (status/kind) + Refresh. Activity shows clickable compact KPIs, a
+// DataTable of runs, and server-side pagination over a job store that can hold
+// six figures of scheduler-tick rows; Scheduled is its own tab so it's not
+// buried below the runs. Wired to the real ApiService job methods
+// (see frontend/src/services/api/jobs.js).
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ListChecks, RefreshCw, RotateCcw, XCircle, Play, Clock, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { ListChecks, RefreshCw, RotateCcw, XCircle, Play, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../services/api';
-import { PageTopbar, MetricCard, KpiBand, Pill, DataTable, SegControl } from '@/components/ds';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
-    Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-} from '@/components/ui/select';
+    MetricCard, KpiBand, Pill, DataTable,
+    SearchField, FilterDrawer, FilterButton, countActiveFilters,
+} from '@/components/ds';
+import { Button } from '@/components/ui/button';
+import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { timeAgo } from '../utils/timeAgo';
+
+const titleCase = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
 
 const STATUSES = ['all', 'queued', 'running', 'succeeded', 'failed', 'cancelled'];
 const PAGE_SIZE = 50;
@@ -60,34 +65,27 @@ const canRetry = (s) => ['failed', 'error', 'cancelled', 'canceled'].includes(St
 export default function Jobs() {
     const { isAdmin } = useAuth();
     const toast = useToast();
+    const location = useLocation();
+    const scheduledView = location.pathname.endsWith('/scheduled');
     const [jobs, setJobs] = useState([]);
     const [total, setTotal] = useState(0);
     const [stats, setStats] = useState(null);
     const [scheduled, setScheduled] = useState([]);
-    const [status, setStatus] = useState('all');
-    const [kind, setKind] = useState('all');
+    // Advanced filters live in the shared FilterDrawer (status + kind, single-
+    // select; '' = all). Search is a separate debounced term.
+    const [filters, setFilters] = useState({ status: '', kind: '' });
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [kinds, setKinds] = useState([]);
-    const [searchInput, setSearchInput] = useState('');
     const [q, setQ] = useState('');
     const [page, setPage] = useState(0);
     const [loading, setLoading] = useState(true);
     const pollRef = useRef(null);
 
-    // Debounce the raw search box into the query term; reset to the first page
-    // whenever the term changes so results start from the top.
-    useEffect(() => {
-        const t = setTimeout(() => {
-            setQ(searchInput.trim());
-            setPage(0);
-        }, 350);
-        return () => clearTimeout(t);
-    }, [searchInput]);
-
     const load = useCallback(async () => {
         try {
             const params = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
-            if (status !== 'all') params.status = status;
-            if (kind !== 'all') params.kind = kind;
+            if (filters.status) params.status = filters.status;
+            if (filters.kind) params.kind = filters.kind;
             if (q) params.q = q;
             const [jobsRes, statsRes, schedRes] = await Promise.all([
                 api.getJobs(params),
@@ -103,7 +101,7 @@ export default function Jobs() {
         } finally {
             setLoading(false);
         }
-    }, [status, kind, q, page]);
+    }, [filters, q, page]);
 
     useEffect(() => {
         if (!isAdmin) return undefined;
@@ -120,8 +118,32 @@ export default function Jobs() {
         return () => clearInterval(pollRef.current);
     }, [isAdmin, load]);
 
-    const setStatusFilter = (value) => { setStatus(value); setPage(0); };
-    const setKindFilter = (value) => { setKind(value); setPage(0); };
+    // KPI tiles are quick status filters; the drawer owns the full set.
+    const setStatusQuick = (value) => { setFilters((f) => ({ ...f, status: value })); setPage(0); };
+    const onFiltersChange = (next) => { setFilters(next); setPage(0); };
+    const onSearch = (value) => { setQ(value.trim()); setPage(0); };
+    const resetFilters = () => { setFilters({ status: '', kind: '' }); setQ(''); setPage(0); };
+    const activeFilterCount = countActiveFilters(filters);
+
+    // Search + advanced-filter trigger + Refresh sit in the shared page top bar
+    // (the Marketplace/Domains pattern). Search/filters only apply to the
+    // Activity tab; the Scheduled tab just gets Refresh.
+    useTopbarActions(() => {
+        if (!isAdmin) return null;
+        return (
+            <>
+                {!scheduledView && (
+                    <>
+                        <SearchField value={q} onSearch={onSearch} placeholder="Search by kind or owner…" />
+                        <FilterButton count={activeFilterCount} onClick={() => setFiltersOpen(true)} />
+                    </>
+                )}
+                <Button variant="outline" size="sm" onClick={load}>
+                    <RefreshCw size={14} /> Refresh
+                </Button>
+            </>
+        );
+    }, [isAdmin, scheduledView, q, activeFilterCount, load]);
 
     const onRetry = async (id) => {
         try { await api.retryJob(id); toast.success('Job re-queued'); load(); }
@@ -142,23 +164,35 @@ export default function Jobs() {
 
     if (!isAdmin) {
         return (
-            <>
-                <PageTopbar icon={<ListChecks size={18} />} title="Jobs" />
+            <div className="sk-tabgroup__inner jobs-page">
                 <div className="sk-jobs"><div className="sk-jobs__empty">Admins only.</div></div>
-            </>
+            </div>
         );
     }
 
     const byStatus = stats?.by_status || {};
-    const hasFilters = status !== 'all' || kind !== 'all' || Boolean(q);
-    const rangeStart = total === 0 ? 0 : page * PAGE_SIZE + 1;
-    const rangeEnd = page * PAGE_SIZE + jobs.length;
+    const hasFilters = Boolean(filters.status || filters.kind || q);
     const hasPrev = page > 0;
     const hasNext = (page + 1) * PAGE_SIZE < total;
 
     const kindOptions = kinds
         .map((k) => (typeof k === 'string' ? k : k.kind || k.name))
         .filter(Boolean);
+
+    const filterGroups = [
+        {
+            key: 'status',
+            label: 'Status',
+            type: 'single',
+            options: STATUSES.filter((s) => s !== 'all').map((s) => ({ value: s, label: titleCase(s) })),
+        },
+        {
+            key: 'kind',
+            label: 'Kind',
+            type: 'single',
+            options: kindOptions.map((k) => ({ value: k, label: k })),
+        },
+    ];
 
     const jobColumns = [
         { key: 'status', header: 'Status', render: (j) => <Pill kind={statusKind(j.status)}>{j.status}</Pill> },
@@ -224,123 +258,80 @@ export default function Jobs() {
     ];
 
     return (
-        <>
-            <PageTopbar
-                icon={<ListChecks size={18} />}
-                title="Jobs"
-                meta="Unified job orchestration across the panel"
-                actions={(
-                    <Button variant="outline" size="sm" onClick={load}>
-                        <RefreshCw size={14} /> Refresh
-                    </Button>
-                )}
-            />
-
+        <div className="sk-tabgroup__inner jobs-page">
             <div className="sk-jobs">
-                <KpiBand>
-                    <MetricCard label="Total" value={stats?.total ?? total ?? 0} tone="accent" compact
-                        onClick={() => setStatusFilter('all')} />
-                    <MetricCard label="Running" value={byStatus.running ?? 0} tone="cyan" compact
-                        onClick={() => setStatusFilter('running')} />
-                    <MetricCard label="Queued" value={byStatus.pending ?? byStatus.queued ?? 0} tone="amber" compact
-                        onClick={() => setStatusFilter('queued')} />
-                    <MetricCard label="Failed" value={byStatus.failed ?? 0} tone="red" compact
-                        onClick={() => setStatusFilter('failed')} />
-                </KpiBand>
-
-                <div className="sk-jobs__command-bar">
-                    <div className="sk-jobs__filters">
-                        <SegControl
-                            options={STATUSES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))}
-                            value={status}
-                            onChange={setStatusFilter}
-                            aria-label="Filter by status"
-                        />
-                        <Select value={kind} onValueChange={setKindFilter}>
-                            <SelectTrigger className="sk-jobs__kind-select" aria-label="Filter by kind">
-                                <SelectValue placeholder="All kinds" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All kinds</SelectItem>
-                                {kindOptions.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        <label className="search-box sk-jobs__search">
-                            <Search size={16} />
-                            <Input
-                                type="text"
-                                placeholder="Search by kind or owner..."
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                aria-label="Search jobs"
-                            />
-                        </label>
-                    </div>
-                    <div className="sk-jobs__results-summary">
-                        {total > 0 ? (
-                            <span>Showing <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> of <strong>{total}</strong></span>
-                        ) : (
-                            <span>No jobs</span>
+                {scheduledView ? (
+                    <DataTable
+                        columns={scheduledColumns}
+                        data={scheduled}
+                        keyField="id"
+                        sortable={false}
+                        loading={loading && scheduled.length === 0}
+                        emptyState={(
+                            <div className="sk-jobs__empty">
+                                <Clock size={24} aria-hidden="true" />
+                                <p>No scheduled jobs yet.</p>
+                            </div>
                         )}
+                    />
+                ) : (
+                    <>
+                        <KpiBand>
+                            <MetricCard label="Total" value={stats?.total ?? total ?? 0} tone="accent" compact
+                                onClick={() => setStatusQuick('')} />
+                            <MetricCard label="Running" value={byStatus.running ?? 0} tone="cyan" compact
+                                onClick={() => setStatusQuick('running')} />
+                            <MetricCard label="Queued" value={byStatus.pending ?? byStatus.queued ?? 0} tone="amber" compact
+                                onClick={() => setStatusQuick('queued')} />
+                            <MetricCard label="Failed" value={byStatus.failed ?? 0} tone="red" compact
+                                onClick={() => setStatusQuick('failed')} />
+                        </KpiBand>
+
                         {hasFilters && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="sk-jobs__clear-filters"
-                                onClick={() => {
-                                    setStatus('all');
-                                    setKind('all');
-                                    setSearchInput('');
-                                    setPage(0);
-                                }}
-                            >
-                                Clear filters
-                            </Button>
+                            <div className="sk-jobs__resultbar">
+                                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                                    Reset filters
+                                </Button>
+                            </div>
                         )}
-                    </div>
-                </div>
 
-                <DataTable
-                    columns={jobColumns}
-                    data={jobs}
-                    keyField="id"
-                    sortable={false}
-                    loading={loading && jobs.length === 0}
-                    emptyState={(
-                        <div className="sk-jobs__empty">
-                            <ListChecks size={24} aria-hidden="true" />
-                            <p>{hasFilters ? 'No jobs match these filters.' : 'No jobs have run yet.'}</p>
-                        </div>
-                    )}
-                />
-
-                {(hasPrev || hasNext) && (
-                    <div className="sk-jobs__pager">
-                        <Button variant="outline" size="sm" disabled={!hasPrev} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                            <ChevronLeft size={14} /> Prev
-                        </Button>
-                        <span className="sk-jobs__pager-label">Page {page + 1}</span>
-                        <Button variant="outline" size="sm" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
-                            Next <ChevronRight size={14} />
-                        </Button>
-                    </div>
-                )}
-
-                {scheduled.length > 0 && (
-                    <section className="sk-jobs__scheduled">
-                        <h2 className="sk-jobs__section-title">
-                            <Clock size={16} aria-hidden="true" /> Scheduled jobs
-                        </h2>
                         <DataTable
-                            columns={scheduledColumns}
-                            data={scheduled}
+                            columns={jobColumns}
+                            data={jobs}
                             keyField="id"
                             sortable={false}
+                            loading={loading && jobs.length === 0}
+                            emptyState={(
+                                <div className="sk-jobs__empty">
+                                    <ListChecks size={24} aria-hidden="true" />
+                                    <p>{hasFilters ? 'No jobs match these filters.' : 'No jobs have run yet.'}</p>
+                                </div>
+                            )}
                         />
-                    </section>
+
+                        {(hasPrev || hasNext) && (
+                            <div className="sk-jobs__pager">
+                                <Button variant="outline" size="sm" disabled={!hasPrev} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                                    <ChevronLeft size={14} /> Prev
+                                </Button>
+                                <span className="sk-jobs__pager-label">Page {page + 1}</span>
+                                <Button variant="outline" size="sm" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
+                                    Next <ChevronRight size={14} />
+                                </Button>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
-        </>
+
+            <FilterDrawer
+                open={filtersOpen}
+                onOpenChange={setFiltersOpen}
+                groups={filterGroups}
+                value={filters}
+                onChange={onFiltersChange}
+                title="Filter jobs"
+            />
+        </div>
     );
 }

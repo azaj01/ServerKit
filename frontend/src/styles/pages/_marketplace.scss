@@ -71,52 +71,13 @@
         }
     }
 
-    .marketplace-toolbar {
+    // Slim bar above the grid — only shown while filtering, to offer a reset.
+    // Search + filters live in the page top bar; there is no result count.
+    .marketplace-resultbar {
         display: flex;
-        flex-wrap: wrap;
-        gap: $space-3;
         align-items: center;
-        margin-bottom: $space-5;
-    }
-
-    .marketplace-search {
-        position: relative;
-        flex: 1 1 260px;
-        min-width: 200px;
-
-        .ui-input {
-            padding-left: 42px;
-            background: $bg-card;
-        }
-    }
-
-    .marketplace-toolbar__select.ui-select-trigger {
-        flex: 0 0 auto;
-        min-width: 160px;
-        background: $bg-card;
-    }
-
-    .marketplace-toolbar__seg {
-        flex: 0 0 auto;
-    }
-
-    .marketplace-toolbar__count {
-        margin-left: auto;
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-        white-space: nowrap;
-    }
-
-    .marketplace-search__icon {
-        position: absolute;
-        top: 50%;
-        left: $space-4;
-        z-index: 1;
-        width: 16px;
-        height: 16px;
-        color: $text-tertiary;
-        transform: translateY(-50%);
-        pointer-events: none;
+        gap: $space-3;
+        margin-bottom: $space-3;
     }
 
     .marketplace-section {
@@ -182,14 +143,20 @@
         }
     }
 
-    // Data-derived gradient banner (per-slug hue set inline via
-    // extensionCoverStyle). Holds the brand mark / manifest icon / category glyph.
+    // Cover banner. Gradient variant (per-slug hue set inline via
+    // extensionCoverStyle) holds the brand mark / manifest icon / category glyph.
     .extension-card__cover {
         display: grid;
         place-items: center;
-        height: 72px;
+        height: 140px;
         border-radius: $radius-md;
         overflow: hidden;
+
+        // Illustrated-icon variant: a clean light tile that lets the colourful
+        // 3D art sit centred with breathing room (drawn for a light backdrop).
+        &--icon {
+            background: #fff;
+        }
     }
 
     .extension-card__brand,
@@ -205,6 +172,15 @@
     .extension-card__logo {
         width: 44px;
         height: 44px;
+        object-fit: contain;
+    }
+
+    // Illustrated raster icon sits centred at a fixed size (never stretched or
+    // zoomed) so every card reads consistently with room around the art.
+    .extension-card__icon {
+        width: 92px;
+        height: 92px;
+        max-width: 66%;
         object-fit: contain;
     }
 
@@ -384,10 +360,6 @@
             }
         }
 
-        .marketplace-toolbar {
-            grid-template-columns: 1fr;
-        }
-
         .extensions-grid {
             grid-template-columns: 1fr;
         }
@@ -452,14 +424,18 @@
         gap: $space-4;
     }
 
-    // Data-derived gradient banner in the detail modal (hue set inline via
-    // extensionCoverStyle). Wider than the card cover to read as a header.
+    // Cover banner in the detail modal. Gradient variant holds the brand mark /
+    // glyph; the --icon variant is a clean light tile for illustrated art.
     &__cover {
         display: grid;
         place-items: center;
-        height: 108px;
+        height: 128px;
         border-radius: $radius-md;
         overflow: hidden;
+
+        &--icon {
+            background: #fff;
+        }
 
         .extension-card__brand,
         .extension-card__glyph {
@@ -474,6 +450,13 @@
         .extension-card__logo {
             width: 60px;
             height: 60px;
+            object-fit: contain;
+        }
+
+        .extension-card__icon {
+            width: 108px;
+            height: 108px;
+            max-width: 60%;
             object-fit: contain;
         }
     }
