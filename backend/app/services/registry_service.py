@@ -31,6 +31,13 @@ _BUNDLED_INDEX = os.path.join(
 
 # The curated public index (one JSON file, PR-reviewed, checksum-verified
 # installs). Panels fall back to cache → bundled copy when unreachable.
+#
+# NOTE (plan 40 task 11): once serverkit.ai/ext/index.json is deployed (Phase 4
+# endpoints), flip this default to 'https://serverkit.ai/ext/index.json' — that
+# endpoint proxies this same raw index with caching + logo URL rewriting. The
+# raw-GitHub URL below stays the documented manual fallback
+# (SERVERKIT_REGISTRY_URL). Deferred here: flipping before the domain is live
+# would break Marketplace Browse everywhere.
 DEFAULT_REGISTRY_URL = (
     'https://raw.githubusercontent.com/jhd3197/serverkit-extensions/main/index.json'
 )

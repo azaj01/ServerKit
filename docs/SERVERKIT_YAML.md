@@ -14,7 +14,7 @@ imperative APIs stay authoritative for apps without a manifest.
 Add a `$schema` header comment so editors give you validation and autocomplete:
 
 ```yaml
-# yaml-language-server: $schema=https://serverkit.dev/serverkit-yaml.schema.json
+# yaml-language-server: $schema=https://serverkit.ai/serverkit-yaml.schema.json
 version: 1
 ```
 
@@ -36,7 +36,7 @@ are accepted everywhere (`buildCommand` == `build_command`,
 ## Full example
 
 ```yaml
-# yaml-language-server: $schema=https://serverkit.dev/serverkit-yaml.schema.json
+# yaml-language-server: $schema=https://serverkit.ai/serverkit-yaml.schema.json
 version: 1
 server: vps-frankfurt          # optional fleet target (Phase 5); omit for local
 

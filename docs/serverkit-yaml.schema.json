@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://serverkit.dev/serverkit-yaml.schema.json",
+  "$id": "https://serverkit.ai/serverkit-yaml.schema.json",
   "title": "ServerKit Manifest",
   "description": "Declarative deployment manifest (serverkit.yaml / serverkit.json). A version:1 file describes a whole deployment — services, databases, disks, backups, env vars, cron and domains — that ServerKit parses, diffs against live state, and applies. camelCase is canonical; snake_case aliases are accepted everywhere.",
   "type": "object",
