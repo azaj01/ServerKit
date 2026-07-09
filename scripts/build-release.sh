@@ -95,9 +95,15 @@ tar -cf - \
     --exclude='./backend/dev-data/backups' \
     --exclude='./backend/instance/backups' \
     --exclude='./scripts/test/output' \
-    --exclude='*.png' \
-    --exclude='*.jpeg' \
-    --exclude='*.jpg' \
+    --exclude='./docs/screenshots' \
+    --exclude='./frontend/dist' \
+    --exclude='./.codex-screenshots' \
+    --exclude='./template-icons' \
+    --no-wildcards-match-slash \
+    --exclude='./*.png' \
+    --exclude='./*.jpg' \
+    --exclude='./*.jpeg' \
+    --exclude='./dev/*.png' \
     --exclude='*.log' \
     --exclude='*.tmp' \
     --exclude='*.pyc' \
