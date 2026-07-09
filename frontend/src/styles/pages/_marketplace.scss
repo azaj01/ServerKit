@@ -484,6 +484,23 @@
         font-size: $font-size-sm;
     }
 
+    &__repo-link {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-1;
+        color: $accent-primary;
+        text-decoration: none;
+
+        svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
     &__desc {
         margin: 0;
         color: $text-secondary;

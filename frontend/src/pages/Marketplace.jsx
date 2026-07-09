@@ -4,6 +4,7 @@ import {
     Activity,
     CheckCircle2,
     DownloadCloud,
+    ExternalLink,
     LayoutGrid,
     Package,
     PackageCheck,
@@ -85,6 +86,7 @@ const getRegistryCatalogEntry = (entry) => ({
     firstParty: isFirstParty(entry.author, entry),
     icon: entry.icon || null,
     logo: entry.logo || null,
+    repo: entry.repo || entry.homepage || null,
     screenshots: Array.isArray(entry.screenshots) ? entry.screenshots : [],
     permissions: Array.isArray(entry.permissions) ? entry.permissions : [],
     configSchema: entry.config_schema && typeof entry.config_schema === 'object' ? entry.config_schema : null,
@@ -655,6 +657,17 @@ const ExtensionDetailModal = ({ entry, installing, statusVariant, onClose, onIns
                             <span>v{entry.version}</span>
                             {entry.author && <span>by {entry.author}</span>}
                             <span>{isLocal ? 'built-in' : entry.extensionType}</span>
+                            {entry.repo && (
+                                <a
+                                    href={entry.repo}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="extension-detail__repo-link"
+                                >
+                                    <ExternalLink aria-hidden="true" />
+                                    Source repo
+                                </a>
+                            )}
                         </div>
                     </div>
                 </div>

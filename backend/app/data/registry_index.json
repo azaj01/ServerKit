@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "updated": "2026-07-01",
+  "schema_version": 2,
+  "updated": "2026-07-09",
   "note": "Bundled fallback copy of the ServerKit extension registry index. The live index is fetched from SERVERKIT_REGISTRY_URL when configured; this file is used offline and in tests. Curated via PR in the serverkit-extensions repo.",
   "extensions": [
     {
@@ -17,6 +17,8 @@
       "sdk_version": "^1.0.0",
       "source": "https://github.com/jhd3197/serverkit-gui",
       "sha256": null,
+      "repo": "https://github.com/jhd3197/serverkit-gui",
+      "logo": "https://raw.githubusercontent.com/jhd3197/serverkit-extensions/main/assets/serverkit-gui/logo.svg",
       "homepage": "https://github.com/jhd3197/serverkit-gui",
       "icon": "<rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"/><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"/>",
       "screenshots": []

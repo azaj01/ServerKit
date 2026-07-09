@@ -35,27 +35,33 @@ Relevant endpoints:
 
 ---
 
-## `index.json` format (schema_version 1)
+## `index.json` format (schema_version 2)
+
+`schema_version` is now `1` **or** `2`. Version 2 is fully additive — v1 entries
+stay valid unchanged; the new fields (`logo`, `repo`, `bundled`) are optional.
 
 ```jsonc
 {
-  "schema_version": 1,
-  "updated": "2026-07-01",
+  "schema_version": 2,
+  "updated": "2026-07-09",
   "extensions": [
     {
       "slug": "serverkit-gui",                 // required — matches the manifest name
       "display_name": "ServerKit Agent GUI",   // required
       "description": "…",
-      "version": "0.1.0",                       // required — the published version
+      "version": "0.1.0",                       // required (unless bundled) — the published version
       "category": "monitoring",                 // ai|monitoring|security|deployment|integration|ui|utility
       "author": "Juan Denis",
       "first_party": false,                     // true only for ServerKit-authored entries
+      "bundled": false,                          // v2 — true = ships inside the panel (catalog listing only)
       "permissions": ["network"],               // declared host permissions (honesty is reviewed)
       "min_panel_version": "1.7.0",             // optional compat gate (inclusive)
       "max_panel_version": null,                // optional
       "sdk_version": "^1.0.0",                   // optional (additive) — frontend SDK range the bundle targets
       "source": "https://github.com/owner/repo", // repo URL (latest release), release URL, or direct .zip
       "sha256": "…",                            // sha256 of the release zip — STRONGLY recommended
+      "repo": "https://github.com/owner/repo",   // v2 — https URL of the source repo (shown as "Source repo")
+      "logo": "assets/serverkit-gui/logo.svg",   // v2 — https URL OR repo-relative assets/<slug>/<file>
       "release_notes": "…",                      // optional (additive) — shown in the update-diff modal
       "homepage": "https://…",
       "icon": "<svg-inner-markup/>",            // rendered on the detail view
@@ -78,6 +84,28 @@ Notes:
   at install and at load. Older panels ignore it; older indexes omit it.
 - `release_notes` (additive) is free text shown in the Marketplace **update-diff**
   modal alongside the version + permissions delta. Old panels ignore it.
+
+### v2 fields (`logo`, `repo`, `bundled`)
+
+- **`logo`** — an extension logo, shown first in the Marketplace art fallback
+  chain (before brand marks / generated covers). Either an absolute `https://`
+  URL or a **repo-relative** path `assets/<slug>/<file>` (`.svg` or `.png`,
+  ≤ 200 KB) committed to the `serverkit-extensions` repo alongside the entry.
+  Repo-relative paths are resolved to absolute URLs by the panel (against the
+  index URL it fetched) and rewritten by the serverkit.ai `/ext` endpoint, so a
+  single relative path works whether the panel reads the raw-GitHub index or the
+  domain.
+- **`repo`** — the https URL of the extension's source repository. The detail
+  modal renders it as a **"Source repo"** link.
+- **`bundled`** — `true` marks an entry as one of the panel's builtin
+  extensions. Bundled entries are **catalog listings only** (they ship inside
+  the panel, so `source`/`sha256` are optional) and are **excluded from the
+  Browse merge** by default to avoid duplicating the builtin cards; the API
+  exposes them via `GET /api/v1/marketplace/registry?include_bundled=true`.
+  Generate them from the panel repo — never hand-type:
+  ```bash
+  node scripts/export-registry-entries.mjs   # emits index-v2 bundled entries
+  ```
 
 ---
 

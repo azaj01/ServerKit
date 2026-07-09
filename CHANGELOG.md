@@ -18,6 +18,18 @@ and the project aims to follow [Semantic Versioning](https://semver.org/spec/v2.
 The `dev` branch is well ahead of the last `main` release. The headline work
 awaiting a stable release:
 
+### Added
+
+- **Public extension index (registry v2)** — the extension registry schema gains
+  optional `logo`, `repo`, and `bundled` fields (additive; v1 entries stay
+  valid). The Marketplace now surfaces extension logos (shown first in the art
+  fallback chain) and a **Source repo** link on the detail modal. Builtin
+  extensions are published to the public index as `bundled` catalog listings
+  (generated via `scripts/export-registry-entries.mjs`) so the index is the full
+  catalog of every extension; bundled entries stay out of the Browse merge to
+  avoid duplicating builtin cards (`GET /api/v1/marketplace/registry?include_bundled=true`
+  returns the complete set).
+
 ### Changed
 
 - **UI consistency round (Jobs, Queue Bus, Email, Marketplace)** — brought four
