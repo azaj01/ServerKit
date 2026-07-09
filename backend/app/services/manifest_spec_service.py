@@ -59,6 +59,10 @@ FROM_SERVICE_PROPERTIES = (
 
 BACKUP_SCHEDULES = ('hourly', 'daily', 'weekly', 'monthly')
 
+# Appliance tier (plan 35): typed L4 port publishes.
+PORT_PROTOCOLS = ('tcp', 'udp')
+PORT_EXPOSURES = ('public', 'local')
+
 _KEY_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 _NAME_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')
 
@@ -102,6 +106,7 @@ MANIFEST_SCHEMA: Dict[str, Any] = {
                 "buildCommand": {"type": "string"},
                 "startCommand": {"type": "string"},
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "ports": {"type": "array", "items": {"$ref": "#/definitions/portDecl"}},
                 "healthCheckPath": {"type": "string"},
                 "autoDeploy": {"type": "boolean"},
                 "version": {"type": ["string", "number"]},
@@ -117,6 +122,17 @@ MANIFEST_SCHEMA: Dict[str, Any] = {
                         {"type": "array", "items": {"$ref": "#/definitions/cron"}},
                     ]
                 },
+            },
+        },
+        "portDecl": {
+            "type": "object",
+            "required": ["port"],
+            "additionalProperties": True,
+            "properties": {
+                "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "containerPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "protocol": {"enum": list(PORT_PROTOCOLS)},
+                "expose": {"enum": list(PORT_EXPOSURES)},
             },
         },
         "envVar": {
@@ -365,6 +381,8 @@ class ManifestSpecService:
             if isinstance(c, dict)
         ]
 
+        ports = cls._normalize_ports(svc.get('ports'), prefix, errors)
+
         return {
             'name': name,
             'type': stype,
@@ -375,6 +393,7 @@ class ManifestSpecService:
             'build_command': cls._alias(svc, 'buildCommand', 'build_command'),
             'start_command': cls._alias(svc, 'startCommand', 'start_command'),
             'port': svc.get('port'),
+            'ports': ports,
             'healthcheck_path': cls._alias(svc, 'healthCheckPath', 'healthcheck_path'),
             'auto_deploy': bool(cls._alias(svc, 'autoDeploy', 'auto_deploy', default=False)),
             'engine_version': cls._stringify(svc.get('version')),
@@ -385,6 +404,40 @@ class ManifestSpecService:
             'disks': disks,
             'crons': crons,
         }
+
+    @classmethod
+    def _normalize_ports(cls, raw: Any, prefix: str, errors: List[str]) -> List[Dict[str, Any]]:
+        """Typed L4 publishes (plan 35). Legacy scalar ``port`` is unaffected —
+        it keeps its HTTP/nginx semantics. ``ports`` are raw tcp/udp publishes
+        (the appliance escape hatch): NULL/[] means "no raw ports declared".
+        """
+        if not isinstance(raw, list):
+            return []
+        ports: List[Dict[str, Any]] = []
+        seen: set = set()
+        for i, entry in enumerate(raw):
+            if not isinstance(entry, dict):
+                errors.append(f'{prefix}/ports[{i}]: must be a mapping')
+                continue
+            host_port = entry.get('port')
+            if not isinstance(host_port, int):
+                errors.append(f'{prefix}/ports[{i}]: `port` is required')
+                continue
+            container_port = cls._alias(entry, 'containerPort', 'container_port') or host_port
+            protocol = (entry.get('protocol') or 'tcp').lower()
+            expose = (entry.get('expose') or 'public').lower()
+            key = (host_port, protocol)
+            if key in seen:
+                errors.append(f'{prefix}/ports[{i}]: duplicate publish {host_port}/{protocol}')
+                continue
+            seen.add(key)
+            ports.append({
+                'host_port': host_port,
+                'container_port': container_port,
+                'protocol': protocol,
+                'expose': expose,
+            })
+        return ports
 
     @classmethod
     def _normalize_env_var(cls, var: Dict[str, Any], where: str, errors: List[str]) -> Dict[str, Any]:

@@ -161,12 +161,16 @@ def apply_manifest():
     result = ManifestApplyService.apply(project, normalized, user_id=user.id,
                                         manifest_row=row)
 
+    # Appliance-tier blockers (plan 35): apply refused, nothing executed.
+    if result.get('refused'):
+        return jsonify(result), 400
+
     try:
         from app.services.audit_service import AuditService
         AuditService.log('manifest.apply', user_id=user.id, target_type='project',
                          target_id=project.id,
-                         details={'success': result['success'], 'applied': result['applied'],
-                                  'job_id': result['job_id']})
+                         details={'success': result['success'], 'applied': result.get('applied'),
+                                  'job_id': result.get('job_id')})
     except Exception:
         pass
 

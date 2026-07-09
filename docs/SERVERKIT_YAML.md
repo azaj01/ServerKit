@@ -102,7 +102,8 @@ environment.
 | `type` | all | `web` / `worker` / `static` / `docker` → Application; `postgres` / `mysql` / `mariadb` / `redis` → ManagedDatabase. |
 | `runtime` | app | Build runtime hint (`python`, `node`, `static`, `docker`). |
 | `buildCommand` / `startCommand` | app | Buildpack command overrides. |
-| `port` | app | Container listen port (1–65535). |
+| `port` | app | Container listen port (1–65535). Keeps its HTTP/nginx semantics. |
+| `ports[]` | app | Typed L4 publishes (appliance tier) — see [Ports](#ports-appliance-tier). |
 | `healthCheckPath` | app | Used for health checks and the zero-downtime restart gate. |
 | `autoDeploy` | app | `true` auto-applies on a changing push; otherwise the manifest flips to `pending`. |
 | `cpu` / `memory` | app | Resource limits (best-effort). |
@@ -112,6 +113,49 @@ environment.
 | `disks[]` | app | Persistent volumes. |
 | `disk` | db | Single primary disk for a db service. |
 | `cron` | app | One object or a list — scheduled jobs. |
+
+## Ports (appliance tier)
+
+The scalar `port` is the HTTP door: it stays behind nginx, on a loopback bind,
+with a vhost — unchanged. Real infrastructure speaks more than HTTP, so
+`ports[]` is the **raw L4 escape hatch**: media/UDP, VoIP, brokers, DNS.
+
+```yaml
+services:
+  - name: media
+    type: docker
+    ports:
+      - { port: 10000, protocol: udp, expose: public }   # 0.0.0.0:10000:10000/udp + firewall
+      - { port: 8443, containerPort: 443, expose: local } # 127.0.0.1:8443:443 (behind nginx)
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `port` | — | Host port to publish (required). |
+| `containerPort` | = `port` | Container port to publish to. |
+| `protocol` | `tcp` | `tcp` or `udp`. |
+| `expose` | `public` | `public` binds `0.0.0.0` **and opens the firewall**; `local` binds `127.0.0.1` only. |
+
+A `public` port renders a direct `0.0.0.0` docker publish and opens a firewall
+rule on the panel host, recorded so deleting the app closes it again. `ports[]`
+persist as JSON on the app row; a plain HTTP app declares none and keeps using
+`port`.
+
+### The honesty rule — plan-time blockers
+
+The plan tells you what the target **can't** provide, and `apply` refuses rather
+than deploying something that silently won't route. Blockers are distinct from
+advisory `issues`; there is no force flag — clear the cause and re-apply.
+
+| Blocker | Fires when |
+|---|---|
+| `port_conflict` | A `public` host port is already bound on the panel host. |
+| `remote_target` | A service with appliance features targets a remote `server:` — remote appliance apply is deferred; run it on the panel host. |
+| `observed_server` | The target server is observed (read-only); ServerKit won't mutate it. |
+| `firewall_undetected` | Public ports are declared but the host firewall state couldn't be determined. |
+
+A *manageable-firewall-simply-absent* case is a warning, not a blocker: the port
+is still published, just not firewall-managed.
 
 ## Environment variables
 

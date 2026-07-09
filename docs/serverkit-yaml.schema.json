@@ -73,6 +73,11 @@
           "minimum": 1,
           "maximum": 65535
         },
+        "ports": {
+          "description": "Typed L4 port publishes (appliance tier). Each entry is a raw tcp/udp publish — the escape hatch for services that speak more than HTTP (media/UDP, VoIP, brokers). The legacy scalar `port` keeps its HTTP/nginx behavior and is separate.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/portDecl" }
+        },
         "healthCheckPath": {
           "description": "HTTP path used for health checks and the zero-downtime restart gate.",
           "type": "string"
@@ -118,6 +123,33 @@
             { "$ref": "#/definitions/cron" },
             { "type": "array", "items": { "$ref": "#/definitions/cron" } }
           ]
+        }
+      }
+    },
+    "portDecl": {
+      "type": "object",
+      "required": ["port"],
+      "additionalProperties": true,
+      "properties": {
+        "port": {
+          "description": "Host port to publish.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "containerPort": {
+          "description": "Container port to publish to. Defaults to the host port.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "protocol": {
+          "description": "L4 protocol. Defaults to tcp.",
+          "enum": ["tcp", "udp"]
+        },
+        "expose": {
+          "description": "public = bind 0.0.0.0 and open the firewall; local = bind 127.0.0.1 only. Defaults to public.",
+          "enum": ["public", "local"]
         }
       }
     },

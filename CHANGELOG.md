@@ -20,6 +20,16 @@ awaiting a stable release:
 
 ### Added
 
+- **Appliance tier for `serverkit.yaml` — typed L4 ports + a plan-time blockers
+  rail** — a service can now declare raw `ports[]` (`{port, containerPort,
+  protocol: tcp|udp, expose: public|local}`) as an escape hatch for
+  infrastructure that speaks more than HTTP (media/UDP, VoIP, brokers). `public`
+  ports render a `0.0.0.0` publish and open a firewall rule (recorded so an app
+  delete closes it); `local` ports bind `127.0.0.1`. The scalar `port` keeps its
+  HTTP/nginx behavior untouched. Apply grows **blockers** distinct from advisory
+  issues — it refuses (nothing executed, no force flag) on a port conflict, a
+  remote/observed target, or an undetectable firewall, with a message that says
+  what the target can't provide and how to fix it.
 - **New Service wizard clarity** — each source card now shows a short explainer
   strip when selected (what it does, what to have ready, the next steps), and a
   "Docs" link to the matching serverkit.ai guide (hidden under White Label). The

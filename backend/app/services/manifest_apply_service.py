@@ -41,11 +41,13 @@ _STEP_ORDER = {
     'warn': 1,
     'create_app': 2,
     'update_app': 3,
-    'set_env': 4,
-    'set_env_ref': 4,
-    'ensure_volume': 5,
-    'upsert_backup_policy': 6,
-    'attach_domain': 7,
+    'open_port': 4,
+    'set_env': 5,
+    'set_env_ref': 5,
+    'ensure_volume': 6,
+    'bootstrap': 7,
+    'upsert_backup_policy': 8,
+    'attach_domain': 9,
 }
 
 
@@ -71,6 +73,7 @@ class ManifestApplyService:
             'engine_version': svc.get('engine_version'),
             'runtime': svc.get('runtime'),
             'port': svc.get('port'),
+            'ports': svc.get('ports', []),
             'healthcheck_path': svc.get('healthcheck_path'),
             'build_command': svc.get('build_command'),
             'start_command': svc.get('start_command'),
@@ -161,15 +164,22 @@ class ManifestApplyService:
         issues: List[Dict[str, Any]] = []
 
         services = normalized.get('services', [])
+        resolved_all: List[Dict[str, Any]] = []
         for svc in services:
             resolved = cls.resolve_service(svc)
             resolved['server'] = resolved.get('server') or default_server
+            resolved_all.append(resolved)
             if resolved['kind'] == 'database':
                 steps.extend(cls._plan_db(resolved))
             else:
                 steps.extend(cls._plan_app(project, env, resolved, issues))
 
         steps.extend(cls._plan_domains(project, normalized.get('domains', [])))
+
+        # Appliance-tier blockers (plan 35): plan-time refusals distinct from
+        # advisory `issues`. Apply refuses (nothing executed) while any exist.
+        blockers, appliance_issues = cls._appliance_blockers(project, resolved_all)
+        issues.extend(appliance_issues)
 
         steps.sort(key=lambda s: (_STEP_ORDER.get(s['type'], 99), s.get('service') or ''))
         return {
@@ -178,6 +188,7 @@ class ManifestApplyService:
             'steps': steps,
             'step_count': len(steps),
             'issues': issues,
+            'blockers': blockers,
             'summary': cls._summarize_plan(steps),
         }
 
@@ -245,6 +256,18 @@ class ManifestApplyService:
                     'type': 'update_app', 'service': name,
                     'description': f'Update app `{name}`: ' + ', '.join(changes.keys()),
                     'payload': {'app_id': app.id, 'changes': changes},
+                })
+
+        # typed L4 port publishes (appliance tier, plan 35)
+        ports = resolved.get('ports') or []
+        if ports:
+            from app.services.app_port_service import AppPortService
+            current = AppPortService.get_ports(app) if app else []
+            if app is None or cls._ports_differ(current, ports):
+                steps.append({
+                    'type': 'open_port', 'service': name,
+                    'description': f'Publish {len(ports)} port(s) on `{name}`',
+                    'payload': {'app_id': app.id if app else None, 'ports': ports},
                 })
 
         # env (literal values only; references bind in Phase 3)
@@ -345,6 +368,140 @@ class ManifestApplyService:
                         'retain': backup['retain']},
         }
 
+    # -- blockers engine (appliance tier, plan 35) --------------------------
+
+    # An appliance FEATURE is anything the manifest can now express that a
+    # target may be unable to provide. Later phases extend `_service_features`.
+    @classmethod
+    def _service_features(cls, resolved: Dict[str, Any]) -> List[str]:
+        feats: List[str] = []
+        if resolved.get('ports'):
+            feats.append('raw port publishes')
+        if resolved.get('host_requirements'):
+            feats.append('host requirements')
+        if resolved.get('bootstrap'):
+            feats.append('a first-boot bootstrap')
+        if resolved.get('containers'):
+            feats.append('a multi-container unit')
+        return feats
+
+    @classmethod
+    def _appliance_blockers(cls, project, resolved_all: List[Dict[str, Any]]):
+        """Return (blockers, issues). Blockers refuse apply; issues are advisory.
+
+        Message contract: "service X needs Y; target Z can't provide it — <fix>".
+        """
+        blockers: List[Dict[str, Any]] = []
+        issues: List[Dict[str, Any]] = []
+        fw_state = None  # resolved lazily, once
+        for resolved in resolved_all:
+            if resolved.get('kind') != 'app':
+                continue
+            name = resolved['name']
+            feats = cls._service_features(resolved)
+            if not feats:
+                continue
+            need = ' and '.join(feats)
+            server_ref = resolved.get('server')
+
+            # Remote target: appliance apply runs on the panel host only (plan 17's
+            # remote-dispatch deferral). Say so instead of half-deploying.
+            if server_ref:
+                srv = cls._resolve_server_obj(server_ref)
+                if srv is not None and getattr(srv, 'management_mode', None) == 'observed':
+                    blockers.append({
+                        'kind': 'observed_server', 'service': name, 'server': server_ref,
+                        'message': f'service {name} needs {need}; target {server_ref} is an '
+                                   f'observed (read-only) server — ServerKit will not mutate it. '
+                                   f'Switch it to managed, or apply on the panel host.'})
+                    continue
+                blockers.append({
+                    'kind': 'remote_target', 'service': name, 'server': server_ref,
+                    'message': f'service {name} needs {need}; target {server_ref} is a remote '
+                               f'server — remote appliance apply is not supported yet. Apply on '
+                               f'the panel host, or provision {server_ref} manually.'})
+                continue
+
+            # Local panel host: port conflicts + firewall detection.
+            public = [p for p in (resolved.get('ports') or [])
+                      if (p.get('expose') or 'public') == 'public']
+            for p in public:
+                hp = p.get('host_port')
+                if hp is not None and cls._port_bound(int(hp)):
+                    blockers.append({
+                        'kind': 'port_conflict', 'service': name, 'port': hp,
+                        'message': f'service {name} needs public port {hp}/{p.get("protocol","tcp")}; '
+                                   f'the panel host already has it bound — free the port or choose '
+                                   f'another in the manifest.'})
+            if public:
+                if fw_state is None:
+                    fw_state = cls._firewall_state()
+                if fw_state == 'undetected':
+                    blockers.append({
+                        'kind': 'firewall_undetected', 'service': name,
+                        'message': f'service {name} publishes public ports but the panel host '
+                                   f'firewall state could not be determined — verify ufw/firewalld '
+                                   f'is reachable, then re-apply.'})
+                elif fw_state == 'none':
+                    issues.append({
+                        'service': name, 'kind': 'firewall_none',
+                        'message': f'no manageable firewall detected — public ports for {name} '
+                                   f'will be published but not firewall-managed.'})
+        return blockers, issues
+
+    # -- blocker seams (patched in tests) -----------------------------------
+
+    @staticmethod
+    def _port_bound(port: int) -> bool:
+        """True when ``port`` is already bound on the panel host (0.0.0.0)."""
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('0.0.0.0', int(port)))
+            return False
+        except OSError:
+            return True
+        except Exception:
+            return False
+        finally:
+            sock.close()
+
+    @staticmethod
+    def _firewall_state() -> str:
+        """'active' (a manageable firewall exists) | 'none' | 'undetected'."""
+        try:
+            from app.services.firewall_service import FirewallService
+            status = FirewallService.get_status()
+        except Exception:
+            return 'undetected'
+        if not isinstance(status, dict):
+            return 'undetected'
+        if status.get('active_firewall'):
+            return 'active'
+        fwd = status.get('firewalld') or {}
+        ufw = status.get('ufw') or {}
+        if fwd.get('installed') or ufw.get('installed'):
+            return 'active'
+        return 'none'
+
+    @staticmethod
+    def _resolve_server_obj(server_ref: Optional[str]):
+        if not server_ref:
+            return None
+        try:
+            from app.models.server import Server
+        except Exception:
+            return None
+        return (Server.query.filter_by(id=server_ref).first()
+                or Server.query.filter_by(name=server_ref).first())
+
+    @staticmethod
+    def _ports_differ(current: List[Dict[str, Any]], desired: List[Dict[str, Any]]) -> bool:
+        def key(p):
+            return (p.get('host_port'), p.get('container_port'),
+                    (p.get('protocol') or 'tcp'), (p.get('expose') or 'public'))
+        return sorted(map(key, current)) != sorted(map(key, desired))
+
     # -- apply (#9) ---------------------------------------------------------
 
     @classmethod
@@ -355,6 +512,20 @@ class ManifestApplyService:
         """Execute the plan inside a DeploymentJob with before/after snapshots."""
         env = environment or cls._default_environment(project)
         plan = cls.plan(project, normalized, env)
+
+        # Appliance-tier blockers (plan 35): refuse before executing anything.
+        # No force flag — the operator must clear the cause and re-apply.
+        if plan.get('blockers'):
+            if manifest_row is not None:
+                manifest_row.status = STATUS_ERROR
+                manifest_row.last_error = plan['blockers'][0]['message']
+                db.session.commit()
+            return {
+                'success': False, 'refused': True,
+                'blockers': plan['blockers'], 'issues': plan.get('issues', []),
+                'applied': 0, 'results': [], 'plan': plan,
+            }
+
         job = cls._create_job(project, user_id, plan)
 
         cls._snapshot_existing(project, normalized, tag='before')
@@ -526,6 +697,18 @@ class ManifestApplyService:
             return {'exists': True}
         vol = VolumeService.create(app, payload['name'], payload['mount_path'])
         return {'volume_id': getattr(vol, 'id', None)}
+
+    @classmethod
+    def _do_open_port(cls, project, env, payload, user_id):
+        from app.services.app_port_service import AppPortService
+        app = Application.query.get(payload.get('app_id') or cls._resolve_app_id(project, payload))
+        if not app:
+            raise RuntimeError('app not found')
+        ports = payload['ports']
+        AppPortService.set_ports(app, ports)
+        db.session.commit()
+        firewall = AppPortService.open_firewall(ports)
+        return {'ports': len(ports), 'firewall': firewall}
 
     @classmethod
     def _do_upsert_backup_policy(cls, project, env, payload, user_id):
