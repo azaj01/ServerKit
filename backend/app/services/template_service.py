@@ -85,9 +85,21 @@ class TemplateService:
             if field not in template:
                 errors.append(f"Missing required field: {field}")
 
-        # Must have either compose or dockerfile
-        if 'compose' not in template and 'dockerfile' not in template:
-            errors.append("Template must have either 'compose' or 'dockerfile'")
+        # A template is either a one-click compose/dockerfile stack (the default,
+        # kind: compose) or a deployable Git repository (kind: repo). Repo
+        # templates carry a `repo` block with a `url` instead of a compose stack;
+        # they are deployed through the New Service wizard, not installed here.
+        kind = template.get('kind', 'compose')
+        if kind == 'repo':
+            repo = template.get('repo')
+            if not isinstance(repo, dict) or not repo.get('url'):
+                errors.append("Repo template must have a 'repo' block with a 'url'")
+        elif kind == 'compose':
+            # Must have either compose or dockerfile
+            if 'compose' not in template and 'dockerfile' not in template:
+                errors.append("Template must have either 'compose' or 'dockerfile'")
+        else:
+            errors.append(f"Unknown template kind: {kind}")
 
         # Validate compose structure
         if 'compose' in template:
@@ -677,16 +689,28 @@ class TemplateService:
                     if result.get('success'):
                         template = result['template']
                         seen_ids.add(template_id)
-                        templates.append({
+                        kind = template.get('kind', 'compose')
+                        entry = {
                             'id': template_id,
                             'name': template.get('name'),
                             'version': template.get('version'),
                             'description': template.get('description'),
                             'icon': template.get('icon'),
                             'categories': template.get('categories', []),
+                            'kind': kind,
                             'source': 'local',
                             'filepath': filepath
-                        })
+                        }
+                        # Repo templates surface a minimal repo summary so the
+                        # catalog grid can badge them and link to the wizard
+                        # without a second fetch.
+                        if kind == 'repo' and isinstance(template.get('repo'), dict):
+                            repo = template['repo']
+                            entry['repo'] = {
+                                'url': repo.get('url'),
+                                'branch': repo.get('branch', 'main'),
+                            }
+                        templates.append(entry)
 
         return templates
 
@@ -820,6 +844,58 @@ class TemplateService:
                 continue
 
         return {'success': False, 'error': 'Template not found'}
+
+    @classmethod
+    def build_template_hints(cls, template: Dict) -> Dict:
+        """Build a manifest-shaped payload from a repo template's declared
+        ``repo`` hints, used as an honest fallback when the public repo cannot be
+        inspected live. Mirrors ``RepositoryManifestService`` output so the wizard
+        renders it with the same code path; the caller tags ``source`` so the UI
+        can label confidence.
+        """
+        repo = template.get('repo') if isinstance(template.get('repo'), dict) else {}
+        build_method = repo.get('build_method')
+        recommended = {
+            'app_type': repo.get('app_type'),
+            'build_method': build_method,
+            'port': repo.get('port'),
+            'dockerfile_path': repo.get('dockerfile_path')
+            or ('Dockerfile' if build_method == 'dockerfile' else None),
+            'custom_build_cmd': repo.get('build_command'),
+            'custom_start_cmd': repo.get('start_command'),
+            'healthcheck_path': repo.get('healthcheck_path'),
+        }
+        manifests = [
+            {
+                'type': 'template-hint',
+                'file': file_name,
+                'label': file_name,
+                'summary': 'Declared by template',
+            }
+            for file_name in (repo.get('manifest_files') or [])
+        ]
+        env = []
+        for item in (repo.get('env') or []):
+            if isinstance(item, dict) and item.get('key'):
+                env.append({
+                    'key': item['key'],
+                    'value': None if item.get('secret') else item.get('value'),
+                    'required': bool(item.get('required')),
+                    'secret': bool(item.get('secret')),
+                    'source': 'template-hints',
+                    'description': item.get('description', ''),
+                })
+        return {
+            'success': True,
+            'strategy': repo.get('strategy')
+            or ('docker_compose' if build_method else None),
+            'recommended': recommended,
+            'manifests': manifests,
+            'env': env,
+            'ports': [repo['port']] if repo.get('port') else [],
+            'detected_files': list(repo.get('manifest_files') or []),
+            'warnings': [],
+        }
 
     @classmethod
     def build_install_plan(cls, template_id: str, app_name: str,

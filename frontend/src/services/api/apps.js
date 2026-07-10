@@ -309,6 +309,13 @@ export async function getTemplate(templateId) {
     return this.request(`/templates/${templateId}`);
 }
 
+// Inspect a repo-kind template's public repository for deploy manifests.
+// Returns { manifest, source: 'repo' | 'template-hints' }.
+export async function inspectTemplateManifest(templateId, branch = null) {
+    const query = branch ? `?branch=${encodeURIComponent(branch)}` : '';
+    return this.request(`/templates/${templateId}/manifest${query}`);
+}
+
 export async function installTemplate(templateId, appName, variables = {}, options = {}) {
     return this.request(`/templates/${templateId}/install`, {
         method: 'POST',

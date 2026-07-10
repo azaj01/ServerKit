@@ -138,8 +138,15 @@ def test_every_template_conforms_to_schema():
         if not template.get("name"):
             failures.append(f"{filename}: missing 'name'")
 
-        # --- at least one of compose / dockerfile / ports -----------------
-        if not any(k in template for k in ("compose", "dockerfile", "ports")):
+        # --- deployable shape depends on kind -----------------------------
+        # compose templates (the default) must define at least one of
+        # compose/dockerfile/ports; repo templates (kind: repo) instead carry a
+        # `repo` block with a `url` and are deployed through the wizard.
+        if template.get("kind") == "repo":
+            repo = template.get("repo")
+            if not isinstance(repo, dict) or not repo.get("url"):
+                failures.append(f"{filename}: repo template missing 'repo.url'")
+        elif not any(k in template for k in ("compose", "dockerfile", "ports")):
             failures.append(
                 f"{filename}: must define at least one of compose/dockerfile/ports"
             )

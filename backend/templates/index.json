@@ -1138,6 +1138,17 @@
         "vpn",
         "security"
       ]
+    },
+    {
+      "id": "agentsite",
+      "name": "AgentSite",
+      "version": "1.0",
+      "description": "AI-powered website builder with multi-agent orchestration, deployed straight from its Git repository.",
+      "categories": [
+        "ai",
+        "website",
+        "deployment"
+      ]
     }
   ],
   "categories": [
@@ -1245,6 +1256,7 @@
     "whiteboard",
     "wiki",
     "workflow",
-    "zigbee"
+    "zigbee",
+    "deployment"
   ]
 }
