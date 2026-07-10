@@ -2,7 +2,7 @@
   "name": "serverkit-crowdsec",
   "display_name": "CrowdSec",
   "version": "1.0.0",
-  "description": "CrowdSec security engine integration — surface active decisions and alerts, ban/unban IPs, and manage allowlists straight from the panel. Read/write via cscli on the host; shows install guidance when CrowdSec is absent (never auto-installs).",
+  "description": "CrowdSec security engine integration. Surface active decisions and alerts, ban/unban IPs, and manage allowlists straight from the panel. Read/write via cscli on the host; shows install guidance when CrowdSec is absent (never auto-installs).",
   "author": "ServerKit",
   "license": "MIT",
   "category": "security",

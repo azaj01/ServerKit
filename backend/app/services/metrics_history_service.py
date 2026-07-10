@@ -361,6 +361,13 @@ class MetricsHistoryService:
             logger.warning("Metrics collection already running")
             return
 
+        # Never spawn the collector under testing: the app fixture is
+        # function-scoped, so one immortal writer would leak per create_app()
+        # call and race the suite's shared SQLite file (see the queue-bus
+        # consumers, which gate the same way).
+        if app.config.get('ENV') == 'testing' or app.config.get('TESTING'):
+            return
+
         cls._stop_collection = False
         cls._is_running = True
 

@@ -5,6 +5,7 @@ export { Pill } from './Pill';
 export { EnvTag } from './EnvTag';
 export { SegControl } from './SegControl';
 export { MetricCard } from './MetricCard';
+export { KpiBand } from './KpiBand';
 export { Gauge } from './Gauge';
 export { ServiceTile } from './ServiceTile';
 export { Sparkline } from './Sparkline';
@@ -12,6 +13,10 @@ export { AreaChart } from './AreaChart';
 export { ScoreGauge } from './ScoreGauge';
 export { Feed, FeedItem } from './Feed';
 export { Drawer } from './Drawer';
+export { SearchField } from './SearchField';
+export {
+    FilterDrawer, FilterButton, countActiveFilters, emptyFilterValue,
+} from './FilterDrawer';
 export { PageTopbar } from './PageTopbar';
 export { DataTable } from './DataTable';
 export { ResourceCard, ResourceList } from './ResourceCard';

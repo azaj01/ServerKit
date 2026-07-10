@@ -71,69 +71,13 @@
         }
     }
 
-    .marketplace-toolbar {
-        display: grid;
-        grid-template-columns: minmax(260px, 1fr) auto;
-        gap: $space-3;
-        align-items: center;
-        margin-bottom: $space-6;
-    }
-
-    .marketplace-search {
-        position: relative;
-        min-width: 0;
-
-        .ui-input {
-            padding-left: 42px;
-            background: $bg-card;
-        }
-    }
-
-    .marketplace-search__icon {
-        position: absolute;
-        top: 50%;
-        left: $space-4;
-        z-index: 1;
-        width: 16px;
-        height: 16px;
-        color: $text-tertiary;
-        transform: translateY(-50%);
-        pointer-events: none;
-    }
-
-    .cat-chips {
+    // Slim bar above the grid — only shown while filtering, to offer a reset.
+    // Search + filters live in the page top bar; there is no result count.
+    .marketplace-resultbar {
         display: flex;
-        flex-wrap: wrap;
-        gap: $space-2;
-        margin-bottom: $space-5;
-    }
-
-    .cat-chip {
-        padding: $space-1 $space-3;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-        background: $bg-elevated;
-        color: $text-tertiary;
-        font-family: inherit;
-        font-size: $font-size-sm + 0.5;
-        font-weight: $font-weight-medium;
-        text-transform: capitalize;
-        cursor: pointer;
-        transition:
-            color $transition-base,
-            background $transition-base,
-            border-color $transition-base;
-
-        &:hover {
-            border-color: $border-active;
-            color: $text-primary;
-        }
-
-        &--active {
-            border-color: var(--accent-dim);
-            background: var(--accent-bg);
-            color: var(--accent-bright);
-        }
+        align-items: center;
+        gap: $space-3;
+        margin-bottom: $space-3;
     }
 
     .marketplace-section {
@@ -168,16 +112,15 @@
 
     .extensions-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: $space-4;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: $space-3;
     }
 
     .extension-card {
         display: flex;
         flex-direction: column;
-        gap: $space-4;
-        min-height: 284px;
-        padding: $space-5;
+        gap: $space-3;
+        padding: $space-4;
         background: $bg-card;
         transition:
             transform $transition-base,
@@ -200,16 +143,54 @@
         }
     }
 
-    .extension-card__topline,
+    // Cover banner. Gradient variant (per-slug hue set inline via
+    // extensionCoverStyle) holds the brand mark / manifest icon / category glyph.
+    .extension-card__cover {
+        display: grid;
+        place-items: center;
+        height: 140px;
+        border-radius: $radius-md;
+        overflow: hidden;
+
+        // Illustrated-icon variant: a clean light tile that lets the colourful
+        // 3D art sit centred with breathing room (drawn for a light backdrop).
+        &--icon {
+            background: #fff;
+        }
+    }
+
+    .extension-card__brand,
+    .extension-card__glyph {
+        color: rgba(255, 255, 255, 0.92);
+    }
+
+    .extension-card__glyph {
+        width: 34px;
+        height: 34px;
+    }
+
+    .extension-card__logo {
+        width: 44px;
+        height: 44px;
+        object-fit: contain;
+    }
+
+    // Illustrated raster icon sits centred at a fixed size (never stretched or
+    // zoomed) so every card reads consistently with room around the art.
+    .extension-card__icon {
+        width: 92px;
+        height: 92px;
+        max-width: 66%;
+        object-fit: contain;
+    }
+
     .extension-card__footer,
     .extension-card__info,
-    .extension-card__actions,
-    .extension-card__signals {
+    .extension-card__actions {
         display: flex;
         align-items: center;
     }
 
-    .extension-card__topline,
     .extension-card__footer {
         justify-content: space-between;
         gap: $space-3;
@@ -217,53 +198,10 @@
 
     .extension-card__badges {
         display: flex;
-        justify-content: flex-end;
         align-items: center;
         gap: $space-2;
         flex-wrap: wrap;
         min-width: 0;
-    }
-
-    .extension-card__icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 42px;
-        height: 42px;
-        flex: 0 0 42px;
-        border-radius: $radius-lg;
-        color: $accent-primary;
-        background: fade($accent-primary-raw, 12%);
-
-        svg {
-            width: 21px;
-            height: 21px;
-        }
-    }
-
-    .extension-card__icon--monitoring {
-        color: $info;
-        background: fade($info, 12%);
-    }
-
-    .extension-card__icon--security {
-        color: $success;
-        background: fade($success, 12%);
-    }
-
-    .extension-card__icon--deployment {
-        color: $warning;
-        background: fade($warning, 12%);
-    }
-
-    .extension-card__icon--integration {
-        color: $color-docker;
-        background: fade($color-docker, 12%);
-    }
-
-    .extension-card__icon--ui {
-        color: #ec4899;
-        background: rgba(236, 72, 153, 0.12);
     }
 
     .extension-card__body {
@@ -280,54 +218,19 @@
 
     .extension-card__desc {
         display: -webkit-box;
-        min-height: 64px;
+        min-height: 40px;
         margin: 0;
         overflow: hidden;
         color: $text-secondary;
         font-size: $font-size-base;
         line-height: $line-height-normal;
         -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
-    }
-
-    .extension-card__signals {
-        justify-content: space-between;
-        gap: $space-3;
-        margin-top: auto;
-        color: $text-tertiary;
-        font-size: $font-size-sm;
-
-        > span {
-            display: inline-flex;
-            align-items: center;
-            gap: $space-2;
-            min-width: 0;
-        }
-    }
-
-    .extension-card__stars {
-        display: inline-flex;
-        align-items: center;
-        gap: 2px;
-        color: $text-tertiary;
-
-        svg {
-            width: 13px;
-            height: 13px;
-        }
-
-        .is-filled {
-            color: $warning;
-            fill: currentColor;
-        }
-    }
-
-    .extension-card__signal-text {
-        color: $text-tertiary;
+        -webkit-line-clamp: 2;
     }
 
     .extension-card__footer {
-        padding-top: $space-4;
+        margin-top: auto;
+        padding-top: $space-3;
         border-top: 1px solid $border-subtle;
     }
 
@@ -349,8 +252,8 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: $space-4;
-        padding: $space-4;
+        gap: $space-3;
+        padding: $space-3;
     }
 
     .installed-item__main {
@@ -365,14 +268,14 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 38px;
-        height: 38px;
-        flex: 0 0 38px;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
         border-radius: $radius-lg;
 
         svg {
-            width: 19px;
-            height: 19px;
+            width: 17px;
+            height: 17px;
         }
     }
 
@@ -457,10 +360,6 @@
             }
         }
 
-        .marketplace-toolbar {
-            grid-template-columns: 1fr;
-        }
-
         .extensions-grid {
             grid-template-columns: 1fr;
         }
@@ -489,9 +388,7 @@
             flex-direction: column;
         }
 
-        .extension-card__topline,
-        .extension-card__footer,
-        .extension-card__signals {
+        .extension-card__footer {
             align-items: flex-start;
             flex-direction: column;
         }
@@ -527,20 +424,40 @@
         gap: $space-4;
     }
 
-    &__icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 52px;
-        height: 52px;
-        flex: 0 0 52px;
-        border-radius: $radius-lg;
-        color: $accent-primary;
-        background: fade($accent-primary-raw, 12%);
+    // Cover banner in the detail modal. Gradient variant holds the brand mark /
+    // glyph; the --icon variant is a clean light tile for illustrated art.
+    &__cover {
+        display: grid;
+        place-items: center;
+        height: 128px;
+        border-radius: $radius-md;
+        overflow: hidden;
 
-        svg {
-            width: 26px;
-            height: 26px;
+        &--icon {
+            background: #fff;
+        }
+
+        .extension-card__brand,
+        .extension-card__glyph {
+            color: rgba(255, 255, 255, 0.92);
+        }
+
+        .extension-card__glyph {
+            width: 46px;
+            height: 46px;
+        }
+
+        .extension-card__logo {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+
+        .extension-card__icon {
+            width: 108px;
+            height: 108px;
+            max-width: 60%;
+            object-fit: contain;
         }
     }
 
@@ -565,6 +482,23 @@
         gap: $space-3;
         color: $text-tertiary;
         font-size: $font-size-sm;
+    }
+
+    &__repo-link {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-1;
+        color: $accent-primary;
+        text-decoration: none;
+
+        svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        &:hover {
+            text-decoration: underline;
+        }
     }
 
     &__desc {
@@ -639,6 +573,10 @@
     align-items: flex-start;
     gap: $space-3;
     margin-bottom: $space-4;
+
+    .plugin-install-form__docs {
+        margin-left: auto;
+    }
 
     h3 {
         margin: 0 0 $space-1;
@@ -751,6 +689,104 @@
     margin-top: $space-2;
     color: $text-tertiary;
     font-size: $font-size-sm;
+}
+
+// Two-step GitHub install: consent card shown after resolve, before install.
+.plugin-install-consent {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+    padding: $space-4;
+    border: 1px solid $border-color;
+    border-radius: $radius-lg;
+    background: $bg-elevated;
+
+    &__head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: $space-3;
+
+        h4 {
+            margin: 0 0 $space-1;
+            font-size: $font-size-lg;
+        }
+    }
+
+    &__meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: $space-3;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+
+        code {
+            font-family: $font-mono;
+        }
+    }
+
+    &__badge {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-1;
+        white-space: nowrap;
+
+        svg {
+            width: 13px;
+            height: 13px;
+        }
+    }
+
+    &__desc {
+        margin: 0;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+        line-height: $line-height-normal;
+    }
+
+    &__label {
+        margin: 0 0 $space-2;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+        color: $text-secondary;
+    }
+
+    &__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+    }
+
+    &__warnings {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+
+        li {
+            display: flex;
+            align-items: flex-start;
+            gap: $space-2;
+            font-size: $font-size-sm;
+            color: $warning;
+
+            svg {
+                flex-shrink: 0;
+                width: 15px;
+                height: 15px;
+                margin-top: 2px;
+            }
+        }
+    }
+
+    &__actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: $space-3;
+    }
 }
 
 // Keep-vs-purge data policy dialog on plugin uninstall.

@@ -6,7 +6,7 @@ third lane that was redundant with the three real sources — the builtin
 folder scan (``/plugins/builtin``), the remote registry (below), and live
 ``InstalledPlugin`` state. This blueprint now serves only the registry.
 """
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from app.services.audit_service import AuditService
 from app.models.audit_log import AuditLog
@@ -24,10 +24,15 @@ def get_current_user():
 @jwt_required()
 def list_registry():
     """Return the remote-registry extensions (with live install state), for the
-    Browse merge. Read-only; offline-tolerant (falls back to a bundled index)."""
+    Browse merge. Read-only; offline-tolerant (falls back to a bundled index).
+
+    Bundled entries (builtins listed for the public catalog) are excluded by
+    default to avoid duplicating the builtin cards; pass
+    ``?include_bundled=true`` for the complete catalog."""
     from app.services import registry_service
+    include_bundled = request.args.get('include_bundled', '').lower() in ('1', 'true', 'yes')
     return jsonify({
-        'extensions': registry_service.list_catalog(),
+        'extensions': registry_service.list_catalog(include_bundled=include_bundled),
         'source': registry_service.registry_source_label(),
     })
 
@@ -51,6 +56,13 @@ def install_registry(slug):
             target_id=plugin.id,
             details={'name': plugin.name, 'version': plugin.version, 'source': 'registry'},
         )
+        # Opt-in anonymous install ping (default OFF; #17). Best-effort — never
+        # affects the install result.
+        try:
+            from app.services import registry_service
+            registry_service.record_install(plugin.slug, plugin.version)
+        except Exception:
+            pass
         return jsonify(plugin.to_dict()), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400

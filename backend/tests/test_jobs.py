@@ -175,14 +175,17 @@ class TestBuiltins:
         assert 'builtin.health_check' in kinds
         assert 'builtin.backup_scheduler' in kinds
         assert 'builtin.extension_updates' in kinds
-        assert len([k for k in kinds if k.startswith('builtin.')]) == 10
+        assert 'builtin.job_retention' in kinds
+        assert len([k for k in kinds if k.startswith('builtin.')]) == 11
 
         builtin_handlers.seed_builtin_schedules()
-        # 10 builtin.* schedules + login-link/SSO reapers + drift/FIM/bandwidth sweeps.
-        assert ScheduledJob.query.count() == 15
+        # 11 builtin.* schedules (incl. job-retention) + login-link/SSO reapers +
+        # drift/FIM/bandwidth sweeps + the host doctor sweep (plan 26) + the
+        # setup-health nag (plan 22).
+        assert ScheduledJob.query.count() == 18
         # Seeding twice doesn't duplicate.
         builtin_handlers.seed_builtin_schedules()
-        assert ScheduledJob.query.count() == 15
+        assert ScheduledJob.query.count() == 18
 
 
 class TestApi:
@@ -214,6 +217,91 @@ class TestApi:
         resp = client.get('/api/v1/jobs/scheduled', headers=auth_headers)
         assert resp.status_code == 200
         assert any(s['name'] == 'api-sched' for s in resp.get_json()['scheduled'])
+
+    def test_list_returns_total_and_paging_metadata(self, client, auth_headers, app):
+        for i in range(5):
+            JobService.enqueue('test.page', {'i': i})
+        resp = client.get('/api/v1/jobs?limit=2&offset=0', headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert len(body['jobs']) == 2
+        assert body['total'] == 5
+        assert body['limit'] == 2 and body['offset'] == 0
+
+    def test_q_filters_over_kind_and_owner(self, client, auth_headers, app):
+        JobService.enqueue('backup.run', {}, owner_type='schedule', owner_id='nightly')
+        JobService.enqueue('workflow.execute', {}, owner_type='workflow', owner_id='42')
+
+        # Match by kind fragment.
+        resp = client.get('/api/v1/jobs?q=backup', headers=auth_headers)
+        body = resp.get_json()
+        assert body['total'] == 1
+        assert body['jobs'][0]['kind'] == 'backup.run'
+
+        # Match by owner_id fragment (case-insensitive).
+        resp = client.get('/api/v1/jobs?q=NIGHTLY', headers=auth_headers)
+        assert resp.get_json()['total'] == 1
+
+        # Match by owner_type fragment spanning both would be broader; a specific
+        # term isolates one row.
+        resp = client.get('/api/v1/jobs?q=workflow', headers=auth_headers)
+        assert resp.get_json()['total'] == 1
+
+
+class TestJobRetention:
+    def test_prune_removes_old_terminal_keeps_fresh_and_running(self, app):
+        from datetime import datetime, timedelta
+
+        now = datetime.utcnow()
+
+        def _job(kind, status, completed_delta_days):
+            j = Job(kind=kind, status=status)
+            if completed_delta_days is not None:
+                j.completed_at = now - timedelta(days=completed_delta_days)
+            j.created_at = now - timedelta(days=(completed_delta_days or 0))
+            db.session.add(j)
+            return j
+
+        old_ok = _job('t.ok', Job.STATUS_SUCCEEDED, 30)       # > 14d → pruned
+        old_cancel = _job('t.c', Job.STATUS_CANCELLED, 20)    # > 14d → pruned
+        fresh_ok = _job('t.ok', Job.STATUS_SUCCEEDED, 2)      # < 14d → kept
+        old_failed = _job('t.f', Job.STATUS_FAILED, 30)       # < 42d → kept
+        ancient_failed = _job('t.f', Job.STATUS_FAILED, 60)   # > 42d → pruned
+        running = _job('t.r', Job.STATUS_RUNNING, None)       # never touched
+        pending = _job('t.p', Job.STATUS_PENDING, None)       # never touched
+        db.session.commit()
+
+        # Capture ids before pruning — accessing .id on a deleted ORM object
+        # (synchronize_session=False) would trigger a failed row refresh.
+        ids = {name: j.id for name, j in {
+            'old_ok': old_ok, 'old_cancel': old_cancel, 'fresh_ok': fresh_ok,
+            'old_failed': old_failed, 'ancient_failed': ancient_failed,
+            'running': running, 'pending': pending,
+        }.items()}
+
+        deleted = JobService.prune_terminal(retention_days=14)
+        assert deleted == 3
+
+        survivors = {j.id for j in Job.query.all()}
+        assert ids['fresh_ok'] in survivors
+        assert ids['old_failed'] in survivors
+        assert ids['running'] in survivors
+        assert ids['pending'] in survivors
+        assert ids['old_ok'] not in survivors
+        assert ids['old_cancel'] not in survivors
+        assert ids['ancient_failed'] not in survivors
+
+    def test_retention_handler_respects_zero_disable(self, app, monkeypatch):
+        from app.jobs import builtin_handlers
+        from app.services.settings_service import SettingsService
+
+        monkeypatch.setattr(SettingsService, 'get',
+                            staticmethod(lambda key, default=None: 0 if key == 'jobs.retention_days' else default))
+        called = {'n': 0}
+        monkeypatch.setattr(JobService, 'prune_terminal',
+                            classmethod(lambda cls, **kw: called.__setitem__('n', called['n'] + 1)))
+        assert builtin_handlers.run_job_retention() is None
+        assert called['n'] == 0
 
 
 class TestDeploymentInstallHandler:

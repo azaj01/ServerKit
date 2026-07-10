@@ -1,14 +1,17 @@
+# Bucket: PER-APP (plan 29 #9). Reads are scoped to callers who can access the
+# app (can_access_app); mutations + install stay admin-only.
 """Per-application WAF (ModSecurity v3 + OWASP CRS) API.
 
-Routes are mounted at ``/api/v1/waf``. Reads require a valid JWT; mutations and
-install require an admin user (mirrors ``app/api/dns_zones.py``). Service
-``ValueError``s map to HTTP 400.
+Routes are mounted at ``/api/v1/waf``. Reads require access to the target app;
+mutations and install require an admin user (mirrors ``app/api/dns_zones.py``).
+Service ``ValueError``s map to HTTP 400.
 """
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
 from app.models.application import Application
 from app.services.waf_service import WafService
+from app.services.resource_grant_service import ResourceGrantService
 
 waf_bp = Blueprint('waf', __name__)
 
@@ -28,8 +31,13 @@ def _require_admin():
 
 
 def _get_application_or_404(app_id):
+    """Resolve the app and enforce read access (plan 29 #9): owner / admin / grant /
+    workspace member. A caller who can't access it gets the same 404 as a missing
+    app (sealed-from-open, no existence leak)."""
     application = Application.query.get(app_id)
     if not application:
+        return None, (jsonify({'error': 'Application not found'}), 404)
+    if not ResourceGrantService.can_access_app(get_current_user(), application):
         return None, (jsonify({'error': 'Application not found'}), 404)
     return application, None
 

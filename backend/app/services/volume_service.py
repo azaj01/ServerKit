@@ -195,6 +195,23 @@ class VolumeService:
         }
 
     @classmethod
+    def host_path_for_mount(cls, app, mount_path):
+        """Live host mountpoint for the app's volume at ``mount_path`` (or None).
+
+        Used to route a manifest disk's backup at the real bytes rather than the
+        in-container path (plan 35)."""
+        if app is None:
+            return None
+        vol = AppVolume.query.filter_by(
+            application_id=app.id, mount_path=mount_path).first()
+        if not vol:
+            return None
+        live = DockerService.inspect_volume(vol.docker_volume_name)
+        if live.get('present') and live.get('mountpoint'):
+            return live['mountpoint']
+        return None
+
+    @classmethod
     def host_paths_for_app(cls, app):
         """Live host mountpoints of an app's managed volumes, for backup
         addressability. Skips volumes not currently present on the host."""

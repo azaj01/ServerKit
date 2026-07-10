@@ -1,0 +1,75 @@
+// "Running alongside another panel" page (plan 27 #15).
+
+.coexistence {
+    display: flex;
+    flex-direction: column;
+    gap: $space-5;
+    max-width: 820px;
+
+    &__mode,
+    &__guarantees {
+        padding: $space-5;
+        background: $bg-card;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-xl;
+    }
+
+    &__mode-title {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        margin: 0 0 $space-3;
+        font-size: $font-size-lg;
+
+        svg { color: $primary-color; flex-shrink: 0; }
+    }
+
+    &__mode-body,
+    &__guarantees {
+        p {
+            margin: 0 0 $space-3;
+            color: $text-secondary;
+            line-height: 1.6;
+        }
+
+        p:last-child { margin-bottom: 0; }
+
+        ol, ul {
+            margin: 0;
+            padding-left: $space-5;
+            display: flex;
+            flex-direction: column;
+            gap: $space-2;
+
+            li {
+                color: $text-secondary;
+                line-height: 1.5;
+            }
+        }
+
+        a {
+            color: $primary-color;
+            &:hover { text-decoration: underline; }
+        }
+    }
+
+    &__warning {
+        display: flex;
+        align-items: flex-start;
+        gap: $space-3;
+        padding: $space-4 $space-5;
+        background: $warning-bg;
+        border: 1px solid $warning-border;
+        border-radius: $radius-xl;
+
+        > svg { color: $warning; flex-shrink: 0; margin-top: 2px; }
+
+        strong { display: block; margin-bottom: $space-1; color: $warning; }
+
+        p {
+            margin: 0;
+            color: $text-secondary;
+            line-height: 1.5;
+        }
+    }
+}

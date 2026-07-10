@@ -46,6 +46,13 @@ class ManifestScaffoldService:
         if app.port:
             service['port'] = app.port
 
+        # Appliance tier (plan 35): round-trip a BYO image + typed L4 ports.
+        if getattr(app, 'docker_image', None):
+            service['image'] = app.docker_image
+        ports = cls._ports(app)
+        if ports:
+            service['ports'] = ports
+
         overrides = cls._json(app.buildpack_overrides)
         build_cmd = overrides.get('build_command') or overrides.get('buildCommand')
         start_cmd = overrides.get('start_command') or overrides.get('startCommand')
@@ -122,10 +129,30 @@ class ManifestScaffoldService:
         return entries
 
     @staticmethod
+    def _ports(app: Application) -> List[Dict[str, Any]]:
+        """Typed L4 publishes from the app row, in manifest (camelCase) form —
+        only non-default fields are emitted to keep the scaffold clean."""
+        from app.services.app_port_service import AppPortService
+        out: List[Dict[str, Any]] = []
+        for p in AppPortService.get_ports(app):
+            entry: Dict[str, Any] = {'port': p['host_port']}
+            if p.get('container_port') and p['container_port'] != p['host_port']:
+                entry['containerPort'] = p['container_port']
+            if p.get('protocol') and p['protocol'] != 'tcp':
+                entry['protocol'] = p['protocol']
+            if p.get('expose') and p['expose'] != 'public':
+                entry['expose'] = p['expose']
+            out.append(entry)
+        return out
+
+    @staticmethod
     def _disks(app: Application) -> List[Dict[str, Any]]:
         disks = []
         for vol in getattr(app, 'volumes', []) or []:
-            disks.append({'name': vol.name, 'mountPath': vol.mount_path})
+            entry: Dict[str, Any] = {'name': vol.name, 'mountPath': vol.mount_path}
+            if getattr(vol, 'declared_size', None):
+                entry['size'] = vol.declared_size
+            disks.append(entry)
         return disks
 
     @staticmethod

@@ -1,11 +1,23 @@
+import hashlib
+import hmac
+import json
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.middleware.rbac import admin_required
 from app.models import User, NotificationPreferences
 from app import db
 from app.services.notification_service import NotificationService
+from app.services.settings_service import SettingsService
+from app.services.bounce_service import BounceService
 from app.notifications.service import NotificationBusService
 from app.notifications.providers import EmailProviderService, SUPPORTED as EMAIL_PROVIDERS
+
+# Header carrying the provider's HMAC-SHA256 of the raw request body, formatted
+# as ``sha256=<hexdigest>`` (GitHub-style). The shared secret is
+# ``notify.inbound_secret``; the endpoint 404s until it is configured.
+INBOUND_SIGNATURE_HEADER = 'X-ServerKit-Signature'
+INBOUND_SECRET_KEY = 'notify.inbound_secret'
 
 notifications_bp = Blueprint('notifications', __name__)
 
@@ -155,7 +167,14 @@ def get_user_preferences():
     """Get current user's notification preferences."""
     current_user_id = get_jwt_identity()
     prefs = NotificationPreferences.get_or_create(current_user_id)
-    return jsonify(prefs.to_dict()), 200
+    payload = prefs.to_dict()
+    # Bounce/complaint suppression status for the address email would go to
+    # (personal override, else account email). Null when the address is clean.
+    user = User.query.get(current_user_id)
+    email = prefs.email or (user.email if user else None)
+    state = BounceService.state_for(email) if email else None
+    payload['email_status'] = state.to_dict() if state is not None else None
+    return jsonify(payload), 200
 
 
 @notifications_bp.route('/preferences', methods=['PUT'])
@@ -296,7 +315,11 @@ def get_inbox():
     limit = min(request.args.get('limit', 20, type=int), 100)
     offset = request.args.get('offset', 0, type=int)
     unread_only = request.args.get('unread', '').lower() in ('1', 'true', 'yes')
-    items = NotificationBusService.inbox(user_id, limit=limit, offset=offset, unread_only=unread_only)
+    category = request.args.get('category') or None
+    severity = request.args.get('severity') or None
+    items = NotificationBusService.inbox(user_id, limit=limit, offset=offset,
+                                         unread_only=unread_only,
+                                         category=category, severity=severity)
     return jsonify({
         'items': items,
         'unread_count': NotificationBusService.unread_count(user_id),
@@ -324,10 +347,17 @@ def mark_inbox_read(delivery_id):
 @notifications_bp.route('/inbox/read-all', methods=['POST'])
 @jwt_required()
 def mark_inbox_all_read():
-    """Mark all of the current user's in-app notifications as read."""
+    """Mark all of the current user's in-app notifications as read.
+
+    Optional ``category`` / ``severity`` query params mark only that group.
+    """
     user_id = int(get_jwt_identity())
-    updated = NotificationBusService.mark_all_read(user_id)
-    return jsonify({'success': True, 'updated': updated, 'unread_count': 0}), 200
+    category = request.args.get('category') or None
+    severity = request.args.get('severity') or None
+    updated = NotificationBusService.mark_all_read(user_id, category=category,
+                                                   severity=severity)
+    return jsonify({'success': True, 'updated': updated,
+                    'unread_count': NotificationBusService.unread_count(user_id)}), 200
 
 
 # ==========================================
@@ -359,6 +389,49 @@ def admin_retry_delivery(delivery_id):
     if result is None:
         return jsonify({'error': 'Delivery not found'}), 404
     return jsonify({'success': True, 'delivery': result}), 200
+
+
+# ==========================================
+# ORG CHAT / WEBHOOK CONNECTIONS (admin)
+# ==========================================
+
+@notifications_bp.route('/admin/chat-connections', methods=['GET'])
+@jwt_required()
+@admin_required
+def list_chat_connections():
+    """List org chat/webhook connections + the catalog of supported kinds."""
+    from app.services.chat_webhook_service import ChatWebhookService
+    from app.models.chat_webhook import ChatWebhookConnection
+    return jsonify({
+        'connections': [c.to_dict() for c in ChatWebhookService.list_all()],
+        'kinds': list(ChatWebhookConnection.KINDS),
+    }), 200
+
+
+@notifications_bp.route('/admin/chat-connections', methods=['POST'])
+@jwt_required()
+@admin_required
+def add_chat_connection():
+    """Create a chat/webhook connection (destination + secret encrypted)."""
+    from app.services.chat_webhook_service import ChatWebhookService
+    data = request.get_json() or {}
+    data['created_by'] = int(get_jwt_identity())
+    try:
+        conn = ChatWebhookService.add(data)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'connection': conn.to_dict()}), 201
+
+
+@notifications_bp.route('/admin/chat-connections/<int:conn_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_chat_connection(conn_id):
+    """Delete a chat/webhook connection (promotes a new per-kind default)."""
+    from app.services.chat_webhook_service import ChatWebhookService
+    if not ChatWebhookService.delete(conn_id):
+        return jsonify({'error': 'Connection not found'}), 404
+    return jsonify({'success': True}), 200
 
 
 # ==========================================
@@ -434,3 +507,79 @@ def delete_email_provider(provider_id):
     if not EmailProviderService.delete_provider(provider_id):
         return jsonify({'error': 'Provider not found'}), 404
     return jsonify({'success': True}), 200
+
+
+# ==========================================
+# INBOUND BOUNCE / COMPLAINT WEBHOOK (roadmap #24)
+# ==========================================
+
+@notifications_bp.route('/inbound/email', methods=['POST'])
+def inbound_email_webhook():
+    """Signed inbound webhook for provider bounce/complaint notifications.
+
+    Provider-agnostic: ``?provider=sendgrid|postmark|ses|mailgun|generic``
+    selects the payload mapping. The body is authenticated with an HMAC-SHA256
+    signature over the RAW request bytes (header ``X-ServerKit-Signature`` =
+    ``sha256=<hex>``) using the ``notify.inbound_secret`` setting. The endpoint
+    404s while that secret is unset (feature off) and 401s on a bad signature.
+    Recorded events correlate to the originating delivery by provider
+    message-id and drive the address auto-mute.
+    """
+    secret = SettingsService.get(INBOUND_SECRET_KEY)
+    if not secret:
+        # Not configured — do not reveal the endpoint exists.
+        return jsonify({'error': 'Not found'}), 404
+
+    raw = request.get_data() or b''
+    provided = request.headers.get(INBOUND_SIGNATURE_HEADER, '') or ''
+    expected = 'sha256=' + hmac.new(
+        secret.encode('utf-8'), raw, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(provided, expected):
+        return jsonify({'error': 'Invalid signature'}), 401
+
+    try:
+        payload = json.loads(raw.decode('utf-8')) if raw else {}
+    except (ValueError, UnicodeDecodeError):
+        return jsonify({'error': 'Invalid JSON body'}), 400
+
+    provider = request.args.get('provider', 'generic')
+    recorded = BounceService.ingest(provider, payload)
+    return jsonify({
+        'recorded': bool(recorded),
+        'events': len(recorded),
+        'addresses': [s.email for s in recorded],
+    }), 200
+
+
+# ==========================================
+# BOUNCE SUPPRESSION — user unmute + admin list
+# ==========================================
+
+@notifications_bp.route('/preferences/email/unmute', methods=['POST'])
+@jwt_required()
+def unmute_own_email():
+    """Clear a bounce-mute on the current user's notification email."""
+    current_user_id = get_jwt_identity()
+    prefs = NotificationPreferences.get_or_create(current_user_id)
+    user = User.query.get(current_user_id)
+    email = prefs.email or (user.email if user else None)
+    if not email:
+        return jsonify({'error': 'No notification email on file'}), 400
+    state = BounceService.unmute(email)
+    return jsonify({
+        'success': True,
+        'email_status': state.to_dict() if state is not None else None,
+    }), 200
+
+
+@notifications_bp.route('/admin/bouncing', methods=['GET'])
+@jwt_required()
+@admin_required
+def admin_list_bouncing():
+    """List addresses currently muted for bouncing/complaints (admin)."""
+    muted_only = request.args.get('all', '').lower() not in ('1', 'true', 'yes')
+    rows = BounceService.list_bouncing(muted_only=muted_only)
+    return jsonify({
+        'addresses': [r.to_dict() for r in rows],
+        'emails': [r.email for r in rows],
+    }), 200

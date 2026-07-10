@@ -80,3 +80,55 @@ def test_user_uninstall_is_not_undone(app, demo_builtin):
     # Re-running must NOT reinstall — the one-shot already happened.
     extension_migration.run_auto_install()
     assert InstalledPlugin.query.filter_by(slug='serverkit-demo').first() is None
+
+
+@pytest.fixture
+def gated_gpu_builtin(tmp_path, monkeypatch):
+    """Ship 'serverkit-gpu' as a gated builtin (no ungated converted slugs)."""
+    backend = tmp_path / 'backend_plugins'
+    frontend = tmp_path / 'frontend_plugins'
+    builtin = tmp_path / 'builtin_extensions'
+    for d in (backend, frontend, builtin):
+        d.mkdir()
+    monkeypatch.setattr(plugin_service, 'BACKEND_PLUGINS_DIR', str(backend))
+    monkeypatch.setattr(plugin_service, 'FRONTEND_PLUGINS_DIR', str(frontend))
+    monkeypatch.setattr(plugin_service, 'BUILTIN_EXTENSIONS_DIR', str(builtin))
+    monkeypatch.setattr(extension_migration, 'CONVERTED_BUILTIN_SLUGS', [])
+
+    folder = builtin / 'serverkit-gpu'
+    (folder / 'frontend').mkdir(parents=True)
+    manifest = {
+        'name': 'serverkit-gpu', 'display_name': 'GPU Monitor', 'version': '1.0.0',
+        'category': 'monitoring',
+        'contributions': {'nav': [{'id': 'gpu', 'label': 'GPU', 'route': '/gpu'}]},
+    }
+    (folder / 'plugin.json').write_text(json.dumps(manifest), encoding='utf-8')
+    (folder / 'frontend' / 'index.jsx').write_text('export function P(){return null;}\n')
+    return builtin
+
+
+def test_upgrade_without_gpu_does_not_install_but_marks(app, gated_gpu_builtin, monkeypatch):
+    _make_user()  # existing install (upgrade path)
+    # App boot already ran a fresh-install pass that marked converted/gated slugs;
+    # clear the marker so this test genuinely exercises the gate.
+    extension_migration._save_processed(set())
+    monkeypatch.setitem(extension_migration.GATED_BUILTIN_SLUGS, 'serverkit-gpu',
+                        lambda: False)
+    extension_migration.run_auto_install()
+
+    # Gate false → not installed, but recorded so it never retries.
+    assert InstalledPlugin.query.filter_by(slug='serverkit-gpu').first() is None
+    assert 'serverkit-gpu' in extension_migration._processed_slugs()
+
+
+def test_upgrade_with_gpu_installs(app, gated_gpu_builtin, monkeypatch):
+    _make_user()  # existing install (upgrade path)
+    # Clear the boot-time processed marker (see note above) so the gate decides.
+    extension_migration._save_processed(set())
+    monkeypatch.setitem(extension_migration.GATED_BUILTIN_SLUGS, 'serverkit-gpu',
+                        lambda: True)
+    extension_migration.run_auto_install()
+
+    p = InstalledPlugin.query.filter_by(slug='serverkit-gpu').first()
+    assert p is not None
+    assert p.status == InstalledPlugin.STATUS_ACTIVE

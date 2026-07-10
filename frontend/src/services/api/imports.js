@@ -21,6 +21,16 @@ export async function analyzeImport(importId) {
     return this.request(`/imports/${importId}/analyze`, { method: 'POST' });
 }
 
+// SSH-source preflight (plan 31 #8): probe a reachable box before pulling it.
+// Returns {reachable, docroot_exists, entry_count, detected_stack, sample:[...]}
+// or 501 {error, code:'LINUX_ONLY'} off a Linux panel host (e.g. Windows dev).
+export async function probeSshImportSource(source) {
+    return this.request('/imports/ssh/probe', {
+        method: 'POST',
+        body: { source },
+    });
+}
+
 export async function runImport(importId, fromStep = null, options = null) {
     const body = {};
     if (fromStep) body.from_step = fromStep;

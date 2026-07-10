@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     ArrowRight,
     CheckCircle2,
@@ -30,6 +30,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import BuildpackPreview from '@/components/buildpack/BuildpackPreview';
+import DocsLink from '@/components/DocsLink';
+import { DEPLOY_TEMPLATES as SERVICE_TEMPLATES, getDeployTemplate } from '@/data/deployTemplates';
 
 const APP_TYPE_OPTIONS = [
     { value: 'auto', label: 'Auto-detect' },
@@ -50,45 +52,35 @@ const BUILD_METHOD_OPTIONS = [
 const APP_TYPE_LABELS = Object.fromEntries(APP_TYPE_OPTIONS.map(option => [option.value, option.label]));
 const BUILD_METHOD_LABELS = Object.fromEntries(BUILD_METHOD_OPTIONS.map(option => [option.value, option.label]));
 
-const SERVICE_TEMPLATES = [
-    {
-        id: 'agentsite',
-        name: 'AgentSite',
-        serviceName: 'agentsite',
-        description: 'AI-powered website builder with multi-agent orchestration.',
-        repoUrl: 'https://github.com/jhd3197/AgentSite.git',
-        branch: 'main',
-        appType: 'docker',
-        buildMethod: 'dockerfile',
-        port: 6391,
-        badges: ['Render', 'Railway', 'Compose', 'Dockerfile'],
-        manifest: {
-            strategy: 'docker_compose',
-            recommended: {
-                app_type: 'docker',
-                build_method: 'dockerfile',
-                port: 6391,
-                dockerfile_path: 'Dockerfile',
-                healthcheck_path: '/api/health',
-            },
-            manifests: [
-                { type: 'docker_compose', file: 'docker-compose.yml', label: 'Docker Compose', summary: 'agentsite service on port 6391' },
-                { type: 'render', file: 'render.yaml', label: 'Render blueprint', summary: 'agentsite web service using docker' },
-                { type: 'railway', file: 'railway.json', label: 'Railway config', summary: 'Dockerfile build with health check' },
-                { type: 'app_json', file: 'app.json', label: 'App manifest', summary: 'AI-powered website builder using multi-agent orchestration' },
-            ],
-            env: [
-                { key: 'OPENAI_API_KEY', required: true, secret: true, source: 'render.yaml' },
-                { key: 'CLAUDE_API_KEY', required: true, secret: true, source: 'render.yaml' },
-                { key: 'GOOGLE_API_KEY', required: true, secret: true, source: 'render.yaml' },
-                { key: 'GROQ_API_KEY', required: true, secret: true, source: 'render.yaml' },
-                { key: 'GROK_API_KEY', required: true, secret: true, source: 'render.yaml' },
-                { key: 'OPENROUTER_API_KEY', required: true, secret: true, source: 'render.yaml' },
-            ],
-            ports: [6391],
-        },
+// Per-source guidance shown as an explainer strip above the selected source's
+// form: what this path does, what to have ready, and the steps that follow.
+const SOURCE_GUIDES = {
+    github: {
+        what: 'Deploy from a GitHub repository you own or can access.',
+        need: 'A GitHub account connected via OAuth (Settings → Connections).',
+        steps: ['Connect with OAuth', 'Pick a repository and branch', 'ServerKit detects the runtime and build'],
     },
-];
+    manual: {
+        what: 'Deploy from any other Git remote (GitLab, Bitbucket, Gitea, or an SSH URL).',
+        need: 'The repository URL, and a deploy key or credentials if it is private.',
+        steps: ['Paste the remote URL', 'Choose a branch', 'ServerKit clones and detects the build'],
+    },
+    local: {
+        what: 'Register an application that already lives on this server — no clone, no build.',
+        need: 'The path on the server, and its compose file or systemd unit if any.',
+        steps: ['Point at the directory or unit', 'Tell ServerKit how it is managed', 'It starts tracking the service'],
+    },
+    upload: {
+        what: 'Deploy or update from a project zip archive uploaded from your machine.',
+        need: 'A .zip of the project (with a Dockerfile/compose or a detectable runtime).',
+        steps: ['Upload the archive', 'ServerKit extracts and detects the runtime', 'It builds and deploys'],
+    },
+    template: {
+        what: 'Fast import from a manifest-ready repository — the form is prefilled for you.',
+        need: 'A repo with a serverkit.yaml, Docker Compose, or another supported manifest.',
+        steps: ['Pick a template', 'ServerKit reads its manifests and prefills everything', 'Review and deploy'],
+    },
+};
 
 function slugify(value) {
     return value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -120,6 +112,7 @@ function formatBuildMethod(value) {
 const NewService = () => {
     const navigate = useNavigate();
     const toast = useToast();
+    const [searchParams] = useSearchParams();
     const [sourceMode, setSourceMode] = useState('github');
     const [githubStatus, setGithubStatus] = useState(null);
     const [repos, setRepos] = useState([]);
@@ -432,6 +425,19 @@ const NewService = () => {
         }
     }
 
+    // Deep-link from the Templates tab: /services/new?template=<id> lands here
+    // with the Deploy Template source preselected. Runs once on mount.
+    useEffect(() => {
+        const templateId = searchParams.get('template');
+        if (!templateId) return;
+        const template = getDeployTemplate(templateId);
+        if (template) {
+            setSourceMode('template');
+            handleSelectTemplate(template);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     async function handleSubmit(e) {
         e.preventDefault();
         if (!canSubmit) {
@@ -610,7 +616,25 @@ const NewService = () => {
                                             ? 'Upload Archive'
                                             : 'Connect Source'}
                         </h2>
+                        <DocsLink
+                            to={sourceMode === 'template' ? 'manifest' : 'deploySources'}
+                            className="new-service-page__section-docs"
+                        />
                     </div>
+
+                    {SOURCE_GUIDES[sourceMode] && (
+                        <div className="new-service-page__source-guide">
+                            <p className="new-service-page__source-guide-what">{SOURCE_GUIDES[sourceMode].what}</p>
+                            <p className="new-service-page__source-guide-need">
+                                <strong>Have ready:</strong> {SOURCE_GUIDES[sourceMode].need}
+                            </p>
+                            <ol className="new-service-page__source-guide-steps">
+                                {SOURCE_GUIDES[sourceMode].steps.map((step, i) => (
+                                    <li key={i}>{step}</li>
+                                ))}
+                            </ol>
+                        </div>
+                    )}
 
                     {sourceMode === 'github' ? (
                         <div className="new-service-page__connect-box">
@@ -710,7 +734,12 @@ const NewService = () => {
                                         onClick={() => handleSelectTemplate(template)}
                                     >
                                         <span className="new-service-page__template-main">
-                                            <strong>{template.name}</strong>
+                                            <strong>
+                                                {template.name}
+                                                {template.example && (
+                                                    <span className="new-service-page__template-example">Example</span>
+                                                )}
+                                            </strong>
                                             <small>{template.description}</small>
                                             <em>{template.repoUrl}</em>
                                         </span>
@@ -726,7 +755,7 @@ const NewService = () => {
 
                             <div className="new-service-page__connect-actions new-service-page__connect-actions--left">
                                 <Button type="button" variant="outline" asChild>
-                                    <Link to="/templates">
+                                    <Link to="/templates#deploy-templates">
                                         <Package size={16} />
                                         Template Library
                                     </Link>

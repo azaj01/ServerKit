@@ -410,3 +410,173 @@ def delete_d1_database(zone_id, database_id):
     except CloudflareError as e:
         return jsonify({'error': str(e)}), 400
     return _service_response(res)
+
+
+# ── DNSSEC ────────────────────────────────────────────────────────────────────
+
+@cloudflare_bp.route('/zones/<int:zone_id>/dnssec', methods=['GET'])
+@jwt_required()
+def get_dnssec(zone_id):
+    try:
+        res = CloudflareService.get_dnssec(zone_id)
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/dnssec', methods=['PATCH'])
+@jwt_required()
+def set_dnssec(zone_id):
+    if not _require_admin():
+        return jsonify({'error': 'Admin access required'}), 403
+    data = request.get_json(silent=True) or {}
+    if 'enabled' not in data:
+        return jsonify({'error': 'An "enabled" boolean is required'}), 400
+    try:
+        res = CloudflareService.set_dnssec(zone_id, bool(data['enabled']))
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+# ── Origin CA certificates ─────────────────────────────────────────────────────
+
+@cloudflare_bp.route('/zones/<int:zone_id>/origin-certificates', methods=['GET'])
+@jwt_required()
+def list_origin_certificates(zone_id):
+    try:
+        res = CloudflareService.list_origin_certificates(zone_id)
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/origin-certificates', methods=['POST'])
+@jwt_required()
+def issue_origin_certificate(zone_id):
+    if not _require_admin():
+        return jsonify({'error': 'Admin access required'}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        res = CloudflareService.issue_origin_certificate(
+            zone_id,
+            hostnames=data.get('hostnames'),
+            validity_days=int(data.get('validity_days', 5475)),
+            install=bool(data.get('install', True)))
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    except (TypeError, ValueError):
+        return jsonify({'error': 'validity_days must be a number'}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/origin-certificates/<certificate_id>',
+                     methods=['DELETE'])
+@jwt_required()
+def revoke_origin_certificate(zone_id, certificate_id):
+    if not _require_admin():
+        return jsonify({'error': 'Admin access required'}), 403
+    try:
+        res = CloudflareService.revoke_origin_certificate(zone_id, certificate_id)
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+# ── Redirect + Transform rules ─────────────────────────────────────────────────
+
+@cloudflare_bp.route('/zones/<int:zone_id>/rules/<slug>', methods=['GET'])
+@jwt_required()
+def list_rules(zone_id, slug):
+    try:
+        res = CloudflareService.list_rules(zone_id, slug)
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/rules/<slug>', methods=['POST'])
+@jwt_required()
+def add_rule(zone_id, slug):
+    if not _require_admin():
+        return jsonify({'error': 'Admin access required'}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        res = CloudflareService.add_rule(
+            zone_id, slug,
+            description=data.get('description'),
+            expression=data.get('expression'),
+            action=data.get('action'),
+            action_parameters=data.get('action_parameters'),
+            enabled=data.get('enabled', True))
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/rules/<slug>/presets/<preset_key>', methods=['POST'])
+@jwt_required()
+def apply_rule_preset(zone_id, slug, preset_key):
+    if not _require_admin():
+        return jsonify({'error': 'Admin access required'}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        res = CloudflareService.apply_rule_preset(zone_id, slug, preset_key, data.get('params') or {})
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/rules/<slug>/rulesets/<ruleset_id>/rules/<rule_id>',
+                     methods=['PATCH'])
+@jwt_required()
+def update_rule(zone_id, slug, ruleset_id, rule_id):
+    if not _require_admin():
+        return jsonify({'error': 'Admin access required'}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        res = CloudflareService.update_rule(zone_id, slug, ruleset_id, rule_id, data)
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/rules/<slug>/rulesets/<ruleset_id>/rules/<rule_id>',
+                     methods=['DELETE'])
+@jwt_required()
+def delete_rule(zone_id, slug, ruleset_id, rule_id):
+    if not _require_admin():
+        return jsonify({'error': 'Admin access required'}), 403
+    try:
+        res = CloudflareService.delete_rule(zone_id, slug, ruleset_id, rule_id)
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)
+
+
+# ── Activity + scope diagnostics ───────────────────────────────────────────────
+
+@cloudflare_bp.route('/zones/<int:zone_id>/activity', methods=['GET'])
+@jwt_required()
+def list_activity(zone_id):
+    try:
+        res = CloudflareService.list_activity(
+            zone_id,
+            product=request.args.get('product'),
+            result=request.args.get('result'),
+            limit=min(int(request.args.get('limit', 100) or 100), 500))
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    except (TypeError, ValueError):
+        return jsonify({'error': 'limit must be a number'}), 400
+    return _service_response(res)
+
+
+@cloudflare_bp.route('/zones/<int:zone_id>/scope-check', methods=['GET'])
+@jwt_required()
+def scope_check(zone_id):
+    try:
+        res = CloudflareService.scope_check(zone_id)
+    except CloudflareError as e:
+        return jsonify({'error': str(e)}), 400
+    return _service_response(res)

@@ -41,11 +41,13 @@ _STEP_ORDER = {
     'warn': 1,
     'create_app': 2,
     'update_app': 3,
-    'set_env': 4,
-    'set_env_ref': 4,
-    'ensure_volume': 5,
-    'upsert_backup_policy': 6,
-    'attach_domain': 7,
+    'open_port': 4,
+    'set_env': 5,
+    'set_env_ref': 5,
+    'ensure_volume': 6,
+    'bootstrap': 7,
+    'upsert_backup_policy': 8,
+    'attach_domain': 9,
 }
 
 
@@ -63,6 +65,43 @@ class ManifestApplyService:
                 literal_env[var['key']] = var['value']
             else:
                 env_refs.append(var)
+
+        containers = svc.get('containers') or []
+        ports = list(svc.get('ports') or [])
+        disks = list(svc.get('disks') or [])
+        bootstraps: List[Dict[str, Any]] = []
+        if svc.get('bootstrap'):
+            bootstraps.append({'service': svc['name'], **svc['bootstrap']})
+        host_requirements = list(
+            [svc['host_requirements']] if svc.get('host_requirements') else [])
+        # unit resources (#8 `_effective_resources`): a unit is ONE Application,
+        # so per-container publishes/bootstraps/host-requirements flatten up to
+        # the unit. Container DISKS stay inside the generated compose (synthetic
+        # per-container named volumes) to avoid mount-path collisions — so unit
+        # disks are NOT folded into `disks` here; their backups route via the
+        # docker volume name instead.
+        unit_backups: List[Dict[str, Any]] = []
+        for c in containers:
+            ports.extend(c.get('ports') or [])
+            if c.get('bootstrap'):
+                bootstraps.append({'service': c['name'], **c['bootstrap']})
+            if c.get('host_requirements'):
+                host_requirements.append(c['host_requirements'])
+            for var in c.get('env_vars') or []:
+                if var['source'] == 'value':
+                    literal_env.setdefault(var['key'], var['value'])
+                else:
+                    env_refs.append(var)
+            for disk in c.get('disks') or []:
+                if disk.get('backup') and disk.get('mount_path'):
+                    unit_backups.append({
+                        'container': c['name'],
+                        'mount_path': disk['mount_path'],
+                        'docker_volume': f'{svc["name"]}-{c["name"]}-'
+                                         f'{disk.get("name") or cls._slug(disk["mount_path"])}',
+                        'backup': disk['backup'],
+                    })
+
         return {
             'name': svc['name'],
             'kind': svc['kind'],
@@ -71,6 +110,14 @@ class ManifestApplyService:
             'engine_version': svc.get('engine_version'),
             'runtime': svc.get('runtime'),
             'port': svc.get('port'),
+            'ports': ports,
+            'bootstrap': svc.get('bootstrap'),
+            'bootstraps': bootstraps,
+            'image': svc.get('image'),
+            'registry': svc.get('registry'),
+            'host_requirements': host_requirements,
+            'containers': containers,
+            'unit_backups': unit_backups,
             'healthcheck_path': svc.get('healthcheck_path'),
             'build_command': svc.get('build_command'),
             'start_command': svc.get('start_command'),
@@ -79,9 +126,29 @@ class ManifestApplyService:
             'auto_deploy': svc.get('auto_deploy', False),
             'env': literal_env,
             'env_refs': env_refs,
-            'disks': svc.get('disks', []),
+            'disks': disks,
             'server': svc.get('server'),
         }
+
+    # -- multi-container unit seams (#9) ------------------------------------
+
+    @classmethod
+    def unit_compose(cls, app) -> Optional[Dict[str, Any]]:
+        """The generated compose project for a manifest-managed UNIT app, or None
+        when the app is not a unit. Lets a deploy/UI render the unit verbatim."""
+        resolved = cls.resolved_for_app(app)
+        if not resolved or not resolved.get('containers'):
+            return None
+        from app.services.unit_compose_service import UnitComposeService
+        return UnitComposeService.render(app.name, resolved['containers'])
+
+    @classmethod
+    def unit_container_names(cls, app) -> List[str]:
+        """Container names of a unit app (``{app}-{container}``), or []."""
+        resolved = cls.resolved_for_app(app)
+        if not resolved or not resolved.get('containers'):
+            return []
+        return [f'{app.name}-{c["name"]}' for c in resolved['containers']]
 
     # -- drift comparison (#18) --------------------------------------------
 
@@ -126,6 +193,19 @@ class ManifestApplyService:
             expected['healthcheck_path'] = resolved['healthcheck_path']
             observed['healthcheck_path'] = app.healthcheck_path
 
+        # Appliance tier (plan 35): track raw ports + BYO image.
+        declared_ports = resolved.get('ports') or []
+        if declared_ports:
+            from app.services.app_port_service import AppPortService
+            def _pkey(p):
+                return (f'{p.get("host_port")}:{p.get("container_port")}'
+                        f'/{p.get("protocol") or "tcp"}/{p.get("expose") or "public"}')
+            expected['ports'] = sorted(_pkey(p) for p in declared_ports)
+            observed['ports'] = sorted(_pkey(p) for p in AppPortService.get_ports(app))
+        if resolved.get('image'):
+            expected['image'] = resolved['image']
+            observed['image'] = app.docker_image
+
         declared_env = sorted(list(resolved.get('env', {}).keys())
                               + [r['key'] for r in resolved.get('env_refs', [])])
         if declared_env:
@@ -161,15 +241,22 @@ class ManifestApplyService:
         issues: List[Dict[str, Any]] = []
 
         services = normalized.get('services', [])
+        resolved_all: List[Dict[str, Any]] = []
         for svc in services:
             resolved = cls.resolve_service(svc)
             resolved['server'] = resolved.get('server') or default_server
+            resolved_all.append(resolved)
             if resolved['kind'] == 'database':
                 steps.extend(cls._plan_db(resolved))
             else:
                 steps.extend(cls._plan_app(project, env, resolved, issues))
 
         steps.extend(cls._plan_domains(project, normalized.get('domains', [])))
+
+        # Appliance-tier blockers (plan 35): plan-time refusals distinct from
+        # advisory `issues`. Apply refuses (nothing executed) while any exist.
+        blockers, appliance_issues = cls._appliance_blockers(project, resolved_all)
+        issues.extend(appliance_issues)
 
         steps.sort(key=lambda s: (_STEP_ORDER.get(s['type'], 99), s.get('service') or ''))
         return {
@@ -178,6 +265,7 @@ class ManifestApplyService:
             'steps': steps,
             'step_count': len(steps),
             'issues': issues,
+            'blockers': blockers,
             'summary': cls._summarize_plan(steps),
         }
 
@@ -223,6 +311,12 @@ class ManifestApplyService:
                        ('app_type', 'port', 'healthcheck_path', 'runtime',
                         'build_command', 'start_command', 'cpu', 'memory')}
             payload['name'] = name
+            # BYO image (plan 35): stamp the declared image + private registry
+            if resolved.get('image'):
+                payload['image'] = resolved['image']
+                if resolved.get('registry'):
+                    reg = cls._resolve_registry(resolved['registry'])
+                    payload['registry_id'] = reg.id if reg else None
             # fleet targeting (#21): route the app to a server when declared
             server_ref = resolved.get('server')
             if server_ref:
@@ -245,6 +339,18 @@ class ManifestApplyService:
                     'type': 'update_app', 'service': name,
                     'description': f'Update app `{name}`: ' + ', '.join(changes.keys()),
                     'payload': {'app_id': app.id, 'changes': changes},
+                })
+
+        # typed L4 port publishes (appliance tier, plan 35)
+        ports = resolved.get('ports') or []
+        if ports:
+            from app.services.app_port_service import AppPortService
+            current = AppPortService.get_ports(app) if app else []
+            if app is None or cls._ports_differ(current, ports):
+                steps.append({
+                    'type': 'open_port', 'service': name,
+                    'description': f'Publish {len(ports)} port(s) on `{name}`',
+                    'payload': {'app_id': app.id if app else None, 'ports': ports},
                 })
 
         # env (literal values only; references bind in Phase 3)
@@ -285,6 +391,11 @@ class ManifestApplyService:
                 desired = {'kind': 'service', 'service': sr['name'], 'property': sr['property']}
                 if cls._ref_changed(live_vars.get(key), desired):
                     steps.append(cls._set_env_ref_step(name, app, key, desired))
+            elif source == 'server':
+                sv = ref['server_ref']
+                desired = {'kind': 'server', 'property': sv['property']}
+                if cls._ref_changed(live_vars.get(key), desired):
+                    steps.append(cls._set_env_ref_step(name, app, key, desired))
 
         # disks
         for disk in resolved.get('disks', []):
@@ -304,6 +415,23 @@ class ManifestApplyService:
             if backup and not cls._backup_policy_current(
                     'files', app.id if app else None, backup):
                 steps.append(cls._files_backup_step(name, app, mount, backup))
+
+        # unit disk backups (plan 35) — the bytes live in a synthetic per-container
+        # docker volume, so the backup routes at that volume name.
+        for ub in resolved.get('unit_backups') or []:
+            if not cls._backup_policy_current('files', app.id if app else None, ub['backup']):
+                steps.append(cls._unit_backup_step(name, app, ub))
+
+        # first-boot bootstrap (appliance tier, plan 35) — once per app; a unit
+        # runs each of its containers' bootstraps under the one bootstrap_done flag
+        bootstraps = resolved.get('bootstraps') or []
+        if bootstraps and (app is None or not getattr(app, 'bootstrap_done', False)):
+            suffix = f' ({len(bootstraps)} container(s))' if len(bootstraps) > 1 else ''
+            steps.append({
+                'type': 'bootstrap', 'service': name,
+                'description': f'Run first-boot bootstrap on `{name}`{suffix}',
+                'payload': {'app_id': app.id if app else None, 'bootstraps': bootstraps},
+            })
 
         return steps
 
@@ -341,9 +469,262 @@ class ManifestApplyService:
             'type': 'upsert_backup_policy', 'service': name,
             'description': f'Backup policy for disk `{mount}` on `{name}` ({backup["schedule"]})',
             'payload': {'target': 'files', 'app_id': app.id if app else None,
-                        'mount_path': mount, 'schedule': backup['schedule'],
-                        'retain': backup['retain']},
+                        'mount_path': mount, 'volume_mount': mount,
+                        'schedule': backup['schedule'], 'retain': backup['retain']},
         }
+
+    @classmethod
+    def _unit_backup_step(cls, name, app, ub):
+        backup = ub['backup']
+        return {
+            'type': 'upsert_backup_policy', 'service': name,
+            'description': f'Backup policy for unit disk `{ub["mount_path"]}` on '
+                           f'`{name}` ({backup["schedule"]})',
+            'payload': {'target': 'files', 'app_id': app.id if app else None,
+                        'mount_path': ub['mount_path'],
+                        'docker_volume': ub['docker_volume'],
+                        'schedule': backup['schedule'], 'retain': backup['retain']},
+        }
+
+    # -- blockers engine (appliance tier, plan 35) --------------------------
+
+    # An appliance FEATURE is anything the manifest can now express that a
+    # target may be unable to provide. Later phases extend `_service_features`.
+    @classmethod
+    def _service_features(cls, resolved: Dict[str, Any]) -> List[str]:
+        feats: List[str] = []
+        if resolved.get('ports'):
+            feats.append('raw port publishes')
+        if resolved.get('host_requirements'):
+            feats.append('host requirements')
+        if resolved.get('bootstraps'):
+            feats.append('a first-boot bootstrap')
+        if resolved.get('containers'):
+            feats.append('a multi-container unit')
+        return feats
+
+    @classmethod
+    def _appliance_blockers(cls, project, resolved_all: List[Dict[str, Any]]):
+        """Return (blockers, issues). Blockers refuse apply; issues are advisory.
+
+        Message contract: "service X needs Y; target Z can't provide it — <fix>".
+        """
+        blockers: List[Dict[str, Any]] = []
+        issues: List[Dict[str, Any]] = []
+        fw_state = None  # resolved lazily, once
+        for resolved in resolved_all:
+            if resolved.get('kind') != 'app':
+                continue
+            name = resolved['name']
+            server_ref = resolved.get('server')
+
+            # fromServer publicIp must resolve (plan 35) — independent of the
+            # other appliance features; a service may bind only its own IP.
+            needs_ip = any(
+                r.get('source') == 'server'
+                and (r.get('server_ref') or {}).get('property') == 'publicIp'
+                for r in resolved.get('env_refs') or [])
+            if needs_ip and not cls._server_public_ip(server_ref):
+                where = f'server {server_ref}' if server_ref else 'the panel host'
+                blockers.append({
+                    'kind': 'fromserver_no_ip', 'service': name,
+                    'message': f'service {name} binds its public IP via fromServer, but '
+                               f'{where} has no recorded public IP — set it, then re-apply.'})
+
+            feats = cls._service_features(resolved)
+            if not feats:
+                continue
+            need = ' and '.join(feats)
+
+            # Remote target: appliance apply runs on the panel host only (plan 17's
+            # remote-dispatch deferral). Say so instead of half-deploying.
+            if server_ref:
+                srv = cls._resolve_server_obj(server_ref)
+                if srv is not None and getattr(srv, 'management_mode', None) == 'observed':
+                    blockers.append({
+                        'kind': 'observed_server', 'service': name, 'server': server_ref,
+                        'message': f'service {name} needs {need}; target {server_ref} is an '
+                                   f'observed (read-only) server — ServerKit will not mutate it. '
+                                   f'Switch it to managed, or apply on the panel host.'})
+                    continue
+                blockers.append({
+                    'kind': 'remote_target', 'service': name, 'server': server_ref,
+                    'message': f'service {name} needs {need}; target {server_ref} is a remote '
+                               f'server — remote appliance apply is not supported yet. Apply on '
+                               f'the panel host, or provision {server_ref} manually.'})
+                continue
+
+            # Local panel host: port conflicts + firewall detection.
+            public = [p for p in (resolved.get('ports') or [])
+                      if (p.get('expose') or 'public') == 'public']
+            for p in public:
+                hp = p.get('host_port')
+                if hp is not None and cls._port_bound(int(hp)):
+                    blockers.append({
+                        'kind': 'port_conflict', 'service': name, 'port': hp,
+                        'message': f'service {name} needs public port {hp}/{p.get("protocol","tcp")}; '
+                                   f'the panel host already has it bound — free the port or choose '
+                                   f'another in the manifest.'})
+            if public:
+                if fw_state is None:
+                    fw_state = cls._firewall_state()
+                if fw_state == 'undetected':
+                    blockers.append({
+                        'kind': 'firewall_undetected', 'service': name,
+                        'message': f'service {name} publishes public ports but the panel host '
+                                   f'firewall state could not be determined — verify ufw/firewalld '
+                                   f'is reachable, then re-apply.'})
+                elif fw_state == 'none':
+                    issues.append({
+                        'service': name, 'kind': 'firewall_none',
+                        'message': f'no manageable firewall detected — public ports for {name} '
+                                   f'will be published but not firewall-managed.'})
+
+            # BYO image (plan 35): a private registry must be known + credentialed.
+            for ref in cls._image_registry_refs(resolved):
+                reg_name = ref.get('registry')
+                if not reg_name:
+                    continue  # anonymous pull is fine
+                reg = cls._resolve_registry(reg_name)
+                if reg is None or not cls._registry_has_credential(reg):
+                    blockers.append({
+                        'kind': 'registry_credential', 'service': name, 'registry': reg_name,
+                        'message': f'service {name} pulls `{ref["image"]}` from registry '
+                                   f'`{reg_name}`, which is '
+                                   + ('unknown' if reg is None else 'missing a stored credential')
+                                   + f' — add the registry credential, then re-apply.'})
+
+            # Host requirements (plan 35): listed in plain words, never silent.
+            for hr in resolved.get('host_requirements') or []:
+                for phrase in cls._hostreq_phrases(hr):
+                    issues.append({'service': name, 'kind': 'host_requirement',
+                                   'message': f'{name} requests {phrase}'})
+                for mod in hr.get('kernel_modules') or []:
+                    if not cls._kernel_module_present(mod):
+                        issues.append({
+                            'service': name, 'kind': 'kernel_module',
+                            'message': f'{name} needs kernel module `{mod}` — not confirmed '
+                                       f'loaded on the host (advisory; verify before relying on it).'})
+        return blockers, issues
+
+    # -- blocker seams (patched in tests) -----------------------------------
+
+    @staticmethod
+    def _port_bound(port: int) -> bool:
+        """True when ``port`` is already bound on the panel host (0.0.0.0)."""
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('0.0.0.0', int(port)))
+            return False
+        except OSError:
+            return True
+        except Exception:
+            return False
+        finally:
+            sock.close()
+
+    @staticmethod
+    def _firewall_state() -> str:
+        """'active' (a manageable firewall exists) | 'none' | 'undetected'."""
+        try:
+            from app.services.firewall_service import FirewallService
+            status = FirewallService.get_status()
+        except Exception:
+            return 'undetected'
+        if not isinstance(status, dict):
+            return 'undetected'
+        if status.get('active_firewall'):
+            return 'active'
+        fwd = status.get('firewalld') or {}
+        ufw = status.get('ufw') or {}
+        if fwd.get('installed') or ufw.get('installed'):
+            return 'active'
+        return 'none'
+
+    @staticmethod
+    def _resolve_server_obj(server_ref: Optional[str]):
+        if not server_ref:
+            return None
+        try:
+            from app.models.server import Server
+        except Exception:
+            return None
+        return (Server.query.filter_by(id=server_ref).first()
+                or Server.query.filter_by(name=server_ref).first())
+
+    @staticmethod
+    def _image_registry_refs(resolved: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Every (image, registry) pair a service pulls — top-level + containers."""
+        refs: List[Dict[str, Any]] = []
+        if resolved.get('image'):
+            refs.append({'image': resolved['image'], 'registry': resolved.get('registry')})
+        for c in resolved.get('containers') or []:
+            if c.get('image'):
+                refs.append({'image': c['image'], 'registry': c.get('registry')})
+        return refs
+
+    @staticmethod
+    def _resolve_registry(name: Optional[str]):
+        if not name:
+            return None
+        try:
+            from app.models.container_registry import ContainerRegistry
+        except Exception:
+            return None
+        return (ContainerRegistry.query.filter_by(id=name).first()
+                if str(name).isdigit() else None) \
+            or ContainerRegistry.query.filter_by(name=name).first()
+
+    @classmethod
+    def _server_public_ip(cls, server_ref: Optional[str]) -> Optional[str]:
+        """Advertised public IP of the manifest target (panel host by default)."""
+        if server_ref:
+            srv = cls._resolve_server_obj(server_ref)
+            return getattr(srv, 'ip_address', None) if srv else None
+        try:
+            from app.services.site_domain_service import SiteDomainService
+            return SiteDomainService.server_ip()
+        except Exception:
+            return None
+
+    @staticmethod
+    def _registry_has_credential(reg) -> bool:
+        # ECR authenticates via a key-pair exchange, so no stored secret needed.
+        if getattr(reg, 'provider', None) == 'ecr':
+            return True
+        return bool(getattr(reg, 'secret_encrypted', None))
+
+    @staticmethod
+    def _hostreq_phrases(hr: Dict[str, Any]) -> List[str]:
+        phrases: List[str] = []
+        if hr.get('privileged'):
+            phrases.append('a PRIVILEGED container')
+        for cap in hr.get('cap_add') or []:
+            phrases.append(f'capability {cap}')
+        for k, v in (hr.get('sysctls') or {}).items():
+            phrases.append(f'sysctl {k}={v}')
+        for dev in hr.get('devices') or []:
+            phrases.append(f'device {dev}')
+        return phrases
+
+    @staticmethod
+    def _kernel_module_present(module: str) -> bool:
+        """Advisory /proc/modules check. Unverifiable (non-Linux / unreadable)
+        returns False so the plan warns rather than silently passing."""
+        try:
+            with open('/proc/modules') as fh:
+                loaded = {line.split()[0] for line in fh if line.strip()}
+            return module in loaded
+        except Exception:
+            return False
+
+    @staticmethod
+    def _ports_differ(current: List[Dict[str, Any]], desired: List[Dict[str, Any]]) -> bool:
+        def key(p):
+            return (p.get('host_port'), p.get('container_port'),
+                    (p.get('protocol') or 'tcp'), (p.get('expose') or 'public'))
+        return sorted(map(key, current)) != sorted(map(key, desired))
 
     # -- apply (#9) ---------------------------------------------------------
 
@@ -355,6 +736,20 @@ class ManifestApplyService:
         """Execute the plan inside a DeploymentJob with before/after snapshots."""
         env = environment or cls._default_environment(project)
         plan = cls.plan(project, normalized, env)
+
+        # Appliance-tier blockers (plan 35): refuse before executing anything.
+        # No force flag — the operator must clear the cause and re-apply.
+        if plan.get('blockers'):
+            if manifest_row is not None:
+                manifest_row.status = STATUS_ERROR
+                manifest_row.last_error = plan['blockers'][0]['message']
+                db.session.commit()
+            return {
+                'success': False, 'refused': True,
+                'blockers': plan['blockers'], 'issues': plan.get('issues', []),
+                'applied': 0, 'results': [], 'plan': plan,
+            }
+
         job = cls._create_job(project, user_id, plan)
 
         cls._snapshot_existing(project, normalized, tag='before')
@@ -377,6 +772,18 @@ class ManifestApplyService:
         cls._snapshot_existing(project, normalized, tag='after')
 
         cls._finish_job(job, failed, results)
+
+        # Host requirements never apply silently (plan 35): audit every one.
+        hr_issues = [i for i in plan.get('issues', []) if i.get('kind') == 'host_requirement']
+        if hr_issues:
+            try:
+                from app.services.audit_service import AuditService
+                AuditService.log('manifest.host_requirements', user_id=user_id,
+                                 target_type='project', target_id=project.id,
+                                 details={'requirements': [i['message'] for i in hr_issues]})
+            except Exception:
+                pass
+
         if manifest_row is not None:
             manifest_row.status = STATUS_ERROR if failed else STATUS_APPLIED
             if not failed:
@@ -452,6 +859,8 @@ class ManifestApplyService:
             healthcheck_path=payload.get('healthcheck_path'),
             cpu_limit=payload.get('cpu'),
             memory_limit=payload.get('memory'),
+            docker_image=payload.get('image'),
+            registry_id=payload.get('registry_id'),
             buildpack_overrides=json.dumps(overrides) if overrides else None,
             source='manifest',
             user_id=user_id,
@@ -478,6 +887,8 @@ class ManifestApplyService:
             app.cpu_limit = changes['cpu']
         if 'memory' in changes:
             app.memory_limit = changes['memory']
+        if 'image' in changes:
+            app.docker_image = changes['image']
         if 'build_command' in changes or 'start_command' in changes:
             overrides = {}
             if app.buildpack_overrides:
@@ -525,7 +936,50 @@ class ManifestApplyService:
         if any(v.mount_path == payload['mount_path'] for v in (app.volumes or [])):
             return {'exists': True}
         vol = VolumeService.create(app, payload['name'], payload['mount_path'])
-        return {'volume_id': getattr(vol, 'id', None)}
+        # persist the manifest-declared size cap (plan 35); measured usage stays
+        # on size_bytes.
+        declared = payload.get('size')
+        if declared is not None and vol is not None:
+            vol.declared_size = str(declared)
+            db.session.commit()
+        return {'volume_id': getattr(vol, 'id', None), 'declared_size': declared}
+
+    @classmethod
+    def _do_bootstrap(cls, project, env, payload, user_id):
+        from app.services.bootstrap_service import BootstrapService
+        app = Application.query.get(payload.get('app_id') or cls._resolve_app_id(project, payload))
+        if not app:
+            raise RuntimeError('app not found')
+        if getattr(app, 'bootstrap_done', False):
+            return {'skipped': 'already bootstrapped'}
+        bootstraps = payload.get('bootstraps')
+        if bootstraps is None and payload.get('command'):
+            bootstraps = [{'service': app.name, 'command': payload['command'],
+                           'timeout_seconds': payload.get('timeout_seconds')}]
+        outputs = []
+        for b in bootstraps or []:
+            result = BootstrapService.run_once(
+                app, b['command'], timeout_seconds=b.get('timeout_seconds'),
+                service=b.get('service'))
+            if not result.get('success'):
+                raise RuntimeError(result.get('error')
+                                   or f'bootstrap failed for {b.get("service")}')
+            outputs.append(result.get('output'))
+        app.bootstrap_done = True
+        db.session.commit()
+        return {'bootstrapped': len(bootstraps or []), 'outputs': outputs}
+
+    @classmethod
+    def _do_open_port(cls, project, env, payload, user_id):
+        from app.services.app_port_service import AppPortService
+        app = Application.query.get(payload.get('app_id') or cls._resolve_app_id(project, payload))
+        if not app:
+            raise RuntimeError('app not found')
+        ports = payload['ports']
+        AppPortService.set_ports(app, ports)
+        db.session.commit()
+        firewall = AppPortService.open_firewall(ports)
+        return {'ports': len(ports), 'firewall': firewall}
 
     @classmethod
     def _do_upsert_backup_policy(cls, project, env, payload, user_id):
@@ -541,11 +995,19 @@ class ManifestApplyService:
                 raise RuntimeError('managed database not found for backup policy')
             ManagedDatabaseService.protect(managed, fields=fields)
             return {'policy': 'database', 'db': payload['db_name']}
-        # files
+        # files — for a manifest disk the real bytes live in the named docker
+        # volume, so record the volume mount so backup resolves the live HOST
+        # mountpoint (plan 35). `paths` stays as a graceful fallback.
         app_id = payload.get('app_id') or cls._resolve_app_id(project, payload)
+        meta = {'paths': [payload['mount_path']], 'managed_by': 'manifest'}
+        if payload.get('volume_mount'):
+            meta['volume_mount'] = payload['volume_mount']
+            meta['app_id'] = app_id
+        if payload.get('docker_volume'):
+            meta['docker_volume'] = payload['docker_volume']
         policy = BackupPolicyService.get_or_create_policy(
             target_type='files', target_id=app_id, target_subtype='pathlist',
-            target_meta={'paths': [payload['mount_path']], 'managed_by': 'manifest'})
+            target_meta=meta)
         BackupPolicyService.update_policy(policy, fields)
         return {'policy': 'files', 'policy_id': policy.id}
 
@@ -628,6 +1090,8 @@ class ManifestApplyService:
             changes['cpu'] = resolved['cpu']
         if resolved.get('memory') and app.memory_limit != resolved['memory']:
             changes['memory'] = resolved['memory']
+        if resolved.get('image') and app.docker_image != resolved['image']:
+            changes['image'] = resolved['image']
         overrides = {}
         if app.buildpack_overrides:
             try:

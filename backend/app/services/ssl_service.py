@@ -14,6 +14,9 @@ class SSLService:
     CERTBOT_BIN = os.environ.get('CERTBOT_BIN', '/usr/bin/certbot')
     CERTS_DIR = '/etc/letsencrypt/live'
     RENEWAL_DIR = '/etc/letsencrypt/renewal'
+    # Custom-cert install location (e.g. issued Cloudflare Origin CA certs, written
+    # by AdvancedSSLService.upload_custom_cert). certbot doesn't know about these.
+    SERVERKIT_CERTS_DIR = '/etc/ssl/serverkit'
 
     @classmethod
     def is_certbot_installed(cls) -> bool:
@@ -159,44 +162,84 @@ class SSLService:
         try:
             result = run_privileged([cls.CERTBOT_BIN, 'certificates'], timeout=60)
 
-            if result.returncode != 0:
-                return certificates
+            # Parse certbot output (skip on a non-zero exit, but still surface the
+            # custom-installed certs below).
+            if result.returncode == 0:
+                current_cert = None
+                for line in result.stdout.split('\n'):
+                    line = line.strip()
 
-            # Parse certbot output
-            current_cert = None
-            for line in result.stdout.split('\n'):
-                line = line.strip()
+                    if line.startswith('Certificate Name:'):
+                        if current_cert:
+                            certificates.append(current_cert)
+                        current_cert = {'name': line.split(':', 1)[1].strip()}
 
-                if line.startswith('Certificate Name:'):
-                    if current_cert:
-                        certificates.append(current_cert)
-                    current_cert = {'name': line.split(':', 1)[1].strip()}
+                    elif current_cert:
+                        if line.startswith('Domains:'):
+                            current_cert['domains'] = line.split(':', 1)[1].strip().split()
+                        elif line.startswith('Expiry Date:'):
+                            expiry_str = line.split(':', 1)[1].strip()
+                            # Parse expiry date
+                            try:
+                                # Format: 2024-03-15 12:00:00+00:00
+                                expiry_part = expiry_str.split(' (')[0]
+                                current_cert['expiry'] = expiry_part
+                                current_cert['expiry_valid'] = 'VALID' in expiry_str
+                            except Exception:
+                                current_cert['expiry'] = expiry_str
+                        elif line.startswith('Certificate Path:'):
+                            current_cert['cert_path'] = line.split(':', 1)[1].strip()
+                        elif line.startswith('Private Key Path:'):
+                            current_cert['key_path'] = line.split(':', 1)[1].strip()
 
-                elif current_cert:
-                    if line.startswith('Domains:'):
-                        current_cert['domains'] = line.split(':', 1)[1].strip().split()
-                    elif line.startswith('Expiry Date:'):
-                        expiry_str = line.split(':', 1)[1].strip()
-                        # Parse expiry date
-                        try:
-                            # Format: 2024-03-15 12:00:00+00:00
-                            expiry_part = expiry_str.split(' (')[0]
-                            current_cert['expiry'] = expiry_part
-                            current_cert['expiry_valid'] = 'VALID' in expiry_str
-                        except Exception:
-                            current_cert['expiry'] = expiry_str
-                    elif line.startswith('Certificate Path:'):
-                        current_cert['cert_path'] = line.split(':', 1)[1].strip()
-                    elif line.startswith('Private Key Path:'):
-                        current_cert['key_path'] = line.split(':', 1)[1].strip()
-
-            if current_cert:
-                certificates.append(current_cert)
+                if current_cert:
+                    certificates.append(current_cert)
 
         except Exception:
             pass
 
+        # Also surface custom-installed certs (e.g. Cloudflare Origin CA), which
+        # certbot doesn't track. Parse the x509 issuer to badge them.
+        certificates.extend(cls._list_serverkit_certificates())
+
         return certificates
+
+    @classmethod
+    def _list_serverkit_certificates(cls) -> List[Dict]:
+        """Walk the custom-cert install dir (``/etc/ssl/serverkit/<domain>/cert.pem``)
+        and describe each cert, badging Cloudflare Origin CA certs as proxy-only."""
+        import glob
+        out: List[Dict] = []
+        try:
+            from cryptography import x509
+            from cryptography.hazmat.backends import default_backend
+        except Exception:
+            return out
+
+        for cert_path in sorted(glob.glob(f'{cls.SERVERKIT_CERTS_DIR}/*/cert.pem')):
+            try:
+                domain = os.path.basename(os.path.dirname(cert_path))
+                with open(cert_path, 'rb') as fh:
+                    cert = x509.load_pem_x509_certificate(fh.read(), default_backend())
+                issuer = cert.issuer.rfc4514_string()
+                is_origin_ca = 'origin' in issuer.lower() and 'cloudflare' in issuer.lower()
+                try:
+                    expiry = cert.not_valid_after_utc
+                except AttributeError:  # cryptography < 42
+                    expiry = cert.not_valid_after
+                out.append({
+                    'name': domain,
+                    'domains': [domain],
+                    'cert_path': cert_path,
+                    'key_path': os.path.join(os.path.dirname(cert_path), 'key.pem'),
+                    'issuer': issuer,
+                    'source': 'custom',
+                    'badge': 'Origin CA (proxy-only)' if is_origin_ca else None,
+                    'expiry': expiry.strftime('%Y-%m-%d %H:%M:%S%z') if expiry else None,
+                })
+            except Exception:
+                continue
+        return out
 
     @classmethod
     def get_certificate_info(cls, domain: str) -> Optional[Dict]:

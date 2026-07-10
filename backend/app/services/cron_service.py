@@ -7,6 +7,7 @@ for cross-platform compatibility.
 
 import os
 import re
+import sys
 import shlex
 import subprocess
 import platform
@@ -16,6 +17,14 @@ import json
 
 # Path for storing job metadata
 JOBS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'cron_jobs.json')
+
+# The run-tracking shim (serverkit-cron-run) lives at the backend root so a
+# tracked crontab line can invoke it by absolute path. app/services/ -> app/ ->
+# backend/.
+SHIM_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'serverkit_cron_run.py',
+)
 
 
 class CronService:
@@ -262,8 +271,13 @@ class CronService:
 
     @classmethod
     def add_job(cls, schedule: str, command: str, name: str = None,
-                description: str = None) -> Dict:
-        """Add a new cron job."""
+                description: str = None, application_id=None) -> Dict:
+        """Add a new cron job.
+
+        `application_id` optionally attributes the job to an application so the
+        member-facing /cron/jobs/for-app surface can show it. Scope
+        (workspace/project) is never stored here — it is derived from the app at
+        read time (plan 19 Decision 3)."""
         # Validate schedule format
         if not cls._validate_schedule(schedule):
             return {'success': False, 'error': 'Invalid cron schedule format'}
@@ -320,6 +334,8 @@ class CronService:
             'command': command,
             'description': description or cls._describe_schedule(schedule),
             'enabled': True,
+            'tracked': False,
+            'application_id': application_id,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat()
         }
@@ -522,8 +538,13 @@ class CronService:
 
     @classmethod
     def update_job(cls, job_id: str, name: str = None, command: str = None,
-                   schedule: str = None, description: str = None) -> Dict:
-        """Update an existing cron job."""
+                   schedule: str = None, description: str = None,
+                   application_id=None, _set_application: bool = False) -> Dict:
+        """Update an existing cron job.
+
+        `application_id` is only touched when `_set_application` is True, so a
+        PUT that omits the field leaves the association untouched, while an
+        explicit `null` clears it (System bucket)."""
         metadata = cls._load_jobs_metadata()
 
         if job_id not in metadata.get('jobs', {}):
@@ -550,8 +571,9 @@ class CronService:
                 )
 
                 if result.returncode == 0:
-                    old_line = f"{old_schedule} {old_command}"
-                    new_line = f"{new_schedule} {new_command}"
+                    tracked = bool(job_data.get('tracked', False))
+                    old_line = f"{old_schedule} {cls._crontab_command(old_command, tracked, job_id)}"
+                    new_line = f"{new_schedule} {cls._crontab_command(new_command, tracked, job_id)}"
                     lines = result.stdout.split('\n')
                     new_lines = []
                     for line in lines:
@@ -585,6 +607,8 @@ class CronService:
             job_data['schedule'] = schedule
         if description is not None:
             job_data['description'] = description
+        if _set_application:
+            job_data['application_id'] = application_id
         job_data['updated_at'] = datetime.now().isoformat()
 
         cls._save_jobs_metadata(metadata)
@@ -609,6 +633,7 @@ class CronService:
         if not command:
             return {'success': False, 'error': 'Job has no command'}
 
+        started = datetime.now()
         try:
             # Run the command
             result = subprocess.run(
@@ -616,6 +641,17 @@ class CronService:
                 capture_output=True,
                 text=True,
                 timeout=60
+            )
+
+            # Record the run in history too (#18) — a manual "Run now" is a real
+            # execution, so it shows up alongside cron-triggered runs. Best-effort:
+            # a recording failure (e.g. no app context) must never fail the run.
+            cls._record_run_safe(
+                job_id,
+                started=started,
+                finished=datetime.now(),
+                exit_code=result.returncode,
+                output_tail=(result.stdout or '') + (result.stderr or ''),
             )
 
             return {
@@ -630,3 +666,220 @@ class CronService:
             return {'success': False, 'error': 'Job execution timed out (60s limit)'}
         except subprocess.SubprocessError as e:
             return {'success': False, 'error': str(e)}
+
+    @classmethod
+    def _record_run_safe(cls, job_id, started=None, finished=None,
+                         exit_code=None, output_tail=None):
+        """Record a CronRun without ever raising (best-effort history join)."""
+        try:
+            from app.services.cron_run_service import CronRunService
+            CronRunService.record_run(
+                job_id=job_id,
+                started_at=started,
+                finished_at=finished,
+                exit_code=exit_code,
+                output_tail=output_tail,
+            )
+        except Exception:  # noqa: BLE001 - history is best-effort
+            pass
+
+    # ------------------------------------------------------------------ #
+    # Run tracking (the serverkit-cron-run shim) + read-time joins
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def _crontab_command(cls, command: str, tracked: bool, job_id: str) -> str:
+        """Build the crontab command for a job.
+
+        Tracked jobs are wrapped by the serverkit-cron-run shim so every run
+        records its exit code + output tail; untracked jobs are byte-identical
+        to the bare command (an untracked line is indistinguishable from a
+        hand-written one)."""
+        if not tracked:
+            return command
+        python = sys.executable or 'python3'
+        return f"{python} {SHIM_PATH} {job_id} -- {command}"
+
+    @classmethod
+    def get_job(cls, job_id: str) -> Optional[Dict]:
+        """Return a single job's metadata (with a normalized `tracked` flag), or
+        None when the id is unknown."""
+        metadata = cls._load_jobs_metadata()
+        job_data = metadata.get('jobs', {}).get(job_id)
+        if job_data is None:
+            return None
+        job = {'id': job_id, **job_data}
+        job['tracked'] = bool(job_data.get('tracked', False))
+        return job
+
+    @classmethod
+    def set_tracking(cls, job_id: str, enabled: bool) -> Dict:
+        """Enable/disable run tracking for a job.
+
+        On Linux this rewrites the job's crontab line to add/remove the
+        serverkit-cron-run wrapper; everywhere it flips the persisted `tracked`
+        flag. Returns {'success', 'tracked'}."""
+        metadata = cls._load_jobs_metadata()
+        if job_id not in metadata.get('jobs', {}):
+            return {'success': False, 'error': 'Job not found'}
+
+        job_data = metadata['jobs'][job_id]
+        enabled = bool(enabled)
+        was_tracked = bool(job_data.get('tracked', False))
+
+        if cls.is_linux() and enabled != was_tracked:
+            schedule = job_data.get('schedule', '')
+            command = job_data.get('command', '')
+            old_line = f"{schedule} {cls._crontab_command(command, was_tracked, job_id)}"
+            new_line = f"{schedule} {cls._crontab_command(command, enabled, job_id)}"
+            err = cls._replace_crontab_line(old_line, new_line)
+            if err is not None:
+                return err
+
+        job_data['tracked'] = enabled
+        job_data['updated_at'] = datetime.now().isoformat()
+        cls._save_jobs_metadata(metadata)
+
+        return {
+            'success': True,
+            'tracked': enabled,
+            'message': f"Run tracking {'enabled' if enabled else 'disabled'}",
+        }
+
+    @classmethod
+    def _replace_crontab_line(cls, old_line: str, new_line: str) -> Optional[Dict]:
+        """Swap one line in the current user's crontab. Returns None on success
+        or an error dict. Linux-only (callers guard with is_linux)."""
+        try:
+            result = subprocess.run(
+                ['crontab', '-l'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode != 0:
+                return None
+            lines = result.stdout.split('\n')
+            new_lines = [new_line if line == old_line else line for line in lines]
+            new_crontab = '\n'.join(new_lines)
+
+            process = subprocess.Popen(
+                ['crontab', '-'],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            _, stderr = process.communicate(input=new_crontab, timeout=10)
+            if process.returncode != 0:
+                return {'success': False, 'error': stderr or 'Failed to update crontab'}
+        except subprocess.SubprocessError as e:
+            return {'success': False, 'error': str(e)}
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Application attribution (member-facing surface)
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def clear_application(cls, application_id) -> int:
+        """Drop the association from every job attributed to `application_id`
+        (called when the app is deleted — jobs fall back to the System bucket
+        rather than being deleted). Returns the number of jobs changed."""
+        metadata = cls._load_jobs_metadata()
+        changed = 0
+        for job_data in metadata.get('jobs', {}).values():
+            aid = job_data.get('application_id')
+            if aid in (None, ''):
+                continue
+            try:
+                same = int(aid) == int(application_id)
+            except (TypeError, ValueError):
+                same = str(aid) == str(application_id)
+            if same:
+                job_data['application_id'] = None
+                job_data['updated_at'] = datetime.now().isoformat()
+                changed += 1
+        if changed:
+            cls._save_jobs_metadata(metadata)
+        return changed
+
+    @classmethod
+    def jobs_for_application(cls, application_id) -> List[Dict]:
+        """All jobs attributed to `application_id`, enriched with a human
+        schedule, the next run time, and a read-time last-run join (plan 34)."""
+        metadata = cls._load_jobs_metadata()
+        jobs = []
+        for job_id, job_data in metadata.get('jobs', {}).items():
+            aid = job_data.get('application_id')
+            if aid in (None, ''):
+                continue
+            try:
+                if int(aid) != int(application_id):
+                    continue
+            except (TypeError, ValueError):
+                if str(aid) != str(application_id):
+                    continue
+
+            schedule = job_data.get('schedule', '')
+            job = {'id': job_id, **job_data}
+            job['tracked'] = bool(job_data.get('tracked', False))
+            job['schedule_human'] = (job_data.get('description')
+                                     or cls._describe_schedule(schedule))
+            job['next_run'] = cls._next_run(schedule)
+            cls._attach_run_tracking(job, job_id)
+            jobs.append(job)
+        return jobs
+
+    @classmethod
+    def _attach_run_tracking(cls, job: Dict, job_id: str):
+        """Fold the latest run summary onto a job dict (best-effort)."""
+        try:
+            from app.services.cron_run_service import CronRunService
+            stats = CronRunService.stats(job_id)
+            job['last_run'] = stats.get('last_run')
+            job['last_status'] = stats.get('last_status')
+            job['success_rate'] = stats.get('success_rate')
+        except Exception:  # noqa: BLE001 - run history is optional context
+            job.setdefault('last_run', None)
+            job.setdefault('last_status', None)
+
+    # ------------------------------------------------------------------ #
+    # Schedule preview (validate + humanize + next runs)
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def preview_schedule(cls, schedule: str, count: int = 5) -> Dict:
+        """Validate a cron schedule and return its human description + the next
+        `count` run times. Side-effect-free (computes over its input only)."""
+        schedule = (schedule or '').strip()
+        if not schedule:
+            return {'success': False, 'valid': False, 'error': 'Schedule is required'}
+        if not cls._validate_schedule(schedule):
+            return {'success': False, 'valid': False,
+                    'error': 'Invalid cron schedule format'}
+        human = cls._describe_schedule(schedule)
+        return {
+            'success': True,
+            'valid': True,
+            'schedule': schedule,
+            'human': human,
+            'description': human,
+            'next_runs': cls._next_runs(schedule, count),
+        }
+
+    @classmethod
+    def _next_runs(cls, schedule: str, count: int = 5) -> List[str]:
+        """Next `count` fire times for a schedule as ISO strings (best-effort)."""
+        try:
+            from croniter import croniter
+            base = datetime.now()
+            itr = croniter(schedule, base)
+            return [itr.get_next(datetime).isoformat() for _ in range(count)]
+        except Exception:  # noqa: BLE001 - preview is best-effort
+            return []
+
+    @classmethod
+    def _next_run(cls, schedule: str) -> Optional[str]:
+        runs = cls._next_runs(schedule, 1)
+        return runs[0] if runs else None

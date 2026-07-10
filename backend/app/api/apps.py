@@ -1,3 +1,6 @@
+# Bucket: PER-APP (plan 29 #9). Per-app routes gate on the shared app-access
+# seam via the file-local _can_access_app (reads) / _can_edit_app (writes)
+# helpers, or the hand-rolled owner-or-admin idiom; host/system ops stay admin.
 import os
 import json
 import re
@@ -1319,6 +1322,16 @@ def delete_app(app_id):
         'nginx': None
     }
 
+    # Appliance tier (plan 35): close any public firewall ports this app opened
+    # so a delete leaves no orphaned holes in the firewall.
+    try:
+        from app.services.app_port_service import AppPortService
+        declared_ports = AppPortService.get_ports(app)
+        if declared_ports:
+            cleanup_results['firewall'] = AppPortService.close_firewall(declared_ports)
+    except Exception as e:
+        cleanup_results['firewall'] = {'error': str(e)}
+
     # For Docker apps, stop and remove containers/volumes
     if app.app_type == 'docker' and app.root_path:
         try:
@@ -1463,9 +1476,12 @@ def apply_image_update(app_id):
 @apps_bp.route('/<int:app_id>/sleep-policy', methods=['GET'])
 @jwt_required()
 def get_sleep_policy(app_id):
+    user = User.query.get(get_jwt_identity())
     app = Application.query.get(app_id)
     if not app:
         return jsonify({'error': 'Application not found'}), 404
+    if not _can_access_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
     return jsonify(ContainerSleepService.get_or_create_policy(app_id).to_dict())
 
 
@@ -1720,9 +1736,12 @@ def purge_micro_cache(app_id):
 @apps_bp.route('/<int:app_id>/scale-policy', methods=['GET'])
 @jwt_required()
 def get_scale_policy(app_id):
+    user = User.query.get(get_jwt_identity())
     app = Application.query.get(app_id)
     if not app:
         return jsonify({'error': 'Application not found'}), 404
+    if not _can_access_app(user, app):
+        return jsonify({'error': 'Access denied'}), 403
     return jsonify(ContainerScaleService.get_or_create_policy(app_id).to_dict())
 
 

@@ -340,7 +340,23 @@ class Server(db.Model):
         'read', 'get', 'inspect', 'status', 'info',
         'search', 'logs', 'stats', 'available',
         'installed', 'current', 'show',
+        # Fleet doctor / survey probes are Observed-safe reads (plan 28 #7):
+        # they only discover host state, so they classify as reads and expand
+        # to `<ns>:read` rather than `<ns>:write`.
+        'probe', 'survey',
     }
+
+    @classmethod
+    def is_read_action(cls, action):
+        """Return True when an agent action is a non-mutating read.
+
+        Classified purely by the leaf verb: ``doctor:probe`` / ``systemd:status``
+        are reads (Observed-safe), while ``cron:update`` / ``systemd:restart``
+        are mutating. Used by the fleet doctor to decide whether a command may
+        run under the Observed (read-only) trust level.
+        """
+        parts = action.split(':')
+        return bool(parts) and parts[-1] in cls.READ_ACTION_VERBS
 
     @classmethod
     def _expand_permission_scope(cls, scope):

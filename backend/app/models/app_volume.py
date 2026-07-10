@@ -29,6 +29,7 @@ class AppVolume(db.Model):
     driver = db.Column(db.String(40), nullable=False, default='local')
     read_only = db.Column(db.Boolean, nullable=False, default=False)
     size_bytes = db.Column(db.BigInteger, nullable=True)      # denormalized last-measured size
+    declared_size = db.Column(db.String(40), nullable=True)   # operator/manifest-declared size cap, e.g. "10Gi" (plan 35)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

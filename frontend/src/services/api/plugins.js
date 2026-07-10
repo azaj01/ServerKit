@@ -9,10 +9,22 @@ export async function getPlugin(pluginId) {
     return this.request(`/plugins/${pluginId}`);
 }
 
-export async function installPlugin(url) {
-    return this.request('/plugins/install', {
+// Preview a GitHub/zip extension without installing. Returns the manifest
+// metadata (slug, version, permissions, panel gate), the resolved download URL,
+// its sha256, and any warnings — used to render the consent card.
+export async function previewPlugin(url) {
+    return this.request('/plugins/preview', {
         method: 'POST',
         body: JSON.stringify({ url }),
+    });
+}
+
+// Install a plugin from a URL. Pass `sha256` (from previewPlugin) to pin the
+// install to the exact previewed bytes.
+export async function installPlugin(url, sha256 = null) {
+    return this.request('/plugins/install', {
+        method: 'POST',
+        body: JSON.stringify(sha256 ? { url, sha256 } : { url }),
     });
 }
 
@@ -60,6 +72,29 @@ export async function disablePlugin(pluginId) {
 // `component` references against the right plugin module.
 export async function getPluginContributions() {
     return this.request('/plugins/contributions');
+}
+
+// Fetch a plugin frontend asset (e.g. a runtime ESM bundle) as raw bytes, with
+// auth. Used by the runtime loader (fetch → sha256 verify → blob-import). Unlike
+// request(), this returns the body verbatim (ArrayBuffer) instead of JSON-parsing
+// it, so the digest matches the backend's byte-for-byte sha256.
+export async function getPluginAssetBytes(slug, assetPath) {
+    const clean = String(assetPath)
+        .split('/')
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join('/');
+    const url = `${this.baseUrl}/plugins/${encodeURIComponent(slug)}/assets/${clean}`;
+    const token = this.getToken();
+    const resp = await fetch(url, {
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+    });
+    if (!resp.ok) {
+        const err = new Error(`Failed to fetch ${slug} asset ${assetPath} (${resp.status})`);
+        err.status = resp.status;
+        throw err;
+    }
+    return resp.arrayBuffer();
 }
 
 // Returns extensions bundled with the repo at builtin-extensions/.

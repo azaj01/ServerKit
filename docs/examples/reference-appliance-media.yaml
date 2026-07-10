@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://serverkit.dev/serverkit-yaml.schema.json
+#
+# Reference appliance (plan 35 #17): a real-time video-meeting stack — the shape
+# the manifest exists to hold honestly. It exercises every appliance-tier
+# feature at once:
+#
+#   * a multi-container UNIT (web + signaling + focus + media bridge)
+#   * a PUBLIC UDP media port (the WebRTC/SFU escape hatch)
+#   * a web frontend served BEHIND NGINX (a loopback `local` port + a domain)
+#   * a config-generating first-boot BOOTSTRAP (run once)
+#   * SHARED DISKS, one of them backed up
+#   * a health-gated DEPENDSON chain
+#   * fromServer PUBLIC IP (what a media bridge must advertise behind NAT)
+#
+# It applies end-to-end on the panel host. Point the images at whatever
+# real-time stack you run; the shape is what matters.
+version: 1
+project: media-stack
+
+services:
+  - name: meet
+    type: docker
+    containers:
+      web:
+        image: jitsi/web:stable
+        # served behind nginx — a loopback bind + the domain below, NOT a raw
+        # public publish
+        ports:
+          - { port: 8443, containerPort: 443, expose: local }
+        envVars:
+          - { key: PUBLIC_URL, value: "https://meet.example.com" }
+        dependsOn:
+          - { service: prosody, condition: healthy }
+        healthCheck: { httpPath: /, interval: 30s, retries: 5 }
+        disks:
+          - name: web-config
+            mountPath: /config
+            size: 1GB
+            backup: { schedule: daily, retain: 7 }
+
+      prosody:
+        image: jitsi/prosody:stable
+        # generates its certificate/config tree exactly once
+        bootstrap: { command: "/opt/bootstrap/generate-config.sh", timeoutSeconds: 120 }
+        healthCheck: { cmd: "prosodyctl status", interval: 15s, retries: 5 }
+        disks:
+          - { name: prosody-config, mountPath: /config, size: 1GB }
+
+      jicofo:
+        image: jitsi/jicofo:stable
+        dependsOn:
+          - { service: prosody, condition: healthy }
+
+      jvb:
+        image: jitsi/jvb:stable
+        # the media bridge: one PUBLIC UDP port, and it must advertise the
+        # host's public IP to clients behind NAT
+        ports:
+          - { port: 10000, protocol: udp, expose: public }
+        envVars:
+          - { key: JVB_ADVERTISE_IP, fromServer: { property: publicIp } }
+        dependsOn:
+          - { service: prosody, condition: healthy }
+
+domains:
+  - host: meet.example.com
+    service: meet
+    ssl: auto

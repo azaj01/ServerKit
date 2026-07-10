@@ -340,6 +340,10 @@ def create_app(config_name=None):
     from app.api.servers import servers_bp
     app.register_blueprint(servers_bp, url_prefix='/api/v1/servers')
 
+    # Register blueprints - Server Survey (read-only "flights" over a paired agent)
+    from app.api.survey import survey_bp
+    app.register_blueprint(survey_bp, url_prefix='/api/v1/servers')
+
     # Register blueprints - Fleet Monitor (Cross-server monitoring)
     from app.api.fleet_monitor import fleet_monitor_bp
     app.register_blueprint(fleet_monitor_bp, url_prefix='/api/v1/fleet-monitor')
@@ -373,6 +377,14 @@ def create_app(config_name=None):
     from app.api.dns_zones import dns_zones_bp
     app.register_blueprint(dns_zones_bp, url_prefix='/api/v1/dns')
 
+    # Register blueprints - Reversible DNS cutover (snapshot/cutover/verify/revert
+    # a migration's DNS switch; backs the /domains cutover drawer)
+    from app.api.dns_cutover import dns_cutover_bp
+    app.register_blueprint(dns_cutover_bp, url_prefix='/api/v1/dns-cutover')
+
+    from app.api.setup_health import setup_health_bp
+    app.register_blueprint(setup_health_bp, url_prefix='/api/v1/setup-health')
+
     # Register blueprints - Cloudflare operations (zone settings/cache/WAF on top
     # of the existing Cloudflare DNS connection)
     # Cloudflare zone-ops moved into the bundled, default-installed
@@ -401,9 +413,10 @@ def create_app(config_name=None):
     from app.api.waf import waf_bp
     app.register_blueprint(waf_bp, url_prefix='/api/v1/waf')
 
-    # Register blueprints - GPU monitoring
-    from app.api.gpu import gpu_bp
-    app.register_blueprint(gpu_bp, url_prefix='/api/v1/gpu')
+    # GPU monitoring moved to the serverkit-gpu builtin extension (plan 32 #7,
+    # first CORE_SLIM slice). Its blueprint now mounts at /api/v1/gpu via the
+    # builtin-extensions loader; the core app.api.gpu / app.services.gpu_service
+    # modules were removed.
 
     # Register blueprints - Nginx Advanced
     from app.api.nginx_advanced import nginx_advanced_bp

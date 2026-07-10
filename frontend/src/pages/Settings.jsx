@@ -156,7 +156,6 @@ const Settings = () => {
                                     </Button>
                                 </>
                             )}
-                            <div className="settings-nav-spacer" />
                             <Button
                                 variant="ghost"
                                 className={`settings-nav-item ${activeTab === 'about' ? 'active' : ''}`}

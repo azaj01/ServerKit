@@ -26,18 +26,24 @@ def list_jobs():
         return jsonify({'error': 'Admin access required'}), 403
     try:
         limit = min(int(request.args.get('limit', 50)), 200)
-        offset = int(request.args.get('offset', 0))
+        offset = max(int(request.args.get('offset', 0)), 0)
     except (TypeError, ValueError):
         limit, offset = 50, 0
-    jobs = JobService.list(
-        status=request.args.get('status'),
-        kind=request.args.get('kind'),
-        owner_type=request.args.get('owner_type'),
-        owner_id=request.args.get('owner_id'),
-        limit=limit,
-        offset=offset,
-    )
-    return jsonify({'jobs': [j.to_dict() for j in jobs]})
+    filters = {
+        'status': request.args.get('status'),
+        'kind': request.args.get('kind'),
+        'owner_type': request.args.get('owner_type'),
+        'owner_id': request.args.get('owner_id'),
+        'q': request.args.get('q'),
+    }
+    jobs = JobService.list(limit=limit, offset=offset, **filters)
+    total = JobService.count(**filters)
+    return jsonify({
+        'jobs': [j.to_dict() for j in jobs],
+        'total': total,
+        'limit': limit,
+        'offset': offset,
+    })
 
 
 @jobs_bp.route('/stats', methods=['GET'])

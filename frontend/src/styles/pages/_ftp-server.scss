@@ -6,15 +6,20 @@
 
 .ftp-server {
 
-    // ─── KPI strip (replaces the old StatStrip) ─────────
+    // ─── KPI strip (status / active server / users / connections) ───
+    // Rule was lost in the recovery rebuild, so the tiles stacked full-width.
     .ftp-kpis {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: $space-4;
-        margin: $space-5 0 $space-4;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: $space-5;
 
-        @media (max-width: $breakpoint-lg) { grid-template-columns: repeat(2, 1fr); }
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
+        @media (max-width: 1100px) {
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        }
+        @media (max-width: 560px) {
+            grid-template-columns: 1fr 1fr;
+        }
     }
 
     // ─── Mono eyebrow section headers (Users / Connections / Logs) ───

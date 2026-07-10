@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import api from '../../services/api';
 import { Button } from '@/components/ui/button';
-import { Pill, ScoreGauge } from '@/components/ds';
+import { Pill, ScoreGauge, KpiBand, MetricCard } from '@/components/ds';
 import {
     ShieldCheck,
     RefreshCw,
@@ -126,7 +126,7 @@ const OverviewTab = ({ status, clamavStatus, clamavLoading, onRefresh, onNavigat
     const kpis = [
         { key: 'alerts', icon: Siren, value: alerts.total || 0, label: 'Alerts · 24h', tone: alerts.total > 0 ? 'amber' : 'green' },
         { key: 'malware', icon: Bug, value: alerts.malware_detections || 0, label: 'Malware', tone: alerts.malware_detections > 0 ? 'red' : 'green' },
-        { key: 'scan', icon: Radar, value: capitalize(status?.scan_status) || 'Idle', label: 'Scan', tone: scanRunning ? 'cyan' : 'muted', text: true },
+        { key: 'scan', icon: Radar, value: capitalize(status?.scan_status) || 'Idle', label: 'Scan', tone: scanRunning ? 'cyan' : 'accent' },
     ];
 
     const defsUpdated = clamavStatus?.last_update ? new Date(clamavStatus.last_update).toLocaleDateString() : null;
@@ -162,18 +162,20 @@ const OverviewTab = ({ status, clamavStatus, clamavLoading, onRefresh, onNavigat
                                         ? 'All hardening checks pass.'
                                         : `${warnCount} ${warnCount === 1 ? 'check needs' : 'checks need'} attention.`}
                             </p>
-                            <div className="sec-posture__kpis">
+                            <KpiBand dense className="sec-posture__kpis">
                                 {kpis.map((k) => {
                                     const Icon = k.icon;
                                     return (
-                                        <div key={k.key} className={`sec-kpi sec-kpi--${k.tone}`}>
-                                            <Icon size={13} className="sec-kpi__icon" />
-                                            <span className={`sec-kpi__val${k.text ? ' sec-kpi__val--text' : ''}`}>{k.value}</span>
-                                            <span className="sec-kpi__label">{k.label}</span>
-                                        </div>
+                                        <MetricCard
+                                            key={k.key}
+                                            icon={<Icon size={16} />}
+                                            tone={k.tone}
+                                            value={k.value}
+                                            label={k.label}
+                                        />
                                     );
                                 })}
-                            </div>
+                            </KpiBand>
                         </div>
                     </div>
 

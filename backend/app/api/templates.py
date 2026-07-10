@@ -1,3 +1,5 @@
+# Bucket: PER-APP (plan 29 #9). The per-app template routes gate on the shared
+# app-access seam; catalog browsing/installation stays panel-authed.
 """
 Template API Endpoints
 

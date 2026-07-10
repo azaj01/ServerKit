@@ -1,3 +1,6 @@
+# Bucket: PER-APP (plan 29 #9). Deploy config reads/writes gate on the shared
+# app-access seam (can_access_app / can_edit_app); the public inbound webhook is
+# token/signature-verified (ALLOWLISTed — no per-app user session).
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.middleware.rbac import admin_required

@@ -1,0 +1,172 @@
+// ============================================
+// SETUP HEALTH — dashboard widget
+// Compact "how set-up is this panel" card: score + top open items, each
+// deep-linking to its fix. Collapses to a slim "all set" line when clean.
+// ============================================
+
+.setup-health-widget {
+    grid-column: span 6;
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+    padding: $space-4;
+    border: 1px solid var(--border-soft, #{$border-default});
+    border-radius: var(--radius, #{$radius-lg});
+    background: var(--surface, #{$bg-card});
+    min-width: 0;
+
+    &__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-2;
+    }
+
+    &__title {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: 13px;
+        font-weight: 600;
+        color: $text-primary;
+    }
+
+    &__score {
+        font-size: 18px;
+        font-weight: 700;
+        color: $text-primary;
+        font-variant-numeric: tabular-nums;
+    }
+
+    &__summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+    }
+
+    &__list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: $space-1;
+    }
+
+    &__item {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        padding: $space-2 $space-2;
+        border: 0;
+        border-radius: $radius-md;
+        background: transparent;
+        color: $text-primary;
+        text-align: left;
+        cursor: pointer;
+        transition: background 0.12s ease;
+
+        &:hover {
+            background: var(--bg-hover, #{$bg-hover});
+        }
+    }
+
+    &__itemtitle {
+        flex: 1;
+        min-width: 0;
+        font-size: 12.5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__more {
+        align-self: flex-start;
+        border: 0;
+        background: transparent;
+        color: $primary-color;
+        font-size: 12px;
+        cursor: pointer;
+        padding: 0;
+
+        &:hover { text-decoration: underline; }
+    }
+
+    &__muted {
+        margin: 0;
+        font-size: 12px;
+        color: $text-tertiary;
+    }
+
+    // Slim "all set" state — a single clickable line, not a dead card.
+    &--clean {
+        flex-direction: row;
+        align-items: center;
+        gap: $space-2;
+        cursor: pointer;
+        color: $success;
+        font-size: 12.5px;
+        font-weight: 500;
+
+        &:hover {
+            border-color: var(--border-default, #{$border-default});
+        }
+    }
+
+    &__cleanlabel {
+        flex: 1;
+        color: $text-secondary;
+    }
+}
+
+@media (max-width: $breakpoint-md) {
+    .setup-health-widget { grid-column: span 12; }
+}
+
+// Per-user "secure your account" nudge banner (dashboard top).
+.account-security-nudge {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    margin-bottom: $space-4;
+    border: 1px solid var(--warning-border, rgba(245, 179, 66, 0.35));
+    border-radius: var(--radius, #{$radius-lg});
+    background: var(--warning-bg, rgba(245, 179, 66, 0.08));
+
+    &__icon {
+        color: $warning;
+        flex-shrink: 0;
+    }
+
+    &__body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    &__title {
+        font-size: 13px;
+        font-weight: 600;
+        color: $text-primary;
+    }
+
+    &__detail {
+        font-size: 12px;
+        color: $text-secondary;
+    }
+
+    &__close {
+        border: 0;
+        background: transparent;
+        color: $text-tertiary;
+        cursor: pointer;
+        padding: $space-1;
+        display: inline-flex;
+
+        &:hover { color: $text-primary; }
+    }
+}

@@ -40,7 +40,7 @@ class ConnectionRegistry:
     @classmethod
     def list_all(cls, user_id=None):
         out = []
-        for fn in (cls._source, cls._dns, cls._infra, cls._registrar, cls._storage, cls._email, cls._registries):
+        for fn in (cls._source, cls._dns, cls._infra, cls._registrar, cls._storage, cls._email, cls._chat, cls._registries):
             try:
                 out += fn(user_id) if fn is cls._source else fn()
             except Exception as e:  # one failing store never breaks the whole list
@@ -100,6 +100,18 @@ class ConnectionRegistry:
             if c.is_default:
                 scope += ' · default'
             out.append(_entry('email', c.provider, c.name, id=c.id, scope=scope,
+                              encrypted=True, created_at=c.created_at))
+        return out
+
+    @staticmethod
+    def _chat():
+        from app.models.chat_webhook import ChatWebhookConnection
+        out = []
+        for c in ChatWebhookConnection.query.all():
+            scope = ', '.join(c.categories()) if c.categories() else 'All categories'
+            if c.is_default:
+                scope += ' · default'
+            out.append(_entry('chat', c.kind, c.name, id=c.id, scope=scope,
                               encrypted=True, created_at=c.created_at))
         return out
 

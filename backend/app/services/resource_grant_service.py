@@ -58,6 +58,24 @@ class ResourceGrantService:
         return ResourceGrantService.grant_role(user.id, 'application', app.id) == 'editor'
 
     @staticmethod
+    def can_operate_app(user, app):
+        """Operate (member+) access to an application. Folds every path to the
+        app into one capability tier (see rbac.app_access_tier) and admits
+        anyone at 'member' or above: owner, panel admin, an editor grant, or a
+        workspace member/admin/owner. The member-write seam (plan 19 Phase 4)."""
+        from app.middleware.rbac import app_access_tier, _APP_ROLE_RANK
+        tier = app_access_tier(user, app)
+        return tier is not None and _APP_ROLE_RANK[tier] >= _APP_ROLE_RANK['member']
+
+    @staticmethod
+    def can_admin_app(user, app):
+        """Administer (admin+) access to an application: panel admin, the app
+        owner, or a workspace admin/owner. Grants never confer admin."""
+        from app.middleware.rbac import app_access_tier, _APP_ROLE_RANK
+        tier = app_access_tier(user, app)
+        return tier is not None and _APP_ROLE_RANK[tier] >= _APP_ROLE_RANK['admin']
+
+    @staticmethod
     def list_for_resource(resource_type, resource_id):
         from app.models.workspace import ResourceGrant
         return ResourceGrant.query.filter_by(

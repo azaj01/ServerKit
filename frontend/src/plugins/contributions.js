@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import pluginsManifest from './plugins-manifest.json';
+import { loadRuntimeFrontends, getRuntimeModule } from './runtime/loader';
 
 // Discover every plugin module at build time. Each plugin is expected to
 // expose its components from src/plugins/<slug>/index.{js,jsx}.
@@ -53,7 +54,8 @@ const localManifestBySlug = (() => {
 })();
 
 export function getPluginModule(slug) {
-    return moduleBySlug[slug] || null;
+    // Build-time (baked) module first, then a runtime-loaded bundle (Decision 4).
+    return moduleBySlug[slug] || getRuntimeModule(slug) || null;
 }
 
 // Resolve a contribution's `component` string to an actual React component.
@@ -62,7 +64,9 @@ export function getPluginModule(slug) {
 //   - "Foo"      → mod.Foo (named export)
 // Returns null if no match; caller decides whether to skip + warn.
 export function resolveComponent(slug, name) {
-    const mod = moduleBySlug[slug];
+    // Baked module (build-time glob) first; fall back to a runtime-loaded
+    // bundle's namespace (Decision 4). Same name-matching for both.
+    const mod = moduleBySlug[slug] || getRuntimeModule(slug);
     if (!mod) return null;
     if (!name || name === 'default') return mod.default || null;
     return mod[name] || null;
@@ -84,6 +88,10 @@ const EMPTY = {
     // tool-result renderers. Consumed by the core AIAssistant via
     // useContributions().ai.
     ai: { suggested_prompts: [], tool_renderers: [] },
+    // Runtime-frontend descriptor map { slug: { entry, hashes } } (plan 25).
+    // Present only for installed extensions shipping a prebuilt ESM bundle;
+    // empty for baked builtins and when the kill switch is off.
+    frontends: {},
 };
 
 // Merge a raw contribution envelope onto the empty shape so every
@@ -188,8 +196,15 @@ function notify(value) {
 
 export function refreshContributions() {
     cachedPromise = api.getPluginContributions()
-        .then((data) => {
+        .then(async (data) => {
             const merged = normalizeContributions({ ...EMPTY, ...(data || {}) });
+            // Load any runtime ESM bundles BEFORE notifying, so contributed
+            // routes render with their components already available (fail-soft:
+            // a bundle that can't load records an error state, never throws).
+            // Pass the panel's SDK version so the loader can refuse a bundle
+            // built against an incompatible SDK before fetching it (plan 32 #1).
+            await loadRuntimeFrontends(
+                merged.frontends, merged.panel_sdk_version || merged.sdk_version);
             notify(merged);
             return merged;
         })

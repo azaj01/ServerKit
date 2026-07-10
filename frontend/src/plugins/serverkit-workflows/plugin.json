@@ -2,7 +2,7 @@
   "name": "serverkit-workflows",
   "display_name": "Workflow Builder",
   "version": "1.0.0",
-  "description": "Visual automation builder — chain deploy, build, and notification steps into pipelines on a drag-and-drop canvas.",
+  "description": "Visual automation builder. Chain deploy, build, and notification steps into pipelines on a drag-and-drop canvas.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "deployment",

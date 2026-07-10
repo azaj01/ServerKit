@@ -14,6 +14,7 @@ import useMediaQuery from '../hooks/useMediaQuery';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import api from '../services/api';
 import SystemNotices from '../components/SystemNotices';
+import StagingBanner from '../components/StagingBanner';
 
 // /workflow is contributed by the serverkit-workflows extension with
 // layout:'full', so it's picked up dynamically via fullPagePaths below.
@@ -82,6 +83,7 @@ const DashboardLayout = () => {
             <AIProvider>
             <ConfirmProvider>
             <div className="dashboard-layout">
+                <StagingBanner />
                 <MobileTopBar navOpen={navOpen} onToggle={() => setNavOpen(prev => !prev)} />
                 <Sidebar
                     mobileOpen={navOpen}

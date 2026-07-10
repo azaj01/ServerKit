@@ -18,12 +18,29 @@ const SEVERITY_DOT = {
 
 const PAGE_SIZE = 25;
 
+const CATEGORY_CHIPS = [
+    { key: '', label: 'All categories' },
+    { key: 'system', label: 'System' },
+    { key: 'security', label: 'Security' },
+    { key: 'backups', label: 'Backups' },
+    { key: 'apps', label: 'Apps' },
+];
+const SEVERITY_CHIPS = [
+    { key: '', label: 'Any' },
+    { key: 'critical', label: 'Critical' },
+    { key: 'warning', label: 'Warning' },
+    { key: 'success', label: 'Success' },
+    { key: 'info', label: 'Info' },
+];
+
 export default function Notifications() {
     const navigate = useNavigate();
     const { isAdmin } = useAuth();
     const { refresh: refreshBell, items: ctxItems = [], dismissNotice } = useNotifications() || {};
     const [items, setItems] = useState([]);
     const [unreadOnly, setUnreadOnly] = useState(false);
+    const [category, setCategory] = useState('');
+    const [severity, setSeverity] = useState('');
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState(false);
@@ -31,7 +48,10 @@ export default function Notifications() {
     const fetchPage = useCallback(async (startOffset, replace) => {
         setLoading(true);
         try {
-            const data = await api.getInbox({ limit: PAGE_SIZE, offset: startOffset, unread: unreadOnly });
+            const data = await api.getInbox({
+                limit: PAGE_SIZE, offset: startOffset, unread: unreadOnly,
+                category: category || undefined, severity: severity || undefined,
+            });
             const fresh = data.items || [];
             setItems((prev) => (replace ? fresh : [...prev, ...fresh]));
             setUnreadCount(data.unread_count || 0);
@@ -41,25 +61,30 @@ export default function Notifications() {
         } finally {
             setLoading(false);
         }
-    }, [unreadOnly]);
+    }, [unreadOnly, category, severity]);
 
     useEffect(() => { fetchPage(0, true); }, [fetchPage]);
 
     const onItemClick = async (item) => {
-        if (item.read) return;
-        setItems((prev) => prev.map((it) => (
-            it.delivery_id === item.delivery_id ? { ...it, read: true } : it
-        )));
-        setUnreadCount((c) => Math.max(0, c - 1));
-        try { await api.markNotificationRead(item.delivery_id); } catch { /* reconciled on reload */ }
-        if (refreshBell) refreshBell();
+        if (!item.read) {
+            setItems((prev) => prev.map((it) => (
+                it.delivery_id === item.delivery_id ? { ...it, read: true } : it
+            )));
+            setUnreadCount((c) => Math.max(0, c - 1));
+            try { await api.markNotificationRead(item.delivery_id); } catch { /* reconciled on reload */ }
+            if (refreshBell) refreshBell();
+        }
+        // Deep link to the notification's subject (whole-row click).
+        if (item.action_path) navigate(item.action_path);
     };
 
     const onMarkAll = async () => {
+        // When a category filter is active, mark just that group read.
         setItems((prev) => prev.map((it) => ({ ...it, read: true })));
-        setUnreadCount(0);
-        try { await api.markAllNotificationsRead(); } catch { /* reconciled on reload */ }
+        setUnreadCount((c) => (category ? Math.max(0, c - items.filter((it) => !it.read).length) : 0));
+        try { await api.markAllNotificationsRead(category || null); } catch { /* reconciled on reload */ }
         if (refreshBell) refreshBell();
+        fetchPage(0, true);
     };
 
     // Live system notices (admin config hints) come from the shared context so they
@@ -80,7 +105,7 @@ export default function Notifications() {
                             </Button>
                         )}
                         <Button variant="outline" size="sm" onClick={onMarkAll} disabled={!unreadCount}>
-                            <CheckCheck size={15} /> Mark all read
+                            <CheckCheck size={15} /> {category ? `Mark ${category} read` : 'Mark all read'}
                         </Button>
                     </>
                 )}
@@ -106,6 +131,33 @@ export default function Notifications() {
                     >
                         Unread
                     </button>
+                </div>
+
+                <div className="sk-notif-page__chips">
+                    <div className="sk-notif-chipset" aria-label="Filter by category">
+                        {CATEGORY_CHIPS.map((c) => (
+                            <button
+                                type="button"
+                                key={c.key || 'all'}
+                                className={`sk-notif-chip${category === c.key ? ' is-active' : ''}`}
+                                onClick={() => setCategory(c.key)}
+                            >
+                                {c.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="sk-notif-chipset" aria-label="Filter by severity">
+                        {SEVERITY_CHIPS.map((s) => (
+                            <button
+                                type="button"
+                                key={s.key || 'any'}
+                                className={`sk-notif-chip sk-notif-chip--sev${severity === s.key ? ' is-active' : ''}`}
+                                onClick={() => setSeverity(s.key)}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {loading && items.length === 0 && noticeItems.length === 0 ? (
@@ -148,7 +200,7 @@ export default function Notifications() {
                         {items.map((item) => (
                             <li
                                 key={item.delivery_id}
-                                className={`sk-notif-row${item.read ? '' : ' is-unread'}`}
+                                className={`sk-notif-row${item.read ? '' : ' is-unread'}${item.action_path ? ' is-linked' : ''}`}
                                 onClick={() => onItemClick(item)}
                             >
                                 <span
@@ -159,6 +211,9 @@ export default function Notifications() {
                                 <div className="sk-notif-row__body">
                                     <div className="sk-notif-row__title">{item.title}</div>
                                     {item.body && <div className="sk-notif-row__text">{item.body}</div>}
+                                    {item.action_path && (
+                                        <div className="sk-notif-row__action">{item.action_label || 'Open'} →</div>
+                                    )}
                                 </div>
                                 <span className="sk-notif-row__time">{timeAgo(item.created_at)}</span>
                             </li>

@@ -23,10 +23,12 @@ import {
 const VALID_TABS = ['logs', 'journal', 'processes', 'services', 'shell'];
 
 // Section tabs rendered inline in the PageTopbar (Servers-style), routed via
-// /terminal/<tab>. Logs is the default landing (/terminal).
+// /terminal/<tab>. Log Files is the default landing (/terminal) — it needs no
+// paired agent — so it's listed first, keeping the highlighted tab and the
+// landing view in sync. The interactive Terminal sits next.
 const TERMINAL_TABS = [
-    { to: '/terminal/shell', label: 'Terminal', icon: <TerminalIcon size={15} /> },
     { to: '/terminal', label: 'Log Files', end: true, icon: <FileText size={15} /> },
+    { to: '/terminal/shell', label: 'Terminal', icon: <TerminalIcon size={15} /> },
     { to: '/terminal/journal', label: 'System Journal', icon: <ScrollText size={15} /> },
     { to: '/terminal/processes', label: 'Processes', icon: <Cpu size={15} /> },
     { to: '/terminal/services', label: 'Services', icon: <Settings size={15} /> },

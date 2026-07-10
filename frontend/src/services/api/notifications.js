@@ -8,6 +8,8 @@ export async function getInbox(params = {}) {
     if (params.limit) query.append('limit', params.limit);
     if (params.offset) query.append('offset', params.offset);
     if (params.unread) query.append('unread', '1');
+    if (params.category) query.append('category', params.category);
+    if (params.severity) query.append('severity', params.severity);
     const suffix = query.toString() ? `?${query}` : '';
     return this.request(`/notifications/inbox${suffix}`);
 }
@@ -20,8 +22,58 @@ export async function markNotificationRead(deliveryId) {
     return this.request(`/notifications/inbox/${deliveryId}/read`, { method: 'POST' });
 }
 
-export async function markAllNotificationsRead() {
-    return this.request('/notifications/inbox/read-all', { method: 'POST' });
+export async function markAllNotificationsRead(category = null) {
+    const suffix = category ? `?category=${encodeURIComponent(category)}` : '';
+    return this.request(`/notifications/inbox/read-all${suffix}`, { method: 'POST' });
+}
+
+// --- Event catalog + org defaults (preference depth) ---
+
+export async function getNotificationCatalog() {
+    return this.request('/notifications/catalog');
+}
+
+export async function getOrgNotificationDefaults() {
+    return this.request('/notifications/admin/defaults');
+}
+
+export async function updateOrgNotificationDefaults(defaults) {
+    return this.request('/notifications/admin/defaults', {
+        method: 'PUT',
+        body: JSON.stringify({ defaults }),
+    });
+}
+
+// --- Org chat/webhook connections (admin) ---
+
+export async function getChatConnections() {
+    return this.request('/notifications/admin/chat-connections');
+}
+
+export async function addChatConnection(data) {
+    return this.request('/notifications/admin/chat-connections', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+export async function updateChatConnection(connectionId, data) {
+    return this.request(`/notifications/admin/chat-connections/${connectionId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    });
+}
+
+export async function testChatConnection(connectionId) {
+    return this.request(`/notifications/admin/chat-connections/${connectionId}/test`, { method: 'POST' });
+}
+
+export async function setDefaultChatConnection(connectionId) {
+    return this.request(`/notifications/admin/chat-connections/${connectionId}/default`, { method: 'POST' });
+}
+
+export async function deleteChatConnection(connectionId) {
+    return this.request(`/notifications/admin/chat-connections/${connectionId}`, { method: 'DELETE' });
 }
 
 // --- Delivery log / ops (admin) ---

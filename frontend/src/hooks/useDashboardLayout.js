@@ -3,6 +3,8 @@ import { useState, useCallback } from 'react';
 const STORAGE_KEY = 'dashboard_layout';
 
 const DEFAULT_WIDGETS = [
+    // Admin-only: renders nothing for non-admins (see Dashboard WIDGET_RENDERERS).
+    { id: 'setup-health', label: 'Setup Health', visible: true },
     { id: 'cpu', label: 'CPU', visible: true },
     { id: 'ram', label: 'RAM', visible: true },
     { id: 'network', label: 'Network', visible: true },

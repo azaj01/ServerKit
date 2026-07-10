@@ -1,3 +1,6 @@
+# Bucket: PER-APP (plan 29 #9). Snapshot reads (list/get/diff) require app
+# access (can_access_app); restore requires write access (can_edit_app) on top
+# of the panel-wide @developer_required.
 """
 Deployment config snapshot API.
 
@@ -14,15 +17,23 @@ from app.middleware.rbac import developer_required, get_current_user
 from app.models.application import Application
 from app.models.deployment_snapshot import DeploymentSnapshot
 from app.services.configuration_service import ConfigurationService
+from app.services.resource_grant_service import ResourceGrantService
 
 snapshots_bp = Blueprint('snapshots', __name__)
 
 
-def _get_app_or_404(app_id):
-    """Return (app, None) or (None, error_response)."""
+def _get_app_or_404(app_id, write=False):
+    """Resolve the app and enforce per-app access (plan 29 #9). ``write`` requires
+    can_edit_app (owner/admin/editor); otherwise can_access_app. A caller without
+    the needed tier gets a 403 (the resource itself exists)."""
     app = Application.query.get(app_id)
     if not app:
         return None, (jsonify({'error': 'Application not found'}), 404)
+    user = get_current_user()
+    ok = (ResourceGrantService.can_edit_app(user, app) if write
+          else ResourceGrantService.can_access_app(user, app))
+    if not ok:
+        return None, (jsonify({'error': 'Access denied'}), 403)
     return app, None
 
 
@@ -134,7 +145,7 @@ def diff_snapshot(app_id, snap_id):
 @developer_required
 def restore_snapshot(app_id, snap_id):
     """Restore a snapshot's config (env/domains) and trigger a redeploy."""
-    _, err = _get_app_or_404(app_id)
+    _, err = _get_app_or_404(app_id, write=True)
     if err:
         return err
     snap, err = _get_snapshot_or_404(app_id, snap_id)

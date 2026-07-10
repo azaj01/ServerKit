@@ -1,3 +1,6 @@
+# Bucket: PER-APP (plan 29 #9). The per-app docker DB read (/docker/app/<app_id>)
+# gates on can_access_app; the bare-container docker routes have no app linkage
+# and are system-level admin-only, matching their kill/drop siblings.
 import logging
 
 from flask import Blueprint, request, jsonify
@@ -627,6 +630,7 @@ def get_sqlite_tables():
 
 @databases_bp.route('/docker', methods=['GET'])
 @jwt_required()
+@admin_required
 def list_docker_databases():
     """List all databases running in Docker containers.
 
@@ -709,6 +713,7 @@ def get_app_databases(app_id):
 
 @databases_bp.route('/docker/<container>/databases', methods=['GET'])
 @jwt_required()
+@admin_required
 def list_docker_container_databases(container):
     """List databases in a Docker MySQL container."""
     user = request.args.get('user', 'root')
@@ -720,6 +725,7 @@ def list_docker_container_databases(container):
 
 @databases_bp.route('/docker/<container>/<database>/tables', methods=['GET'])
 @jwt_required()
+@admin_required
 def get_docker_database_tables(container, database):
     """Get tables in a Docker MySQL database."""
     user = request.args.get('user', 'root')
@@ -735,6 +741,7 @@ def get_docker_database_tables(container, database):
 
 @databases_bp.route('/docker/<container>/<database>/query', methods=['POST'])
 @jwt_required()
+@admin_required
 def execute_docker_query(container, database):
     """Execute a query on a Docker MySQL database.
 
@@ -957,6 +964,7 @@ def kill_host_db_process(engine, pid):
 
 @databases_bp.route('/docker/<container>/processes', methods=['GET'])
 @jwt_required()
+@admin_required
 def list_docker_db_processes(container):
     """List live server processes inside a Docker database container."""
     target = {

@@ -1,6 +1,13 @@
+"""GPU Monitor API endpoints (serverkit-gpu extension).
+
+Mounted under ``/api/v1/gpu`` via the manifest's ``entry_point`` + ``url_prefix``
+(the same prefix the core route used, so the frontend is unchanged — decision D9).
+Thin routing layer over :class:`GpuService`; read-only metrics, JWT-protected.
+"""
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from app.services.gpu_service import GpuService
+
+from .gpu_service import GpuService
 
 gpu_bp = Blueprint('gpu', __name__)
 

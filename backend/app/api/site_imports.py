@@ -29,6 +29,23 @@ def upload_archive():
     return jsonify({'upload_path': upload_path}), 201
 
 
+@site_imports_bp.route('/ssh/probe', methods=['POST'])
+@admin_required
+def probe_ssh_source():
+    """Preflight an SSH import source: test the connection, list the docroot,
+    sniff the stack (plan 31 #8). Linux-only runtime — returns 501 on a host
+    that can't run ssh (e.g. Windows dev) so the wizard can message it."""
+    data = request.get_json(silent=True) or {}
+    source = data.get('source') or data
+    try:
+        result = SiteImportService.probe_ssh(source)
+    except SiteImportError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc), 'code': 'LINUX_ONLY'}), 501
+    return jsonify(result), 200
+
+
 @site_imports_bp.route('', methods=['POST'])
 @admin_required
 def create_import():

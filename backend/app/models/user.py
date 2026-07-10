@@ -45,6 +45,10 @@ class User(db.Model):
     # Sidebar preferences: { preset: 'full'|'web'|'email'|'devops'|'minimal'|'custom', hiddenItems: [...] }
     sidebar_config = db.Column(db.Text, nullable=True)
 
+    # Per-user Setup Health item snoozes: JSON { item_key: iso_expiry } (plan 22
+    # Phase 6). Panel-item snoozes live in a SettingsService map instead.
+    setup_snoozes = db.Column(db.Text, nullable=True)
+
     # Relationships
     applications = db.relationship('Application', backref='owner', lazy='dynamic')
 

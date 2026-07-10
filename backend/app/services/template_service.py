@@ -205,7 +205,9 @@ class TemplateService:
     # Matches ``${SERVICE_...}`` magic tokens specifically (a subset of the
     # generic ``${VAR}`` substitution pattern). ``<NAME>`` may be empty-safe:
     # we require at least one trailing char after the prefix.
-    MAGIC_TOKEN_PATTERN = r'\$\{(SERVICE_(?:PASSWORD|USER|FQDN|URL|BASE64)_[A-Z0-9_]+)\}'
+    MAGIC_TOKEN_PATTERN = (
+        r'\$\{(SERVICE_(?:PASSWORD|USER|FQDN|URL|BASE64)_[A-Z0-9_]+|SERVER_PUBLIC_IP)\}'
+    )
 
     # Default password length for magic SERVICE_PASSWORD_* tokens.
     MAGIC_PASSWORD_LENGTH = 32
@@ -214,6 +216,8 @@ class TemplateService:
     def _classify_magic_token(cls, token: str):
         """Return ``(kind, name)`` for a bare magic token (no ``${}``), or
         ``(None, None)`` if it is not a recognized magic variable."""
+        if token == 'SERVER_PUBLIC_IP':  # appliance tier (plan 35), no name suffix
+            return 'server_public_ip', ''
         for prefix, kind in cls.MAGIC_PREFIXES:
             if token.startswith(prefix):
                 return kind, token[len(prefix):]
@@ -259,6 +263,15 @@ class TemplateService:
             scheme = str(context.get('scheme') or 'http')
             host = context.get('fqdn') or context.get('app_name') or 'localhost'
             return f'{scheme}://{host}'
+        if kind == 'server_public_ip':
+            ip = context.get('server_public_ip')
+            if not ip:
+                try:
+                    from app.services.site_domain_service import SiteDomainService
+                    ip = SiteDomainService.server_ip()
+                except Exception:
+                    ip = None
+            return str(ip or '')
         return ''
 
     @classmethod

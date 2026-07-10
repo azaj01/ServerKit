@@ -56,6 +56,7 @@
 @import 'components/_query-runner';
 @import 'components/_deploy';
 @import 'components/_git-connect';
+@import 'components/_docs-link';
 @import 'components/_build';
 @import 'components/_users';
 @import 'components/_linked-apps';
@@ -68,6 +69,7 @@
 @import 'components/_logs-drawer';
 @import 'components/_ai-assistant';
 @import 'components/_ui';
+@import 'components/_staging-banner';
 @import 'components/_design-system';  // redesign shared primitives (sk-* namespace)
 @import 'components/_system-notices';
 @import 'components/container-status';
@@ -110,6 +112,7 @@
 @import 'pages/_workflow';
 @import 'pages/_git';
 @import 'pages/_servers';
+@import 'pages/_server-survey';
 @import 'pages/_downloads';
 @import 'pages/_wordpress';
 @import 'pages/_wordpress-pipeline';

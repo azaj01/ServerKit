@@ -32,7 +32,8 @@ class NotificationBusService:
     # Public API
     # ------------------------------------------------------------------
     @classmethod
-    def send(cls, event, to, data=None, channels=None, severity=None, title=None, category=None):
+    def send(cls, event, to, data=None, channels=None, severity=None, title=None,
+             category=None, action_path=None, action_label=None):
         """Emit a notification.
 
         event    — catalog key, e.g. 'backup.completed' (unknown keys render
@@ -45,6 +46,11 @@ class NotificationBusService:
         severity  — override the catalog default.
         title     — override the computed title/subject.
         category  — override the catalog category (system/security/backups/apps).
+        action_path  — deep link (relative path) for this notification; when
+                    omitted, resolved from the catalog link builder. Persisted
+                    on the row so a later route move never breaks old rows.
+        action_label — button label for the deep link (falls back to the
+                    catalog default when a path is resolved).
 
         Returns {'notification_id', 'deliveries'} immediately.
         """
@@ -53,6 +59,12 @@ class NotificationBusService:
         severity = meta['severity']
         category = category or meta['category']
 
+        # Compute + persist the deep link at send time (producer override wins).
+        if action_path is None:
+            action_path, link_label = catalog.link_for(event, data)
+            if action_label is None:
+                action_label = link_label
+
         notification = Notification(
             event_key=event,
             category=category,
@@ -60,6 +72,8 @@ class NotificationBusService:
             title=meta['title'],
             body=data.get('summary') or data.get('message'),
             audience=cls._describe(to),
+            action_path=action_path,
+            action_label=action_label,
             correlation_id=generate_correlation_id(),
         )
         notification.set_data(data)
@@ -109,6 +123,29 @@ class NotificationBusService:
                 else:
                     delivery.status = NotificationDelivery.STATUS_PENDING
                     to_enqueue.append(delivery)
+                db.session.add(delivery)
+
+        # Org-level chat/webhook connections (plan 24 Phase 4). A preference-
+        # driven notification (channels is None) fans out ONCE per active,
+        # category-matched connection as an org-level delivery (no recipient
+        # user). Directed transactional sends (explicit channels) are
+        # per-recipient only and never trigger org chat.
+        if channels is None:
+            from app.services.chat_webhook_service import ChatWebhookService
+            for conn in ChatWebhookService.active_for_category(category):
+                target = f'conn:{conn.id}'
+                key = (None, conn.kind, target)
+                if key in seen:
+                    continue
+                seen.add(key)
+                delivery = NotificationDelivery(
+                    notification_id=notification.id,
+                    recipient_user_id=None,
+                    channel=conn.kind,
+                    target=target,
+                    status=NotificationDelivery.STATUS_PENDING,
+                )
+                to_enqueue.append(delivery)
                 db.session.add(delivery)
 
         db.session.commit()
@@ -365,11 +402,17 @@ class NotificationBusService:
         )
 
     @classmethod
-    def inbox(cls, user_id, limit=20, offset=0, unread_only=False):
-        """Return the current user's in-app notifications, newest first."""
+    def inbox(cls, user_id, limit=20, offset=0, unread_only=False,
+              category=None, severity=None):
+        """Return the current user's in-app notifications, newest first.
+
+        Optional ``category`` / ``severity`` filters narrow the history to one
+        notification bucket (joined against the parent :class:`Notification`).
+        """
         query = cls._inbox_query(user_id)
         if unread_only:
             query = query.filter(NotificationDelivery.read_at.is_(None))
+        query = cls._apply_notification_filters(query, category, severity)
         rows = (query.order_by(NotificationDelivery.created_at.desc())
                 .limit(limit).offset(offset).all())
         items = []
@@ -403,15 +446,41 @@ class NotificationBusService:
         return True
 
     @classmethod
-    def mark_all_read(cls, user_id):
-        """Mark every unread in-app notification read. Returns the count."""
+    def mark_all_read(cls, user_id, category=None, severity=None):
+        """Mark every unread in-app notification read. With ``category`` /
+        ``severity``, only that group is touched. Returns the count."""
         now = datetime.utcnow()
-        updated = (cls._inbox_query(user_id)
-                   .filter(NotificationDelivery.read_at.is_(None))
-                   .update({NotificationDelivery.read_at: now},
-                           synchronize_session=False))
+        query = (cls._inbox_query(user_id)
+                 .filter(NotificationDelivery.read_at.is_(None)))
+        if category or severity:
+            # A join is needed to filter on the parent notification, and a bulk
+            # UPDATE with a join isn't portable — resolve ids, then update those.
+            query = cls._apply_notification_filters(query, category, severity)
+            ids = [row.id for row in query.with_entities(NotificationDelivery.id).all()]
+            if not ids:
+                return 0
+            NotificationDelivery.query.filter(NotificationDelivery.id.in_(ids)).update(
+                {NotificationDelivery.read_at: now}, synchronize_session=False)
+            db.session.commit()
+            return len(ids)
+        updated = query.update({NotificationDelivery.read_at: now},
+                               synchronize_session=False)
         db.session.commit()
         return updated
+
+    @staticmethod
+    def _apply_notification_filters(query, category=None, severity=None):
+        """Join the parent :class:`Notification` and filter by category/severity
+        when either is given."""
+        if not category and not severity:
+            return query
+        query = query.join(
+            Notification, NotificationDelivery.notification_id == Notification.id)
+        if category:
+            query = query.filter(Notification.category == category)
+        if severity:
+            query = query.filter(Notification.severity == severity)
+        return query
 
     # ------------------------------------------------------------------
     # Delivery log / ops (admin)

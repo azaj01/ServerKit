@@ -22,6 +22,19 @@ from app.utils.slug import slugify as _slugify
 class SiteDomainService:
     DEFAULT_BASE_DOMAIN = 'lvh.me'
 
+    # Deep-link a publishing gap / preflight warning to the page that fixes it,
+    # in the Setup Health item shape ``{'kind': 'link', 'to': <path>}``. The
+    # config gaps are fixed in Settings → Managed Sites; an unresolved host is
+    # fixed from Monitoring → Doctor (one-click record create when a provider is
+    # connected).
+    _GAP_FIX_LINKS = {
+        'no_base_domain': {'kind': 'link', 'to': '/settings/site'},
+        'base_overlaps_panel': {'kind': 'link', 'to': '/settings/site'},
+        'http_only': {'kind': 'link', 'to': '/settings/site'},
+        'no_server_ip': {'kind': 'link', 'to': '/settings/site'},
+        'host_unresolved': {'kind': 'link', 'to': '/monitoring/doctor'},
+    }
+
     @staticmethod
     def _norm(value):
         return (str(value).strip().lstrip('.').lower()) if value else ''
@@ -389,6 +402,80 @@ class SiteDomainService:
                 continue
         return {'sent': sent}
 
+    # ------------------------------------------------------------------ #
+    # Creation-time preflight (advisory)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _host_resolves(host, timeout=2.0):
+        """True when ``host`` currently resolves to at least one A/AAAA address.
+
+        Runs the blocking ``socket.getaddrinfo`` lookup in a worker thread with a
+        hard ``timeout`` so a slow or unreachable resolver must not produce a
+        false 'does not resolve' warning at create time — but also can never
+        stall the create flow. A lookup that errors, times out, or yields nothing
+        counts as 'does not resolve'.
+        """
+        import socket
+        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import TimeoutError as FTimeout
+
+        def _resolve():
+            try:
+                return bool(socket.getaddrinfo(host, None))
+            except OSError:
+                return False
+
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            future = pool.submit(_resolve)
+            try:
+                return bool(future.result(timeout=timeout))
+            except FTimeout:
+                return False
+        finally:
+            pool.shutdown(wait=False)
+
+    @staticmethod
+    def _skip_dns_host(host):
+        """True for hosts the resolvability probe skips entirely: loopback / bare
+        labels / IP literals / dev + reserved suffixes (``lvh.me``, ``localhost``,
+        ``.test`` …). Reuses the doctor's own public-host filter so both surfaces
+        agree on what is worth a real DNS lookup."""
+        from app.services.doctor_service import _is_public_site_host
+        return not _is_public_site_host(host)
+
+    @classmethod
+    def creation_warnings(cls, host=None):
+        """Preflight warnings for a just-created site: every open publishing gap
+        (:meth:`publishing_gaps`) plus, when ``host`` is a real public name, a
+        resolvability probe of it.
+
+        Returns ``[{code, message, fix}]`` (empty when fully set up). Never blocks
+        a create — this is advisory. ``fix`` is a ``{kind:'link', to}`` deep-link,
+        matching the Setup Health item shape.
+        """
+        warnings = []
+        for gap in cls.publishing_gaps():
+            code = gap['code']
+            warnings.append({
+                'code': code,
+                'message': gap['message'],
+                'fix': cls._GAP_FIX_LINKS.get(code, {'kind': 'link', 'to': '/settings/site'}),
+            })
+
+        if host and not cls._skip_dns_host(host) and not cls._host_resolves(host):
+            warnings.append({
+                'code': 'host_unresolved',
+                'message': (
+                    f'{host} does not resolve yet, so visitors get a DNS error '
+                    '(NXDOMAIN) until its record exists. If a DNS provider is '
+                    'connected, use Monitoring → Doctor to create the record in one '
+                    'click; otherwise add the record at your DNS host.'),
+                'fix': cls._GAP_FIX_LINKS['host_unresolved'],
+            })
+        return warnings
+
     @classmethod
     def _vhost_create_kwargs(cls, app, domains, ssl_cert, ssl_key, force_type=None):
         """Build ``NginxService.create_site(**kwargs)`` for ``app``, or
@@ -492,8 +579,10 @@ class SiteDomainService:
         (re)writes its nginx vhost, and — in per-site DNS mode — auto-creates the A
         record (wildcard mode relies on ``*.<base>``).
 
-        Returns ``{success, host, url, dns, nginx, warning}`` or
-        ``{success: False, error}``.
+        Returns ``{success, host, url, dns, nginx, warning, warnings}`` or
+        ``{success: False, error}``. ``warning`` is the legacy single string;
+        ``warnings`` is the structured advisory-preflight array
+        (:meth:`creation_warnings`).
         """
         from app import db
         from app.models.domain import Domain
@@ -538,4 +627,5 @@ class SiteDomainService:
 
         return {'success': True, 'host': host,
                 'url': cls.site_url(host, ssl=cls.https_enabled(base) and cls.covers(host)),
-                'dns': dns, 'nginx': nginx, 'warning': warning}
+                'dns': dns, 'nginx': nginx, 'warning': warning,
+                'warnings': cls.creation_warnings(host)}

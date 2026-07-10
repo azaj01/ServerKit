@@ -147,13 +147,59 @@ def _ensure_dirs():
     _ensure_backend_dir()
 
 
-def _resolve_github_url(url):
+def _github_token():
+    """Optional GitHub token (SERVERKIT_GITHUB_TOKEN). Lifts the 60/hr anonymous
+    rate limit and enables private-repo installs. Never logged or echoed back."""
+    return (os.environ.get('SERVERKIT_GITHUB_TOKEN') or '').strip()
+
+
+def _is_github_host(url):
+    """True for github.com / api.github.com / codeload.github.com URLs — the only
+    hosts the token is ever attached to (never leak it to third-party mirrors)."""
+    return bool(re.match(r'^https?://(?:[a-z0-9-]+\.)?github\.com/', url or '', re.I))
+
+
+def _github_api_headers(accept='application/vnd.github+json'):
+    headers = {'Accept': accept, 'User-Agent': 'ServerKit-Plugin-Installer/1.0'}
+    token = _github_token()
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    return headers
+
+
+class GitHubResolveError(ValueError):
+    """Actionable failure resolving a GitHub URL (rate limit, 404, private)."""
+
+
+def _normalize_source_url(url):
+    """Accept `owner/repo` and `owner/repo@tag` shorthand, normalizing to a
+    github.com URL. Full URLs and direct .zip links pass through unchanged."""
+    if not url:
+        return url
+    u = url.strip()
+    if u.startswith('http://') or u.startswith('https://') or u.endswith('.zip'):
+        return u
+    m = re.match(r'^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:@(.+))?$', u)
+    if not m:
+        return u
+    owner, repo, tag = m.groups()
+    if tag:
+        return f'https://github.com/{owner}/{repo}/releases/tag/{tag}'
+    return f'https://github.com/{owner}/{repo}'
+
+
+def _resolve_github_url(url, strict=False):
     """Convert a GitHub repo URL to the latest release zip download URL.
 
     Handles:
       - https://github.com/user/repo  -> latest release zip
       - https://github.com/user/repo/releases/tag/v1.0.0  -> that release zip
       - Direct zip URLs pass through unchanged
+
+    When ``strict`` is False (installs) any API hiccup silently falls back to the
+    default-branch/tag zipball. When ``strict`` is True (preview) failures raise
+    :class:`GitHubResolveError` with an actionable message, and a
+    ``.used_zipball_fallback`` flag records whether no release asset was found.
     """
     if url.endswith('.zip'):
         return url
@@ -176,7 +222,9 @@ def _resolve_github_url(url):
         api_url = f'https://api.github.com/repos/{owner}/{repo}/releases/latest'
 
     try:
-        resp = requests.get(api_url, timeout=15, headers={'Accept': 'application/vnd.github+json'})
+        resp = requests.get(api_url, timeout=15, headers=_github_api_headers())
+        if strict:
+            _raise_for_github_status(resp, owner, repo)
         resp.raise_for_status()
         release = resp.json()
 
@@ -185,24 +233,76 @@ def _resolve_github_url(url):
             if asset['name'].endswith('.zip'):
                 return asset['browser_download_url']
 
-        # Fallback to source zipball
-        return release.get('zipball_url', url)
+        # No .zip asset — fall back to source zipball (default branch of the tag).
+        zipball = release.get('zipball_url') or (
+            f'https://api.github.com/repos/{owner}/{repo}/zipball/{tag}' if tag
+            else f'https://api.github.com/repos/{owner}/{repo}/zipball')
+        _mark_zipball_fallback(zipball)
+        return zipball
+    except GitHubResolveError:
+        raise
     except Exception as e:
         logger.warning(f'Could not resolve GitHub release URL: {e}')
-        # Fallback: try the zipball endpoint directly
-        if tag:
-            return f'https://api.github.com/repos/{owner}/{repo}/zipball/{tag}'
-        return f'https://api.github.com/repos/{owner}/{repo}/zipball'
+        # Fallback: try the zipball endpoint directly (no release published).
+        zipball = (f'https://api.github.com/repos/{owner}/{repo}/zipball/{tag}' if tag
+                   else f'https://api.github.com/repos/{owner}/{repo}/zipball')
+        _mark_zipball_fallback(zipball)
+        return zipball
+
+
+# Records the most recent resolution's zipball fallback so the preview flow can
+# warn "no release found (installing the default-branch zipball)". Only read
+# immediately after a _resolve_github_url call.
+_LAST_RESOLUTION = {'zipball_fallback': False}
+
+
+def _mark_zipball_fallback(_url):
+    _LAST_RESOLUTION['zipball_fallback'] = True
+
+
+def _raise_for_github_status(resp, owner, repo):
+    """Turn a GitHub API error response into an actionable GitHubResolveError."""
+    if resp.status_code == 200:
+        _LAST_RESOLUTION['zipball_fallback'] = False
+        return
+    if resp.status_code == 403 and resp.headers.get('X-RateLimit-Remaining') == '0':
+        reset = resp.headers.get('X-RateLimit-Reset')
+        mins = ''
+        try:
+            import time as _t
+            if reset:
+                mins = f' (try again in ~{max(1, round((int(reset) - _t.time()) / 60))} min)'
+        except Exception:
+            pass
+        raise GitHubResolveError(
+            f'GitHub API rate limit reached{mins}. Set SERVERKIT_GITHUB_TOKEN '
+            f'to raise the limit and enable private-repo installs.')
+    if resp.status_code == 404:
+        raise GitHubResolveError(
+            f'Repository or release not found for {owner}/{repo}. Check the URL, '
+            f'or set SERVERKIT_GITHUB_TOKEN if the repository is private.')
+    raise GitHubResolveError(
+        f'GitHub API returned HTTP {resp.status_code} for {owner}/{repo}.')
 
 
 def _download_zip(url):
     """Download a zip file from URL and return bytes."""
     resolved = _resolve_github_url(url)
+    return _download_resolved(resolved)
+
+
+def _download_resolved(resolved):
+    """Download an already-resolved zip URL and return a BytesIO buffer."""
     logger.info(f'Downloading plugin from: {resolved}')
-    resp = requests.get(resolved, timeout=120, stream=True, headers={
+    headers = {
         'Accept': 'application/octet-stream',
         'User-Agent': 'ServerKit-Plugin-Installer/1.0',
-    })
+    }
+    # Attach the token only for GitHub hosts (private assets / rate limit).
+    token = _github_token()
+    if token and _is_github_host(resolved):
+        headers['Authorization'] = f'Bearer {token}'
+    resp = requests.get(resolved, timeout=120, stream=True, headers=headers)
     resp.raise_for_status()
 
     buf = io.BytesIO()
@@ -414,6 +514,7 @@ def install_from_url(url, user_id=None, expected_sha256=None, force=False,
     Returns:
         InstalledPlugin instance
     """
+    url = _normalize_source_url(url)
     try:
         buf = _download_zip(url)
     except Exception as e:
@@ -434,6 +535,96 @@ def install_from_url(url, user_id=None, expected_sha256=None, force=False,
         user_id=user_id, force=force,
         hot_load=hot_load,
     )
+
+
+def _read_manifest_from_buffer(buf):
+    """Read and JSON-parse plugin.json from a plugin zip buffer, handling the
+    GitHub zipball directory nesting. Raises ValueError with an actionable
+    message when the archive is not a valid plugin package."""
+    try:
+        zf = zipfile.ZipFile(buf)
+    except zipfile.BadZipFile:
+        raise ValueError('The downloaded file is not a valid zip archive.')
+    manifest_path, _prefix = _find_manifest(zf)
+    if not manifest_path:
+        raise ValueError(
+            'No plugin.json found at the archive root. A ServerKit extension '
+            'needs plugin.json at the top level (see the layout in '
+            'docs/EXTENSIONS.md).')
+    try:
+        with zf.open(manifest_path) as f:
+            return json.loads(f.read().decode('utf-8'))
+    except Exception as e:
+        raise ValueError(f'plugin.json could not be parsed: {e}')
+
+
+def preview_from_url(url):
+    """Resolve + download a GitHub/zip source and read its manifest WITHOUT
+    installing. Returns the metadata a user needs to consent to the install:
+    slug, display_name, version, description, permissions, panel-version gate,
+    the resolved download URL, its sha256, and any warnings.
+
+    Stateless by design — the subsequent install re-downloads (extension zips
+    are small) and pins the previewed sha256 so the installed bytes are
+    byte-identical to the previewed bytes.
+    """
+    from app.utils.version import version_satisfies, get_panel_version
+    import hashlib
+
+    normalized = _normalize_source_url(url)
+    _LAST_RESOLUTION['zipball_fallback'] = False
+    resolved = _resolve_github_url(normalized, strict=True)
+
+    try:
+        buf = _download_resolved(resolved)
+    except GitHubResolveError:
+        raise
+    except Exception as e:
+        raise ValueError(f'Failed to download the extension: {e}')
+
+    digest = hashlib.sha256(buf.getvalue()).hexdigest()
+    buf.seek(0)
+    manifest = _read_manifest_from_buffer(buf)
+
+    # Validate shape early so preview surfaces manifest problems too.
+    _validate_manifest(manifest)
+
+    slug = manifest['name']
+    minv = manifest.get('min_panel_version')
+    maxv = manifest.get('max_panel_version')
+
+    warnings = []
+    if _LAST_RESOLUTION.get('zipball_fallback'):
+        warnings.append(
+            'No release asset found — installing the default-branch source '
+            'archive. Publish a release with a plugin .zip asset for '
+            'reproducible, checksum-pinned installs.')
+    if (minv or maxv):
+        panel = get_panel_version()
+        if not version_satisfies(panel, minv, maxv):
+            warnings.append(
+                f'This extension targets panel {minv or "*"}-{maxv or "*"}, '
+                f'but this panel is {panel}. Install will be blocked.')
+    if InstalledPlugin.query.filter_by(slug=slug).first():
+        warnings.append(
+            f'An extension with the slug "{slug}" is already installed. '
+            f'Installing will reinstall/overwrite it.')
+
+    return {
+        'slug': slug,
+        'display_name': manifest.get('display_name') or slug,
+        'version': manifest.get('version'),
+        'description': manifest.get('description', ''),
+        'author': manifest.get('author', ''),
+        'homepage': manifest.get('homepage', ''),
+        'permissions': manifest.get('permissions', []) if isinstance(
+            manifest.get('permissions'), list) else [],
+        'min_panel_version': minv,
+        'max_panel_version': maxv,
+        'resolved_url': resolved,
+        'sha256': digest,
+        'warnings': warnings,
+    }
 
 
 def install_from_path(path, user_id=None, force=False, hot_load=True,

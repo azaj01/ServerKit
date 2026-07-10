@@ -660,12 +660,21 @@ class BuildpackService:
         return json.dumps(['sh', '-c', command])
 
     @classmethod
-    def generate_compose(cls, plan: Dict, app_name: str) -> str:
-        """Return a docker-compose snippet wrapping the generated image."""
+    def generate_compose(cls, plan: Dict, app_name: str, extra_ports: Optional[list] = None,
+                         volumes: Optional[list] = None,
+                         named_volumes: Optional[list] = None,
+                         networks: Optional[list] = None) -> str:
+        """Return a docker-compose snippet wrapping the generated image.
+
+        Appliance tier (plan 35): ``extra_ports`` are raw compose publish
+        strings (typed L4 ports) appended to the app's own HTTP port;
+        ``volumes`` are service mount specs and ``named_volumes`` declare the
+        top-level named volumes they reference.
+        """
         plan = plan or {}
         safe_name = re.sub(r'[^a-z0-9_-]', '-', (app_name or 'app').lower()).strip('-') or 'app'
         port = cls._port(plan)
-        return '\n'.join([
+        lines = [
             'services:',
             f'  {safe_name}:',
             '    build:',
@@ -675,7 +684,27 @@ class BuildpackService:
             '    restart: unless-stopped',
             '    ports:',
             f'      - "{port}:{port}"',
-        ]) + '\n'
+        ]
+        for spec in (extra_ports or []):
+            lines.append(f'      - "{spec}"')
+        if volumes:
+            lines.append('    volumes:')
+            for spec in volumes:
+                lines.append(f'      - "{spec}"')
+        if networks:
+            lines.append('    networks:')
+            for net in networks:
+                lines.append(f'      - {net}')
+        if named_volumes:
+            lines.append('volumes:')
+            for name in named_volumes:
+                lines.append(f'  {name}: {{}}')
+        if networks:
+            lines.append('networks:')
+            for net in networks:
+                lines.append(f'  {net}:')
+                lines.append('    external: true')
+        return '\n'.join(lines) + '\n'
 
     # ------------------------------------------------------------------ #
     # Caching

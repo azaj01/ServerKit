@@ -263,6 +263,27 @@ def run_backup_scheduler():
     BackupService.check_backup_schedules()
 
 
+def run_job_retention():
+    """Prune old terminal jobs so scheduler-tick rows (backup/workflow/auto-sync
+    ticks) don't accumulate forever — the "107,834 Total" fix at the source.
+    Succeeded/cancelled are kept ``jobs.retention_days`` (default 14), failed
+    kept 3x that; queued/running rows are never touched. ``0`` disables it."""
+    from app.jobs.service import JobService
+    from app.services.settings_service import SettingsService
+    days = SettingsService.get('jobs.retention_days', 14)
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        days = 14
+    if days <= 0:
+        return None
+    deleted = JobService.prune_terminal(retention_days=days)
+    if deleted:
+        logger.info(f'Job retention pruned {deleted} terminal job row(s)')
+        return {'deleted': deleted}
+    return None
+
+
 def run_extension_update_check():
     """Daily registry check for installed-extension updates (#50).
 
@@ -324,6 +345,7 @@ _BUILTINS = [
     ('builtin.registrar_expiry',    run_registrar_expiry,      'registrar-expiry',   86400, 300),
     ('builtin.backup_scheduler',    run_backup_scheduler,      'backup-scheduler',   30,    30),
     ('builtin.extension_updates',   run_extension_update_check, 'extension-updates', 86400, 600),
+    ('builtin.job_retention',       run_job_retention,         'job-retention',      21600, 1500),
 ]
 
 
@@ -375,4 +397,18 @@ def seed_builtin_schedules():
     ScheduledJobService.ensure(
         bandwidth_service.BANDWIDTH_SCHEDULE_NAME, bandwidth_service.BANDWIDTH_JOB_KIND,
         interval_seconds=86400, startup_delay_seconds=1800,
+    )
+    # Daily host "doctor" health sweep — handler registered by
+    # DoctorService.register_jobs() at boot.
+    from app.services.doctor_service import DOCTOR_JOB_KIND, DOCTOR_SCHEDULE_NAME
+    ScheduledJobService.ensure(
+        DOCTOR_SCHEDULE_NAME, DOCTOR_JOB_KIND,
+        interval_seconds=86400, startup_delay_seconds=600,
+    )
+    # Weekly setup-health nag (plan 22) — handler registered by
+    # SetupHealthService.register_jobs() at boot.
+    from app.services.setup_health_service import NAG_JOB_KIND, NAG_SCHEDULE_NAME
+    ScheduledJobService.ensure(
+        NAG_SCHEDULE_NAME, NAG_JOB_KIND,
+        interval_seconds=604800, startup_delay_seconds=3600,
     )

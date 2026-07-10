@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Activity, Rocket, CheckCircle2, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Activity, Rocket, CheckCircle2, XCircle, Globe, Database, ShieldCheck } from 'lucide-react';
 import api from '../../services/api';
 import { useDeployments } from '../../hooks/useDeployments';
 import { getDeployStatus, formatRelativeTime, formatDuration } from '../../utils/serviceTypes';
 import { formatBytes } from '../../utils/formatBytes';
 import BandwidthSparkline from '../BandwidthSparkline';
-import { MetricCard, Pill, Gauge, EnvTag } from '@/components/ds';
+import ScheduledTasksCard from '../ScheduledTasksCard';
+import { KpiBand, MetricCard, Pill, Gauge, EnvTag } from '@/components/ds';
 
 // Deployment status → semantic tone (ds Pill kind / dot modifier)
 const DEPLOY_TONE = {
@@ -27,6 +29,7 @@ const OverviewTab = ({ app, deployConfig }) => {
     const [metrics, setMetrics] = useState(null);
     const [metricsLoading, setMetricsLoading] = useState(true);
     const [bandwidth, setBandwidth] = useState(null);
+    const [related, setRelated] = useState(null);
     const { deployments, loading: deploymentsLoading } = useDeployments(app.id);
 
     const isDocker = app.app_type === 'docker';
@@ -43,6 +46,15 @@ const OverviewTab = ({ app, deployConfig }) => {
         let cancelled = false;
         api.getAppBandwidth(app.id, 90)
             .then((data) => { if (!cancelled) setBandwidth(data); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [app.id]);
+
+    useEffect(() => {
+        // Related resources (domains, DBs, backups, deploys). Member-visible.
+        let cancelled = false;
+        api.getAppRelatedResources(app.id)
+            .then((data) => { if (!cancelled) setRelated(data); })
             .catch(() => {});
         return () => { cancelled = true; };
     }, [app.id]);
@@ -88,7 +100,7 @@ const OverviewTab = ({ app, deployConfig }) => {
     return (
         <div className="overview-tab">
             {/* KPI Strip */}
-            <div className="overview-tab__kpis">
+            <KpiBand>
                 <MetricCard
                     tone={app.isRunning ? 'green' : 'amber'}
                     icon={<Activity size={16} />}
@@ -113,7 +125,7 @@ const OverviewTab = ({ app, deployConfig }) => {
                     value={failedDeploys.length}
                     label="Failed"
                 />
-            </div>
+            </KpiBand>
 
             <div className="overview-tab__grid">
                 {/* Service Info Card */}
@@ -263,6 +275,12 @@ const OverviewTab = ({ app, deployConfig }) => {
                         </div>
                     )}
                 </div>
+
+                {/* Related Resources Card (member-visible: domains, DBs, backups, deploys) */}
+                <RelatedResourcesCard app={app} related={related} />
+
+                {/* Scheduled tasks (read-only cron summary; renders nothing for non-members) */}
+                <ScheduledTasksCard appId={app.id} />
             </div>
 
             {/* Bandwidth (daily nginx rollups; hidden until data exists) */}
@@ -331,6 +349,80 @@ const OverviewTab = ({ app, deployConfig }) => {
                     </div>
                 )}
             </div>
+        </div>
+    );
+};
+
+// One member-visible card summarizing the app's related resources. Each row
+// links only to a surface the caller can open; the backend already scopes what
+// it returns to the caller's access, so an empty section simply renders nothing.
+const RelatedResourcesCard = ({ app, related }) => {
+    const domains = related?.domains || [];
+    const databases = related?.databases || [];
+    const backup = related?.backup;
+    const deployments = related?.deployments;
+
+    const hasAny = domains.length || databases.length || backup?.enabled || deployments?.count;
+
+    return (
+        <div className="overview-tab__card">
+            <h3 className="overview-tab__card-title">Related Resources</h3>
+            {!related ? (
+                <div className="overview-tab__loading">Loading...</div>
+            ) : !hasAny ? (
+                <div className="overview-tab__no-metrics">
+                    <p>No related resources yet.</p>
+                </div>
+            ) : (
+                <div className="overview-tab__related">
+                    {domains.length > 0 && (
+                        <div className="overview-tab__related-group">
+                            <span className="overview-tab__related-label">
+                                <Globe size={14} /> Domains
+                            </span>
+                            <div className="overview-tab__related-items">
+                                {domains.map((d) => (
+                                    <Link key={d.id} to={`/services/${app.id}/settings/domain`} className="overview-tab__related-chip">
+                                        {d.name}
+                                        {d.ssl_enabled && <ShieldCheck size={12} className="overview-tab__related-ssl" />}
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {databases.length > 0 && (
+                        <div className="overview-tab__related-group">
+                            <span className="overview-tab__related-label">
+                                <Database size={14} /> Databases
+                            </span>
+                            <div className="overview-tab__related-items">
+                                {databases.map((m) => (
+                                    <span key={m.id} className="overview-tab__related-chip">
+                                        {m.name} <span className="overview-tab__related-muted">{m.engine}</span>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {backup?.enabled && (
+                        <div className="sk-info-row">
+                            <span className="k">Backups</span>
+                            <span className="v">
+                                {backup.frequency || 'scheduled'}
+                                {backup.last_status && <Pill kind={backup.last_status === 'success' ? 'green' : 'amber'}>{backup.last_status}</Pill>}
+                            </span>
+                        </div>
+                    )}
+                    {deployments?.count > 0 && (
+                        <div className="sk-info-row">
+                            <span className="k">Deployments</span>
+                            <span className="v">
+                                <Link to={`/services/${app.id}/events`}>{deployments.count} total</Link>
+                            </span>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

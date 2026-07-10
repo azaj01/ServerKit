@@ -1,4 +1,4 @@
-import { Pill } from '../ds';
+import { Pill, KpiBand } from '../ds';
 import OnboardingWizard from '../server/OnboardingWizard';
 import SystemStatusCard from './SystemStatusCard';
 import { formatBytes } from '@/utils/formatBytes';
@@ -67,7 +67,7 @@ const ServerOverviewTab = ({ server, metrics, systemInfo, onRefreshServer }) => 
                     />
                 </div>
             )}
-            <div className="server-stats-strip">
+            <KpiBand max={5}>
                 <KpiTile
                     icon={<PulseIcon />}
                     label="Status"
@@ -101,7 +101,7 @@ const ServerOverviewTab = ({ server, metrics, systemInfo, onRefreshServer }) => 
                     color="var(--green)"
                     sub={totalDisk ? formatBytes(totalDisk) : null}
                 />
-            </div>
+            </KpiBand>
 
             {!isOnline && (
                 <div className="info-card offline-card">

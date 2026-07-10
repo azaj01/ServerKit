@@ -2,7 +2,7 @@
   "name": "serverkit-dns-server",
   "display_name": "DNS Server",
   "version": "1.0.0",
-  "description": "Host authoritative DNS on this box with PowerDNS (SQLite backend) in a managed Docker container — zones, records, DNSSEC, and delegation checks from the panel. Authoritative only (no recursion); complements provider integrations like Cloudflare, never replaces them. Built for homelab and air-gapped setups.",
+  "description": "Host authoritative DNS on this box with PowerDNS (SQLite backend) in a managed Docker container, covering zones, records, DNSSEC, and delegation checks from the panel. Authoritative only (no recursion); complements provider integrations like Cloudflare, never replaces them. Built for homelab and air-gapped setups.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "networking",

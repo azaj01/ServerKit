@@ -107,3 +107,71 @@ def auth_headers(app):
         token = create_access_token(identity=user.id)
 
     return {'Authorization': f'Bearer {token}'}
+
+
+def _mk_scope_user(db, username, role='developer'):
+    from app.models import User
+    from werkzeug.security import generate_password_hash
+    u = User(email=f'{username}@t.local', username=username,
+             password_hash=generate_password_hash('x'), role=role, is_active=True)
+    db.session.add(u)
+    db.session.commit()
+    return u
+
+
+def _scope_token(user_id):
+    from flask_jwt_extended import create_access_token
+    return {'Authorization': f'Bearer {create_access_token(identity=user_id)}'}
+
+
+@pytest.fixture
+def scoping_rbac(app):
+    """Five personas over ONE workspace containing ONE application (plan 19
+    Decision 2 — the workspace-scoping membership model).
+
+    Every path to the app folds into a single capability tier (see
+    app_access_tier): the app owner and a panel admin resolve to 'owner',
+    workspace members resolve to their workspace role, and a foreign user has no
+    access at all.
+
+        owner  -> owns the app                         (tier 'owner')
+        admin  -> panel admin, bypasses to             (tier 'owner')
+        member -> workspace 'member' role              (tier 'member')
+        viewer -> workspace 'viewer' role              (tier 'viewer')
+        foreign-> no membership / no grant             (no access)
+
+    Returns a namespace of per-persona auth headers plus the shared app/workspace
+    ids so a suite can drive the /for-app read gate and the admin write gate.
+    """
+    from types import SimpleNamespace
+    from app import db
+    from app.models import Application, Workspace
+    from app.services.workspace_service import WorkspaceService
+
+    owner = _mk_scope_user(db, 'scope_owner')
+    member = _mk_scope_user(db, 'scope_member')
+    viewer = _mk_scope_user(db, 'scope_viewer')
+    foreign = _mk_scope_user(db, 'scope_foreign')
+    admin = _mk_scope_user(db, 'scope_admin', role='admin')
+
+    ws = Workspace(name='scope-ws', slug='scope-ws', created_by=owner.id)
+    db.session.add(ws)
+    db.session.commit()
+
+    WorkspaceService.add_member(ws.id, member.id, role='member')
+    WorkspaceService.add_member(ws.id, viewer.id, role='viewer')
+
+    a = Application(name='scope-app', app_type='php', user_id=owner.id,
+                    workspace_id=ws.id, root_path='/srv/scope')
+    db.session.add(a)
+    db.session.commit()
+
+    return SimpleNamespace(
+        app_id=a.id,
+        ws_id=ws.id,
+        owner=_scope_token(owner.id),
+        admin=_scope_token(admin.id),
+        member=_scope_token(member.id),
+        viewer=_scope_token(viewer.id),
+        foreign=_scope_token(foreign.id),
+    )

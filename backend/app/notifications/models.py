@@ -46,6 +46,13 @@ class Notification(db.Model):
     # (e.g. 'admins', 'user:42', 'ops@example.com'). Not used for routing.
     audience = db.Column(db.String(255))
 
+    # Deep link to this notification's subject (plan 24 Phase 5). Stored RELATIVE
+    # (e.g. '/domains') and computed at send time — from the catalog link builder
+    # or a producer override — so a later route move never breaks old rows. The
+    # bell/history navigate here; email/chat resolve it to an absolute URL.
+    action_path = db.Column(db.String(512))
+    action_label = db.Column(db.String(120))
+
     # Correlation ID for grouping this notification with related telemetry events.
     correlation_id = db.Column(db.String(64), nullable=True, index=True)
 
@@ -76,6 +83,8 @@ class Notification(db.Model):
             'title': self.title,
             'body': self.body,
             'audience': self.audience,
+            'action_path': self.action_path,
+            'action_label': self.action_label,
             'correlation_id': self.correlation_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
@@ -95,6 +104,10 @@ class NotificationDelivery(db.Model):
     STATUS_SENT = 'sent'          # handed to the channel successfully
     STATUS_FAILED = 'failed'      # exhausted retries (dead-letter on the queue)
     STATUS_SKIPPED = 'skipped'    # intentionally not sent (e.g. no target)
+    # Held for the periodic digest (plan 24 Phase 3): a digestable email or a
+    # quiet-hours catch-up. Never enqueued; the digest job groups these, sends
+    # ONE branded email, then flips them to STATUS_SENT.
+    STATUS_QUEUED_DIGEST = 'queued_digest'
 
     # Channels
     CHANNEL_INAPP = 'inapp'

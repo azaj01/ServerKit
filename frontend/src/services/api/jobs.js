@@ -6,6 +6,7 @@ export async function getJobs(params = {}) {
     if (params.kind) query.append('kind', params.kind);
     if (params.owner_type) query.append('owner_type', params.owner_type);
     if (params.owner_id) query.append('owner_id', params.owner_id);
+    if (params.q) query.append('q', params.q);
     if (params.limit) query.append('limit', params.limit);
     if (params.offset) query.append('offset', params.offset);
     const suffix = query.toString() ? `?${query}` : '';

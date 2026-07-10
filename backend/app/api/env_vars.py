@@ -1,3 +1,6 @@
+# Bucket: PER-APP (plan 29 #9). Env-var routes converge on the app-access seam:
+# reads use can_access_app (owner/admin/any grant — a viewer grant can read,
+# with secrets still masked), writes use can_edit_app (owner/admin/editor grant).
 """
 Environment Variables API
 
@@ -9,19 +12,27 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import Application, User
 from app.services.env_service import EnvService
+from app.services.resource_grant_service import ResourceGrantService
 
 env_vars_bp = Blueprint('env_vars', __name__)
 
 
-def check_app_access(app_id, user_id):
-    """Check if user has access to the application."""
+def check_app_access(app_id, user_id, write=False):
+    """Check that the user may access the application's env vars (plan 29 #9).
+
+    Reads (``write=False``) require can_access_app (owner/admin/any grant);
+    writes require can_edit_app (owner/admin/editor grant — a viewer grant is
+    read-only). Returns ``(user, app, None, None)`` on success or
+    ``(None, None, error_response, status)`` on failure."""
     user = User.query.get(user_id)
     app = Application.query.get(app_id)
 
     if not app:
         return None, None, jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != user_id:
+    ok = (ResourceGrantService.can_edit_app(user, app) if write
+          else ResourceGrantService.can_access_app(user, app))
+    if not ok:
         return None, None, jsonify({'error': 'Access denied'}), 403
 
     return user, app, None, None
@@ -52,7 +63,7 @@ def get_env_vars(app_id):
 def create_env_var(app_id):
     """Create a new environment variable."""
     current_user_id = get_jwt_identity()
-    user, app, error, status = check_app_access(app_id, current_user_id)
+    user, app, error, status = check_app_access(app_id, current_user_id, write=True)
     if error:
         return error, status
 
@@ -108,7 +119,7 @@ def get_env_var(app_id, key):
 def update_env_var(app_id, key):
     """Update an existing environment variable."""
     current_user_id = get_jwt_identity()
-    user, app, error, status = check_app_access(app_id, current_user_id)
+    user, app, error, status = check_app_access(app_id, current_user_id, write=True)
     if error:
         return error, status
 
@@ -158,7 +169,7 @@ def update_env_var(app_id, key):
 def delete_env_var(app_id, key):
     """Delete an environment variable."""
     current_user_id = get_jwt_identity()
-    user, app, error, status = check_app_access(app_id, current_user_id)
+    user, app, error, status = check_app_access(app_id, current_user_id, write=True)
     if error:
         return error, status
 
@@ -178,7 +189,7 @@ def delete_env_var(app_id, key):
 def bulk_set_env_vars(app_id):
     """Set multiple environment variables at once."""
     current_user_id = get_jwt_identity()
-    user, app, error, status = check_app_access(app_id, current_user_id)
+    user, app, error, status = check_app_access(app_id, current_user_id, write=True)
     if error:
         return error, status
 
@@ -202,7 +213,7 @@ def bulk_set_env_vars(app_id):
 def import_env_file(app_id):
     """Import environment variables from .env file content."""
     current_user_id = get_jwt_identity()
-    user, app, error, status = check_app_access(app_id, current_user_id)
+    user, app, error, status = check_app_access(app_id, current_user_id, write=True)
     if error:
         return error, status
 
@@ -280,7 +291,7 @@ def get_env_history(app_id):
 def clear_all_env_vars(app_id):
     """Delete all environment variables for an application."""
     current_user_id = get_jwt_identity()
-    user, app, error, status = check_app_access(app_id, current_user_id)
+    user, app, error, status = check_app_access(app_id, current_user_id, write=True)
     if error:
         return error, status
 

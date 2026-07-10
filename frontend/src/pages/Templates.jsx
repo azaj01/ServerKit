@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import EmptyState from '../components/EmptyState';
+import { DEPLOY_TEMPLATES } from '@/data/deployTemplates';
 
 // Featured templates (curated list)
 const FEATURED_TEMPLATES = [
@@ -440,6 +441,44 @@ const Templates = () => {
 
     return (
         <div className="sk-tabgroup__inner templates-page">
+            {/* Deploy templates — manifest-ready repos, shared with the New
+                Service wizard's "Deploy Template" source. */}
+            <section id="deploy-templates" className="deploy-templates-section">
+                <div className="deploy-templates-section__head">
+                    <div>
+                        <h3>Deploy templates</h3>
+                        <p>Manifest-ready repositories that prefill the New Service wizard.</p>
+                    </div>
+                </div>
+                <div className="deploy-templates-list">
+                    {DEPLOY_TEMPLATES.map(template => (
+                        <div key={template.id} className="deploy-template-row">
+                            <div className="deploy-template-row__main">
+                                <div className="deploy-template-row__title">
+                                    <strong>{template.name}</strong>
+                                    {template.example && (
+                                        <span className="deploy-template-row__example">Example</span>
+                                    )}
+                                </div>
+                                <p>{template.description}</p>
+                                <code>{template.repoUrl}</code>
+                                <div className="deploy-template-row__badges">
+                                    {(template.badges || []).map(badge => (
+                                        <span key={badge}>{badge}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <Button
+                                size="sm"
+                                onClick={() => navigate(`/services/new?template=${encodeURIComponent(template.id)}`)}
+                            >
+                                <Rocket size={14} /> Use template
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
             {/* Results and Filters */}
             <div className="templates-results-header">
                 <span className="results-count">

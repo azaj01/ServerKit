@@ -36,6 +36,7 @@ export default function ProtectionPanel({ targetType, targetId, targetName, show
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [backingUp, setBackingUp] = useState(false);
+    const [drilling, setDrilling] = useState(false);
     const [historyView, setHistoryView] = useState('list');  // 'list' | 'calendar'
     const [dayFilter, setDayFilter] = useState(null);        // Date | null
     const [detailRun, setDetailRun] = useState(null);
@@ -117,6 +118,19 @@ export default function ProtectionPanel({ targetType, targetId, targetName, show
         }
     }, [targetType, targetId, toast, scheduleReloads]);
 
+    const handleRunDrill = useCallback(async () => {
+        setDrilling(true);
+        try {
+            await api.runBackupDrill(targetType, targetId);
+            toast.success('Restore drill started');
+            scheduleReloads();
+        } catch (err) {
+            toast.error(err.message || 'Failed to start restore drill');
+        } finally {
+            setDrilling(false);
+        }
+    }, [targetType, targetId, toast, scheduleReloads]);
+
     // Restore is always initiated from a run — opening the restore drawer.
     const openRestore = useCallback((run) => setRestoreRun(run), []);
 
@@ -177,10 +191,12 @@ export default function ProtectionPanel({ targetType, targetId, targetName, show
                     policyView={view}
                     onToggle={handleToggle}
                     onBackupNow={handleBackupNow}
+                    onRunDrill={handleRunDrill}
                     onViewGlobal={() => navigate('/backups')}
                     onViewJobs={() => navigate('/jobs')}
                     busy={saving}
                     backingUp={backingUp}
+                    drilling={drilling || !!view?.restore_proof?.is_drilling}
                 />
 
                 <ScheduleCard
@@ -236,6 +252,7 @@ export default function ProtectionPanel({ targetType, targetId, targetName, show
                         ) : (
                             <BackupHistoryList
                                 runs={visibleRuns}
+                                drills={dayFilter ? [] : view?.restore_proof?.recent_drills}
                                 loading={loading}
                                 onRestore={openRestore}
                                 onVerify={handleVerify}

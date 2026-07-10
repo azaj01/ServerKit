@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import time
+from urllib.parse import urljoin
 
 import requests
 
@@ -30,6 +31,13 @@ _BUNDLED_INDEX = os.path.join(
 
 # The curated public index (one JSON file, PR-reviewed, checksum-verified
 # installs). Panels fall back to cache → bundled copy when unreachable.
+#
+# NOTE (plan 40 task 11): once serverkit.ai/ext/index.json is deployed (Phase 4
+# endpoints), flip this default to 'https://serverkit.ai/ext/index.json' — that
+# endpoint proxies this same raw index with caching + logo URL rewriting. The
+# raw-GitHub URL below stays the documented manual fallback
+# (SERVERKIT_REGISTRY_URL). Deferred here: flipping before the domain is live
+# would break Marketplace Browse everywhere.
 DEFAULT_REGISTRY_URL = (
     'https://raw.githubusercontent.com/jhd3197/serverkit-extensions/main/index.json'
 )
@@ -50,7 +58,10 @@ except ValueError:
 # Module-level cache: last successfully-parsed entry list + when we fetched it.
 _cache = {'ts': 0.0, 'entries': None, 'source': None}
 
-# Fields we surface for a registry entry, with defaults.
+# Fields we surface for a registry entry, with defaults. Index v2 adds
+# `repo`, `logo`, and `bundled` (see the serverkit-extensions schema); any
+# field not listed here is stripped before it reaches the UI, so new index
+# fields must be registered below to survive normalization.
 _FIELDS = {
     'slug': '',
     'display_name': '',
@@ -59,18 +70,35 @@ _FIELDS = {
     'category': 'utility',
     'author': '',
     'first_party': False,
+    'bundled': False,
     'permissions': [],
     'min_panel_version': None,
     'max_panel_version': None,
     'source': '',
     'sha256': None,
+    'repo': '',
+    'logo': None,
     'homepage': '',
     'icon': None,
     'screenshots': [],
 }
 
 
-def _normalize(raw):
+def _resolve_logo(logo, base_url):
+    """Turn a repo-relative logo path (``assets/<slug>/<file>``) into an
+    absolute URL against the index we fetched it from. Absolute https logos
+    pass through unchanged; ``urljoin`` resolves both the raw-GitHub index
+    (→ raw asset URL) and the serverkit.ai ``/ext/index.json`` (→ proxy URL)."""
+    if not logo or not isinstance(logo, str):
+        return logo
+    if logo.startswith('http://') or logo.startswith('https://'):
+        return logo
+    if base_url:
+        return urljoin(base_url, logo)
+    return logo
+
+
+def _normalize(raw, base_url=None):
     if not isinstance(raw, dict) or not raw.get('slug'):
         return None
     out = {}
@@ -80,20 +108,24 @@ def _normalize(raw):
         out['permissions'] = []
     if not isinstance(out['screenshots'], list):
         out['screenshots'] = []
+    out['bundled'] = bool(out['bundled'])
+    out['logo'] = _resolve_logo(out['logo'], base_url)
     return out
 
 
-def _read_index_payload(payload):
+def _read_index_payload(payload, base_url=None):
     exts = payload.get('extensions') if isinstance(payload, dict) else None
     if not isinstance(exts, list):
         return []
-    return [e for e in (_normalize(x) for x in exts) if e]
+    return [e for e in (_normalize(x, base_url) for x in exts) if e]
 
 
 def _load_bundled():
     try:
         with open(_BUNDLED_INDEX, 'r', encoding='utf-8') as f:
-            return _read_index_payload(json.load(f))
+            # Bundled copy mirrors the public index; resolve its relative logos
+            # against the default (raw-GitHub) index base.
+            return _read_index_payload(json.load(f), base_url=DEFAULT_REGISTRY_URL)
     except Exception as e:
         logger.warning(f'Could not read bundled registry index: {e}')
         return []
@@ -108,7 +140,7 @@ def _fetch_remote():
         'User-Agent': 'ServerKit-Registry/1.0',
     })
     resp.raise_for_status()
-    return _read_index_payload(resp.json())
+    return _read_index_payload(resp.json(), base_url=url)
 
 
 def refresh(force=False):
@@ -170,8 +202,18 @@ def to_catalog_dict(entry):
     return d
 
 
-def list_catalog():
-    return [to_catalog_dict(e) for e in refresh()]
+def list_catalog(include_bundled=False):
+    """Registry entries + live install state for the Marketplace Browse merge.
+
+    Bundled entries (``bundled: true``) are catalog listings for extensions
+    that ship inside the panel — the Browse tab already renders those from
+    ``list_builtin_extensions()``, so a bundled index entry would duplicate
+    the card. They are excluded by default; pass ``include_bundled=True`` to
+    get the complete catalog (e.g. for the public gallery API)."""
+    entries = refresh()
+    if not include_bundled:
+        entries = [e for e in entries if not e.get('bundled')]
+    return [to_catalog_dict(e) for e in entries]
 
 
 def registry_source_label():

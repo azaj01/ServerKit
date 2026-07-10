@@ -73,7 +73,14 @@ def register_api_analytics(app):
 
 
 def start_analytics_flush_thread(app):
-    """Start background thread to flush analytics buffer to DB."""
+    """Start background thread to flush analytics buffer to DB.
+
+    Skipped under testing: the app fixture is function-scoped, so an
+    unconditional per-create_app() flusher would leak one immortal writer per
+    test and race the suite's shared database (mirrors the queue-bus consumers).
+    """
+    if app.config.get('ENV') == 'testing' or app.config.get('TESTING'):
+        return None
 
     def flush_loop():
         while True:

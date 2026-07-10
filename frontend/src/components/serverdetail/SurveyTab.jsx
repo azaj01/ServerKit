@@ -1,0 +1,452 @@
+import { useState, useEffect, useCallback } from 'react';
+import api from '../../services/api';
+import { useToast } from '../../contexts/ToastContext';
+import { Button } from '@/components/ui/button';
+import { Pill } from '../ds';
+import EmptyState from '../EmptyState';
+import {
+    FileSearch,
+    RefreshCw,
+    AlertTriangle,
+    ShieldCheck,
+    Boxes,
+    Globe,
+    Database,
+    Clock,
+    Radio,
+    Network,
+} from 'lucide-react';
+
+// Survey tab (plan 27/28) — the read-only "Server Map" for a paired agent.
+//
+// A survey is a strictly read-only "flight": the agent runs a declarative probe
+// catalog and returns what's running on the box; the panel normalizes it into a
+// stable Server Map and stores each flight as an immutable, diffable snapshot.
+// This tab also hosts the managed/observed adoption toggle: when another control
+// panel is detected we suggest switching to Observed (read-only) mode.
+const SurveyTab = ({ serverId, serverStatus, server }) => {
+    const toast = useToast();
+
+    const [loading, setLoading] = useState(true);
+    const [snapshots, setSnapshots] = useState([]);
+    const [map, setMap] = useState(null);
+    const [takenAt, setTakenAt] = useState(null);
+    const [diff, setDiff] = useState(null);
+
+    const [mode, setMode] = useState('managed');
+    const [observed, setObserved] = useState(null);
+
+    const [flying, setFlying] = useState(false);
+    const [switching, setSwitching] = useState(false);
+
+    const [showCatalog, setShowCatalog] = useState(false);
+    const [catalog, setCatalog] = useState(null);
+
+    // The agent must advertise the `survey` capability. The tab is only mounted
+    // when it does, but guard here too so an older agent degrades cleanly.
+    const capable = server?.capabilities?.survey ?? true;
+
+    const load = useCallback(async () => {
+        try {
+            const [surveysRes, obs] = await Promise.all([
+                api.getServerSurveys(serverId),
+                api.getServerObservedStatus(serverId).catch(() => null),
+            ]);
+            const list = surveysRes?.surveys || [];
+            setSnapshots(list);
+            if (obs) {
+                setMode(obs.management_mode || 'managed');
+                setObserved(obs);
+            }
+            if (list.length) {
+                const latest = await api.getServerSurvey(serverId, list[0].id);
+                setMap(latest?.map || null);
+                setTakenAt(latest?.taken_at || null);
+                if (list.length >= 2) {
+                    const d = await api.diffServerSurveys(serverId).catch(() => null);
+                    setDiff(d?.diff || null);
+                } else {
+                    setDiff(null);
+                }
+            } else {
+                setMap(null);
+                setTakenAt(null);
+                setDiff(null);
+            }
+        } catch (err) {
+            console.error('Failed to load survey:', err);
+        }
+    }, [serverId]);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            await load();
+            if (!cancelled) setLoading(false);
+        })();
+        return () => { cancelled = true; };
+    }, [load]);
+
+    async function refly() {
+        setFlying(true);
+        try {
+            await api.runServerSurvey(serverId);
+            toast.success('Survey complete');
+            await load();
+        } catch (err) {
+            toast.error(err.message || 'Survey failed');
+        } finally {
+            setFlying(false);
+        }
+    }
+
+    async function loadCatalog() {
+        if (showCatalog) {
+            setShowCatalog(false);
+            return;
+        }
+        try {
+            const data = catalog || await api.getSurveyCatalog();
+            setCatalog(data);
+            setShowCatalog(true);
+        } catch (err) {
+            toast.error(err.message || 'Failed to load probe index');
+        }
+    }
+
+    async function switchToObserved() {
+        setSwitching(true);
+        try {
+            await api.setServerManagementMode(serverId, 'observed');
+            toast.success('Switched to Observed (read-only)');
+            setMode('observed');
+            const obs = await api.getServerObservedStatus(serverId).catch(() => null);
+            if (obs) setObserved(obs);
+        } catch (err) {
+            toast.error(err.message || 'Failed to switch mode');
+        } finally {
+            setSwitching(false);
+        }
+    }
+
+    async function toggleAgentUpdateOverride(checked) {
+        setSwitching(true);
+        try {
+            await api.setServerManagementMode(serverId, mode, checked);
+            const obs = await api.getServerObservedStatus(serverId).catch(() => null);
+            if (obs) setObserved(obs);
+        } catch (err) {
+            toast.error(err.message || 'Failed to update setting');
+        } finally {
+            setSwitching(false);
+        }
+    }
+
+    if (!capable) {
+        return (
+            <EmptyState
+                icon={FileSearch}
+                title="Survey not available"
+                description="This agent doesn't support the read-only survey yet. Upgrade the agent to enable Observe mode — it maps what's running on the box without changing anything."
+            />
+        );
+    }
+
+    if (loading) {
+        return <EmptyState loading title="Loading survey" />;
+    }
+
+    return (
+        <div className="survey-tab">
+            <div className="survey-tab__toolbar">
+                <div className="survey-tab__toolbar-info">
+                    {takenAt ? (
+                        <span className="survey-tab__muted">Last flight {new Date(takenAt).toLocaleString()}</span>
+                    ) : (
+                        <span className="survey-tab__muted">No flights yet — run one to map this server.</span>
+                    )}
+                    {map?.foreign_panel_detected && (
+                        <Pill kind="amber">
+                            <AlertTriangle size={12} aria-hidden="true" /> Another control panel detected
+                        </Pill>
+                    )}
+                </div>
+                <div className="survey-tab__toolbar-actions">
+                    <Button variant="outline" size="sm" onClick={loadCatalog}>
+                        <FileSearch size={14} /> {showCatalog ? 'Hide' : 'What we check'}
+                    </Button>
+                    <Button size="sm" onClick={refly} disabled={flying || serverStatus !== 'online'}>
+                        <RefreshCw size={14} className={flying ? 'spin' : ''} />
+                        {flying ? 'Surveying…' : (snapshots.length ? 'Re-fly survey' : 'Run survey')}
+                    </Button>
+                </div>
+            </div>
+
+            {serverStatus !== 'online' && !snapshots.length && (
+                <p className="survey-tab__muted">The agent is offline — reconnect it to fly a survey.</p>
+            )}
+
+            {map?.foreign_panel_detected && mode === 'managed' && (
+                <div className="survey-tab__suggest">
+                    <AlertTriangle size={18} aria-hidden="true" />
+                    <div className="survey-tab__suggest-body">
+                        <strong>This box looks like it&apos;s run by another control panel.</strong>
+                        <p>
+                            Two panels writing web-server config will fight over ownership. Switch this
+                            server to <em>Observed</em> to keep read-only survey, metrics and backups while
+                            ServerKit stops making config changes — then migrate sites over when you&apos;re ready.
+                        </p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={switchToObserved} disabled={switching}>
+                        {switching ? 'Switching…' : 'Switch to Observed'}
+                    </Button>
+                </div>
+            )}
+
+            {mode === 'observed' && (
+                <div className="survey-tab__observed">
+                    <div className="survey-tab__observed-head">
+                        <Pill kind="amber"><ShieldCheck size={12} aria-hidden="true" /> Observed (read-only)</Pill>
+                        {observed && (
+                            <span
+                                className="survey-tab__muted"
+                                title="Mutating commands the Observe guard has refused on this server"
+                            >
+                                {observed.observed_blocked_count} command{observed.observed_blocked_count === 1 ? '' : 's'} blocked
+                            </span>
+                        )}
+                    </div>
+                    <p className="survey-tab__muted">
+                        ServerKit makes no config changes on this box. Metrics, survey, doctor reads
+                        and backups of pointed paths stay on; every mutating action is refused.
+                    </p>
+                    <label className="survey-tab__observed-toggle">
+                        <input
+                            type="checkbox"
+                            checked={!!observed?.allow_agent_update_observed}
+                            disabled={switching || !observed}
+                            onChange={(e) => toggleAgentUpdateOverride(e.target.checked)}
+                        />
+                        <span>
+                            Allow <code>agent:update</code> while observing
+                            <span className="survey-tab__muted"> — keep the agent binary current without leaving Observed mode</span>
+                        </span>
+                    </label>
+                </div>
+            )}
+
+            {showCatalog && catalog && (
+                <section className="survey-tab__catalog">
+                    <p className="survey-tab__muted">
+                        A survey is strictly read-only. Catalog v{catalog.version} — here is exactly what the agent looks at:
+                    </p>
+                    <ul className="survey-tab__catalog-list">
+                        {catalog.probes.map((p) => (
+                            <li key={p.id}>
+                                <strong>{p.title}</strong> <span className="survey-tab__muted">— {p.reads}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {diff && (
+                <section className="survey-tab__section">
+                    <h3 className="survey-tab__section-title"><RefreshCw size={15} aria-hidden="true" /> Since last flight</h3>
+                    <DiffSummary diff={diff} />
+                </section>
+            )}
+
+            {map ? (
+                <>
+                    <section className="survey-tab__section">
+                        <h3 className="survey-tab__section-title"><Boxes size={15} aria-hidden="true" /> Services</h3>
+                        <ServiceGrid services={map.services} />
+                    </section>
+
+                    <section className="survey-tab__section">
+                        <h3 className="survey-tab__section-title"><Globe size={15} aria-hidden="true" /> Sites</h3>
+                        <SitesTable sites={map.sites} />
+                    </section>
+
+                    <SimpleList
+                        icon={Database} title="Databases" items={map.databases}
+                        empty="No database engines detected."
+                        render={(d) => (
+                            <>
+                                <span className="survey-tab__mono">{d.engine}</span>
+                                {d.port ? <span className="survey-tab__muted"> :{d.port}</span> : null}
+                                {' '}<Pill kind={d.active ? 'green' : 'gray'}>{d.active ? 'active' : 'inactive'}</Pill>
+                            </>
+                        )}
+                    />
+
+                    <SimpleList
+                        icon={ShieldCheck} title="TLS certificates" items={map.certs}
+                        empty="No certificates detected."
+                        render={(c) => (
+                            <>
+                                <span className="survey-tab__mono">{c.domain}</span>
+                                {c.expires_at ? <span className="survey-tab__muted"> — expires {new Date(c.expires_at).toLocaleDateString()}</span> : null}
+                            </>
+                        )}
+                    />
+
+                    <SimpleList
+                        icon={Clock} title="Cron" items={map.cron}
+                        empty="No crontabs detected."
+                        render={(c) => (
+                            <>
+                                <span className="survey-tab__mono">{c.user}</span>
+                                <span className="survey-tab__muted"> — {(c.lines || []).length} job(s)</span>
+                            </>
+                        )}
+                    />
+
+                    <SimpleList
+                        icon={Radio} title="Listening ports" items={map.listeners}
+                        empty="No listeners reported."
+                        render={(l) => (
+                            <>
+                                <span className="survey-tab__mono">:{l.port}/{l.proto}</span>
+                                <span className="survey-tab__muted"> → {l.process || 'unknown'}</span>
+                            </>
+                        )}
+                    />
+
+                    {map.foreign_panels?.length ? (
+                        <SimpleList
+                            icon={Network} title="Control-panel markers" items={map.foreign_panels}
+                            empty=""
+                            render={(f) => <code className="survey-tab__mono">{f.marker}</code>}
+                        />
+                    ) : null}
+                </>
+            ) : (
+                <EmptyState
+                    icon={FileSearch}
+                    title="No survey yet"
+                    description="Fly a read-only survey to map what's running on this server."
+                />
+            )}
+        </div>
+    );
+};
+
+// A compact +added / −removed / ~changed summary across every map category.
+function DiffSummary({ diff }) {
+    const cats = [
+        ['services', 'Services'],
+        ['sites', 'Sites'],
+        ['databases', 'Databases'],
+        ['certs', 'Certs'],
+        ['cron', 'Cron'],
+        ['listeners', 'Listeners'],
+    ];
+    const chips = [];
+    cats.forEach(([key, label]) => {
+        const d = diff?.[key];
+        if (!d) return;
+        const parts = [];
+        if (d.added?.length) parts.push(`+${d.added.length}`);
+        if (d.removed?.length) parts.push(`−${d.removed.length}`);
+        if (d.changed?.length) parts.push(`~${d.changed.length}`);
+        if (parts.length) chips.push({ label, text: parts.join(' ') });
+    });
+    if (diff?.foreign_panel_changed) chips.push({ label: 'Control panel', text: 'changed' });
+
+    if (!chips.length) {
+        return <p className="survey-tab__muted">No changes since the last flight.</p>;
+    }
+    return (
+        <ul className="survey-tab__diff">
+            {chips.map((c) => (
+                <li key={c.label}>
+                    <span className="survey-tab__mono">{c.label}</span>
+                    <Pill kind="gray">{c.text}</Pill>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+// Detected services as small chips (name + ports + active/inactive).
+function ServiceGrid({ services }) {
+    const list = services || [];
+    if (!list.length) {
+        return <p className="survey-tab__muted">No managed services detected.</p>;
+    }
+    return (
+        <div className="survey-tab__services">
+            {list.map((s) => (
+                <div key={s.id} className="survey-tab__service">
+                    <Boxes size={14} aria-hidden="true" />
+                    <span className="survey-tab__service-name">{s.id}</span>
+                    {s.ports?.length ? (
+                        <span className="survey-tab__service-ports">:{s.ports.join(', :')}</span>
+                    ) : null}
+                    <Pill kind={s.active ? 'green' : 'gray'}>{s.active ? 'active' : 'inactive'}</Pill>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// Read-only web-server vhosts, with a "managed by" column that flags sites owned
+// by another control panel.
+function SitesTable({ sites }) {
+    const list = sites || [];
+    if (!list.length) {
+        return <p className="survey-tab__muted">No web-server vhosts detected.</p>;
+    }
+    return (
+        <div className="survey-tab__table-wrap">
+            <table className="survey-tab__table">
+                <thead>
+                    <tr>
+                        <th>Domain</th>
+                        <th>Stack</th>
+                        <th>Doc root</th>
+                        <th>Upstream</th>
+                        <th>Managed by</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {list.map((s, i) => (
+                        <tr key={s.domain || i}>
+                            <td className="survey-tab__mono">{s.domain}</td>
+                            <td>{s.stack}</td>
+                            <td className="survey-tab__mono">{s.doc_root || '—'}</td>
+                            <td className="survey-tab__mono">{s.upstream || '—'}</td>
+                            <td>
+                                {s.managed_by === 'other-panel'
+                                    ? <Pill kind="amber">other panel</Pill>
+                                    : <Pill kind="gray">{s.managed_by}</Pill>}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// A titled section that renders a simple list of items, or an empty hint.
+function SimpleList({ icon: Icon, title, items, empty, render }) {
+    const list = items || [];
+    return (
+        <section className="survey-tab__section">
+            <h3 className="survey-tab__section-title"><Icon size={15} aria-hidden="true" /> {title}</h3>
+            {list.length ? (
+                <ul className="survey-tab__list">
+                    {list.map((item, i) => <li key={i}>{render(item)}</li>)}
+                </ul>
+            ) : (
+                empty ? <p className="survey-tab__muted">{empty}</p> : null
+            )}
+        </section>
+    );
+}
+
+export default SurveyTab;

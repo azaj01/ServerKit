@@ -1,0 +1,35 @@
+// STAGING banner (plan 37 testbed)
+// Full-width amber strip pinned to the very top of the app shell. Only shown on
+// the staging instance (backend /system/health echoes `staging:true`). Uses the
+// theme-agnostic $warning* tokens so it reads clearly in light and dark themes,
+// with dark text on amber for legibility.
+.staging-banner {
+    position: sticky;
+    top: 0;
+    z-index: $z-fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $spacing-sm;
+    width: 100%;
+    padding: $spacing-sm $spacing-md;
+    background-color: $warning;
+    border-bottom: 1px solid $warning-border;
+    color: #1a1300; // dark text on amber — legible in both themes
+    font-size: $font-size-sm;
+    line-height: $line-height-tight;
+    text-align: center;
+
+    &__label {
+        font-weight: $font-weight-bold;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 2px $spacing-sm;
+        border-radius: $radius-sm;
+        background-color: rgba(0, 0, 0, 0.16);
+    }
+
+    &__text {
+        font-weight: $font-weight-semibold;
+    }
+}

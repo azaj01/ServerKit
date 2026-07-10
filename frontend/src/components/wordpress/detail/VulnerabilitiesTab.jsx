@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import wordpressApi from '../../../services/wordpress';
 import { useToast } from '../../../contexts/ToastContext';
-import { MetricCard } from '../../ds';
+import { KpiBand, MetricCard } from '../../ds';
 import { Button } from '@/components/ui/button';
 import { OverviewGridSkeleton } from './wpDetailShared';
 
@@ -72,7 +72,7 @@ const VulnerabilitiesTab = ({ siteId }) => {
                 </div>
 
                 {data?.scanned_at && (
-                    <div className="wp-kpis">
+                    <KpiBand>
                         <MetricCard icon={<AlertTriangle size={16} />} tone="red" value={summary.critical ?? 0} label="Critical" />
                         <MetricCard icon={<AlertTriangle size={16} />} tone="red" value={summary.high ?? 0} label="High" />
                         <MetricCard icon={<AlertTriangle size={16} />} tone="amber" value={summary.medium ?? 0} label="Medium" />
@@ -80,7 +80,7 @@ const VulnerabilitiesTab = ({ siteId }) => {
                         {summary.unknown > 0 && (
                             <MetricCard icon={<AlertTriangle size={16} />} tone="violet" value={summary.unknown} label="Unrated" />
                         )}
-                    </div>
+                    </KpiBand>
                 )}
 
                 {vulns.length === 0 ? (

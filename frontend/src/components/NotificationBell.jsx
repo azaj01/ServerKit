@@ -45,13 +45,18 @@ export default function NotificationBell() {
     };
 
     const onItemClick = (item) => {
-        // System notices route to their fix; bus notifications just mark read.
+        // System notices route to their fix; bus notifications mark read and
+        // then deep-link to their subject when they carry an action_path.
         if (item.kind === 'notice') {
             setOpen(false);
             if (item.action_path) navigate(item.action_path);
             return;
         }
         if (!item.read && markRead) markRead(item.delivery_id);
+        if (item.action_path) {
+            setOpen(false);
+            navigate(item.action_path);
+        }
     };
 
     const badge = unreadCount > 99 ? '99+' : unreadCount;
@@ -130,7 +135,10 @@ export default function NotificationBell() {
                                         <span className="sk-notif__content">
                                             <span className="sk-notif__title">{item.title}</span>
                                             {item.body && <span className="sk-notif__text">{item.body}</span>}
-                                            <span className="sk-notif__time">{timeAgo(item.created_at)}</span>
+                                            <span className="sk-notif__time">
+                                                {timeAgo(item.created_at)}
+                                                {item.action_path && <span className="sk-notif__cta"> · {item.action_label || 'Open'} →</span>}
+                                            </span>
                                         </span>
                                     </button>
                                 )

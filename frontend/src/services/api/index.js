@@ -40,6 +40,8 @@ import * as doctorMethods from './doctor.js';
 import * as bandwidthMethods from './bandwidth.js';
 import * as htaccessToolMethods from './htaccessTools.js';
 import * as manifestMethods from './manifests.js';
+import * as surveyMethods from './survey.js';
+import * as dnsCutoverMethods from './dnsCutover.js';
 
 class ApiService extends ApiClient {
     constructor() {
@@ -87,6 +89,8 @@ class ApiService extends ApiClient {
             bandwidthMethods,
             htaccessToolMethods,
             manifestMethods,
+            surveyMethods,
+            dnsCutoverMethods,
         ];
         for (const mod of modules) {
             for (const [key, fn] of Object.entries(mod)) {

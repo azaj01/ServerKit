@@ -77,11 +77,20 @@ class SiteImportService:
             raise SiteImportError(
                 f'source_type must be one of {VALID_SOURCE_TYPES}')
         source = source or {}
-        if not source.get('upload_path') and not source.get('url'):
-            raise SiteImportError(
-                "source must contain 'upload_path' or 'url'")
-        if source.get('url'):
-            cls._validate_url(source['url'])  # fail fast at creation time
+        if source_type == 'ssh':
+            # SSH sources carry connection facts (host/user/docroot), not an
+            # archive; validate + normalise (keyfile-only, no password field).
+            from app.services.site_importers.ssh import parse_ssh_source
+            try:
+                source = parse_ssh_source(source)
+            except ValueError as exc:
+                raise SiteImportError(str(exc))
+        else:
+            if not source.get('upload_path') and not source.get('url'):
+                raise SiteImportError(
+                    "source must contain 'upload_path' or 'url'")
+            if source.get('url'):
+                cls._validate_url(source['url'])  # fail fast at creation time
         imp = SiteImport(source_type=source_type, status='created',
                          created_by=user_id)
         imp.set_source(source)
@@ -253,6 +262,8 @@ class SiteImportService:
     @classmethod
     def analyze(cls, imp):
         """Fetch + extract + analyse; sets status analyzed/failed."""
+        if imp.source_type == 'ssh':
+            return cls._analyze_ssh(imp)
         imp.status = 'analyzing'
         imp.error = None
         imp.current_step = 'analyze'
@@ -295,6 +306,54 @@ class SiteImportService:
                           f"{len(analysis.get('databases', []))} database(s), "
                           f"{len(analysis.get('db_users', []))} DB user(s), "
                           f"{len(analysis.get('crontab', []))} cron line(s).")
+            for warning in analysis.get('warnings', []):
+                cls._log(imp, f'Warning: {warning}')
+            db.session.commit()
+            return analysis
+        except Exception as exc:
+            db.session.rollback()
+            imp.status = 'failed'
+            imp.error = str(exc)
+            cls._log(imp, f'Analysis failed: {exc}')
+            db.session.commit()
+            raise
+
+    @classmethod
+    def _analyze_ssh(cls, imp):
+        """Stage a live site over SSH, then build the analyse report from the
+        source + pull result. Credentials never persist: the DB password is
+        scrubbed from the durable source once the pull has consumed it, and the
+        staging manifest records no secrets (plan 31 #7/#9, Decision 5)."""
+        from app.services.site_importers.ssh import GenericSshImporter
+
+        imp.status = 'analyzing'
+        imp.error = None
+        imp.current_step = 'analyze'
+        db.session.commit()
+        try:
+            source = imp.get_source()
+            staging = cls.extracted_dir(imp)
+            if os.path.isdir(staging):
+                shutil.rmtree(staging, ignore_errors=True)
+            os.makedirs(staging, exist_ok=True)
+
+            importer = GenericSshImporter()
+            cls._log(imp, "Staging site over SSH from "
+                          f"{source.get('user')}@{source.get('host')} ...")
+            pull = importer.pull(source, staging)
+
+            analysis = GenericSshImporter.analyze_source(source, pull)
+            imp.set_analysis(analysis)
+
+            # Scrub the DB password from the durable record now the pull is done.
+            scrubbed = {k: v for k, v in source.items() if k != 'db_password'}
+            imp.set_source(scrubbed)
+
+            imp.status = 'analyzed'
+            imp.current_step = None
+            cls._log(imp, 'Analysis complete (SSH source): '
+                          f"{len(analysis.get('domains', []))} domain(s), "
+                          f"{len(analysis.get('databases', []))} database(s).")
             for warning in analysis.get('warnings', []):
                 cls._log(imp, f'Warning: {warning}')
             db.session.commit()
@@ -460,6 +519,19 @@ class SiteImportService:
     def _step_copy_files(cls, imp, ctx):
         application = cls._get_app(imp, ctx)
         analysis = ctx['analysis']
+        # SSH imports stage the docroot directly (no homedir layout to walk).
+        staged = analysis.get('staged_docroot')
+        if staged:
+            src = os.path.join(ctx['extracted'], staged)
+            if not os.path.isdir(src):
+                raise SiteImportError(
+                    f'Staged docroot not found: {src}')
+            shutil.copytree(src, application.root_path, dirs_exist_ok=True)
+            copied = sum(len(files) for _b, _d, files
+                         in os.walk(application.root_path))
+            cls._log(imp, f'Copied staged site files ({copied} file(s) now in '
+                          'docroot).')
+            return
         if not analysis.get('homedir_present'):
             ctx['result']['warnings'].append(
                 'Backup has no homedir — no site files copied.')

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
 import { InfoList, InfoItem } from '../InfoList';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,10 @@ function formatUptime(seconds) {
 
 const SystemTab = () => {
     const { isAdmin } = useAuth();
+    const { whiteLabel } = useTheme();
+    const brand = whiteLabel?.enabled && whiteLabel?.brandName ? whiteLabel.brandName : 'ServerKit';
     const [metrics, setMetrics] = useState(null);
+    const [version, setVersion] = useState('');
     const [loading, setLoading] = useState(true);
     const [timezones, setTimezones] = useState([]);
     const [selectedTimezone, setSelectedTimezone] = useState('');
@@ -45,6 +49,7 @@ const SystemTab = () => {
             loadMetrics();
             loadTimezones();
             loadDomainInfo();
+            api.getVersion().then(d => setVersion(d.version || '')).catch(() => {});
         }
     }, [isAdmin]);
 
@@ -197,14 +202,19 @@ const SystemTab = () => {
                 </div>
             </div>
 
-            {metrics?.system && (
+            {(metrics?.system || version) && (
                 <div className="settings-card">
                     <h3>System Details</h3>
                     <InfoList>
-                        <InfoItem label="Hostname" value={metrics.system.hostname || '-'} />
-                        <InfoItem label="Platform" value={metrics.system.platform || '-'} />
-                        <InfoItem label="OS Version" value={metrics.system.version || '-'} />
-                        <InfoItem label="Uptime" value={formatUptime(metrics.system.uptime)} />
+                        <InfoItem label={`${brand} Version`} value={version || '-'} />
+                        {metrics?.system && (
+                            <>
+                                <InfoItem label="Hostname" value={metrics.system.hostname || '-'} />
+                                <InfoItem label="Platform" value={metrics.system.platform || '-'} />
+                                <InfoItem label="OS Version" value={metrics.system.version || '-'} />
+                                <InfoItem label="Uptime" value={formatUptime(metrics.system.uptime)} />
+                            </>
+                        )}
                     </InfoList>
                 </div>
             )}

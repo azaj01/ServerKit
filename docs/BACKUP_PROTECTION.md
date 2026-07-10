@@ -81,6 +81,50 @@ Open a backup from the history → **Restore** → choose the scope and confirm:
 
 Restore runs as a `restore.run` job; you're notified on completion.
 
+## How restore proof works
+
+A backup you have never restored is an assumption, not a safety net. ServerKit
+records how strongly each backup has been *proven*, on a ladder:
+
+| Level | What it means |
+|-------|---------------|
+| `none` | Produced, nothing checked yet. |
+| `listed` | Every archive is readable end to end (`tar -t`). |
+| `hashed` | The primary archive still matches the sha256 recorded in its `manifest.json` — catches silent corruption. |
+| `drilled` | A real restore of this point actually succeeded (strongest proof). |
+
+`listed` and `hashed` run automatically at the end of **every** backup (inside
+the existing `verifying` window). Each run writes a `manifest.json` next to its
+archives — file list, per-artifact sha256, chain refs, tool versions — and the
+primary archive's hash is stored on the run.
+
+A **restore drill** earns `drilled`. On a per-policy cadence (**Off / Weekly /
+Monthly**, set on the Schedule card) — or on demand with **Run drill now** — the
+latest restorable point is restored into a throwaway scratch location (a
+`restores/drill-<id>/` dir for files/apps/WordPress, a `skdrill_<run_id>`
+scratch database for databases), probe-verified (file count + bytes + a hashed
+sample; table listing for databases), then torn down. It never touches the live
+target. Drilling the *latest* point proves the whole incremental chain by
+construction. A free-space precheck marks an under-provisioned drill
+`skipped_no_space` rather than failing mid-extract, and only one drill runs at a
+time per host.
+
+The Protection panel shows a **Last proven restore** badge (never / ok / stale /
+failed) and the Doctor raises a repairable warning when a cadenced policy is
+overdue (> 1.5× its cadence) or its latest backup is unverified.
+
+For **remote copies**, a weekly check compares the offsite object's size and —
+for single-part uploads — its ETag/MD5; multipart uploads are honestly labelled
+`size_only` until a **monthly deep check** downloads one sampled object and
+hashes it against the *stored* sha256 (never a hash recomputed from the local
+file, which could share the same corruption). Egress stays bounded to one object
+per month.
+
+Drill/verify failures and recoveries notify admins **once per transition**
+(`backup.drill_failed` / `backup.verify_failed` and their recovery notices), not
+on every sweep. The diagnostic support bundle includes a scrubbed
+`restore_confidence` summary (levels + states only, no paths or secrets).
+
 ## Under the hood
 
 - **Models**: `BackupPolicy` (one per target) and `BackupRun` (one per run, the
@@ -89,6 +133,10 @@ Restore runs as a `restore.run` job; you're notified on completion.
 - **Services**: `backup_policy_service.py` (policy CRUD, schedule wiring, the
   `backup.policy.run` / `restore.run` job handlers, retention),
   `backup_cost_service.py` (cost), and the smart-backup helpers in
-  `backup_service.py`.
+  `backup_service.py`. Restore proof lives in `backup_verify_service.py`
+  (manifest + tier-1 verifier), `backup_drill_service.py` (`backup.drill.run` +
+  cadence/orphan sweeps, `RestoreDrill` model), `backup_offsite_service.py`
+  (`backup.offsite.verify`), and `backup_alert_service.py` (edge-triggered
+  drill/verify notices).
 - **Scheduling**: the policy's cron is mirrored into a `ScheduledJob` on the
   unified job bus, so firing is observable and retryable like any other job.

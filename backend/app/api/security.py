@@ -1,3 +1,5 @@
+# Bucket: PER-APP (plan 29 #9). Per-app scan/security routes gate on the shared
+# app-access seam; host-level firewall/fail2ban/malware surfaces stay admin-only.
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.middleware.rbac import admin_required

@@ -18,6 +18,135 @@ and the project aims to follow [Semantic Versioning](https://semver.org/spec/v2.
 The `dev` branch is well ahead of the last `main` release. The headline work
 awaiting a stable release:
 
+### Added
+
+- **Appliance tier for `serverkit.yaml` — typed L4 ports + a plan-time blockers
+  rail** — a service can now declare raw `ports[]` (`{port, containerPort,
+  protocol: tcp|udp, expose: public|local}`) as an escape hatch for
+  infrastructure that speaks more than HTTP (media/UDP, VoIP, brokers). `public`
+  ports render a `0.0.0.0` publish and open a firewall rule (recorded so an app
+  delete closes it); `local` ports bind `127.0.0.1`. The scalar `port` keeps its
+  HTTP/nginx behavior untouched. Apply grows **blockers** distinct from advisory
+  issues — it refuses (nothing executed, no force flag) on a port conflict, a
+  remote/observed target, or an undetectable firewall, with a message that says
+  what the target can't provide and how to fix it.
+- **Appliance tier — finished volumes + one-shot first-boot bootstrap** — a
+  manifest disk's `size` is now recorded on the volume, its declared mounts are
+  emitted into the generated compose, and its `backup:` block resolves the
+  docker volume's live host mountpoint so backups capture the real data. A new
+  `bootstrap: { command, timeoutSeconds }` runs once (via `docker compose run
+  --rm`) after volumes exist — for appliances that generate a config tree on
+  first boot — and stamps the app so it never re-runs; re-arm it with
+  `POST /manifests/bootstrap/reset` (type the app name to confirm).
+- **Appliance tier — multi-container units** — a service can now declare a
+  `containers:` map and become one Application rendered as one compose project
+  with a private network and health-gated `dependsOn`. Each container takes the
+  full vocabulary (`image`, `ports`, `disks`, `envVars`, `bootstrap`,
+  `hostRequirements`, `healthCheck`, `dependsOn`); `healthCheck.cmd` becomes a
+  `CMD-SHELL` probe and `healthCheck.httpPath` a `wget` probe; dependsOn is
+  validated against sibling containers and rejected on cycles. Per-container
+  named volumes (`{unit}-{container}-{disk}`) let two containers mount the same
+  path without colliding. `dependsOn` cycles and buildpack-key mixing are
+  plan-time errors.
+- **Appliance tier — BYO image + host requirements** — a service (or unit
+  container) can declare a ready-made `image:` with an optional private
+  `registry:` (an unknown/uncredentialed registry is a plan-time blocker; ECR is
+  accepted via its key-pair exchange), and `hostRequirements:`
+  (`privileged`/`capAdd`/`sysctls`/`devices`/`kernelModules`). Host requirements
+  are listed in plain words in the plan and written to a
+  `manifest.host_requirements` audit line on apply — never applied silently;
+  `kernelModules` are an advisory `/proc/modules` check.
+- **Appliance tier — network identity** — an env var can bind the service's own
+  advertised address with `fromServer: { property: publicIp|hostname }` (the
+  WebRTC/NAT need; a missing IP is a `fromserver_no_ip` blocker), and templates
+  gain a `${SERVER_PUBLIC_IP}` magic variable. Manifest-generated app projects
+  now attach to a shared external `serverkit` docker network (created
+  idempotently), so a `fromService` host reference resolves cross-app by
+  container name at runtime. Static egress IPs remain out of scope (documented).
+- **Appliance tier — reference appliance + adoption hardening** — a runnable
+  4-container real-time-media reference manifest ships at
+  `docs/examples/reference-appliance-media.yaml` and applies end-to-end.
+  `serverkit.yaml` scaffolding now round-trips typed `ports`, a BYO `image`, and
+  disk `size` from a live app, and drift detection tracks raw ports and image
+  alongside the existing surface.
+- **New Service wizard clarity** — each source card now shows a short explainer
+  strip when selected (what it does, what to have ready, the next steps), and a
+  "Docs" link to the matching serverkit.ai guide (hidden under White Label). The
+  demo deploy template moved out of the wizard into a shared module: the
+  Templates tab gains a **Deploy templates** section with a "Use template"
+  action that deep-links into the wizard with the template preselected
+  (`/services/new?template=<id>`), so there is one list with two entry points.
+- **Install extensions straight from GitHub, with a preview + consent step** —
+  the manual-install URL flow is now two-step: paste a repo (`owner/repo`,
+  `owner/repo@tag`, a release URL, or a direct `.zip`), **Preview** resolves and
+  reads the extension, then a consent card shows its version, declared
+  permissions, panel-version compatibility, and warnings (no release found,
+  slug already installed, version-gate mismatch) before you install. The install
+  is pinned to the exact previewed bytes via sha256. A new
+  `POST /api/v1/plugins/preview` endpoint powers it. Set the optional
+  `SERVERKIT_GITHUB_TOKEN` to lift GitHub's anonymous rate limit and install
+  from private repos (the token is only ever sent to GitHub, never logged).
+- **Public extension index (registry v2)** — the extension registry schema gains
+  optional `logo`, `repo`, and `bundled` fields (additive; v1 entries stay
+  valid). The Marketplace now surfaces extension logos (shown first in the art
+  fallback chain) and a **Source repo** link on the detail modal. Builtin
+  extensions are published to the public index as `bundled` catalog listings
+  (generated via `scripts/export-registry-entries.mjs`) so the index is the full
+  catalog of every extension; bundled entries stay out of the Browse merge to
+  avoid duplicating builtin cards (`GET /api/v1/marketplace/registry?include_bundled=true`
+  returns the complete set).
+
+### Changed
+
+- **UI consistency round (Jobs, Queue Bus, Email, Marketplace)** — brought four
+  drifted pages back onto the shared host idiom. The **Jobs** page was rebuilt
+  to the /servers–/domains table-with-search pattern (SegControl status filter,
+  kind select, debounced search, DataTable rows, clickable KPIs) and now pages
+  server-side against the job store; a new `builtin.job_retention` scheduled job
+  prunes old terminal jobs (`jobs.retention_days`, default 14; failed kept 3×)
+  so the total count stops growing without bound. **Queue Bus** counts render in
+  a compact notation (107,814 → "107.8K", exact value on hover) via a new
+  `formatCompact` util and an opt-in `compact` prop on the KPI tile, so six-digit
+  totals no longer burst the rail. The **Email Server** page was reskinned to the
+  `sk-email` design system (its rebuilt classes had been wearing dead selectors),
+  with a designed not-installed state and DataTable lists. The **Marketplace** got
+  a density pass — Installed promoted to a top-bar tab, one toolbar row, compact
+  cards — plus per-extension cover art (deterministic per-slug gradients with
+  brand marks, optional registry `logo`).
+
+### Fixed
+
+- **July‑5–7 recovery rebuild** — a scattered subset of the July‑5–7 work
+  (plans 22, 28–34) was lost when a backup was corrupted, leaving the backend
+  unable to boot. Reconstructed the dropped service layer (agent‑fleet survey +
+  fleet doctor/repair, backup restore‑drills + verify, reachable DNS cutover,
+  setup‑health + reconcile, cron‑run history, notification digests + chat
+  webhooks, the 4‑tier authorization model), the `FleetDoctorResult` /
+  `DnsCutoverSnapshot` models, the missing migration chain (056–074), five lost
+  frontend components, and the per‑app route authorization gating — recovered
+  with high fidelity from surviving compiled bytecode, the surviving tests, and
+  the plan docs. Backend boots clean, `flask db upgrade` reaches head on a fresh
+  DB, and the full test suite is green again.
+- **Recovery parity audit** — a follow-up audit found the recovery rebuild had
+  silently dropped more than the above: because code and its proving tests died
+  *together*, the suite stayed green while whole slices vanished. Restored the
+  Cloudflare Round 2 engine (DNSSEC status, Origin CA issue/install/revoke,
+  redirect & transform rules, the per-zone operations activity ledger, and the
+  per-product token-scope probe), the email-bounce webhook + auto-mute slice,
+  the DNS-cutover explicit-records staging path (a `NO_PROVIDER` now names the
+  provider), the Server **Survey** tab and its (previously 404-ing) API routes,
+  the cron run-history styling, and 18 lost backend test suites. Where a restored
+  test proved its feature still hollow, it is skipped with a reason naming the
+  exact missing symbol so the gap stays visible.
+- **Survey API routes returned 404** — `app/api/survey.py` was defined but never
+  registered after the rebuild; the server-detail Survey tab and management-mode
+  endpoints are reachable again.
+- **Test-count ratchet** — Backend CI now fails if the collected-test count drops
+  below a checked-in floor (`backend/tests/BASELINE_COUNT`). Lowering the floor
+  requires editing that file in the same commit, so a silent test loss (the exact
+  failure mode that hid the recovery gaps above) surfaces as a red X instead of a
+  still-green suite.
+
 ### Removed
 
 - **Legacy marketplace catalog** — the DB-seeded `Extension`/`ExtensionInstall`

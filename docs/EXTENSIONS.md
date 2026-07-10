@@ -384,6 +384,37 @@ entries). Python `requirements.txt` is **not** installed unless the operator set
 `SERVERKIT_ALLOW_PLUGIN_PIP=1` (installing runs pip with the backend's
 privileges).
 
+### Installable straight from GitHub
+
+Your extension is installable from a raw GitHub URL with **no registry entry
+required** — that's the "paste a repo, get a safe install" path. Make it work
+by honoring this contract:
+
+- **`plugin.json` at the archive root.** The installer reads the manifest from
+  the top level (GitHub zipball nesting is handled). No `plugin.json` at the
+  root is the single most common failure.
+- **Prefer a release with a `.zip` asset.** Tag a release and attach your
+  packaged `.zip`; the installer picks the `.zip` asset over the source
+  zipball, giving a reproducible, checksum-pinnable download. With no release,
+  it falls back to the default-branch source archive and the preview **warns**.
+- **Accepted forms:** a repo URL, a release URL, a direct `.zip`, or the
+  shorthand `owner/repo` and `owner/repo@tag`.
+
+Before anything lands, the panel **previews** the install: it resolves and
+downloads the source, reads your manifest, and shows the user a consent card
+with the version, the **declared `permissions`** (the same "This extension
+requests:" block registry entries show), panel-version compatibility, and any
+warnings (no release found, slug already installed, version-gate mismatch). The
+subsequent install is pinned to the exact previewed bytes via `sha256`, so what
+is installed is byte-identical to what was previewed. Declaring your
+`permissions` honestly is therefore what the user sees and agrees to — under- or
+over-declaring both read badly at the consent step.
+
+Private repos and GitHub's anonymous rate limit are handled by the optional
+`SERVERKIT_GITHUB_TOKEN` env var (Bearer auth, attached only to GitHub hosts,
+never logged). See [`POST /api/v1/plugins/preview`](EXTENSIONS_REGISTRY.md) and
+the site's [Installing](https://serverkit.ai/docs/extensions/installing) guide.
+
 ### Docker note
 
 A dockerized backend only sees `/app`, not the host's `frontend/` tree. To install

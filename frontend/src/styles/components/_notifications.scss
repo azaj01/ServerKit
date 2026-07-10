@@ -53,6 +53,31 @@
     gap: $space-4;
 }
 
+// "Email bouncing" warning shown in the Email Settings card when a user's
+// address is auto-muted after repeated hard bounces (plan 33 Phase 4).
+.notif-bounce-warning {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-3;
+    flex-wrap: wrap;
+    margin-top: $space-3;
+    padding: $space-3;
+    background: $danger-bg;
+    border: 1px solid $danger-border;
+    border-radius: $radius-md;
+
+    &__body {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        flex-wrap: wrap;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+        min-width: 0;
+    }
+}
+
 .channel-toggles,
 .category-toggles {
     display: flex;
@@ -269,4 +294,213 @@
     margin-top: $space-6;
     padding-top: $space-4;
     border-top: 1px solid $border-subtle;
+}
+
+// ============================================
+// PER-EVENT OVERRIDE MATRIX + ORG DEFAULTS (plan 24 Phase 2)
+// ============================================
+
+.notif-event-matrix {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+}
+
+.notif-event-category {
+    border: 1px solid $border-subtle;
+    border-radius: $radius-md;
+    overflow: hidden;
+
+    &__header {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        width: 100%;
+        padding: $space-3 $space-4;
+        background: $bg-card;
+        border: none;
+        cursor: pointer;
+        color: $text-primary;
+        text-align: left;
+
+        &:hover { background: $bg-hover; }
+
+        .expand-icon {
+            margin-left: auto;
+            transition: transform 0.15s ease;
+            &.expanded { transform: rotate(180deg); }
+        }
+    }
+
+    &__name { font-weight: 600; }
+
+    &__body {
+        display: flex;
+        flex-direction: column;
+        border-top: 1px solid $border-subtle;
+    }
+}
+
+.notif-event-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-4;
+    padding: $space-3 $space-4;
+    flex-wrap: wrap;
+
+    &:not(:last-child) { border-bottom: 1px solid $border-subtle; }
+
+    &__meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 180px;
+    }
+
+    &__title { color: $text-primary; font-size: 0.9rem; }
+
+    &__key {
+        color: $text-tertiary;
+        font-size: 0.75rem;
+        font-family: $font-mono;
+    }
+
+    &__channels {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        flex-wrap: wrap;
+    }
+
+    &__reset {
+        background: transparent;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-sm;
+        color: $text-secondary;
+        padding: $space-1 $space-2;
+        font-size: 0.75rem;
+        cursor: pointer;
+
+        &:hover:not(:disabled) { background: $bg-hover; color: $text-primary; }
+        &:disabled { opacity: 0.4; cursor: default; }
+    }
+}
+
+.notif-chan-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: $space-1 $space-2;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    background: $bg-card;
+    color: $text-secondary;
+    font-size: 0.75rem;
+    cursor: pointer;
+    text-transform: capitalize;
+
+    &__state {
+        font-size: 0.68rem;
+        font-weight: 600;
+        opacity: 0.85;
+    }
+
+    &--inherit { border-style: dashed; color: $text-tertiary; }
+
+    &--on {
+        background: $accent-glow;
+        border-color: $accent-primary;
+        color: $accent-primary;
+    }
+
+    &--off {
+        background: fade($danger, 12%);
+        border-color: fade($danger, 40%);
+        color: $danger;
+    }
+
+    &:hover { border-color: $border-default; }
+}
+
+.notif-org-defaults {
+    .notif-defaults-grid {
+        display: flex;
+        flex-direction: column;
+        gap: $space-1;
+        margin: $space-3 0;
+        overflow-x: auto;
+    }
+
+    .notif-defaults-grid__head,
+    .notif-defaults-grid__row {
+        display: grid;
+        grid-template-columns: 140px repeat(5, minmax(64px, 1fr));
+        align-items: center;
+        gap: $space-2;
+    }
+
+    .notif-defaults-grid__head {
+        padding-bottom: $space-2;
+        border-bottom: 1px solid $border-subtle;
+    }
+
+    .notif-defaults-grid__chan {
+        text-align: center;
+        font-size: 0.75rem;
+        color: $text-secondary;
+        text-transform: capitalize;
+    }
+
+    .notif-defaults-grid__row {
+        padding: $space-2 0;
+        &:not(:last-child) { border-bottom: 1px solid $border-subtle; }
+    }
+
+    .notif-defaults-grid__cat {
+        font-size: 0.85rem;
+        color: $text-primary;
+        font-weight: 500;
+    }
+
+    .notif-defaults-grid__cell {
+        display: flex;
+        justify-content: center;
+        cursor: pointer;
+    }
+}
+
+// Email digest cadence selector (plan 24 Phase 3)
+.notif-digest-options {
+    display: flex;
+    gap: $space-3;
+    flex-wrap: wrap;
+    margin-top: $space-2;
+}
+
+.notif-digest-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 140px;
+    padding: $space-3 $space-4;
+    background: $bg-card;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-md;
+    cursor: pointer;
+    text-align: left;
+    color: $text-secondary;
+
+    &:hover { border-color: $border-default; }
+
+    &.active {
+        border-color: $accent-primary;
+        background: $accent-glow;
+        color: $accent-primary;
+    }
+
+    &__label { font-weight: 600; font-size: 0.9rem; }
+    &__hint { font-size: 0.75rem; color: $text-tertiary; }
+
+    &.active &__hint { color: $accent-primary; opacity: 0.85; }
 }

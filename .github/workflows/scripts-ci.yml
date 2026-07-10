@@ -76,6 +76,7 @@ jobs:
           bash scripts/test/test_lib.sh
           bash scripts/test/test_cli.sh
           bash scripts/test/test_agent_install.sh
+          bash scripts/test/test_stage.sh
 
       - name: nginx -t smoke (shipped vhosts parse on a real nginx)
         run: |
@@ -132,6 +133,7 @@ jobs:
             bash scripts/test/test_lib.sh
             bash scripts/test/test_cli.sh
             bash scripts/test/test_agent_install.sh
+            bash scripts/test/test_stage.sh
           '
 
   update-e2e:

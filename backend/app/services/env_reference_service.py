@@ -28,7 +28,38 @@ class EnvReferenceResolver:
             return cls._resolve_secret(ref.get('secret'))
         if kind == 'service':
             return cls._resolve_service(app, ref.get('service'), ref.get('property'))
+        if kind == 'server':
+            return cls._resolve_server(app, ref.get('property'))
         return None, f'unknown reference kind: {kind}'
+
+    # -- fromServer (appliance tier, plan 35) -------------------------------
+
+    @classmethod
+    def _resolve_server(cls, app, prop: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+        """The service's own advertised identity — the WebRTC/NAT need. Resolves
+        against the app's target server, or the panel host when unassigned."""
+        prop = prop or 'publicIp'
+        server_id = getattr(app, 'server_id', None)
+        if server_id:
+            from app.models.server import Server
+            srv = Server.query.get(server_id)
+            if not srv:
+                return None, 'target server not found'
+            if prop == 'publicIp':
+                return (srv.ip_address, None) if srv.ip_address \
+                    else (None, 'target server has no recorded IP')
+            if prop == 'hostname':
+                return (getattr(srv, 'hostname', None) or srv.name or None), None
+            return None, f'unknown server property `{prop}`'
+        # panel host
+        if prop == 'publicIp':
+            from app.services.site_domain_service import SiteDomainService
+            ip = SiteDomainService.server_ip()
+            return (ip, None) if ip else (None, 'panel host public IP is not configured')
+        if prop == 'hostname':
+            import socket
+            return socket.gethostname(), None
+        return None, f'unknown server property `{prop}`'
 
     # -- fromSecret ---------------------------------------------------------
 

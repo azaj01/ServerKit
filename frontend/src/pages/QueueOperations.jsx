@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { MetricCard, Pill } from '@/components/ds';
+import { formatCompact, formatFull } from '../utils/formatNumber';
 
 const STATUS_KINDS = {
     pending: 'blue',
@@ -280,10 +281,10 @@ const QueueOperations = () => {
                             <span>Overview</span>
                         </div>
                         <div className="queue-rail-overview">
-                            <MetricCard label="Groups" value={groups.length} />
-                            <MetricCard label="Queues" value={totalQueues} />
-                            <MetricCard label="Messages" value={totalMessages} />
-                            <MetricCard label="Dead Letter" value={statusCounts.dead_letter || 0} kind="danger" />
+                            <MetricCard label="Groups" value={groups.length} compact />
+                            <MetricCard label="Queues" value={totalQueues} compact />
+                            <MetricCard label="Messages" value={totalMessages} compact />
+                            <MetricCard label="Dead Letter" value={statusCounts.dead_letter || 0} kind="danger" compact />
                         </div>
                     </section>
 
@@ -300,7 +301,7 @@ const QueueOperations = () => {
                             >
                                 <Server size={14} />
                                 <span>All groups</span>
-                                <b>{totalQueues}</b>
+                                <b title={String(formatFull(totalQueues))}>{formatCompact(totalQueues)}</b>
                             </button>
                             {groups.map(group => (
                                 <button
@@ -314,7 +315,7 @@ const QueueOperations = () => {
                                     {group.owner_type === 'system' && (
                                         <span className="queue-group-badge">system</span>
                                     )}
-                                    <b>{group.stats?.queues || 0}</b>
+                                    <b>{formatCompact(group.stats?.queues || 0)}</b>
                                 </button>
                             ))}
                         </div>
@@ -332,7 +333,7 @@ const QueueOperations = () => {
                                 onClick={() => setMessageFilter('all')}
                             >
                                 <span><strong>All</strong><small>Any status</small></span>
-                                <b>{totalMessages}</b>
+                                <b title={String(formatFull(totalMessages))}>{formatCompact(totalMessages)}</b>
                             </button>
                             {STATUS_ORDER.map(status => (
                                 <button
@@ -345,7 +346,7 @@ const QueueOperations = () => {
                                         <strong>{STATUS_LABELS[status]}</strong>
                                         <small>{status}</small>
                                     </span>
-                                    <b>{statusCounts[status] || 0}</b>
+                                    <b title={String(formatFull(statusCounts[status] || 0))}>{formatCompact(statusCounts[status] || 0)}</b>
                                 </button>
                             ))}
                         </div>

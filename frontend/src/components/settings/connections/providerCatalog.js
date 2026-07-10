@@ -16,6 +16,7 @@ export const CONNECTION_CATEGORIES = [
     { key: 'dns', label: 'DNS & domains', blurb: 'Let ServerKit manage DNS records and issue wildcard certificates automatically.' },
     { key: 'registrar', label: 'Registrars & ownership', blurb: 'Track the domains you own and when their registration expires.' },
     { key: 'email', label: 'Email & delivery', blurb: 'Outbound relays and deliverability for the mail server.' },
+    { key: 'chat', label: 'Chat & webhooks', blurb: 'Send notifications to a shared chat room or webhook, filtered by category.' },
     { key: 'storage', label: 'Storage & backups', blurb: 'Off-site destinations for backups and large assets.' },
 ];
 
@@ -106,6 +107,30 @@ export const CONNECTION_PROVIDERS = [
     {
         id: 'smtp', category: 'email', name: 'SMTP relay', kind: 'email',
         blurb: 'Send outbound mail through a provider like Postmark, SES or Mailgun.',
+    },
+
+    // ── Chat & webhooks ──
+    // Org-level notification destinations. One card per kind; each holds many
+    // connections (e.g. an #ops room and a #security room), routed by category.
+    {
+        id: 'chat_discord', category: 'chat', name: 'Discord', kind: 'chatwebhook', chatKind: 'discord',
+        blurb: 'Post notifications to a Discord channel via an incoming webhook.',
+        docUrl: 'https://support.discord.com/hc/en-us/articles/228383668', manageHref: '/settings/notifications',
+    },
+    {
+        id: 'chat_slack', category: 'chat', name: 'Slack', kind: 'chatwebhook', chatKind: 'slack',
+        blurb: 'Post notifications to a Slack channel via an incoming webhook.',
+        docUrl: 'https://api.slack.com/messaging/webhooks', manageHref: '/settings/notifications',
+    },
+    {
+        id: 'chat_telegram', category: 'chat', name: 'Telegram', kind: 'chatwebhook', chatKind: 'telegram',
+        blurb: 'Send notifications to a Telegram chat through a bot.',
+        docUrl: 'https://core.telegram.org/bots#how-do-i-create-a-bot', manageHref: '/settings/notifications',
+    },
+    {
+        id: 'chat_webhook', category: 'chat', name: 'Generic webhook', kind: 'chatwebhook', chatKind: 'webhook',
+        blurb: 'POST a signed JSON payload to any endpoint. Optional HMAC signature.',
+        docUrl: null, manageHref: '/settings/notifications',
     },
 
     // ── Storage & backups ──

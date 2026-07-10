@@ -1,0 +1,126 @@
+import { SlidersHorizontal } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { Drawer } from './Drawer';
+
+// Schema-driven advanced-filter slide-over, shared across tables/lists (the
+// marketplace today; domains/services/etc. next). A page passes a `groups`
+// schema plus a controlled `value`/`onChange`, and the drawer renders each
+// group as a set of toggle chips. Changes apply live so results update behind
+// the open drawer.
+//
+//   groups = [
+//     { key: 'ownership', label: 'Publisher', type: 'single',
+//       options: [{ value: 'serverkit', label: 'By ServerKit' }, …] },
+//     { key: 'category',  label: 'Categories', type: 'multi',
+//       options: [{ value: 'security', label: 'Security' }, …] },
+//   ]
+//   value  = { ownership: '', category: ['security'] }
+//
+// `single` groups hold a string ('' = none); `multi` groups hold a string[].
+
+// Count how many filter selections are active — a single-select group counts 1
+// when set, a multi-select group counts its selected length. Drives the
+// FilterButton badge.
+export function countActiveFilters(value = {}) {
+    return Object.values(value).reduce((total, entry) => {
+        if (Array.isArray(entry)) return total + entry.length;
+        return total + (entry ? 1 : 0);
+    }, 0);
+}
+
+// Empty value object for a given schema — used to clear/initialise state.
+export function emptyFilterValue(groups = []) {
+    const next = {};
+    groups.forEach((group) => { next[group.key] = group.type === 'multi' ? [] : ''; });
+    return next;
+}
+
+// The trigger button, with an active-count badge. Kept here so hosts get the
+// button + drawer as a matched pair.
+export function FilterButton({ count = 0, onClick, className, label = 'Filters' }) {
+    return (
+        <Button
+            variant="outline"
+            size="sm"
+            onClick={onClick}
+            className={cn('sk-filter-btn', count > 0 && 'sk-filter-btn--active', className)}
+        >
+            <SlidersHorizontal aria-hidden="true" />
+            {label}
+            {count > 0 && <span className="sk-filter-btn__badge">{count}</span>}
+        </Button>
+    );
+}
+
+export function FilterDrawer({
+    open,
+    onOpenChange,
+    groups = [],
+    value = {},
+    onChange,
+    title = 'Filters',
+    width = 380,
+}) {
+    const isOn = (group, optValue) => (
+        group.type === 'multi'
+            ? (value[group.key] || []).includes(optValue)
+            : (value[group.key] || '') === optValue
+    );
+
+    const toggle = (group, optValue) => {
+        if (group.type === 'multi') {
+            const current = Array.isArray(value[group.key]) ? value[group.key] : [];
+            const next = current.includes(optValue)
+                ? current.filter((item) => item !== optValue)
+                : [...current, optValue];
+            onChange({ ...value, [group.key]: next });
+        } else {
+            const current = value[group.key] || '';
+            onChange({ ...value, [group.key]: current === optValue ? '' : optValue });
+        }
+    };
+
+    const active = countActiveFilters(value);
+    const clearAll = () => onChange(emptyFilterValue(groups));
+
+    return (
+        <Drawer
+            open={open}
+            onOpenChange={onOpenChange}
+            title={title}
+            subtitle={active ? `${active} active` : 'no filters'}
+            icon={<SlidersHorizontal size={16} />}
+            width={width}
+        >
+            <div className="sk-filter">
+                {groups.map((group) => (
+                    <div key={group.key} className="sk-filter__group">
+                        <div className="sk-filter__label">{group.label}</div>
+                        <div className="sk-filter__chips">
+                            {group.options.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className={cn('sk-filter__chip', isOn(group, option.value) && 'is-on')}
+                                    onClick={() => toggle(group, option.value)}
+                                    aria-pressed={isOn(group, option.value)}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+                <div className="sk-filter__footer">
+                    <Button variant="ghost" size="sm" onClick={clearAll} disabled={!active}>
+                        Clear all
+                    </Button>
+                    <Button size="sm" onClick={() => onOpenChange(false)}>Done</Button>
+                </div>
+            </div>
+        </Drawer>
+    );
+}
+
+export default FilterDrawer;

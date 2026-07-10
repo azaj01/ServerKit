@@ -96,7 +96,9 @@
 
 .queue-rail-overview {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    // minmax(0, 1fr) lets a wide value shrink/truncate within the narrow rail
+    // instead of forcing the column (and the whole tile) to overflow.
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: $space-3;
 }
 

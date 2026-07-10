@@ -1,558 +1,235 @@
 // ============================================
-// BACKUPS PAGE (redesign — infra console look)
+// BACKUPS PAGE
 // ============================================
+// Reconstructed after a data-loss corruption. Rebuilt from the class usage in
+// pages/Backups.jsx and components/backups/*, using design-system tokens only.
+// Layout-faithful to the surviving JSX; visual details are a best-effort
+// restore rather than a byte-for-byte recovery of the original 22KB sheet.
 
 .backups-page {
+    display: flex;
+    flex-direction: column;
+    gap: $space-5;
+}
 
-    // ── KPI strip (4 tiles, +1 when a remote provider is set) ──
-    .bk-kpis {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: $space-4;
-        margin-bottom: $space-5;
+// ---------- KPI strip / generic cards ----------
+.bk-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: $space-3;
+}
 
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
+.bk-card {
+    background: $bg-card;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-lg;
+    padding: $space-4;
+}
+
+.bk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: $space-2;
+}
+
+.bk-listhead {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: $space-3;
+    margin-bottom: $space-3;
+}
+
+.bk-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: $space-3;
+    padding: $space-12 $space-6;
+    text-align: center;
+    color: $text-tertiary;
+    background: $bg-card;
+    border: 1px dashed $border-subtle;
+    border-radius: $radius-lg;
+
+    svg { color: $text-tertiary; opacity: 0.7; }
+}
+
+// ---------- Backups / schedules table ----------
+.bk-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: $font-size-base;
+
+    th,
+    td {
+        text-align: left;
+        padding: $space-3;
+        border-bottom: 1px solid $border-subtle;
+        vertical-align: middle;
     }
 
-    // ── list head: mono eyebrow + segmented filter + actions ─
-    .bk-listhead {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-        margin-bottom: $space-3;
-
-        h2 {
-            flex: 1;
-            min-width: 0;
-            margin: 0;
-            font-family: var(--mono);
-            font-size: 10.5px;
-            font-weight: $font-weight-semibold;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--text-faint);
-        }
-
-        @media (max-width: $breakpoint-md) {
-            flex-wrap: wrap;
-
-            h2 { flex-basis: 100%; }
-        }
-    }
-
-    // ── dense tables (backup archive + schedules) ───────────
-    .bk-card {
-        background: var(--surface);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--radius);
-        overflow: hidden;
-    }
-
-    .bk-empty {
-        padding: $space-10;
-        text-align: center;
-        color: var(--text-faint);
-        font-size: 13px;
-        background: var(--surface);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--radius);
-    }
-
-    .bk-table {
-        // actions column shrinks to fit, buttons never wrap
-        th:last-child { width: 1%; }
-        td:last-child { white-space: nowrap; }
-
-        tbody tr.is-disabled {
-            opacity: 0.55;
-
-            .bk-ico {
-                background: var(--surface-3);
-                color: var(--text-faint);
-            }
-        }
-    }
-
-    // backup kind tile (tinted per type)
-    .bk-ico {
-        width: 30px;
-        height: 30px;
-        border-radius: 8px;
-        display: grid;
-        place-items: center;
-        flex-shrink: 0;
-        background: var(--surface-2);
-        color: var(--text-dim);
-
-        &--application { background: var(--accent-bg); color: var(--accent-bright); }
-        &--database { background: var(--violet-bg); color: var(--violet); }
-        &--files { background: var(--amber-bg); color: var(--amber); }
-    }
-
-    // mono type chip (application / database / files) — %sk-state shape
-    // (_design-system.scss) with local sizing + bordered per-type tints kept
-    .bk-type {
-        @extend %sk-state;
-        padding: 2px 7px;
-        border-radius: 5px;
-        font-size: 10.5px;
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        color: var(--text-dim);
-
-        &--application {
-            background: var(--accent-bg);
-            border-color: fade($accent-primary-raw, 30%);
-            color: var(--accent-bright);
-        }
-
-        &--database {
-            background: var(--violet-bg);
-            border-color: rgba(176, 123, 245, 0.3);
-            color: var(--violet);
-        }
-
-        &--files {
-            background: var(--amber-bg);
-            border-color: rgba(245, 185, 69, 0.3);
-            color: var(--amber);
-        }
-    }
-
-    .bk-when {
-        font-family: var(--mono);
-        font-size: 12px;
-        color: var(--text-faint);
-        white-space: nowrap;
-    }
-
-    .bk-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: $space-1;
-    }
-
-    // schedule time chip (matches the cron expression chip)
-    .bk-sched {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 2px 8px;
-        font-family: var(--mono);
-        font-size: 11.5px;
-        color: var(--text-dim);
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        white-space: nowrap;
-
-        svg {
-            color: var(--text-faint);
-            flex-shrink: 0;
-        }
-    }
-
-    // remote-upload indicator on schedule rows
-    .bk-remote-on { color: var(--green); }
-    .bk-remote-off { color: var(--text-ghost); }
-
-    // storage pills carry a small lucide icon instead of the dot
-    .sk-pill svg { flex-shrink: 0; }
-
-    @media (max-width: $breakpoint-md) {
-        .bk-card { overflow-x: auto; }
-        .bk-table { min-width: 720px; }
-        .bk-table--schedules { min-width: 880px; }
-    }
-
-    // ── storage tab: real-data spec strip ───────────────────
-    .bk-specs {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: $space-3;
-        margin-bottom: $space-4;
-
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
-    }
-
-    // storage/settings cards → surface chrome + eyebrow headers
-    .card {
-        background: var(--surface);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--radius);
-    }
-
-    .card-header h3 {
-        margin: 0;
-        font-family: var(--mono);
-        font-size: 10.5px;
+    th {
+        color: $text-tertiary;
         font-weight: $font-weight-semibold;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-faint);
-    }
-
-    .storage-provider-config {
-        margin: $space-4 0;
-        padding: $space-4;
-        background: var(--surface-2);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--radius-sm);
-
-        h4 {
-            margin: 0 0 $space-4;
-            font-family: var(--mono);
-            font-size: 10.5px;
-            font-weight: $font-weight-semibold;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--text-faint);
-        }
-    }
-
-    // ── forms (cards + modals): mono eyebrow labels ─────────
-    .form-group > label:not(.checkbox-label) {
-        font-family: var(--mono);
-        font-size: 10.5px;
-        font-weight: $font-weight-semibold;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-faint);
-    }
-
-    .form-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: $space-4;
-
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
-    }
-
-    .form-help {
-        display: block;
-        margin-top: $space-2;
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--text-faint);
-    }
-
-    // inline hint inside an eyebrow label — undo the uppercase
-    .form-help-inline {
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: $font-weight-normal;
-        letter-spacing: normal;
-        text-transform: none;
-        color: var(--text-ghost);
-    }
-
-    .form-actions {
-        display: flex;
-        gap: $space-2;
-        margin-top: $space-5;
-    }
-
-    .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-        cursor: pointer;
-
-        input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-            accent-color: var(--accent);
-        }
-
-        span {
-            font-size: 13px;
-            color: var(--text);
-        }
-    }
-
-    // ── restore modal ───────────────────────────────────────
-    .bk-restore-warn {
-        display: flex;
-        gap: 11px;
-        padding: 13px 15px;
-        margin-bottom: $space-5;
-        border-radius: 11px;
-        background: var(--amber-bg);
-        border: 1px solid rgba(245, 185, 69, 0.28);
-        font-size: 12.5px;
-        line-height: 1.5;
-        color: var(--text-dim);
-
-        svg {
-            color: var(--amber);
-            flex-shrink: 0;
-            margin-top: 1px;
-        }
-
-        b { color: var(--text); }
-    }
-
-    .bk-restore-details {
-        padding: $space-1 $space-4;
-        background: var(--surface-2);
-        border: 1px solid var(--border-soft);
-        border-radius: var(--radius-sm);
-    }
-
-    // ── spinners (upload / test-connection buttons) ─────────
-    .spinning {
-        animation: spin 1s linear infinite;
-    }
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-// Reusable inline spinner for the protection components (lucide <Loader2 className="spin" />).
-.spin { animation: spin 1s linear infinite; }
-
-// ============================================
-// PROTECTION PANEL (backup protection — WordPress + Services settings)
-// Rendered inside .app-overview-grid > .app-overview-left, so these styles are
-// top-level (not nested under .backups-page).
-// ============================================
-.protection-panel {
-    // Single column inside a settings pane (no right rail).
-    grid-template-columns: 1fr;
-
-    .app-overview-left {
-        display: flex;
-        flex-direction: column;
-        gap: $space-4;
-    }
-}
-
-// ── Card 1: status ──────────────────────────────────────────
-.protection-status-card {
-    &__toggle {
-        display: flex;
-        align-items: flex-start;
-        gap: $space-3;
-        padding-bottom: $space-4;
-        border-bottom: 1px solid var(--border-soft);
-
-        label {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            cursor: pointer;
-        }
-    }
-
-    &__toggle-title { font-weight: $font-weight-semibold; color: var(--text); }
-    &__toggle-sub { font-size: 12px; color: var(--text-faint); }
-
-    &__status {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: $space-2;
-        margin: $space-4 0;
-        font-size: 13px;
-        color: var(--text-dim);
-    }
-
-    &__kpis {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: $space-3;
-        margin-bottom: $space-4;
-
-        @media (max-width: $breakpoint-sm) { grid-template-columns: 1fr; }
-    }
-
-    &__actions {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: $space-2;
-    }
-}
-
-// ── Card 2: schedule ────────────────────────────────────────
-.schedule-card {
-    .app-panel-body {
-        display: flex;
-        flex-direction: column;
-        gap: $space-4;
-    }
-
-    &__field {
-        display: flex;
-        flex-direction: column;
-        gap: $space-2;
-
-        > label {
-            font-size: 12px;
-            font-weight: $font-weight-semibold;
-            color: var(--text);
-        }
-    }
-
-    &__days {
-        display: flex;
-        gap: $space-2;
-    }
-
-    &__day {
-        width: 32px;
-        height: 32px;
-        border: 1px solid var(--border-soft);
-        background: var(--surface-2);
-        color: var(--text-dim);
-        border-radius: $radius-sm;
-        font-size: 12px;
-        font-weight: $font-weight-semibold;
-        cursor: pointer;
-        transition: border-color .12s ease, background .12s ease, color .12s ease;
-
-        &:hover { border-color: var(--accent-bright); }
-
-        &.is-active {
-            background: var(--accent-bg);
-            color: var(--accent-bright);
-            border-color: var(--accent-bright);
-        }
-    }
-
-    &__preview {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-
-        code {
-            font-family: var(--mono);
-            font-size: 12px;
-            color: var(--text);
-            background: var(--surface-2);
-            border: 1px solid var(--border-soft);
-            border-radius: $radius-sm;
-            padding: 2px 8px;
-        }
-    }
-
-    &__preview-label {
-        font-family: var(--mono);
-        font-size: 10.5px;
+        font-size: $font-size-xs;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--text-faint);
     }
 
-    &__retention-row {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-        font-size: 13px;
-        color: var(--text-dim);
-
-        input { width: 80px; }
+    tbody tr:hover {
+        background: $bg-hover;
     }
 
-    &__remote {
-        flex-direction: row;
-        align-items: flex-start;
-        gap: $space-3;
-
-        label {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            cursor: pointer;
-        }
+    &--schedules {
+        td { vertical-align: top; }
     }
-
-    &__actions { margin-top: $space-1; }
 }
 
-// ── Card 3: history list ────────────────────────────────────
-.backup-history-list {
-    width: 100%;
+.bk-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: $text-secondary;
+}
 
-    &__row.is-clickable { cursor: pointer; }
+.bk-type {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    font-size: $font-size-sm;
+    color: $text-secondary;
+}
+
+.bk-when {
+    color: $text-tertiary;
+    font-size: $font-size-sm;
+    white-space: nowrap;
+}
+
+.bk-specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+    color: $text-tertiary;
+    font-size: $font-size-sm;
+}
+
+.bk-sched {
+    font-family: $font-mono;
+    font-size: $font-size-sm;
+    color: $text-secondary;
+}
+
+.bk-remote-on { color: $success; }
+.bk-remote-off { color: $text-tertiary; }
+
+.bk-restore-details {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    font-size: $font-size-sm;
+    color: $text-secondary;
+}
+
+.bk-restore-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: $space-2;
+    padding: $space-3;
+    border-radius: $radius-md;
+    background: $warning-bg;
+    border: 1px solid $warning-border;
+    color: $warning;
+    font-size: $font-size-sm;
+}
+
+// ---------- Backup history list ----------
+.backup-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: $space-3;
+        background: $bg-card;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+    }
 
     &__ico {
         display: inline-flex;
-        color: var(--text-faint);
+        align-items: center;
+        justify-content: center;
+        color: $text-secondary;
+    }
+
+    &__storage {
+        color: $text-tertiary;
+        font-size: $font-size-sm;
     }
 
     &__when {
-        color: var(--text-dim);
-        font-size: 13px;
+        margin-left: auto;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
         white-space: nowrap;
     }
 
     &__actions {
         display: flex;
-        justify-content: flex-end;
         gap: $space-1;
-    }
-
-    &__storage {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 12px;
-        color: var(--text-dim);
     }
 }
 
-// ── History card chrome (list/calendar toggle + day-filter chip) ────
 .backup-history-card {
+    background: $bg-card;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-lg;
+    padding: $space-4;
+
     &__tools {
         display: flex;
         align-items: center;
         gap: $space-2;
     }
 
-    &__toggle {
-        display: inline-flex;
-        border: 1px solid var(--border-soft);
-        border-radius: $radius-sm;
-        overflow: hidden;
-
-        button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 28px;
-            height: 26px;
-            background: var(--surface-2);
-            color: var(--text-dim);
-            border: none;
-            cursor: pointer;
-
-            &.is-active { background: var(--accent-bg); color: var(--accent-bright); }
-            & + button { border-left: 1px solid var(--border-soft); }
-        }
-    }
-
     &__chip {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 2px 8px;
-        font-size: 12px;
-        color: var(--text-dim);
-        background: var(--surface-2);
-        border: 1px solid var(--border-soft);
-        border-radius: $radius-full;
-        cursor: pointer;
+        gap: $space-1;
+        padding: 1px $space-2;
+        border-radius: $radius-sm;
+        background: $bg-hover;
+        border: 1px solid $border-subtle;
+        color: $text-secondary;
+        font-size: $font-size-xs;
+    }
 
-        &:hover { color: var(--text); }
+    &__toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-1;
+        background: transparent;
+        border: none;
+        color: $accent-primary;
+        cursor: pointer;
+        font-size: $font-size-sm;
     }
 }
 
-// ── Calendar view ───────────────────────────────────────────
+// ---------- Backup calendar ----------
 .backup-calendar {
+    background: $bg-card;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-lg;
+    padding: $space-4;
+
     &__head {
         display: flex;
         align-items: center;
@@ -560,26 +237,37 @@
         margin-bottom: $space-3;
     }
 
-    &__month {
-        flex: 1;
-        font-weight: $font-weight-semibold;
-        color: var(--text);
-    }
-
-    &__nav,
-    &__today {
+    &__nav {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        width: 28px;
         height: 28px;
-        padding: 0 $space-2;
-        background: var(--surface-2);
-        border: 1px solid var(--border-soft);
+        background: transparent;
+        border: 1px solid $border-subtle;
         border-radius: $radius-sm;
-        color: var(--text-dim);
+        color: $text-secondary;
         cursor: pointer;
 
-        &:hover { border-color: var(--accent-bright); color: var(--text); }
+        &:hover { border-color: $border-active; color: $text-primary; }
+    }
+
+    &__month {
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+    }
+
+    &__today {
+        margin-left: auto;
+        background: transparent;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-sm;
+        padding: $space-1 $space-2;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+        cursor: pointer;
+
+        &:hover { border-color: $border-active; color: $text-primary; }
     }
 
     &__grid {
@@ -590,85 +278,119 @@
 
     &__dow {
         text-align: center;
-        font-family: var(--mono);
-        font-size: 10px;
+        color: $text-tertiary;
+        font-size: $font-size-xs;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--text-faint);
-        padding-bottom: $space-1;
+        padding: $space-1 0;
     }
 
     &__cell {
         position: relative;
-        aspect-ratio: 1 / 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid var(--border-soft);
+        min-height: 44px;
+        padding: $space-1;
+        border: 1px solid $border-subtle;
         border-radius: $radius-sm;
-        background: var(--surface-2);
-        color: var(--text-dim);
-        font-size: 12px;
+        background: $bg-body;
 
-        &--empty { background: transparent; border-color: transparent; }
+        &--empty {
+            background: transparent;
+            border-color: transparent;
+        }
 
         &--has {
+            border-color: $border-active;
             cursor: pointer;
 
-            &:hover { border-color: var(--accent-bright); }
-            &.is-success { border-color: var(--green); background: var(--green-bg); }
-            &.is-failed { border-color: var(--red); background: var(--red-bg); }
-            &.is-running { border-color: var(--cyan); background: var(--cyan-bg); }
+            &.is-success { border-color: $success-border; }
+            &.is-failed,
+            &.is-error { border-color: $danger-border; }
+            &.is-running { border-color: $info-border; }
         }
+    }
+
+    &__today {
+        // "Today" cell highlight (shared name with the header button, scoped by
+        // being a grid cell modifier in markup).
+    }
+
+    &.is-today &__cell,
+    &__cell.is-today {
+        outline: 1px solid $accent-primary;
+    }
+
+    &__daynum {
+        font-size: $font-size-xs;
+        color: $text-secondary;
     }
 
     &__badge {
         position: absolute;
-        top: 2px;
-        right: 3px;
+        bottom: 2px;
+        right: 2px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: $radius-full;
+        background: $accent-primary;
+        color: #fff;
         font-size: 9px;
         font-weight: $font-weight-semibold;
-        color: var(--text-faint);
     }
 }
 
-// ── Detail drawer ───────────────────────────────────────────
+// ---------- Backup detail drawer ----------
 .backup-detail-drawer {
     display: flex;
     flex-direction: column;
     gap: $space-4;
 
-    &__error {
-        padding: $space-2 $space-3;
-        font-size: 13px;
-        color: var(--red);
-        background: var(--red-bg);
-        border: 1px solid var(--border-soft);
-        border-radius: $radius-sm;
+    &__head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: $space-3;
     }
 
     &__meta {
-        display: grid;
-        gap: $space-1;
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
     }
 
     &__row {
         display: flex;
         justify-content: space-between;
         gap: $space-3;
-        padding: 6px 0;
-        border-bottom: 1px solid var(--border-soft);
-        font-size: 13px;
-
-        span:first-child { color: var(--text-faint); }
-        span:last-child { color: var(--text); }
+        font-size: $font-size-sm;
+        color: $text-secondary;
+        padding: $space-2 0;
+        border-bottom: 1px solid $border-subtle;
     }
 
     &__cost {
-        font-size: 13px;
-        color: var(--text-dim);
-        font-family: var(--mono);
+        color: $text-secondary;
+        font-family: $font-mono;
+    }
+
+    &__joblink {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-1;
+        color: $accent-primary;
+        cursor: pointer;
+    }
+
+    &__error {
+        padding: $space-3;
+        border-radius: $radius-md;
+        background: $danger-bg;
+        border: 1px solid $danger-border;
+        color: $danger;
+        font-size: $font-size-sm;
     }
 
     &__actions {
@@ -676,57 +398,283 @@
         flex-wrap: wrap;
         gap: $space-2;
     }
+}
 
-    &__joblink {
-        display: inline-flex;
+// ---------- Backup drills (restore drills / probes) ----------
+.backup-drills {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+
+    &__head {
+        display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 4px;
-        font-size: 13px;
-        color: var(--accent-bright);
+        gap: $space-3;
+    }
+
+    &__list {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    &__item {
+        background: $bg-card;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        overflow: hidden;
+    }
+
+    &__trigger {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        width: 100%;
+        padding: $space-3;
+        background: transparent;
+        border: none;
+        color: $text-primary;
+        cursor: pointer;
+        text-align: left;
+
+        &:hover { background: $bg-hover; }
+    }
+
+    &__chev {
+        display: inline-flex;
+        color: $text-tertiary;
+        transition: transform 0.15s;
+    }
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+    }
+
+    &__when {
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+    }
+
+    &__meta {
+        color: $text-tertiary;
+        font-size: $font-size-xs;
+    }
+
+    &__sub {
+        margin-left: auto;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+    }
+
+    &__detail {
+        padding: $space-3;
+        border-top: 1px solid $border-subtle;
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    &__probes {
+        display: flex;
+        flex-direction: column;
+        gap: $space-1;
+    }
+
+    &__probe {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+    }
+
+    &__probe-empty {
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+        font-style: italic;
+    }
+
+    &__error {
+        color: $danger;
+        font-size: $font-size-sm;
     }
 }
 
-// ── Restore drawer ──────────────────────────────────────────
+// ---------- Protection status card ----------
+.protection-panel {
+    display: flex;
+    flex-direction: column;
+    gap: $space-4;
+}
+
+.protection-status-card {
+    &__toggle {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+    }
+
+    &__toggle-title {
+        display: block;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+    }
+
+    &__toggle-sub {
+        display: block;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+    }
+
+    &__status {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: $space-2;
+        margin: $space-3 0;
+    }
+
+    &__kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: $space-3;
+        margin: $space-3 0;
+    }
+
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+    }
+}
+
+// ---------- Schedule card ----------
+.schedule-card {
+    background: $bg-card;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-lg;
+    padding: $space-4;
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+
+    &__field {
+        display: flex;
+        flex-direction: column;
+        gap: $space-1;
+
+        label {
+            color: $text-tertiary;
+            font-size: $font-size-sm;
+        }
+    }
+
+    &__retention {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    &__retention-row {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+    }
+
+    &__remote {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+    }
+
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+    }
+}
+
+// ---------- Restore drawer ----------
 .restore-drawer {
     display: flex;
     flex-direction: column;
     gap: $space-4;
 
-    &__section { display: flex; flex-direction: column; gap: $space-2; }
-    &__label { font-size: 12px; font-weight: $font-weight-semibold; color: var(--text); }
+    &__section {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    &__label {
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-semibold;
+    }
+
+    &__scope {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+    }
+
+    &__options {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    &__option {
+        display: flex;
+        align-items: flex-start;
+        gap: $space-2;
+        padding: $space-2 $space-3;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        cursor: pointer;
+
+        &:hover { border-color: $border-active; }
+    }
 
     &__tables {
         display: flex;
         flex-direction: column;
         gap: $space-1;
-        max-height: 180px;
+        max-height: 240px;
         overflow-y: auto;
         padding: $space-2;
-        border: 1px solid var(--border-soft);
-        border-radius: $radius-sm;
-
-        label { display: flex; align-items: center; gap: $space-2; font-size: 13px; color: var(--text-dim); }
-    }
-
-    &__options { display: flex; flex-direction: column; gap: $space-3; }
-
-    &__option {
-        display: flex;
-        align-items: flex-start;
-        gap: $space-3;
-
-        label { display: flex; flex-direction: column; font-size: 13px; color: var(--text); cursor: pointer; }
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        background: $bg-body;
     }
 
     &__warning {
         display: flex;
         align-items: flex-start;
         gap: $space-2;
-        padding: $space-2 $space-3;
-        font-size: 13px;
-        color: var(--amber);
-        background: var(--amber-bg);
-        border: 1px solid var(--border-soft);
-        border-radius: $radius-sm;
+        padding: $space-3;
+        border-radius: $radius-md;
+        background: $warning-bg;
+        border: 1px solid $warning-border;
+        color: $warning;
+        font-size: $font-size-sm;
     }
+}
+
+// ---------- Storage provider config ----------
+.storage-provider-config {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+    background: $bg-card;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-lg;
+    padding: $space-4;
 }

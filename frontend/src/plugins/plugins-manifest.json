@@ -1,23 +1,20 @@
 {
   "plugins": [
     {
-      "name": "serverkit-git",
-      "slug": "serverkit-git",
-      "display_name": "Git Server",
+      "name": "serverkit-wordpress",
+      "slug": "serverkit-wordpress",
+      "display_name": "WordPress",
       "version": "1.0.0",
       "frontend_entry": "",
-      "path": "serverkit-git"
+      "path": "serverkit-wordpress"
     },
     {
-      "name": "serverkit-gui",
-      "slug": "serverkit-gui",
-      "display_name": "ServerKit Agent GUI",
-      "version": "0.1.0",
-      "frontend_entry": "components/ServerGui.jsx",
-      "path": "serverkit-gui",
-      "styles": [
-        "plugins/serverkit-gui/styles/server-gui.css"
-      ]
+      "name": "serverkit-cloudflare-ops",
+      "slug": "serverkit-cloudflare-ops",
+      "display_name": "Cloudflare Zone Ops",
+      "version": "1.0.0",
+      "frontend_entry": "",
+      "path": "serverkit-cloudflare-ops"
     }
   ]
 }

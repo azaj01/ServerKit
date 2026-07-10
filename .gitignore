@@ -123,6 +123,11 @@ SECURITY_AND_CODE_AUDIT.md
 !/docs/screenshots/
 !/docs/screenshots/*.png
 
+# …and the bundled marketplace extension cover icons — real source assets
+# imported/hashed by Vite, so they must be committed.
+!/frontend/src/assets/extension-icons/
+!/frontend/src/assets/extension-icons/*.png
+
 # MSI / build artifacts that should not be committed.
 /agent/packaging/msi/output/
 /agent/packaging/msi/*.wixpdb
@@ -150,3 +155,13 @@ docs/NOTIFICATIONS_ROADMAP.md
 docs/ORCHESTRATION_ROADMAP.md
 docs/DNS_ROADMAP.md
 docs/SERVICES_ROADMAP.md
+
+# Staging target profiles (scripts/stage.sh) — real profiles carry a host alias
+# + paths and must never enter the repo. The committed template is the sole
+# exception so `cp example.env <name>.env` always has a starting point.
+/deploy/targets/*.env
+!/deploy/targets/example.env
+
+# Vite dependency pre-bundle cache (regenerated on every dev run; never commit)
+.vite/
+**/.vite/

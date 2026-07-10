@@ -108,3 +108,132 @@
         margin-top: $space-4;
     }
 }
+
+// Setup Health section — the setup.* checks rendered above the health sweep,
+// each with a "why it matters" line and a deep-link/repair fix.
+.doctor-setup {
+    margin-bottom: $space-5;
+
+    &__heading {
+        margin: 0 0 $space-3;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-faint);
+    }
+}
+
+.doctor-check__why {
+    margin-top: 2px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-faint);
+}
+
+.doctor-setup__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-3;
+    flex-wrap: wrap;
+}
+
+.doctor-setup__actions {
+    display: flex;
+    gap: $space-2;
+}
+
+// Reconcile dry-run list (DNS backfill / URL fix preview).
+.doctor-reconcile-list {
+    list-style: none;
+    margin: $space-2 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    max-height: 240px;
+    overflow: auto;
+    font-size: 12.5px;
+    color: var(--text-dim);
+
+    code {
+        font-family: var(--mono);
+        font-size: 11.5px;
+    }
+
+    &__warn {
+        color: var(--warning, #f5b342);
+    }
+}
+
+// A snoozed setup item — still rendered, just muted.
+.doctor-check--snoozed {
+    opacity: 0.6;
+
+    .doctor-check__title { font-weight: 500; }
+}
+
+.doctor-check__snooze {
+    flex-shrink: 0;
+}
+
+// ============================================
+// Fleet doctor (plan 26) — per-server sweep switcher + server groups.
+// ============================================
+
+.doctor-panel__switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-2;
+    margin-right: $space-2;
+
+    &-label {
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-faint);
+    }
+
+    &-select {
+        appearance: none;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        color: var(--text);
+        font-size: 12.5px;
+        padding: $space-1 $space-3;
+        cursor: pointer;
+
+        &:hover { border-color: var(--border); }
+    }
+}
+
+.doctor-fleet-group {
+    margin-bottom: $space-4;
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: $space-2 0;
+        margin-bottom: $space-2;
+        border-bottom: 1px solid var(--border-soft);
+    }
+
+    &__name {
+        font-weight: $font-weight-semibold;
+        font-size: 13.5px;
+        color: var(--text);
+    }
+
+    &__counts {
+        display: flex;
+        gap: $space-2;
+        margin-left: auto;
+        font-size: 11.5px;
+        color: var(--text-faint);
+    }
+
+    &__count { white-space: nowrap; }
+}

@@ -2,45 +2,6 @@
     padding: $spacing-md;
 }
 
-.telemetry-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: $spacing-md;
-    margin-bottom: $spacing-lg;
-}
-
-.telemetry-stat {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: $spacing-md;
-    border-radius: $radius-md;
-    background: $bg-card;
-    border: 1px solid $border-default;
-
-    &__count {
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: $text-primary;
-    }
-
-    &__label {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: $text-tertiary;
-        margin-top: $spacing-xs;
-    }
-
-    &--critical { border-top: 3px solid $danger; }
-    &--error { border-top: 3px solid $danger-hover; }
-    &--warning { border-top: 3px solid $warning; }
-    &--info { border-top: 3px solid $info; }
-    &--debug { border-top: 3px solid $text-tertiary; }
-    &--total { border-top: 3px solid $accent-primary; }
-}
-
 .telemetry-filters {
     background: $bg-card;
     border: 1px solid $border-default;

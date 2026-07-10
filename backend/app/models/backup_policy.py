@@ -60,6 +60,13 @@ class BackupPolicy(db.Model):
     # Remote
     remote_copy = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Restore-drill cadence (plan 23). 'off' | 'weekly' | 'monthly'. A single
+    # daily sweep enqueues due drills; last_drill_* is the denormalized cache
+    # that powers the "last proven restore" badge + doctor staleness check.
+    drill_cadence = db.Column(db.String(12), default='off', nullable=False)
+    last_drill_at = db.Column(db.DateTime, nullable=True)
+    last_drill_status = db.Column(db.String(24), nullable=True)  # success|failed|skipped_no_space
+
     # Hooks (optional shell snippets run before/after a backup)
     pre_backup_hook = db.Column(db.Text, nullable=True)
     post_backup_hook = db.Column(db.Text, nullable=True)
@@ -112,6 +119,9 @@ class BackupPolicy(db.Model):
             'full_every_n_days': self.full_every_n_days,
             'compression': self.compression,
             'remote_copy': self.remote_copy,
+            'drill_cadence': self.drill_cadence or 'off',
+            'last_drill_at': self.last_drill_at.isoformat() if self.last_drill_at else None,
+            'last_drill_status': self.last_drill_status,
             'pre_backup_hook': self.pre_backup_hook,
             'post_backup_hook': self.post_backup_hook,
             'last_run_at': self.last_run_at.isoformat() if self.last_run_at else None,

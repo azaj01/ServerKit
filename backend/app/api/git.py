@@ -1,14 +1,34 @@
+# Bucket: PER-APP (plan 29 #9, #11). The per-app deployment read gates on app
+# visibility (require_app_member); webhook reads are scoped to the linked app's
+# visibility (an unlinked webhook stays panel-wide viewer-visible). Webhook
+# mutations and the Gitea host lifecycle stay admin-only.
 """Git Server API endpoints for managing integrated Gitea instance and webhooks."""
 
 from flask import Blueprint, request, jsonify
 
-from ..middleware.rbac import admin_required, viewer_required
+from ..middleware.rbac import (
+    admin_required, viewer_required, require_app_member,
+    get_current_user, app_access_tier,
+)
+from ..models import Application, GitWebhook
 from ..services.git_service import GitService
 from ..services.webhook_service import WebhookService
 from ..services.gitea_api_service import GiteaAPIService
 from ..services.git_deploy_service import GitDeployService
 
 git_bp = Blueprint('git', __name__)
+
+
+def _webhook_visible_to(user, webhook):
+    """A webhook with no app linkage is a panel-wide viewer-visible resource; an
+    app-linked webhook is visible only to callers who can reach that app
+    (owner/admin/grant/workspace member — plan 29 #11)."""
+    if not getattr(webhook, 'app_id', None):
+        return True
+    app = Application.query.get(webhook.app_id)
+    if app is None:
+        return True
+    return app_access_tier(user, app) is not None
 
 
 @git_bp.route('/status', methods=['GET'])
@@ -97,8 +117,19 @@ def restart():
 @git_bp.route('/webhooks', methods=['GET'])
 @viewer_required
 def list_webhooks():
-    """List all configured webhooks."""
+    """List webhooks the caller can see (plan 29 #11): every unlinked webhook
+    plus any app-linked webhook whose app they can reach."""
+    user = get_current_user()
     result = WebhookService.list_webhooks()
+    webhooks = result.get('webhooks', [])
+    visible = []
+    for w in webhooks:
+        wh = GitWebhook.query.get(w.get('id'))
+        if wh is None or _webhook_visible_to(user, wh):
+            visible.append(w)
+    result['webhooks'] = visible
+    if 'count' in result:
+        result['count'] = len(visible)
     return jsonify(result), 200
 
 
@@ -131,7 +162,12 @@ def create_webhook():
 @git_bp.route('/webhooks/<int:webhook_id>', methods=['GET'])
 @viewer_required
 def get_webhook(webhook_id):
-    """Get a specific webhook."""
+    """Get a specific webhook (scoped to the linked app's visibility, #11)."""
+    user = get_current_user()
+    wh = GitWebhook.query.get(webhook_id)
+    if wh is None or not _webhook_visible_to(user, wh):
+        return jsonify({'error': 'Not found'}), 404
+
     result = WebhookService.get_webhook(webhook_id)
 
     if result.get('success'):
@@ -177,7 +213,11 @@ def toggle_webhook(webhook_id):
 @git_bp.route('/webhooks/<int:webhook_id>/logs', methods=['GET'])
 @viewer_required
 def get_webhook_logs(webhook_id):
-    """Get logs for a specific webhook."""
+    """Get logs for a specific webhook (scoped to the linked app's visibility)."""
+    user = get_current_user()
+    wh = GitWebhook.query.get(webhook_id)
+    if wh is None or not _webhook_visible_to(user, wh):
+        return jsonify({'error': 'Not found'}), 404
     limit = request.args.get('limit', 50, type=int)
     result = WebhookService.get_webhook_logs(webhook_id, limit=limit)
     return jsonify(result), 200
@@ -393,7 +433,7 @@ def get_gitea_version():
 # ==================== DEPLOYMENT ENDPOINTS ====================
 
 @git_bp.route('/deployments/app/<int:app_id>', methods=['GET'])
-@viewer_required
+@require_app_member()
 def get_app_deployments(app_id):
     """Get deployment history for an application."""
     limit = request.args.get('limit', 20, type=int)

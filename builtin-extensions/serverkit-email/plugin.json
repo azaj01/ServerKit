@@ -2,7 +2,7 @@
   "name": "serverkit-email",
   "display_name": "Email Server",
   "version": "1.0.0",
-  "description": "Full mail-server stack — Postfix/Dovecot, domains, mailboxes, aliases, DKIM/SPF/DMARC, SpamAssassin filtering, and Roundcube webmail. Most panels never run a mail server, so it ships as an opt-in extension.",
+  "description": "Full mail-server stack with Postfix/Dovecot, domains, mailboxes, aliases, DKIM/SPF/DMARC, SpamAssassin filtering, and Roundcube webmail. Most panels never run a mail server, so it ships as an opt-in extension.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "integration",

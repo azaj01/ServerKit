@@ -1,8 +1,16 @@
+# Bucket: PER-APP (plan 29 #9). Per-site WordPress routes gate on the linked
+# application's access seam: reads use can_access_app (owner/admin/any grant),
+# writes use can_edit_app (owner/admin/editor grant). The P0 <site_id> lifecycle
+# mutations and the previously-open <site_id>/<app_id> reads seal from open —
+# denial (or a missing resource) is an indistinguishable 404 (Decision 5). Host/
+# system ops (standalone install/uninstall/start/stop/restart, legacy install,
+# wp-cli, plugin library) stay @admin_required.
 import json
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.middleware.rbac import admin_required
+from app.middleware.rbac import admin_required, get_current_user
 from app.models import User, Application, WordPressSite
+from app.services.resource_grant_service import ResourceGrantService
 from .wordpress_service import WordPressService
 from app import db
 
@@ -27,6 +35,40 @@ def _is_wp_app(app):
     if app.app_type == 'wordpress':
         return True
     return WordPressSite.query.filter_by(application_id=app.id).first() is not None
+
+
+def _guard_app(site_or_app_id, write=False):
+    """Resolve a per-site WordPress route to its Application and enforce access,
+    returning ``(app, None)`` or ``(None, error_response)``. Reads use
+    can_access_app (owner/admin/any grant); writes use can_edit_app (owner/admin/
+    editor grant). Denial is a 403 — used by the convergence reads that keep
+    their status. A missing/non-WP resource is a 404."""
+    app = _resolve_app(site_or_app_id)
+    if not _is_wp_app(app):
+        return None, (jsonify({'error': 'Application not found'}), 404)
+    user = get_current_user()
+    ok = (ResourceGrantService.can_edit_app(user, app) if write
+          else ResourceGrantService.can_access_app(user, app))
+    if not ok:
+        return None, (jsonify({'error': 'Access denied'}), 403)
+    return app, None
+
+
+def _guard_sealed_app(site_or_app_id, write=False):
+    """Like :func:`_guard_app` but sealed-from-open (Decision 5): a missing
+    resource OR an unauthorized caller both return an indistinguishable
+    ``404 {'error': 'Not found'}`` so a foreign caller cannot probe existence.
+    Used by the P0 <site_id> lifecycle mutations and the previously-open
+    <site_id>/<app_id> reads."""
+    app = _resolve_app(site_or_app_id)
+    if not _is_wp_app(app):
+        return None, (jsonify({'error': 'Not found'}), 404)
+    user = get_current_user()
+    ok = (ResourceGrantService.can_edit_app(user, app) if write
+          else ResourceGrantService.can_access_app(user, app))
+    if not ok:
+        return None, (jsonify({'error': 'Not found'}), 404)
+    return app, None
 
 
 # ==================== WORDPRESS SITES HUB ENDPOINTS ====================
@@ -141,6 +183,9 @@ def import_site():
 @jwt_required()
 def get_site(site_id):
     """Get site detail with environments."""
+    _, err = _guard_sealed_app(site_id)
+    if err:
+        return err
     result = WordPressService.get_site(site_id)
     if 'error' in result:
         return jsonify(result), 404
@@ -151,6 +196,9 @@ def get_site(site_id):
 @jwt_required()
 def clone_site(site_id):
     """Clone a site into a new INDEPENDENT top-level site with fresh admin creds."""
+    _, err = _guard_sealed_app(site_id, write=True)
+    if err:
+        return err
     data = request.get_json() or {}
     new_name = data.get('name')
     if not new_name:
@@ -167,6 +215,9 @@ def clone_site(site_id):
 @jwt_required()
 def set_site_tags(site_id):
     """Replace the tag list for a WordPress site."""
+    _, err = _guard_sealed_app(site_id, write=True)
+    if err:
+        return err
     data = request.get_json() or {}
     tags = data.get('tags')
     if tags is None or not isinstance(tags, list):
@@ -197,6 +248,9 @@ def set_site_tags(site_id):
 @jwt_required()
 def delete_site(site_id):
     """Delete site and all its environments (takes a final backup by default)."""
+    _, err = _guard_sealed_app(site_id, write=True)
+    if err:
+        return err
     # Back up before delete unless explicitly opted out via ?create_backup=false
     create_backup = request.args.get('create_backup', 'true').lower() != 'false'
     result = WordPressService.delete_site(site_id, create_backup=create_backup)
@@ -209,6 +263,9 @@ def delete_site(site_id):
 @jwt_required()
 def archive_site(site_id):
     """Archive a site: stop the stack but keep all data. Reversible."""
+    _, err = _guard_sealed_app(site_id, write=True)
+    if err:
+        return err
     result = WordPressService.archive_site(site_id)
     if result.get('success'):
         return jsonify(result), 200
@@ -219,6 +276,9 @@ def archive_site(site_id):
 @jwt_required()
 def unarchive_site(site_id):
     """Restore a previously archived site."""
+    _, err = _guard_sealed_app(site_id, write=True)
+    if err:
+        return err
     result = WordPressService.unarchive_site(site_id)
     if result.get('success'):
         return jsonify(result), 200
@@ -229,6 +289,9 @@ def unarchive_site(site_id):
 @jwt_required()
 def list_environments(site_id):
     """List environments for a site."""
+    _, err = _guard_sealed_app(site_id)
+    if err:
+        return err
     result = WordPressService.get_environments(site_id)
     if 'error' in result:
         return jsonify(result), 404
@@ -239,6 +302,9 @@ def list_environments(site_id):
 @jwt_required()
 def create_environment(site_id):
     """Create a staging or development environment."""
+    _, err = _guard_sealed_app(site_id, write=True)
+    if err:
+        return err
     data = request.get_json() or {}
     env_type = data.get('type', '')
 
@@ -257,6 +323,9 @@ def create_environment(site_id):
 @jwt_required()
 def delete_environment(site_id, env_id):
     """Delete a non-production environment."""
+    _, err = _guard_sealed_app(site_id, write=True)
+    if err:
+        return err
     result = WordPressService.delete_environment(env_id)
     if result.get('success'):
         return jsonify(result), 200
@@ -283,6 +352,7 @@ def get_standalone_requirements():
 
 @wordpress_bp.route('/standalone/install', methods=['POST'])
 @jwt_required()
+@admin_required
 def install_standalone():
     """Install WordPress via Docker Compose."""
     data = request.get_json() or {}
@@ -298,6 +368,7 @@ def install_standalone():
 
 @wordpress_bp.route('/standalone/uninstall', methods=['POST'])
 @jwt_required()
+@admin_required
 def uninstall_standalone():
     """Uninstall standalone WordPress and optionally remove data."""
     data = request.get_json() or {}
@@ -313,6 +384,7 @@ def uninstall_standalone():
 
 @wordpress_bp.route('/standalone/start', methods=['POST'])
 @jwt_required()
+@admin_required
 def start_standalone():
     """Start WordPress containers."""
     result = WordPressService.start_wordpress_standalone()
@@ -324,6 +396,7 @@ def start_standalone():
 
 @wordpress_bp.route('/standalone/stop', methods=['POST'])
 @jwt_required()
+@admin_required
 def stop_standalone():
     """Stop WordPress containers."""
     result = WordPressService.stop_wordpress_standalone()
@@ -335,6 +408,7 @@ def stop_standalone():
 
 @wordpress_bp.route('/standalone/restart', methods=['POST'])
 @jwt_required()
+@admin_required
 def restart_standalone():
     """Restart WordPress containers."""
     result = WordPressService.restart_wordpress_standalone()
@@ -391,7 +465,7 @@ def get_php(app_id):
     app = _resolve_app(app_id)
     if not app:
         return jsonify({'error': 'Application not found'}), 404
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
     info = WordPressService.get_php_info(app.root_path)
     info['available_versions'] = WordPressService.get_available_php_versions()
@@ -469,7 +543,7 @@ def get_site_status_page(app_id):
     app = _resolve_app(app_id)
     if not app:
         return jsonify({'error': 'Application not found'}), 404
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
     wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
     component = None
@@ -555,7 +629,7 @@ def get_site_analytics(app_id):
     app = _resolve_app(app_id)
     if not app:
         return jsonify({'error': 'Application not found'}), 404
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
     result = WpAnalyticsService.get_traffic(app.name, request.args.get('hours', 24))
     # PHP fatals/warnings from the WP_DEBUG log (#25 fatals; populated by #30's toggle).
@@ -573,7 +647,7 @@ def get_site_vulnerabilities(app_id):
     app = _resolve_app(app_id)
     if not app:
         return jsonify({'error': 'Application not found'}), 404
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
     wp_site = WordPressSite.query.filter_by(application_id=app.id).first()
     if not wp_site:
@@ -872,7 +946,7 @@ def get_wordpress_info(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     if not _is_wp_app(app):
@@ -914,7 +988,7 @@ def get_plugins(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     plugins = WordPressService.get_plugins(app.root_path)
@@ -1013,7 +1087,7 @@ def get_themes(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     themes = WordPressService.get_themes(app.root_path)
@@ -1102,7 +1176,7 @@ def list_backups(app_id):
     if not app:
         return jsonify({'error': 'Application not found'}), 404
 
-    if user.role != 'admin' and app.user_id != current_user_id:
+    if not ResourceGrantService.can_access_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
 
     import os
@@ -1250,9 +1324,9 @@ def optimize_database(app_id):
 @jwt_required()
 def get_page_cache(app_id):
     """Report full-page cache plugin status for a site."""
-    app = _resolve_app(app_id)
-    if not app:
-        return jsonify({'error': 'Application not found'}), 404
+    app, err = _guard_sealed_app(app_id)
+    if err:
+        return err
     return jsonify(WordPressService.get_page_cache_status(app.root_path)), 200
 
 
@@ -1298,9 +1372,9 @@ def disable_page_cache(app_id):
 @jwt_required()
 def object_cache_status(app_id):
     """Report Redis object-cache state for a site."""
-    app = _resolve_app(app_id)
-    if not app:
-        return jsonify({'error': 'Application not found'}), 404
+    app, err = _guard_sealed_app(app_id)
+    if err:
+        return err
     return jsonify(WordPressService.object_cache_status(app.root_path)), 200
 
 
@@ -1628,6 +1702,9 @@ def scan_site_library_plugins(app_id):
 def get_site_managed_plugins(app_id):
     """Which of a site's installed plugins are library-managed (+ update state)."""
     from .wordpress_plugin_library_service import WordPressPluginLibraryService
+    _, err = _guard_sealed_app(app_id)
+    if err:
+        return err
     site = _resolve_wp_site(app_id)
     if not site:
         return jsonify({'error': 'Site not found'}), 404

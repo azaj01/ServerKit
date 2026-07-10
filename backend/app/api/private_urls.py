@@ -1,3 +1,5 @@
+# Bucket: PER-APP (plan 29 #9). Private-URL routes gate on the shared app-access
+# seam (can_access_app for reads, can_edit_app for mutations).
 """API endpoints for managing private URLs for applications."""
 
 from flask import Blueprint, request, jsonify

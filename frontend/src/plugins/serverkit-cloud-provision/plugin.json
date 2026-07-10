@@ -2,7 +2,7 @@
   "name": "serverkit-cloud-provision",
   "display_name": "Cloud Provisioning",
   "version": "1.0.0",
-  "description": "Provision new servers from connected cloud providers — the Cloud Servers tab in the Servers group.",
+  "description": "Provision new servers from connected cloud providers, as the Cloud Servers tab in the Servers group.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "deployment",

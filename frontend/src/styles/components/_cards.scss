@@ -177,34 +177,9 @@
     .stat-strip__value { font-size: $font-size-md; }
 }
 
-// Legacy stats grid layout (retained for widgets that still use raw .stat-* inner
-// classes; the StatsGrid component now renders .stat-strip instead).
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: $space-4;
-    margin-bottom: $space-6;
-
-    @media (max-width: $breakpoint-xl) {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    @media (max-width: $breakpoint-sm) {
-        grid-template-columns: 1fr;
-    }
-}
-
-// Stat cards (dashboard)
-.stat-card {
-    background: $bg-card;
-    padding: $space-5;
-    border-radius: $radius-xl;
-    border: 1px solid $border-subtle;
-    display: flex;
-    align-items: center;
-    gap: $space-4;
-}
-
+// Legacy `.stats-grid` / `.stat-card` KPI tile system removed (Plan 20 #20) —
+// pages use the shared KpiBand primitive (`.sk-kpiband`). `.stat-icon` below is
+// kept: it is a standalone icon chip still used by StyleGuide demos.
 .stat-icon {
     width: 48px;
     height: 48px;
@@ -257,57 +232,9 @@
     }
 }
 
-.stat-content {
-    display: flex;
-    flex-direction: column;
-    gap: $space-1;
-    min-width: 0;
-}
-
-.stat-label {
-    font-size: $font-size-sm;
-    color: $text-tertiary;
-    font-weight: $font-weight-medium;
-}
-
-.stat-value {
-    font-size: $font-size-xl;
-    font-weight: $font-weight-bold;
-    color: $text-primary;
-    line-height: 1.2;
-}
-
-.stat-suffix {
-    font-size: $font-size-base;
-    color: $text-tertiary;
-    font-weight: $font-weight-normal;
-}
-
-.stat-detail {
-    font-size: $font-size-xs;
-    color: $text-tertiary;
-    margin-top: 2px;
-}
-
-// Clickable stat-card variant: behaves as a filter button
-.stat-card--clickable {
-    appearance: none;
-    width: 100%;
-    text-align: left;
-    cursor: pointer;
-    color: inherit;
-    transition: transform $transition-base, border-color $transition-base, box-shadow $transition-base;
-
-    &:hover,
-    &.active {
-        transform: translateY(-1px);
-        border-color: $border-active;
-    }
-
-    &.active {
-        border-color: $accent-primary;
-    }
-}
+// Legacy `.stat-content` / `.stat-label` / `.stat-value` / `.stat-suffix` /
+// `.stat-detail` / `.stat-card--clickable` removed (Plan 20 #20) — superseded by
+// the MetricCard tile (`.sk-kpi`) inside KpiBand.
 
 // Progress bar
 .progress-bar {

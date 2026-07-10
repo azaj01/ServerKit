@@ -1,0 +1,30 @@
+{% extends 'email/base.html' %}
+{% from 'email/partials/_macros.html' import divider with context %}
+{% block heading %}{{ subject }}{% endblock %}
+{% block content %}
+  <p style="margin:0 0 20px;">Here{{ "'s" }} what happened while you were away{% if total %} — {{ total }} update{{ 's' if total != 1 else '' }}{% endif %}.</p>
+  {% for group in groups %}
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+    <tr>
+      <td class="sk-faint" style="padding:6px 0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:{{ brand.faint }};">
+        {{ group.label }}
+      </td>
+    </tr>
+  </table>
+  {% for item in group['items'] %}
+  {% set st = severity_styles.get(item.severity, severity_styles['info']) %}
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:10px;"><tr>
+    <td style="background:{{ st.bg }};border-left:4px solid {{ st.dot }};border-radius:8px;padding:12px 14px;">
+      <div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:{{ st.text }};">{{ st.label }}{% if item.when %} &middot; {{ item.when }}{% endif %}</div>
+      <div class="sk-ink" style="margin-top:5px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:{{ brand.ink }};">
+        {% if item.action_url %}<a href="{{ item.action_url }}" style="color:{{ brand.ink }};text-decoration:none;">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}
+      </div>
+    </td>
+  </tr></table>
+  {% endfor %}
+  <div style="height:6px;line-height:6px;font-size:6px;">&nbsp;</div>
+  {% endfor %}
+  {% if manage_url %}
+  <div style="margin-top:18px;">{{ divider() }}</div>
+  {% endif %}
+{% endblock %}

@@ -145,6 +145,9 @@ class DNSProviderConfig(db.Model):
     api_secret = db.Column(db.String(500))
     api_email = db.Column(db.String(255))
     is_default = db.Column(db.Boolean, default=False)
+    # Cloudflare Origin CA — the private key the panel generated for the CSR when
+    # issuing an Origin certificate for this provider's zones (plan 36 Origin CA).
+    origin_ca_key = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     domains = db.relationship('EmailDomain', backref='dns_provider', lazy=True)

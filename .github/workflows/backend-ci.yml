@@ -35,6 +35,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
+      - name: Test-count ratchet
+        # Fails if collected-test count drops below backend/tests/BASELINE_COUNT.
+        # Converts "code + its tests vanished together" (the 2026-07 data loss,
+        # where a green suite hid ~363 lost tests) from invisible to a red X.
+        # Lowering the floor requires editing BASELINE_COUNT in the same commit.
+        working-directory: backend
+        run: python tests/check_test_count.py
       - name: Run tests
         working-directory: backend
         run: python -m pytest -v

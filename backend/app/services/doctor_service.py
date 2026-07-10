@@ -8,14 +8,19 @@ doctor is interactive (the API runs it synchronously), so no probe may hang.
 Nothing here repairs anything automatically: :meth:`DoctorService.repair`
 runs only for the explicit items the operator selected.
 """
+import ipaddress
 import json
 import logging
+import socket
 import sys
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 DOCTOR_JOB_KIND = 'doctor.run'
+# Name of the built-in ScheduledJob row that runs the doctor sweep daily
+# (seeded by app/jobs/builtin_handlers.py:seed_builtin_schedules).
+DOCTOR_SCHEDULE_NAME = 'doctor'
 LAST_REPORT_KEY = 'doctor_last_report'
 
 # Core host services the doctor probes and is allowed to restart on demand.
@@ -27,6 +32,52 @@ DISK_FAIL_FREE_PCT = 5.0
 
 # Cap for the synchronous probes that shell out (systemctl is-active).
 PROBE_TIMEOUT_SECONDS = 10
+
+# Upper bound on how many site domains the DNS sweep resolves in one run — a
+# synchronous check that does a live lookup per domain must stay bounded so the
+# interactive doctor can never hang on a large portfolio. Domains past the cap
+# are reported (not silently dropped) in a single roll-up check.
+DNS_CHECK_MAX_DOMAINS = 25
+
+# Host suffixes that are development / reserved and never resolve publicly, so
+# the DNS sweep skips them (RFC 2606/6761 + the dev wildcard base lvh.me). Note
+# these are single-label reserved TLDs — ``example.com`` is a real public zone
+# and is intentionally NOT skipped.
+_DNS_SKIP_SUFFIXES = (
+    '.lvh.me', '.localhost', '.local', '.internal', '.test', '.invalid',
+    '.example', '.lan', '.home.arpa',
+)
+
+
+def _resolve_host_ips(host):
+    """Return the list of IP addresses ``host`` resolves to (A + AAAA).
+
+    Raises ``socket.gaierror`` (or another ``OSError``) when the name does not
+    resolve — callers treat that as an unresolved domain. Split out as a
+    module-level function so tests can stub the resolver.
+    """
+    ips = []
+    for info in socket.getaddrinfo(host, None):
+        ip = info[4][0]
+        if ip not in ips:
+            ips.append(ip)
+    return ips
+
+
+def _is_public_site_host(host):
+    """True when ``host`` is a real, public hostname worth a DNS lookup — not
+    localhost, a bare label, an IP literal, or a dev/reserved suffix."""
+    h = (host or '').strip().lower().rstrip('.')
+    if not h or h == 'localhost':
+        return False
+    if '.' not in h:
+        return False
+    try:
+        ipaddress.ip_address(h)
+        return False  # an IP literal, not a hostname
+    except ValueError:
+        pass
+    return not any(h.endswith(suffix) for suffix in _DNS_SKIP_SUFFIXES)
 
 
 def _check(key, title, status, detail, repairable=False, repair_ref=None):
@@ -161,6 +212,261 @@ class DoctorService:
             return _check('db.reachable', 'Database', 'fail', f'Query failed: {e}')
 
     # ------------------------------------------------------------------ #
+    # Site-DNS sweep (plan 26/31): do the managed site domains still resolve,
+    # and do they point at this server? Each unresolved public domain becomes a
+    # fail row, repairable via a connected DNS provider when one is set up.
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def _site_domains(cls):
+        """Hostnames of every managed-site domain (Domain rows attached to an
+        Application)."""
+        try:
+            from app.models.domain import Domain
+            rows = Domain.query.filter(Domain.application_id.isnot(None)).all()
+        except Exception:  # noqa: BLE001
+            return []
+        return [d.name for d in rows if d.name]
+
+    @classmethod
+    def _dns_provider_available(cls):
+        """True when at least one DNS provider is connected, so an unresolved
+        domain can be repaired automatically."""
+        try:
+            from app import db
+            from app.models.email import DNSProviderConfig
+            return db.session.query(DNSProviderConfig.id).first() is not None
+        except Exception:  # noqa: BLE001
+            return False
+
+    @classmethod
+    def _dns_checks(cls):
+        """One check per public site domain, plus a single roll-up over any
+        domains past the per-run cap. Returns a single ``ok`` check when there
+        are no public site domains to verify."""
+        from app.services.site_domain_service import SiteDomainService
+
+        public = [h for h in cls._site_domains() if _is_public_site_host(h)]
+        if not public:
+            return [_check('dns.resolve', 'Site DNS', 'ok',
+                           'No public site domains to check.')]
+
+        try:
+            server_ip = SiteDomainService.server_ip()
+        except Exception:  # noqa: BLE001
+            server_ip = None
+        provider_available = cls._dns_provider_available()
+
+        capped = public[:DNS_CHECK_MAX_DOMAINS]
+        checks = [cls._dns_check_one(host, server_ip, provider_available)
+                  for host in capped]
+
+        overflow = len(public) - len(capped)
+        if overflow > 0:
+            checks.append(_check(
+                'dns.resolve', 'Site DNS', 'warn',
+                f'Checked the first {DNS_CHECK_MAX_DOMAINS} of {len(public)} site '
+                f'domains this run; {overflow} more domain(s) were not checked.'))
+        return checks
+
+    @classmethod
+    def _dns_check_one(cls, host, server_ip, provider_available):
+        key = f'dns.resolve.{host}'
+        title = f'DNS: {host}'
+        try:
+            ips = _resolve_host_ips(host)
+        except Exception:  # noqa: BLE001 — any resolver error = unresolved
+            ips = None
+        if not ips:
+            return cls._dns_unresolved(key, title, host, server_ip, provider_available)
+        if server_ip and server_ip in ips:
+            return _check(key, title, 'ok', f'{host} resolves to {server_ip}.')
+        resolved = ', '.join(ips)
+        if server_ip:
+            return _check(key, title, 'warn',
+                          f'{host} resolves to {resolved}, not this server '
+                          f'({server_ip}).')
+        return _check(key, title, 'warn',
+                      f'{host} resolves to {resolved} (server public IP is not '
+                      f'set, so this cannot be verified).')
+
+    @classmethod
+    def _dns_unresolved(cls, key, title, host, server_ip, provider_available):
+        if not server_ip:
+            return _check(
+                key, title, 'fail',
+                f'{host} does not resolve. Set the server public IP in Settings so '
+                f'ServerKit can create and verify its DNS record.',
+                repairable=False)
+        if provider_available:
+            return _check(
+                key, title, 'fail',
+                f'{host} does not resolve. ServerKit can create the A record '
+                f'{host} → {server_ip} via a connected DNS provider.',
+                repairable=True, repair_ref={'kind': 'dns', 'host': host})
+        return _check(
+            key, title, 'fail',
+            f'{host} does not resolve. Add an A record {host} → {server_ip} at your '
+            f'DNS host, or connect a DNS provider so ServerKit can do it for you.',
+            repairable=False)
+
+    @classmethod
+    def _repair_dns(cls, host):
+        """Create the missing A record for a managed site ``host`` via a
+        connected DNS provider. Refuses any hostname ServerKit doesn't manage so
+        a caller can't steer a provider write at an arbitrary name."""
+        host = (host or '').strip().lower().rstrip('.')
+        if not host:
+            return {'success': False, 'error': 'No host given for DNS repair.'}
+        managed = {(h or '').strip().lower().rstrip('.') for h in cls._site_domains()}
+        if host not in managed:
+            return {'success': False, 'error': f'Not a managed site domain: {host}'}
+
+        from app.services.site_domain_service import SiteDomainService
+        try:
+            ip = SiteDomainService.server_ip()
+        except Exception:  # noqa: BLE001
+            ip = None
+        if not ip:
+            return {'success': False,
+                    'error': 'Set the server public IP in Settings before '
+                             'creating DNS records.'}
+
+        from app.services.dns_provider_service import DNSProviderService
+        res = DNSProviderService.ensure_a_record(host, ip)
+        if res.get('created'):
+            return {'success': True, 'provider': res.get('provider'),
+                    'zone': res.get('zone'), 'record': res.get('record')}
+        msg = (res.get('message') or res.get('error')
+               or 'DNS record could not be created.')
+        return {'success': False, 'error': msg, 'reason': res.get('reason'),
+                'record': res.get('record')}
+
+    @staticmethod
+    def _failed_dns_hosts(checks):
+        """Hostnames of the ``dns.resolve.<host>`` checks currently failing."""
+        prefix = 'dns.resolve.'
+        hosts = []
+        for c in checks or []:
+            key = c.get('key', '')
+            if c.get('status') == 'fail' and key.startswith(prefix) and key != 'dns.resolve':
+                hosts.append(key[len(prefix):])
+        return hosts
+
+    @classmethod
+    def _notify_dns_failures(cls, hosts):
+        """Alert admins that site domains newly stopped resolving."""
+        try:
+            from app.plugins_sdk import notify
+            listed = ', '.join(hosts[:5])
+            if len(hosts) > 5:
+                listed += f' (+{len(hosts) - 5} more)'
+            notify.send(
+                'dns.unresolved', to='admins',
+                data={'count': len(hosts), 'domains': list(hosts),
+                      'summary': listed,
+                      'message': f'Site domain(s) no longer resolve: {listed}. '
+                                 f'Check the Monitoring → Doctor tab to repair them.'})
+        except Exception as e:  # noqa: BLE001 — notification is best-effort
+            logger.warning('could not send dns.unresolved notification: %s', e)
+
+    # ------------------------------------------------------------------ #
+    # Backup restore-proof (plan 23 Phase 3): is each policy's latest backup
+    # actually restorable? Two check families per policy:
+    #   backup_drill_stale.<id> — cadence'd policies whose last drill is stale /
+    #                             failed / never (skipped when cadence is 'off').
+    #   backup_unverified.<id>  — policies whose latest successful run has not
+    #                             been verified beyond the 'none' level.
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _policy_label(policy):
+        return f'{policy.target_type}:{policy.target_id}'
+
+    @classmethod
+    def _backup_proof_checks(cls):
+        """One drill-staleness check per cadence'd policy plus one verification
+        check per policy that has a successful run. Best-effort — any read
+        failure degrades to a single warn."""
+        checks = []
+        try:
+            from app.models.backup_policy import BackupPolicy
+            policies = BackupPolicy.query.all()
+        except Exception as e:  # noqa: BLE001
+            return [_check('backup.proof', 'Backup restore proof', 'warn',
+                           f'Could not read backup policies: {e}')]
+        for policy in policies:
+            stale = cls._backup_drill_stale_check(policy)
+            if stale is not None:
+                checks.append(stale)
+            unverified = cls._backup_unverified_check(policy)
+            if unverified is not None:
+                checks.append(unverified)
+        return checks
+
+    @classmethod
+    def _backup_drill_stale_check(cls, policy):
+        """Drill-staleness for one policy, or ``None`` when it has no drill
+        cadence (``drill_cadence == 'off'``)."""
+        if (policy.drill_cadence or 'off') == 'off':
+            return None
+        from app.services.backup_policy_service import BackupPolicyService
+        badge = BackupPolicyService._drill_badge(policy)
+        key = f'backup_drill_stale.{policy.id}'
+        title = f'Restore drill: {cls._policy_label(policy)}'
+        repair_ref = {'kind': 'backup_drill', 'policy_id': policy.id}
+        if badge == 'ok':
+            return _check(key, title, 'ok',
+                          'A recent restore drill proved this backup restores.')
+        if badge == 'stale':
+            return _check(key, title, 'warn',
+                          "The last restore drill is older than this policy's "
+                          'cadence — run a fresh drill.',
+                          repairable=True, repair_ref=repair_ref)
+        detail = ('This backup has never been restore-drilled.'
+                  if badge == 'never'
+                  else 'The last restore drill failed — the backup may not restore.')
+        return _check(key, title, 'fail', detail,
+                      repairable=True, repair_ref=repair_ref)
+
+    @classmethod
+    def _backup_unverified_check(cls, policy):
+        """Verification state of the latest successful run for one policy, or
+        ``None`` when the policy has no successful run yet."""
+        try:
+            from app.models.backup_run import BackupRun
+            run = (BackupRun.query
+                   .filter_by(policy_id=policy.id, status='success')
+                   .order_by(BackupRun.started_at.desc()).first())
+        except Exception:  # noqa: BLE001
+            return None
+        if not run:
+            return None
+        key = f'backup_unverified.{policy.id}'
+        title = f'Backup verification: {cls._policy_label(policy)}'
+        level = run.effective_verify_level()
+        if level == 'none':
+            return _check(
+                key, title, 'warn',
+                'The latest backup has not been verified (no integrity check or '
+                'restore drill has run against it yet).',
+                repairable=True,
+                repair_ref={'kind': 'backup_verify', 'policy_id': policy.id,
+                            'run_id': run.id})
+        return _check(key, title, 'ok', f'Latest backup verified ({level}).')
+
+    @classmethod
+    def _setup_checks(cls):
+        """Panel setup-health items as ``setup.*`` doctor checks. Imported
+        lazily to avoid an import cycle; best-effort."""
+        try:
+            from app.services.setup_health_service import SetupHealthService
+            return list(SetupHealthService.doctor_checks())
+        except Exception as e:  # noqa: BLE001
+            logger.warning('setup-health doctor section failed: %s', e)
+            return []
+
+    # ------------------------------------------------------------------ #
     # Sweep
     # ------------------------------------------------------------------ #
 
@@ -173,9 +479,12 @@ class DoctorService:
         checks = []
         checks += cls._drift_checks()
         checks += cls._service_checks()
+        checks += cls._dns_checks()
+        checks += cls._backup_proof_checks()
         checks.append(cls._cert_check())
         checks.append(cls._disk_check())
         checks.append(cls._db_check())
+        checks += cls._setup_checks()
         report = {
             'checks': checks,
             'ran_at': datetime.utcnow().isoformat() + 'Z',
@@ -223,6 +532,8 @@ class DoctorService:
                 results.append({'item': item, **res})
             elif kind == 'service':
                 results.append({'item': item, **cls._restart_service(item.get('name'))})
+            elif kind == 'dns':
+                results.append({'item': item, **cls._repair_dns(item.get('host'))})
             else:
                 results.append({'item': item, 'success': False,
                                 'error': f'Unknown repair kind: {kind}'})
@@ -250,12 +561,27 @@ class DoctorService:
 
     @classmethod
     def run_doctor_job(cls, job):
-        """Job handler for ``doctor.run`` (background variant of run())."""
-        report = cls.run()
+        """Job handler for ``doctor.run`` (background variant of run()).
+
+        Diffs the site-DNS results against the previous report and alerts admins
+        about domains that *newly* stopped resolving — so a persistently-broken
+        domain nags once, not on every daily sweep.
+        """
+        prev = cls.get_last_report() or {}
+        prev_failed = set(cls._failed_dns_hosts(prev.get('checks', [])))
+
+        report = cls.run()  # stores the new report as the last report
+
+        now_failed = cls._failed_dns_hosts(report['checks'])
+        new_failures = [h for h in now_failed if h not in prev_failed]
+        if new_failures:
+            cls._notify_dns_failures(new_failures)
+
         counts = {}
         for c in report['checks']:
             counts[c['status']] = counts.get(c['status'], 0) + 1
-        return {'ran_at': report['ran_at'], 'counts': counts}
+        return {'ran_at': report['ran_at'], 'counts': counts,
+                'dns_new_failures': new_failures}
 
     @classmethod
     def register_jobs(cls):

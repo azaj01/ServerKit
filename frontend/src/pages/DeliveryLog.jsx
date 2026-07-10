@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Send, RefreshCw, Inbox } from 'lucide-react';
 import api from '../services/api';
-import { PageTopbar, MetricCard } from '@/components/ds';
+import { PageTopbar, MetricCard, KpiBand } from '@/components/ds';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -81,12 +81,12 @@ export default function DeliveryLog() {
             <div className="sk-dlog">
                 <EmailProviders />
 
-                <div className="sk-dlog__stats">
+                <KpiBand>
                     <MetricCard label="Total" value={stats?.total ?? 0} tone="accent" />
                     <MetricCard label="Sent" value={byStatus.sent ?? 0} tone="green" />
                     <MetricCard label="Pending" value={byStatus.pending ?? 0} tone="amber" />
                     <MetricCard label="Failed" value={byStatus.failed ?? 0} tone="red" />
-                </div>
+                </KpiBand>
 
                 <div className="sk-dlog__filters">
                     <label>

@@ -39,6 +39,13 @@ class NotificationPreferences(db.Model):
     # JSON object with category: boolean
     categories = db.Column(db.Text, default='{"system": true, "security": true, "backups": true, "apps": true}')
 
+    # Digest rollup cadence (plan 24 Phase 3): 'off' | 'daily' | 'weekly'.
+    # Default 'off' preserves immediate-send back-compat (digests are opt-in).
+    # Backed by migration 060; the digest job (app/notifications/digest.py)
+    # batches this user's `queued_digest` deliveries into one branded email.
+    digest_cadence = db.Column(db.String(12), default='off')
+    digest_last_sent_at = db.Column(db.DateTime, nullable=True)
+
     # Quiet hours (don't send non-critical notifications during these hours)
     quiet_hours_enabled = db.Column(db.Boolean, default=False)
     quiet_hours_start = db.Column(db.String(5), default='22:00')  # HH:MM format
@@ -100,6 +107,8 @@ class NotificationPreferences(db.Model):
             'discord_webhook': self.discord_webhook[:30] + '...' if self.discord_webhook and len(self.discord_webhook) > 30 else self.discord_webhook,
             'telegram_chat_id': self.telegram_chat_id,
             'categories': self.get_categories(),
+            'digest_cadence': self.digest_cadence or 'off',
+            'digest_last_sent_at': self.digest_last_sent_at.isoformat() if self.digest_last_sent_at else None,
             'quiet_hours': {
                 'enabled': self.quiet_hours_enabled,
                 'start': self.quiet_hours_start,

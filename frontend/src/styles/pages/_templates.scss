@@ -364,6 +364,102 @@
 }
 
 // Results Header
+.deploy-templates-section {
+    margin-bottom: $space-5;
+    padding-bottom: $space-4;
+    border-bottom: 1px solid $border-color;
+
+    &__head {
+        margin-bottom: $space-3;
+
+        h3 {
+            margin: 0 0 2px;
+            font-size: $font-size-base;
+            font-weight: $font-weight-semibold;
+            color: $text-primary;
+        }
+
+        p {
+            margin: 0;
+            font-size: $font-size-sm;
+            color: $text-tertiary;
+        }
+    }
+}
+
+.deploy-templates-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: $space-3;
+}
+
+.deploy-template-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    border: 1px solid $border-color;
+    border-radius: $radius-md;
+    background: $bg-card;
+
+    &__main {
+        min-width: 0;
+
+        p {
+            margin: 2px 0 $space-1;
+            font-size: $font-size-sm;
+            color: $text-secondary;
+        }
+
+        code {
+            display: block;
+            font-size: $font-size-xs;
+            color: $text-tertiary;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    &__title {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+
+        strong {
+            color: $text-primary;
+            font-weight: $font-weight-semibold;
+        }
+    }
+
+    &__example {
+        padding: 1px $space-2;
+        border-radius: $radius-sm;
+        background: rgba($accent-primary-raw, 0.15);
+        color: $accent-primary;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-medium;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    &__badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-1;
+        margin-top: $space-2;
+
+        span {
+            padding: 1px $space-2;
+            border: 1px solid $border-color;
+            border-radius: $radius-sm;
+            font-size: $font-size-xs;
+            color: $text-tertiary;
+        }
+    }
+}
+
 .templates-results-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;

@@ -1,5 +1,9 @@
-"""NVIDIA GPU monitoring. Shells out to `nvidia-smi` (like the rest of the
-service layer) and degrades gracefully to "no GPUs" when it isn't present."""
+"""NVIDIA GPU monitoring (serverkit-gpu extension).
+
+Moved out of core as the first CORE_SLIM slice (plan 32 #7). Shells out to
+``nvidia-smi`` (like the rest of the service layer) and degrades gracefully to
+"no GPUs" when it isn't present, so the panel stays happy on GPU-less hosts.
+"""
 import logging
 import re
 import subprocess
@@ -74,7 +78,7 @@ class GpuService:
     @classmethod
     def _container_for_pid(cls, pid):
         """Best-effort: resolve a host PID to a Docker container name via its
-        cgroup. Returns None when it can't be determined."""
+        cgroup. Returns None when it can't be determined (or off Linux)."""
         if not pid:
             return None
         try:

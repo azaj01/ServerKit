@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://serverkit.dev/serverkit-yaml.schema.json",
+  "$id": "https://serverkit.ai/serverkit-yaml.schema.json",
   "title": "ServerKit Manifest",
   "description": "Declarative deployment manifest (serverkit.yaml / serverkit.json). A version:1 file describes a whole deployment — services, databases, disks, backups, env vars, cron and domains — that ServerKit parses, diffs against live state, and applies. camelCase is canonical; snake_case aliases are accepted everywhere.",
   "type": "object",
@@ -73,6 +73,33 @@
           "minimum": 1,
           "maximum": 65535
         },
+        "ports": {
+          "description": "Typed L4 port publishes (appliance tier). Each entry is a raw tcp/udp publish — the escape hatch for services that speak more than HTTP (media/UDP, VoIP, brokers). The legacy scalar `port` keeps its HTTP/nginx behavior and is separate.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/portDecl" }
+        },
+        "image": {
+          "description": "Container image reference for a BYO-image app (appliance tier) — a first-class peer of the buildpack path.",
+          "type": "string"
+        },
+        "registry": {
+          "description": "Named private registry to authenticate against before pulling `image`. A registry that is unknown or has no stored credential is a plan-time blocker.",
+          "type": "string"
+        },
+        "hostRequirements": {
+          "description": "Elevated host requirements (appliance tier) — privileged/capAdd/sysctls/devices/kernelModules. Always listed in plain words in the plan; never applied silently.",
+          "$ref": "#/definitions/hostRequirements"
+        },
+        "bootstrap": {
+          "description": "First-boot bootstrap (appliance tier). Runs once via `docker compose run --rm` after volumes exist and before the first up — for appliances that generate a config tree once.",
+          "$ref": "#/definitions/bootstrap"
+        },
+        "containers": {
+          "description": "A multi-container UNIT (appliance tier): one service rendered as one compose project with a private network and health-gated dependsOn. Mutually exclusive with the buildpack keys. Keyed by container name.",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/container" }
+        },
         "healthCheckPath": {
           "description": "HTTP path used for health checks and the zero-downtime restart gate.",
           "type": "string"
@@ -121,6 +148,96 @@
         }
       }
     },
+    "bootstrap": {
+      "type": "object",
+      "required": ["command"],
+      "additionalProperties": true,
+      "properties": {
+        "command": {
+          "description": "Command run once inside a throwaway service container.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutSeconds": {
+          "description": "Max seconds the bootstrap may run before it is killed and the step fails.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "image": { "description": "Container image reference.", "type": "string" },
+        "registry": { "description": "Named private registry to authenticate against before pulling.", "type": "string" },
+        "ports": { "type": "array", "items": { "$ref": "#/definitions/portDecl" } },
+        "disks": { "type": "array", "items": { "$ref": "#/definitions/disk" } },
+        "envVars": { "type": "array", "items": { "$ref": "#/definitions/envVar" } },
+        "bootstrap": { "$ref": "#/definitions/bootstrap" },
+        "hostRequirements": { "$ref": "#/definitions/hostRequirements" },
+        "healthCheck": { "$ref": "#/definitions/healthCheck" },
+        "dependsOn": { "type": "array", "items": { "$ref": "#/definitions/dependsOn" } }
+      }
+    },
+    "healthCheck": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "cmd": { "description": "Shell command probe (rendered as CMD-SHELL).", "type": "string" },
+        "httpPath": { "description": "HTTP path probed with wget on localhost.", "type": "string" },
+        "interval": { "description": "e.g. 30s.", "type": "string" },
+        "timeout": { "description": "e.g. 5s.", "type": "string" },
+        "retries": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "dependsOn": {
+      "type": "object",
+      "required": ["service"],
+      "additionalProperties": true,
+      "properties": {
+        "service": { "description": "Sibling container name in the same unit.", "type": "string" },
+        "condition": { "description": "healthy waits for the dependency's healthcheck; started only waits for it to start.", "enum": ["healthy", "started"] }
+      }
+    },
+    "hostRequirements": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "privileged": { "description": "Run privileged (big hammer — always shown in the plan, never silent).", "type": "boolean" },
+        "capAdd": { "description": "Linux capabilities to add.", "type": "array", "items": { "type": "string" } },
+        "sysctls": { "description": "sysctl key/value pairs.", "type": "object" },
+        "devices": { "description": "Host devices to expose.", "type": "array", "items": { "type": "string" } },
+        "kernelModules": { "description": "Kernel modules the workload needs (advisory /proc/modules check only).", "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "portDecl": {
+      "type": "object",
+      "required": ["port"],
+      "additionalProperties": true,
+      "properties": {
+        "port": {
+          "description": "Host port to publish.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "containerPort": {
+          "description": "Container port to publish to. Defaults to the host port.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "protocol": {
+          "description": "L4 protocol. Defaults to tcp.",
+          "enum": ["tcp", "udp"]
+        },
+        "expose": {
+          "description": "public = bind 0.0.0.0 and open the firewall; local = bind 127.0.0.1 only. Defaults to public.",
+          "enum": ["public", "local"]
+        }
+      }
+    },
     "envVar": {
       "type": "object",
       "required": ["key"],
@@ -152,6 +269,15 @@
                 "connectionString", "host", "port", "database", "username", "password", "url"
               ]
             }
+          }
+        },
+        "fromServer": {
+          "description": "Reference to the service's own target server identity (appliance tier). publicIp is what a NAT'd media/WebRTC bridge must advertise to clients.",
+          "type": "object",
+          "required": ["property"],
+          "additionalProperties": false,
+          "properties": {
+            "property": { "type": "string", "enum": ["publicIp", "hostname"] }
           }
         },
         "generate": {

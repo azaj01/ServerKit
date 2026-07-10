@@ -258,3 +258,86 @@ def test_registry_url_empty_disables_remote(monkeypatch):
 def test_registry_url_env_override_wins(monkeypatch):
     monkeypatch.setenv('SERVERKIT_REGISTRY_URL', 'https://example.test/index.json')
     assert registry_service._registry_url() == 'https://example.test/index.json'
+
+
+# --------------------------------------------------------------------------- #
+# Index v2 fields — logo / repo / bundled
+# --------------------------------------------------------------------------- #
+
+def test_v2_entry_normalizes_logo_and_repo():
+    """A v2 entry keeps logo/repo; an absolute logo passes through unchanged."""
+    e = registry_service._normalize({
+        'slug': 'gui', 'display_name': 'GUI', 'version': '1.0.0',
+        'source': 'https://x/gui.zip',
+        'repo': 'https://github.com/acme/gui',
+        'logo': 'https://cdn.example/gui.svg',
+    })
+    assert e['repo'] == 'https://github.com/acme/gui'
+    assert e['logo'] == 'https://cdn.example/gui.svg'
+    assert e['bundled'] is False
+
+
+def test_relative_logo_resolved_against_index_base():
+    """A repo-relative logo becomes absolute against the index URL it came
+    from (raw-GitHub index → raw asset URL)."""
+    base = registry_service.DEFAULT_REGISTRY_URL  # .../main/index.json
+    e = registry_service._normalize({
+        'slug': 'gui', 'display_name': 'GUI', 'version': '1.0.0',
+        'source': 'https://x/gui.zip',
+        'logo': 'assets/gui/logo.svg',
+    }, base_url=base)
+    assert e['logo'] == (
+        'https://raw.githubusercontent.com/jhd3197/serverkit-extensions/'
+        'main/assets/gui/logo.svg'
+    )
+
+
+def test_v1_entry_unaffected_by_v2_defaults():
+    """An entry with no v2 fields normalizes with safe defaults."""
+    e = registry_service._normalize({
+        'slug': 'old', 'display_name': 'Old', 'version': '1.0.0',
+        'source': 'https://x/old.zip',
+    })
+    assert e['bundled'] is False
+    assert e['repo'] == ''
+    assert e['logo'] is None
+
+
+def test_bundled_excluded_from_catalog_by_default(app, monkeypatch):
+    monkeypatch.setattr(registry_service, '_cache', {
+        'ts': 9e18, 'source': 'test',
+        'entries': [
+            registry_service._normalize({
+                'slug': 'community-ext', 'display_name': 'Community', 'version': '1.0.0',
+                'source': 'https://x/c.zip',
+            }),
+            registry_service._normalize({
+                'slug': 'serverkit-wordpress', 'display_name': 'WordPress',
+                'version': '1.0.0', 'bundled': True,
+            }),
+        ],
+    })
+    default_slugs = {e['slug'] for e in registry_service.list_catalog()}
+    assert 'community-ext' in default_slugs
+    assert 'serverkit-wordpress' not in default_slugs  # bundled hidden from Browse
+
+    full_slugs = {e['slug'] for e in registry_service.list_catalog(include_bundled=True)}
+    assert 'serverkit-wordpress' in full_slugs
+    assert 'community-ext' in full_slugs
+
+
+def test_registry_endpoint_include_bundled_flag(app, client, auth_headers, monkeypatch):
+    monkeypatch.setattr(registry_service, '_cache', {
+        'ts': 9e18, 'source': 'test',
+        'entries': [
+            registry_service._normalize({
+                'slug': 'serverkit-wordpress', 'display_name': 'WordPress',
+                'version': '1.0.0', 'bundled': True,
+            }),
+        ],
+    })
+    resp = client.get('/api/v1/marketplace/registry', headers=auth_headers)
+    assert not any(e['slug'] == 'serverkit-wordpress' for e in resp.get_json()['extensions'])
+
+    resp2 = client.get('/api/v1/marketplace/registry?include_bundled=true', headers=auth_headers)
+    assert any(e['slug'] == 'serverkit-wordpress' for e in resp2.get_json()['extensions'])

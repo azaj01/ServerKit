@@ -46,3 +46,37 @@ def test_wildcard_permissions_still_match_agent_actions():
     assert server.has_permission('docker:container:list')
     assert server.has_permission('docker:container:restart')
     assert not server.has_permission('docker:image:list')
+
+
+def test_probe_classifies_as_read():
+    """doctor:probe is a read (plan 28 #7): it expands to doctor:read, not
+    doctor:write, and is_read_action treats it as Observed-safe."""
+    assert 'probe' in Server.READ_ACTION_VERBS
+    assert Server.is_read_action('doctor:probe') is True
+    # cron:update / systemd:restart stay mutating.
+    assert Server.is_read_action('cron:update') is False
+    assert Server.is_read_action('systemd:restart') is False
+
+
+def test_scoped_profiles_grant_fleet_doctor_scopes():
+    """Each scoped canned profile must let the fleet doctor pass has_permission
+    on BOTH negotiation paths: doctor:probe (v2) and systemd:status (v1
+    composed). systemd:restart / cron:update stay OUT of the read profiles
+    (explicit grant or * only) per Decision 5."""
+    from app.api.servers import PERMISSION_PROFILES
+
+    for key in ('docker_readonly', 'docker_manager', 'deployment_runner'):
+        perms = PERMISSION_PROFILES[key]['permissions']
+        server = Server(name=f'srv-{key}', permissions=list(perms))
+        assert server.has_permission('doctor:probe'), key
+        assert server.has_permission('systemd:status'), key
+        assert server.has_permission('survey:read'), key
+        # Mutating v2 verbs must NOT be implied by the read profile.
+        assert not server.has_permission('systemd:restart'), key
+        assert not server.has_permission('cron:update'), key
+
+    # full_access ('*') covers everything, including the mutating verbs.
+    full = Server(name='full', permissions=list(PERMISSION_PROFILES['full_access']['permissions']))
+    assert full.has_permission('doctor:probe')
+    assert full.has_permission('systemd:restart')
+    assert full.has_permission('cron:update')

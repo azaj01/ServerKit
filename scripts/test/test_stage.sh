@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+#
+# Unit tests for the staging testbed (scripts/stage.sh + scripts/stage-remote.sh
+# + scripts/lib/stage-common.sh) — runs in seconds, no server, no SSH, no box.
+#
+# Both stage scripts are source-able: sourcing defines every function and returns
+# before the run block (the BASH_SOURCE guard), exactly like scripts/update.sh.
+#
+# Run:  bash scripts/test/test_stage.sh
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+STAGE_SH="$SCRIPT_DIR/../stage.sh"
+STAGE_REMOTE_SH="$SCRIPT_DIR/../stage-remote.sh"
+STAGE_COMMON="$SCRIPT_DIR/../lib/stage-common.sh"
+
+PASS=0; FAIL=0; SKIP=0
+ok()   { PASS=$((PASS + 1)); printf '  \033[32m✔\033[0m %s\n' "$1"; }
+bad()  { FAIL=$((FAIL + 1)); printf '  \033[31m✘\033[0m %s\n' "$1"; }
+skip() { SKIP=$((SKIP + 1)); printf '  \033[33m∼\033[0m %s (skipped)\n' "$1"; }
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+export NO_COLOR=1
+# shellcheck source=../lib/stage-common.sh
+source "$STAGE_COMMON"
+# shellcheck source=../stage.sh
+source "$STAGE_SH"
+set +e +u
+
+printf '\nstaging testbed unit tests\n\n'
+
+# TS1 — the exclusion list.
+excl="$(stage_rsync_excludes)"
+if printf '%s\n' "$excl" | grep -qx '.env' \
+   && printf '%s\n' "$excl" | grep -qx '.git/' \
+   && printf '%s\n' "$excl" | grep -qx 'backend/instance/' \
+   && printf '%s\n' "$excl" | grep -qx 'frontend/node_modules/' \
+   && printf '%s\n' "$excl" | grep -qx 'frontend/dist/' \
+   && printf '%s\n' "$excl" | grep -qx 'deploy/targets/'; then
+    ok "stage_rsync_excludes covers .env, .git, instance DB, venv, node_modules, dist, profiles"
+else
+    bad "stage_rsync_excludes is missing an expected pattern: [$(printf '%s' "$excl" | tr '\n' ',')]"
+fi
+args="$(stage_rsync_exclude_args)"
+if printf '%s\n' "$args" | grep -qx -- '--exclude=.env' \
+   && printf '%s\n' "$args" | grep -qx -- '--exclude=.git/' \
+   && [ "$(printf '%s\n' "$args" | grep -c -- '--exclude=')" -ge 6 ]; then
+    ok "stage_rsync_exclude_args wraps every pattern in --exclude="
+else
+    bad "stage_rsync_exclude_args did not wrap patterns: [$(printf '%s' "$args" | tr '\n' ' ')]"
+fi
+
+# TS2 — the verdict contract.
+checks="$(printf 'health=pass\nlogin=pass\ndocker=skip\n' | stage_checks_to_json)"
+if [ "$checks" = '{"health":"pass","login":"pass","docker":"skip"}' ]; then
+    ok "stage_checks_to_json builds an ordered JSON object from name=state lines"
+else
+    bad "stage_checks_to_json produced [$checks]"
+fi
+line="$(stage_format_verdict testbox abc1234 head "$checks" 1)"
+if printf '%s' "$line" | grep -qE '^VERDICT \{' \
+   && printf '%s' "$line" | grep -q '"target":"testbox"' \
+   && printf '%s' "$line" | grep -q '"commit":"abc1234"' \
+   && printf '%s' "$line" | grep -q '"mode":"head"' \
+   && printf '%s' "$line" | grep -q '"pass":true' \
+   && printf '%s' "$line" | grep -q '"health":"pass"'; then
+    ok "stage_format_verdict emits a well-formed VERDICT line (pass:true as a JSON literal)"
+else
+    bad "stage_format_verdict line malformed: [$line]"
+fi
+lf="$(stage_format_verdict t c m '{}' 0)"
+if printf '%s' "$lf" | grep -q '"pass":false' && ! printf '%s' "$lf" | grep -q '"pass":"'; then
+    ok "stage_format_verdict renders a failing verdict as pass:false"
+else
+    bad "stage_format_verdict failing case wrong: [$lf]"
+fi
+esc="$(stage_json_escape 'he said "hi"\ok')"
+if [ "$esc" = 'he said \"hi\"\\ok' ]; then
+    ok "stage_json_escape escapes quotes and backslashes"
+else
+    bad "stage_json_escape wrong: [$esc]"
+fi
+
+# TS3 — profile parsing.
+mkroot() { local r="$1"; mkdir -p "$r/deploy/targets"; }
+GOODROOT="$WORK/good"; mkroot "$GOODROOT"
+cat > "$GOODROOT/deploy/targets/tb.env" <<'EOF'
+STAGE_HOST=tb-alias
+STAGE_DIR=/opt/serverkit-staging
+STAGE_PORT=5100
+EOF
+res="$(
+    set -Eeuo pipefail
+    STAGE_REPO_ROOT="$GOODROOT"; STAGE_CMD=push
+    stage_load_profile tb
+    printf '%s|%s|%s|%s|%s' "$STAGE_HOST" "$STAGE_DIR" "$STAGE_PORT" "$STAGE_MODE" "$STAGE_SRC"
+)"
+if [ "$res" = "tb-alias|/opt/serverkit-staging|5100|parallel|/opt/serverkit-staging.src" ]; then
+    ok "stage_load_profile parses a full profile and defaults STAGE_MODE=parallel + derives .src"
+else
+    bad "stage_load_profile parsed wrong: [$res]"
+fi
+if ( set -Eeuo pipefail; STAGE_REPO_ROOT="$GOODROOT"; STAGE_CMD=push; stage_load_profile does-not-exist ) >/dev/null 2>&1; then
+    bad "stage_load_profile must hard-error on a missing profile file"
+else
+    ok "stage_load_profile hard-errors (no prompt) on a missing profile"
+fi
+cat > "$GOODROOT/deploy/targets/nohost.env" <<'EOF'
+STAGE_DIR=/opt/serverkit-staging
+STAGE_PORT=5100
+EOF
+if ( set -Eeuo pipefail; STAGE_REPO_ROOT="$GOODROOT"; STAGE_CMD=push; stage_load_profile nohost ) >/dev/null 2>&1; then
+    bad "stage_load_profile must hard-error when STAGE_HOST is missing"
+else
+    ok "stage_load_profile hard-errors on a missing STAGE_HOST"
+fi
+cat > "$GOODROOT/deploy/targets/badmode.env" <<'EOF'
+STAGE_HOST=x
+STAGE_DIR=/opt/serverkit-staging
+STAGE_PORT=5100
+STAGE_MODE=obliterate
+EOF
+if ( set -Eeuo pipefail; STAGE_REPO_ROOT="$GOODROOT"; STAGE_CMD=push; stage_load_profile badmode ) >/dev/null 2>&1; then
+    bad "stage_load_profile must reject an invalid STAGE_MODE"
+else
+    ok "stage_load_profile rejects an invalid STAGE_MODE"
+fi
+
+# TS4 — payload-mode selection.
+m_head="$( set -Eeuo pipefail; STAGE_DIRTY=0; stage_payload_mode )"
+m_dirty="$( set -Eeuo pipefail; STAGE_DIRTY=1; stage_payload_mode )"
+if [ "$m_head" = "head" ] && [ "$m_dirty" = "dirty" ]; then
+    ok "stage_payload_mode selects head by default and dirty under --dirty"
+else
+    bad "stage_payload_mode wrong: head=[$m_head] dirty=[$m_dirty]"
+fi
+c_dirty="$( set -Eeuo pipefail; STAGE_REPO_ROOT="$REPO_ROOT"; STAGE_DIRTY=1; stage_commit )"
+if printf '%s' "$c_dirty" | grep -q -- '-dirty$'; then
+    ok "stage_commit stamps a -dirty suffix for working-tree payloads"
+else
+    bad "stage_commit did not mark a dirty payload: [$c_dirty]"
+fi
+
+# TS5 — the no-prompt gate.
+prompt_hit=""
+for f in "$STAGE_SH" "$STAGE_REMOTE_SH" "$STAGE_COMMON"; do
+    [ -f "$f" ] || continue
+    if grep -nE '\bread -[a-z]*p|read[^#]*/dev/tty|\bselect \b' "$f" >/dev/null 2>&1; then
+        prompt_hit="$prompt_hit $(basename "$f")"
+    fi
+done
+if [ -z "$prompt_hit" ]; then
+    ok "no interactive prompt (read -p / /dev/tty / select) anywhere in the stage scripts"
+else
+    bad "interactive prompt found in:$prompt_hit — staging must never ask a question"
+fi
+
+# TS6 — the no-secrets gate.
+secret_hit=""
+for f in "$STAGE_SH" "$STAGE_REMOTE_SH" "$STAGE_COMMON"; do
+    [ -f "$f" ] || continue
+    if grep -nE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' "$f" | grep -vE '127\.0\.0\.1|0\.0\.0\.0' >/dev/null 2>&1; then
+        secret_hit="$secret_hit $(basename "$f"):ip"
+    fi
+    if grep -nE 'IdentityFile|BEGIN [A-Z]* ?PRIVATE KEY|id_rsa|id_ed25519' "$f" >/dev/null 2>&1; then
+        secret_hit="$secret_hit $(basename "$f"):key"
+    fi
+done
+if [ -z "$secret_hit" ]; then
+    ok "no host/key literals in the stage scripts (real profiles are git-ignored)"
+else
+    bad "host/key literal found in:$secret_hit"
+fi
+
+# TS7 — .gitignore protects real profiles.
+if [ -f "$REPO_ROOT/deploy/targets/example.env" ]; then
+    ok "deploy/targets/example.env template is committed"
+else
+    bad "deploy/targets/example.env template is missing"
+fi
+if grep -q '/deploy/targets/\*.env' "$REPO_ROOT/.gitignore" \
+   && grep -q '!/deploy/targets/example.env' "$REPO_ROOT/.gitignore"; then
+    ok ".gitignore ignores real profiles but keeps the example template"
+else
+    bad ".gitignore does not protect deploy/targets/*.env"
+fi
+
+# TS8-TS14 — stage-remote pure helpers.
+if [ ! -f "$STAGE_REMOTE_SH" ]; then
+    skip "stage-remote.sh helper checks (script not present)"
+else
+# shellcheck source=../stage-remote.sh
+source "$STAGE_REMOTE_SH"
+if declare -f sr_load_config >/dev/null && declare -f sr_guard_target >/dev/null \
+   && declare -f sr_render_env >/dev/null; then
+    ok "stage-remote.sh sources cleanly and defines its pure helpers (no run on source)"
+else
+    bad "stage-remote.sh missing an expected pure helper after source"
+fi
+b_on="$(sr_bool 1)$(sr_bool true)$(sr_bool YES)$(sr_bool on)"
+b_off="$(sr_bool 0)$(sr_bool '')$(sr_bool no)$(sr_bool maybe)"
+if [ "$b_on" = "1111" ] && [ "$b_off" = "0000" ]; then
+    ok "sr_bool reads 1/true/yes/on as truthy and everything else as false"
+else
+    bad "sr_bool wrong: on=[$b_on] off=[$b_off]"
+fi
+if [ "$(sr_bind_host 0)" = "127.0.0.1" ] && [ "$(sr_bind_host 1)" = "0.0.0.0" ]; then
+    ok "sr_bind_host is loopback by default and only 0.0.0.0 when exposed"
+else
+    bad "sr_bind_host wrong: default=[$(sr_bind_host 0)] exposed=[$(sr_bind_host 1)]"
+fi
+g1_rc=0; ( set -Eeuo pipefail; sr_guard_target /opt/serverkit-staging /opt/serverkit parallel /opt/serverkit-staging.src ) >/dev/null 2>&1 || g1_rc=$?
+g2_rc=0; ( set -Eeuo pipefail; sr_guard_target /opt/serverkit /opt/serverkit parallel /x.src ) >/dev/null 2>&1 || g2_rc=$?
+g3_rc=0; ( set -Eeuo pipefail; sr_guard_target /opt/serverkit /opt/serverkit replace /x.src ) >/dev/null 2>&1 || g3_rc=$?
+g4_rc=0; ( set -Eeuo pipefail; sr_guard_target /opt/serverkit-staging.src /opt/serverkit parallel /opt/serverkit-staging.src ) >/dev/null 2>&1 || g4_rc=$?
+if [ "$g1_rc" -eq 0 ] && [ "$g2_rc" -ne 0 ] && [ "$g3_rc" -eq 0 ] && [ "$g4_rc" -ne 0 ]; then
+    ok "sr_guard_target refuses live-dir (parallel) + payload-dir, allows a distinct dir + replace-mode"
+else
+    bad "sr_guard_target wrong: distinct=$g1_rc live/parallel=$g2_rc live/replace=$g3_rc payload=$g4_rc"
+fi
+envout="$(sr_render_env sek jwtk enck /opt/serverkit-staging/backend/instance/serverkit.db 5100 127.0.0.1)"
+if printf '%s\n' "$envout" | grep -qx 'SERVERKIT_STAGING=1' \
+   && printf '%s\n' "$envout" | grep -qx 'PORT=5100' \
+   && printf '%s\n' "$envout" | grep -q 'DATABASE_URL=sqlite:////opt/serverkit-staging/backend/instance/serverkit.db' \
+   && printf '%s\n' "$envout" | grep -qx 'SECRET_KEY=sek' \
+   && printf '%s\n' "$envout" | grep -qx 'SERVERKIT_SSL_MODE=insecure'; then
+    ok "sr_render_env emits STAGING=1, own sqlite path, staging port, HTTP-only"
+else
+    bad "sr_render_env output missing an expected key: [$(printf '%s' "$envout" | tr '\n' ';')]"
+fi
+ef="$WORK/staging.env"; printf 'SECRET_KEY=abc\nPORT=5100\nSECRET_KEY=xyz\n' > "$ef"
+if [ "$(sr_env_get SECRET_KEY "$ef")" = "xyz" ] && [ "$(sr_env_get PORT "$ef")" = "5100" ] \
+   && [ -z "$(sr_env_get NOPE "$ef")" ]; then
+    ok "sr_env_get returns the last value for a key and empty for an absent one"
+else
+    bad "sr_env_get wrong: SECRET_KEY=[$(sr_env_get SECRET_KEY "$ef")] PORT=[$(sr_env_get PORT "$ef")]"
+fi
+acc="$(
+    set -Eeuo pipefail
+    SR_CHECKS=""; SR_FAIL=0
+    sr_check health pass >/dev/null
+    sr_check docker skip >/dev/null
+    s1="$SR_FAIL"
+    sr_check migration fail >/dev/null
+    s2="$SR_FAIL"
+    json="$(printf '%s' "$SR_CHECKS" | stage_checks_to_json)"
+    printf '%s|%s|%s' "$s1" "$s2" "$json"
+)"
+if [ "$acc" = '0|1|{"health":"pass","docker":"skip","migration":"fail"}' ]; then
+    ok "sr_check: pass/skip keep SR_FAIL=0, a fail flips it, and the checks JSON is built"
+else
+    bad "sr_check accounting wrong: [$acc]"
+fi
+vv="$(
+    set -Eeuo pipefail
+    SR_CHECKS=""; SR_FAIL=0
+    sr_check a pass >/dev/null; sr_check b fail >/dev/null
+    cj="$(printf '%s' "$SR_CHECKS" | stage_checks_to_json)"
+    p=1; [ "$SR_FAIL" = 0 ] || p=0
+    stage_format_verdict prof deadbee head "$cj" "$p"
+)"
+if printf '%s' "$vv" | grep -q '"pass":false' && printf '%s' "$vv" | grep -q '"b":"fail"'; then
+    ok "verify integration: a failing check produces a pass:false VERDICT line"
+else
+    bad "verify→verdict integration wrong: [$vv]"
+fi
+fi
+
+printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
+[ "$FAIL" -eq 0 ]

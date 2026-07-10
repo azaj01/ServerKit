@@ -29,6 +29,11 @@ class SettingsService:
             'type': 'integer',
             'description': 'Number of days to retain audit logs'
         },
+        'jobs.retention_days': {
+            'value': 14,
+            'type': 'integer',
+            'description': 'Days to retain succeeded/cancelled background jobs before pruning (failed jobs are kept 3x as long). 0 disables pruning.'
+        },
         'onboarding_use_cases': {
             'value': [],
             'type': 'json',

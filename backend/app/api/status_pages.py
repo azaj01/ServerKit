@@ -139,6 +139,9 @@ def delete_component(comp_id):
 @status_pages_bp.route('/components/<int:comp_id>/check', methods=['POST'])
 @jwt_required()
 def run_check(comp_id):
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
     hc = StatusPageService.run_check(comp_id)
     if not hc:
         return jsonify({'error': 'Component not found'}), 404

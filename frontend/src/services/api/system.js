@@ -661,6 +661,27 @@ export async function getCronPresets() {
     return this.request('/cron/presets');
 }
 
+export async function previewCronSchedule(schedule) {
+    return this.request('/cron/preview', {
+        method: 'POST',
+        body: { schedule }
+    });
+}
+
+export async function getCronJobsForApp(appId) {
+    return this.request(`/cron/jobs/for-app/${appId}`);
+}
+
+export async function setCronTracking(jobId, { enabled, alertOnFailure } = {}) {
+    const body = { enabled };
+    if (alertOnFailure !== undefined) body.alert_on_failure = alertOnFailure;
+    return this.request(`/cron/jobs/${jobId}/track`, { method: 'POST', body });
+}
+
+export async function getCronJobRuns(jobId) {
+    return this.request(`/cron/jobs/${jobId}/runs`);
+}
+
 // Uptime Tracking endpoints
 export async function getCurrentUptime() {
     return this.request('/uptime/current');

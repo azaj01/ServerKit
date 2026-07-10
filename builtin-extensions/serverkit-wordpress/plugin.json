@@ -2,7 +2,7 @@
   "name": "serverkit-wordpress",
   "display_name": "WordPress",
   "version": "1.0.0",
-  "description": "The full WordPress suite — site provisioning, plugin library, environments/pipelines, updates, security hardening, vulnerability scanning, analytics and reports. Ships bundled and installed by default (a flagship), and can be uninstalled to slim the core.",
+  "description": "The full WordPress suite, covering site provisioning, plugin library, environments/pipelines, updates, security hardening, vulnerability scanning, analytics and reports. Ships bundled and installed by default (a flagship), and can be uninstalled to slim the core.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "integration",

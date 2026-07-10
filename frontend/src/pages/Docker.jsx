@@ -3,7 +3,7 @@ import useTabParam from '../hooks/useTabParam';
 import api from '../services/api';
 import EmptyState from '../components/EmptyState';
 import { Button } from '@/components/ui/button';
-import { MetricCard } from '@/components/ds';
+import { MetricCard, KpiBand } from '@/components/ds';
 import {
     Box, Layers, HardDrive, Network as NetworkIcon,
     Trash2, Activity, Package, Server as ServerIcon,
@@ -318,7 +318,7 @@ const Docker = () => {
                 </aside>
 
                 <main className="dx-main">
-                    <div className="dx-kpi-strip">
+                    <KpiBand>
                         <MetricCard tone="accent" icon={<Box size={16} />} value={stats.containers.total} label="Containers">
                             <div className="sk-kpi__sub"><span>{stats.containers.running} running</span></div>
                         </MetricCard>
@@ -327,7 +327,7 @@ const Docker = () => {
                         </MetricCard>
                         <MetricCard tone="violet" icon={<HardDrive size={16} />} value={stats.volumes.total} label="Volumes" />
                         <MetricCard tone="green" icon={<NetworkIcon size={16} />} value={stats.networks.total} label="Networks" />
-                    </div>
+                    </KpiBand>
                     <div className="dx-workbar">
                         <div className="dx-workbar-title">
                             <span>Docker</span>

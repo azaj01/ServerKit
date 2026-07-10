@@ -1,0 +1,327 @@
+// Survey tab (plan 27) — the read-only Server Map on server detail.
+
+.survey-tab {
+    display: flex;
+    flex-direction: column;
+    gap: $space-5;
+
+    &__toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-4;
+        flex-wrap: wrap;
+    }
+
+    &__toolbar-info {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        flex-wrap: wrap;
+    }
+
+    &__toolbar-actions {
+        display: flex;
+        gap: $space-2;
+    }
+
+    &__muted {
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+    }
+
+    &__mono {
+        font-family: $font-mono;
+        font-size: $font-size-sm;
+    }
+
+    &__section {
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+    }
+
+    &__section-title {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        margin: 0;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-semibold;
+        color: $text-secondary;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    &__count {
+        margin-left: auto;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-medium;
+        color: $text-tertiary;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    &__site-action {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    &__migrated {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: $font-size-xs;
+        color: $success;
+
+        svg { color: $success; }
+    }
+
+    // Services — small chips grid
+    &__services {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: $space-2;
+    }
+
+    &__service {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        padding: $space-2 $space-3;
+        background: $bg-card;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+
+        svg { color: $text-tertiary; flex-shrink: 0; }
+    }
+
+    &__service-name {
+        font-weight: $font-weight-medium;
+        margin-right: auto;
+    }
+
+    &__service-ports {
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        color: $text-tertiary;
+    }
+
+    // Sites table
+    &__table-wrap {
+        overflow-x: auto;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-lg;
+    }
+
+    &__table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: $font-size-sm;
+
+        th, td {
+            padding: $space-2 $space-3;
+            text-align: left;
+            border-bottom: 1px solid $border-subtle;
+        }
+
+        th {
+            color: $text-tertiary;
+            font-weight: $font-weight-medium;
+            background: $bg-secondary;
+        }
+
+        tr:last-child td { border-bottom: none; }
+    }
+
+    &__list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: $space-1;
+
+        li {
+            padding: $space-1 0;
+            font-size: $font-size-sm;
+        }
+    }
+
+    // Diff summary
+    &__diff {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-2;
+
+        li { display: flex; gap: $space-1; }
+    }
+
+    // Probe index ("what we check")
+    &__catalog {
+        padding: $space-4;
+        background: $bg-secondary;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-lg;
+    }
+
+    &__catalog-list {
+        list-style: none;
+        margin: $space-3 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: $space-3;
+
+        li { font-size: $font-size-sm; }
+    }
+
+    &__catalog-locs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-1;
+        margin-top: $space-1;
+
+        code {
+            font-family: $font-mono;
+            font-size: $font-size-xs;
+            padding: 1px 6px;
+            background: $bg-card;
+            border: 1px solid $border-subtle;
+            border-radius: $radius-sm;
+            color: $text-tertiary;
+        }
+    }
+
+    .spin { animation: spin 1s linear infinite; }
+
+    // Decommission checklist — shown once all surveyed sites are migrated.
+    &__decommission {
+        padding: $space-4;
+        background: rgba($success, 0.06);
+        border: 1px solid rgba($success, 0.3);
+        border-radius: $radius-lg;
+
+        .survey-tab__section-title { color: $success; }
+        .survey-tab__section-title svg { color: $success; }
+    }
+
+    &__checklist {
+        margin: $space-3 0 0;
+        padding-left: $space-5;
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+
+        li {
+            font-size: $font-size-sm;
+            color: $text-secondary;
+            line-height: 1.5;
+        }
+
+        strong { color: $text-primary; }
+    }
+
+    // "This box looks like it's run by another panel — switch to Observed"
+    &__suggest {
+        display: flex;
+        align-items: flex-start;
+        gap: $space-3;
+        padding: $space-4;
+        background: $warning-bg;
+        border: 1px solid $warning-border;
+        border-radius: $radius-lg;
+
+        > svg { color: $warning; flex-shrink: 0; margin-top: 2px; }
+
+        button { flex-shrink: 0; }
+    }
+
+    &__suggest-body {
+        flex: 1;
+
+        strong { display: block; margin-bottom: 2px; }
+
+        p {
+            margin: 0;
+            font-size: $font-size-sm;
+            color: $text-secondary;
+            line-height: 1.5;
+        }
+    }
+
+    // Observed-mode panel: break-glass toggle + blocked-command counter (#10/#11).
+    &__observed {
+        margin-bottom: $space-4;
+        padding: $space-4;
+        background: $warning-bg;
+        border: 1px solid $warning-border;
+        border-radius: $radius-lg;
+
+        p { margin: $space-2 0; }
+    }
+
+    &__observed-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-3;
+    }
+
+    &__observed-toggle {
+        display: flex;
+        align-items: flex-start;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        color: $text-primary;
+        cursor: pointer;
+
+        input { margin-top: 3px; flex-shrink: 0; }
+
+        code {
+            padding: 1px 4px;
+            border-radius: $radius-sm;
+            background: rgba(0, 0, 0, 0.06);
+        }
+    }
+}
+
+// Observed read-only banner on the server detail page.
+.server-observed-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-4;
+    margin-bottom: $space-4;
+    padding: $space-3 $space-4;
+    background: $warning-bg;
+    border: 1px solid $warning-border;
+    border-radius: $radius-lg;
+
+    &__text {
+        font-size: $font-size-sm;
+        color: $text-secondary;
+        line-height: 1.5;
+
+        strong { color: $warning; }
+    }
+
+    a { flex-shrink: 0; }
+}
+
+// Observed-mode chip on the server list rows.
+.server-row__mode-chip {
+    display: inline-block;
+    margin-left: $space-2;
+    padding: 1px 8px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: $warning;
+    background: $warning-bg;
+    border: 1px solid $warning-border;
+    border-radius: $radius-full;
+    vertical-align: middle;
+}

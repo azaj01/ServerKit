@@ -2,7 +2,7 @@
   "name": "serverkit-mail",
   "display_name": "Mail Server",
   "version": "1.0.0",
-  "description": "Self-hosted mail server powered by Stalwart in a managed Docker container — domains, mailboxes, forwarders, and autoresponders, with automatic DKIM/SPF/DMARC/MX record deployment, a deliverability preflight (PTR, port-25 egress, RBL) that gates outbound sending, brute-force jails, and maildir backups. Most panels never run a mail server, so it ships as an opt-in extension.",
+  "description": "Self-hosted mail server powered by Stalwart in a managed Docker container, providing domains, mailboxes, forwarders, and autoresponders, with automatic DKIM/SPF/DMARC/MX record deployment, a deliverability preflight (PTR, port-25 egress, RBL) that gates outbound sending, brute-force jails, and maildir backups. Most panels never run a mail server, so it ships as an opt-in extension.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "integration",

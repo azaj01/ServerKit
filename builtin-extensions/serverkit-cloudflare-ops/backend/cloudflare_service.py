@@ -12,6 +12,7 @@ the ``/dns`` API uses); credential + Cloudflare zone id are resolved server-side
 via :meth:`DNSZoneService._resolve_credential`, the canonical resolver.
 """
 import logging
+import os
 import re
 
 logger = logging.getLogger(__name__)
@@ -178,6 +179,20 @@ class CloudflareService:
         return {'id': zone.id, 'domain': zone.domain,
                 'provider_zone_id': zone.provider_zone_id}
 
+    @staticmethod
+    def _record(zone, product, action, target=None, result='ok', error=None):
+        """Best-effort append to the Cloudflare-ops activity ledger. Never raises —
+        an audit write must not break the operation it describes."""
+        try:
+            from app.services.cf_ops_change_service import CfOpsChangeService
+            CfOpsChangeService.record(
+                provider_zone_id=getattr(zone, 'provider_zone_id', None),
+                product=product, action=action, target=target,
+                result=result, error=error,
+                config_id=getattr(zone, 'dns_provider_config_id', None))
+        except Exception:  # pragma: no cover - ledger writes are best-effort
+            pass
+
     @classmethod
     def get_settings(cls, zone_id):
         """Live zone settings, indexed by id, plus the UI grouping metadata."""
@@ -202,7 +217,9 @@ class CloudflareService:
         zone, client = cls._zone_and_client(zone_id)
         res = client.update_zone_setting(zone.provider_zone_id, setting_id, value)
         if not res.get('success'):
+            cls._record(zone, 'settings', 'update', setting_id, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Update failed')}
+        cls._record(zone, 'settings', 'update', setting_id)
         return {'success': True, 'setting': res.get('result')}
 
     @classmethod
@@ -217,6 +234,9 @@ class CloudflareService:
                             'success': bool(res.get('success')),
                             'error': None if res.get('success') else res.get('error')})
         applied = sum(1 for r in results if r['success'])
+        cls._record(zone, 'settings', 'apply-preset', 'recommended',
+                    'ok' if applied else 'error',
+                    None if applied else 'No settings applied')
         return {'success': applied > 0, 'applied': applied,
                 'total': len(results), 'results': results}
 
@@ -249,8 +269,11 @@ class CloudflareService:
                                       'provide files, hosts, prefixes, or tags')
 
         res = client.purge_cache(zone.provider_zone_id, payload)
+        target = 'everything' if everything else 'files'
         if not res.get('success'):
+            cls._record(zone, 'cache', 'purge', target, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Cache purge failed')}
+        cls._record(zone, 'cache', 'purge', target)
         return {'success': True, 'purged': payload}
 
     # ── WAF custom rules ─────────────────────────────────────────────────────
@@ -333,15 +356,16 @@ class CloudflareService:
         raise CloudflareError(f'Unknown WAF preset: {key}')
 
     @classmethod
-    def _find_custom_ruleset(cls, client, provider_zone_id):
+    def _find_custom_ruleset(cls, client, provider_zone_id, phase=None):
         """Return ``(ruleset_dict, listing_error)``. ``ruleset_dict`` is the zone's
         custom-firewall entry-point ruleset or ``None`` when it doesn't exist yet;
         ``listing_error`` is set only when the list call itself failed (auth/scope)."""
+        phase = phase or cls.WAF_PHASE
         listing = client.list_rulesets(provider_zone_id)
         if not listing.get('success'):
             return None, listing.get('error', 'Failed to list rulesets')
         custom = next((rs for rs in (listing.get('result') or [])
-                       if rs.get('phase') == cls.WAF_PHASE and rs.get('kind') == 'zone'), None)
+                       if rs.get('phase') == phase and rs.get('kind') == 'zone'), None)
         return custom, None
 
     @staticmethod
@@ -388,7 +412,9 @@ class CloudflareService:
         else:
             res = client.create_phase_ruleset(zone.provider_zone_id, cls.WAF_PHASE, [rule])
         if not res.get('success'):
+            cls._record(zone, 'waf', 'add-rule', rule['description'], 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to add rule')}
+        cls._record(zone, 'waf', 'add-rule', rule['description'])
         return {'success': True, 'result': res.get('result')}
 
     @classmethod
@@ -412,7 +438,9 @@ class CloudflareService:
             raise CloudflareError('No updatable fields provided')
         res = client.update_ruleset_rule(zone.provider_zone_id, ruleset_id, rule_id, rule)
         if not res.get('success'):
+            cls._record(zone, 'waf', 'update-rule', rule_id, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to update rule')}
+        cls._record(zone, 'waf', 'update-rule', rule_id)
         return {'success': True, 'result': res.get('result')}
 
     @classmethod
@@ -420,7 +448,9 @@ class CloudflareService:
         zone, client = cls._zone_and_client(zone_id)
         res = client.delete_ruleset_rule(zone.provider_zone_id, ruleset_id, rule_id)
         if not res.get('success'):
+            cls._record(zone, 'waf', 'delete-rule', rule_id, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to delete rule')}
+        cls._record(zone, 'waf', 'delete-rule', rule_id)
         return {'success': True}
 
     # ── Workers (edge hosting) ───────────────────────────────────────────────
@@ -488,6 +518,7 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.upload_worker_module(account_id, name, code, compat)
         if not res.get('success'):
+            cls._record(zone, 'workers', 'deploy', name, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Worker upload failed')}
 
         rec = CloudflareWorker.query.filter_by(account_id=account_id, name=name).first()
@@ -504,6 +535,7 @@ class CloudflareService:
             rr = client.add_worker_route(zone.provider_zone_id, route_pattern.strip(), name)
             route = {'success': bool(rr.get('success')),
                      'error': None if rr.get('success') else rr.get('error')}
+        cls._record(zone, 'workers', 'deploy', name)
         return {'success': True, 'worker': rec.to_dict(), 'route': route}
 
     @classmethod
@@ -514,11 +546,13 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.delete_worker_script(account_id, name)
         if not res.get('success'):
+            cls._record(zone, 'workers', 'delete', name, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to delete worker')}
         rec = CloudflareWorker.query.filter_by(account_id=account_id, name=name).first()
         if rec:
             db.session.delete(rec)
             db.session.commit()
+        cls._record(zone, 'workers', 'delete', name)
         return {'success': True}
 
     @classmethod
@@ -528,7 +562,9 @@ class CloudflareService:
         zone, client = cls._zone_and_client(zone_id)
         res = client.add_worker_route(zone.provider_zone_id, pattern.strip(), script.strip())
         if not res.get('success'):
+            cls._record(zone, 'workers', 'add-route', pattern.strip(), 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to add route')}
+        cls._record(zone, 'workers', 'add-route', pattern.strip())
         return {'success': True, 'result': res.get('result')}
 
     @classmethod
@@ -536,7 +572,9 @@ class CloudflareService:
         zone, client = cls._zone_and_client(zone_id)
         res = client.delete_worker_route(zone.provider_zone_id, route_id)
         if not res.get('success'):
+            cls._record(zone, 'workers', 'delete-route', route_id, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to delete route')}
+        cls._record(zone, 'workers', 'delete-route', route_id)
         return {'success': True}
 
     # ── Tunnels (cloudflared) ────────────────────────────────────────────────
@@ -583,6 +621,7 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.create_tunnel(account_id, name)
         if not res.get('success'):
+            cls._record(zone, 'tunnels', 'create', name, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to create tunnel')}
         result = res.get('result') or {}
         tunnel_id = result.get('id')
@@ -597,6 +636,7 @@ class CloudflareService:
             token_encrypted=encrypt_secret(token) if token else None)
         db.session.add(rec)
         db.session.commit()
+        cls._record(zone, 'tunnels', 'create', name)
         return {'success': True, 'tunnel': rec.to_dict(),
                 'token': token, 'install': cls._install_command(token)}
 
@@ -619,11 +659,13 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.delete_tunnel(account_id, tunnel_id)
         if not res.get('success'):
+            cls._record(zone, 'tunnels', 'delete', tunnel_id, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to delete tunnel')}
         rec = CloudflareTunnel.query.filter_by(account_id=account_id, tunnel_id=tunnel_id).first()
         if rec:
             db.session.delete(rec)
             db.session.commit()
+        cls._record(zone, 'tunnels', 'delete', tunnel_id)
         return {'success': True}
 
     @classmethod
@@ -662,8 +704,10 @@ class CloudflareService:
 
         res = client.put_tunnel_configuration(account_id, tunnel_id, config)
         if not res.get('success'):
+            cls._record(zone, 'tunnels', 'add-hostname', hostname, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to set tunnel route')}
         dns = cls._ensure_tunnel_cname(zone, client, hostname, tunnel_id)
+        cls._record(zone, 'tunnels', 'add-hostname', hostname)
         return {'success': True, 'dns': dns}
 
     @classmethod
@@ -681,7 +725,9 @@ class CloudflareService:
         config['ingress'] = ingress
         res = client.put_tunnel_configuration(account_id, tunnel_id, config)
         if not res.get('success'):
+            cls._record(zone, 'tunnels', 'remove-hostname', hostname, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to remove tunnel route')}
+        cls._record(zone, 'tunnels', 'remove-hostname', hostname)
         return {'success': True}
 
     @staticmethod
@@ -753,7 +799,9 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.create_r2_bucket(account_id, name)
         if not res.get('success'):
+            cls._record(zone, 'storage', 'create-r2', name, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to create bucket')}
+        cls._record(zone, 'storage', 'create-r2', name)
         return {'success': True, 'bucket': name}
 
     @classmethod
@@ -762,7 +810,9 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.delete_r2_bucket(account_id, name)
         if not res.get('success'):
+            cls._record(zone, 'storage', 'delete-r2', name, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to delete bucket')}
+        cls._record(zone, 'storage', 'delete-r2', name)
         return {'success': True}
 
     @classmethod
@@ -774,7 +824,9 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.create_kv_namespace(account_id, title)
         if not res.get('success'):
+            cls._record(zone, 'storage', 'create-kv', title, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to create namespace')}
+        cls._record(zone, 'storage', 'create-kv', title)
         return {'success': True, 'namespace': res.get('result')}
 
     @classmethod
@@ -783,7 +835,9 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.delete_kv_namespace(account_id, namespace_id)
         if not res.get('success'):
+            cls._record(zone, 'storage', 'delete-kv', namespace_id, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to delete namespace')}
+        cls._record(zone, 'storage', 'delete-kv', namespace_id)
         return {'success': True}
 
     @classmethod
@@ -795,7 +849,9 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.create_d1_database(account_id, name)
         if not res.get('success'):
+            cls._record(zone, 'storage', 'create-d1', name, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to create database')}
+        cls._record(zone, 'storage', 'create-d1', name)
         return {'success': True, 'database': res.get('result')}
 
     @classmethod
@@ -804,5 +860,473 @@ class CloudflareService:
         account_id = cls._account_id(zone, client)
         res = client.delete_d1_database(account_id, database_id)
         if not res.get('success'):
+            cls._record(zone, 'storage', 'delete-d1', database_id, 'error', res.get('error'))
             return {'success': False, 'error': res.get('error', 'Failed to delete database')}
+        cls._record(zone, 'storage', 'delete-d1', database_id)
         return {'success': True}
+
+    # ── DNSSEC ────────────────────────────────────────────────────────────────
+    # Display-only: enabling DNSSEC returns the DS record the operator must place
+    # at their registrar. No registrar automation.
+
+    @staticmethod
+    def _normalize_dnssec(r):
+        """Flatten Cloudflare's DNSSEC ``result`` to the fields the DS card needs."""
+        r = r or {}
+        return {
+            'status': r.get('status'),   # active | pending | pending-disabled | disabled
+            'ds': r.get('ds'),
+            'digest': r.get('digest'),
+            'digest_type': r.get('digest_type'),
+            'digest_algorithm': r.get('digest_algorithm'),
+            'algorithm': r.get('algorithm'),
+            'key_tag': r.get('key_tag'),
+            'key_type': r.get('key_type'),
+            'public_key': r.get('public_key'),
+            'flags': r.get('flags'),
+        }
+
+    @classmethod
+    def get_dnssec(cls, zone_id):
+        zone, client = cls._zone_and_client(zone_id)
+        res = client.get_dnssec(zone.provider_zone_id)
+        if not res.get('success'):
+            return {'success': False, 'error': res.get('error', 'Failed to load DNSSEC status')}
+        return {'success': True, 'zone': cls._zone_dict(zone),
+                'dnssec': cls._normalize_dnssec(res.get('result'))}
+
+    @classmethod
+    def set_dnssec(cls, zone_id, enabled):
+        """Enable or disable DNSSEC. Returns the DS record payload on enable."""
+        zone, client = cls._zone_and_client(zone_id)
+        action = 'enable' if enabled else 'disable'
+        res = client.set_dnssec(zone.provider_zone_id, 'active' if enabled else 'disabled')
+        if not res.get('success'):
+            cls._record(zone, 'dnssec', action, zone.domain, 'error', res.get('error'))
+            return {'success': False, 'error': res.get('error', 'Failed to update DNSSEC')}
+        cls._record(zone, 'dnssec', action, zone.domain)
+        return {'success': True, 'dnssec': cls._normalize_dnssec(res.get('result'))}
+
+    # ── Origin CA certificates ────────────────────────────────────────────────
+    # Issue-and-install, honest about trust: Origin CA certs are valid ONLY behind
+    # the Cloudflare proxy. The CSR is generated panel-side; the private key never
+    # leaves the box (only the CSR is sent to Cloudflare). Install reuses the
+    # existing custom-cert seam (Linux-only). A credential lacking the Origin CA
+    # permission is surfaced as an actionable 400 (CloudflareError), never a 502.
+
+    # Cloudflare's accepted Origin CA validity windows, in days (7d … 15y).
+    ORIGIN_CA_VALIDITY_DAYS = [7, 30, 90, 365, 730, 1095, 5475]
+
+    # Substrings that mark a provider error as a credential/scope problem rather
+    # than a transient provider failure — surfaced as a scoped 400.
+    _SCOPE_ERROR_MARKERS = (
+        'permission', 'not authorized', 'unauthorized', 'authentication',
+        'not allowed', 'insufficient', 'invalid api', 'access denied',
+        'forbidden', 'origin ca', 'service key', 'scope',
+    )
+
+    @classmethod
+    def _is_scope_error(cls, error):
+        e = (error or '').lower()
+        return any(m in e for m in cls._SCOPE_ERROR_MARKERS)
+
+    @staticmethod
+    def _origin_ca_service_key(zone):
+        """The optional account-level Origin CA service key stored (Fernet) on the
+        zone's DNS provider connection, or ``None`` (a suitably-scoped token also
+        authenticates the Origin CA endpoints)."""
+        try:
+            from app.models.email import DNSProviderConfig
+            from app.utils.crypto import decrypt_secret_safe
+            cfg_id = getattr(zone, 'dns_provider_config_id', None)
+            cfg = DNSProviderConfig.query.get(cfg_id) if cfg_id else None
+            if cfg and getattr(cfg, 'origin_ca_key', None):
+                return decrypt_secret_safe(cfg.origin_ca_key)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _generate_csr(hostnames):
+        """Generate an RSA private key + CSR for ``hostnames`` panel-side. Returns
+        ``(csr_pem, key_pem)``; the key is kept locally for install and never sent
+        to Cloudflare."""
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        builder = x509.CertificateSigningRequestBuilder().subject_name(
+            x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostnames[0])]))
+        builder = builder.add_extension(
+            x509.SubjectAlternativeName([x509.DNSName(h) for h in hostnames]), critical=False)
+        csr = builder.sign(key, hashes.SHA256())
+        csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode()
+        key_pem = key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption()).decode()
+        return csr_pem, key_pem
+
+    @staticmethod
+    def _proxy_warnings(zone, client, hostnames):
+        """Best-effort: warn when a covered hostname isn't proxied (grey cloud) or
+        has no DNS record — an Origin CA cert is only valid behind the proxy."""
+        warnings = []
+        try:
+            rec = client.list_records(zone.provider_zone_id)
+            records = (rec.get('records') or []) if rec.get('success') else []
+            by_name = {}
+            for r in records:
+                by_name.setdefault((r.get('name') or '').lower().rstrip('.'), []).append(r)
+            for h in hostnames:
+                base = h[2:] if h.startswith('*.') else h
+                matches = by_name.get(base, [])
+                if not matches:
+                    warnings.append(
+                        f'{h}: no DNS record found — an Origin CA certificate is only '
+                        'valid when traffic is proxied through Cloudflare.')
+                elif not any(m.get('proxied') for m in matches):
+                    warnings.append(
+                        f'{h}: the DNS record is not proxied (grey cloud). This '
+                        'certificate only works when traffic goes through Cloudflare.')
+        except Exception:
+            pass
+        return warnings
+
+    @staticmethod
+    def _install_origin_cert(hostnames, cert_pem, key_pem):
+        """Install the issued cert + panel-generated key via the existing custom-cert
+        seam (writes PEMs to ``/etc/ssl/serverkit/<domain>/``, Linux-only)."""
+        try:
+            from app.services.advanced_ssl_service import AdvancedSSLService
+            install_domain = next((h for h in hostnames if not h.startswith('*.')), None)
+            if not install_domain:
+                install_domain = hostnames[0][2:] if hostnames[0].startswith('*.') else hostnames[0]
+            info = AdvancedSSLService.upload_custom_cert(install_domain, cert_pem, key_pem)
+            return {'success': True, **info}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    @classmethod
+    def issue_origin_certificate(cls, zone_id, hostnames, validity_days=5475, install=True):
+        """Issue an Origin CA certificate for ``hostnames`` and (optionally) install
+        it on the origin. The private key is generated panel-side and never sent to
+        Cloudflare."""
+        zone, client = cls._zone_and_client(zone_id)
+        hostnames = [h.strip().lower().rstrip('.') for h in (hostnames or []) if h and h.strip()]
+        if not hostnames:
+            raise CloudflareError('At least one hostname is required')
+        if validity_days not in cls.ORIGIN_CA_VALIDITY_DAYS:
+            raise CloudflareError(
+                'Unsupported validity — choose one of: '
+                + ', '.join(str(v) for v in cls.ORIGIN_CA_VALIDITY_DAYS) + ' days')
+
+        csr_pem, key_pem = cls._generate_csr(hostnames)
+        res = client.create_origin_certificate(
+            csr=csr_pem, hostnames=hostnames, requested_validity=validity_days,
+            service_key=cls._origin_ca_service_key(zone))
+        if not res.get('success'):
+            err = res.get('error', 'Failed to issue Origin CA certificate')
+            cls._record(zone, 'origin_ca', 'issue', hostnames[0], 'error', err)
+            if cls._is_scope_error(err):
+                raise CloudflareError(
+                    'This Cloudflare credential lacks the Origin CA permission. Add the '
+                    '"SSL and Certificates: Edit" scope to the token, or set an Origin CA '
+                    f'key on the connection. ({err})')
+            return {'success': False, 'error': err}
+
+        result = res.get('result') or {}
+        cert_pem = result.get('certificate')
+        out = {
+            'success': True,
+            'certificate_id': result.get('id'),
+            'certificate': cert_pem,
+            'hostnames': hostnames,
+            'expires_on': result.get('expires_on'),
+            'proxy_only': True,
+            'warnings': cls._proxy_warnings(zone, client, hostnames),
+        }
+        if install and cert_pem and os.name != 'nt':
+            out['install'] = cls._install_origin_cert(hostnames, cert_pem, key_pem)
+        cls._record(zone, 'origin_ca', 'issue', hostnames[0])
+        return out
+
+    @classmethod
+    def list_origin_certificates(cls, zone_id):
+        zone, client = cls._zone_and_client(zone_id)
+        res = client.list_origin_certificates(
+            zone.provider_zone_id, service_key=cls._origin_ca_service_key(zone))
+        if not res.get('success'):
+            err = res.get('error', 'Failed to list Origin CA certificates')
+            if cls._is_scope_error(err):
+                raise CloudflareError(
+                    'This Cloudflare credential lacks the Origin CA permission. Add the '
+                    f'"SSL and Certificates: Read" scope to the token. ({err})')
+            return {'success': False, 'error': err}
+        certs = [{
+            'id': c.get('id'),
+            'hostnames': c.get('hostnames'),
+            'expires_on': c.get('expires_on'),
+            'requested_validity': c.get('requested_validity'),
+            'certificate': c.get('certificate'),
+        } for c in (res.get('result') or [])]
+        return {'success': True, 'certificates': certs, 'proxy_only': True}
+
+    @classmethod
+    def revoke_origin_certificate(cls, zone_id, certificate_id):
+        zone, client = cls._zone_and_client(zone_id)
+        res = client.revoke_origin_certificate(
+            certificate_id, service_key=cls._origin_ca_service_key(zone))
+        if not res.get('success'):
+            err = res.get('error', 'Failed to revoke certificate')
+            cls._record(zone, 'origin_ca', 'revoke', certificate_id, 'error', err)
+            if cls._is_scope_error(err):
+                raise CloudflareError(
+                    'This Cloudflare credential lacks the Origin CA permission. '
+                    f'({err})')
+            return {'success': False, 'error': err}
+        cls._record(zone, 'origin_ca', 'revoke', certificate_id)
+        return {'success': True, 'certificate_id': certificate_id}
+
+    # ── Redirect + Transform rules ────────────────────────────────────────────
+    # The same ruleset machinery as WAF, in different phases, with per-phase action
+    # allowlists + the shared expression-injection guard.
+
+    RULE_PHASES = {
+        'redirect': 'http_request_dynamic_redirect',
+        'transform': 'http_request_transform',
+    }
+    RULE_ACTIONS = {
+        'redirect': {'redirect'},
+        'transform': {'rewrite'},
+    }
+
+    # Preset library per rule type (plan §Phase 3). Presets take no free-form user
+    # input that lands in an expression — the only interpolated value is the zone's
+    # own (validated) domain — so there is no injection surface.
+    RULE_PRESETS = {
+        'redirect': [
+            {'key': 'force_www', 'label': 'Redirect apex to www',
+             'description': 'Send https://example.com/* to https://www.example.com/*.',
+             'params': []},
+            {'key': 'www_to_apex', 'label': 'Redirect www to apex',
+             'description': 'Send https://www.example.com/* to https://example.com/*.',
+             'params': []},
+            {'key': 'strip_trailing_slash', 'label': 'Remove trailing slash',
+             'description': 'Redirect /path/ to /path (except the root).',
+             'params': []},
+        ],
+        'transform': [
+            {'key': 'strip_tracking', 'label': 'Strip tracking parameters',
+             'description': 'Remove utm_*, gclid and fbclid query parameters.',
+             'params': []},
+        ],
+    }
+
+    _SAFE_HOST_RE = re.compile(r'^[a-z0-9.-]+$')
+
+    @classmethod
+    def _resolve_rule_phase(cls, slug):
+        phase = cls.RULE_PHASES.get(slug)
+        if not phase:
+            raise CloudflareError(
+                f'Unknown rule type "{slug}". Use one of: '
+                + ', '.join(sorted(cls.RULE_PHASES)))
+        return phase
+
+    @classmethod
+    def _validate_rule_action(cls, slug, action):
+        allowed = cls.RULE_ACTIONS.get(slug, set())
+        if action not in allowed:
+            raise CloudflareError(
+                f'Unsupported action "{action}" for {slug} rules. '
+                f'Use one of: {", ".join(sorted(allowed))}')
+
+    @staticmethod
+    def _full_rule_dict(r):
+        return {'id': r.get('id'), 'description': r.get('description'),
+                'expression': r.get('expression'), 'action': r.get('action'),
+                'action_parameters': r.get('action_parameters'),
+                'enabled': r.get('enabled', True), 'ref': r.get('ref')}
+
+    @classmethod
+    def list_rules(cls, zone_id, slug):
+        """Rules for a phase (redirect|transform), plus the preset catalog. A zone
+        with no ruleset in that phase yet returns an empty list (not an error)."""
+        phase = cls._resolve_rule_phase(slug)
+        zone, client = cls._zone_and_client(zone_id)
+        custom, err = cls._find_custom_ruleset(client, zone.provider_zone_id, phase)
+        if err:
+            return {'success': False, 'error': err}
+        presets = cls.RULE_PRESETS.get(slug, [])
+        if not custom:
+            return {'success': True, 'ruleset_id': None, 'rules': [], 'presets': presets}
+        detail = client.get_ruleset(zone.provider_zone_id, custom['id'])
+        if not detail.get('success'):
+            return {'success': False, 'error': detail.get('error', 'Failed to load ruleset')}
+        result = detail.get('result') or {}
+        rules = [cls._full_rule_dict(r) for r in (result.get('rules') or [])]
+        return {'success': True, 'ruleset_id': result.get('id'),
+                'rules': rules, 'presets': presets}
+
+    @classmethod
+    def add_rule(cls, zone_id, slug, *, description, expression, action,
+                 action_parameters=None, enabled=True):
+        """Append a rule to the phase's entry-point ruleset, creating it on first use."""
+        phase = cls._resolve_rule_phase(slug)
+        cls._validate_rule_action(slug, action)
+        if not (expression or '').strip():
+            raise CloudflareError('A rule expression is required')
+        zone, client = cls._zone_and_client(zone_id)
+        rule = {'description': description or 'ServerKit rule', 'expression': expression,
+                'action': action, 'enabled': bool(enabled)}
+        if action_parameters:
+            rule['action_parameters'] = action_parameters
+
+        custom, err = cls._find_custom_ruleset(client, zone.provider_zone_id, phase)
+        if err:
+            return {'success': False, 'error': err}
+        if custom:
+            res = client.add_ruleset_rule(zone.provider_zone_id, custom['id'], rule)
+        else:
+            res = client.create_phase_ruleset(zone.provider_zone_id, phase, [rule])
+        if not res.get('success'):
+            cls._record(zone, slug, 'add-rule', rule['description'], 'error', res.get('error'))
+            return {'success': False, 'error': res.get('error', 'Failed to add rule')}
+        cls._record(zone, slug, 'add-rule', rule['description'])
+        return {'success': True, 'result': res.get('result')}
+
+    @classmethod
+    def _build_rule_preset(cls, slug, key, domain, params):
+        """Turn a preset key + the zone domain into a concrete rule dict. The domain
+        is validated before interpolation so a preset can't inject expression syntax."""
+        domain = (domain or '').strip().lower().rstrip('.')
+        if not cls._SAFE_HOST_RE.match(domain or ''):
+            raise CloudflareError('The zone domain is not a valid hostname')
+        if slug == 'redirect':
+            if key == 'force_www':
+                return {'description': 'ServerKit: redirect apex to www',
+                        'expression': f'(http.host eq "{domain}")',
+                        'action': 'redirect',
+                        'action_parameters': {'from_value': {
+                            'status_code': 301,
+                            'target_url': {'expression':
+                                           f'concat("https://www.{domain}", http.request.uri.path)'},
+                            'preserve_query_string': True}}}
+            if key == 'www_to_apex':
+                return {'description': 'ServerKit: redirect www to apex',
+                        'expression': f'(http.host eq "www.{domain}")',
+                        'action': 'redirect',
+                        'action_parameters': {'from_value': {
+                            'status_code': 301,
+                            'target_url': {'expression':
+                                           f'concat("https://{domain}", http.request.uri.path)'},
+                            'preserve_query_string': True}}}
+            if key == 'strip_trailing_slash':
+                return {'description': 'ServerKit: remove trailing slash',
+                        'expression': ('(ends_with(http.request.uri.path, "/") and '
+                                       'http.request.uri.path ne "/")'),
+                        'action': 'redirect',
+                        'action_parameters': {'from_value': {
+                            'status_code': 301,
+                            'target_url': {'expression':
+                                           'concat("https://", http.host, '
+                                           'substring(http.request.uri.path, 0, -1))'},
+                            'preserve_query_string': True}}}
+        elif slug == 'transform':
+            if key == 'strip_tracking':
+                return {'description': 'ServerKit: strip tracking parameters',
+                        'expression': '(http.request.uri.query ne "")',
+                        'action': 'rewrite',
+                        'action_parameters': {'uri': {'query': {'expression':
+                            'regex_replace(http.request.uri.query, '
+                            '"(^|&)(utm_[a-z]+|gclid|fbclid)=[^&]*", "")'}}}}
+        raise CloudflareError(f'Unknown {slug} preset: {key}')
+
+    @classmethod
+    def apply_rule_preset(cls, zone_id, slug, preset_key, params=None):
+        cls._resolve_rule_phase(slug)   # validates slug up front
+        zone, _ = cls._zone_and_client(zone_id)
+        rule = cls._build_rule_preset(slug, preset_key, zone.domain, params or {})
+        return cls.add_rule(zone_id, slug, description=rule['description'],
+                            expression=rule['expression'], action=rule['action'],
+                            action_parameters=rule.get('action_parameters'))
+
+    @classmethod
+    def update_rule(cls, zone_id, slug, ruleset_id, rule_id, fields):
+        cls._resolve_rule_phase(slug)
+        zone, client = cls._zone_and_client(zone_id)
+        rule = {}
+        for k in ('description', 'expression', 'action', 'enabled', 'action_parameters'):
+            if k in fields:
+                rule[k] = fields[k]
+        if 'action' in rule:
+            cls._validate_rule_action(slug, rule['action'])
+        if not rule:
+            raise CloudflareError('No updatable fields provided')
+        res = client.update_ruleset_rule(zone.provider_zone_id, ruleset_id, rule_id, rule)
+        if not res.get('success'):
+            cls._record(zone, slug, 'update-rule', rule_id, 'error', res.get('error'))
+            return {'success': False, 'error': res.get('error', 'Failed to update rule')}
+        cls._record(zone, slug, 'update-rule', rule_id)
+        return {'success': True, 'result': res.get('result')}
+
+    @classmethod
+    def delete_rule(cls, zone_id, slug, ruleset_id, rule_id):
+        cls._resolve_rule_phase(slug)
+        zone, client = cls._zone_and_client(zone_id)
+        res = client.delete_ruleset_rule(zone.provider_zone_id, ruleset_id, rule_id)
+        if not res.get('success'):
+            cls._record(zone, slug, 'delete-rule', rule_id, 'error', res.get('error'))
+            return {'success': False, 'error': res.get('error', 'Failed to delete rule')}
+        cls._record(zone, slug, 'delete-rule', rule_id)
+        return {'success': True}
+
+    # ── Activity (local ops ledger) ───────────────────────────────────────────
+
+    @classmethod
+    def list_activity(cls, zone_id, product=None, result=None, limit=100):
+        """The per-zone Cloudflare-ops change ledger, newest first."""
+        zone, _ = cls._zone_and_client(zone_id)
+        from app.services.cf_ops_change_service import CfOpsChangeService
+        rows = CfOpsChangeService.list(
+            provider_zone_id=zone.provider_zone_id,
+            product=product, result=result, limit=limit)
+        return {'success': True, 'zone': cls._zone_dict(zone),
+                'changes': [r.to_dict() for r in rows]}
+
+    # ── Token scope diagnosability ────────────────────────────────────────────
+
+    @classmethod
+    def scope_check(cls, zone_id):
+        """Probe each product with a cheap read and report
+        ``{product: ok|missing_scope|error}`` — round 2 is exactly where DNS-only
+        tokens start failing."""
+        zone, client = cls._zone_and_client(zone_id)
+
+        def classify(res):
+            if res.get('success'):
+                return 'ok'
+            return 'missing_scope' if cls._is_scope_error(res.get('error')) else 'error'
+
+        products = {
+            'dns': classify(client.list_records(zone.provider_zone_id)),
+            'settings': classify(client.get_zone_settings(zone.provider_zone_id)),
+            'dnssec': classify(client.get_dnssec(zone.provider_zone_id)),
+            'waf': classify(client.list_rulesets(zone.provider_zone_id)),
+            'origin_ca': classify(client.list_origin_certificates(
+                zone.provider_zone_id, service_key=cls._origin_ca_service_key(zone))),
+        }
+        try:
+            account_id = cls._account_id(zone, client)
+        except CloudflareError:
+            account_id = None
+        if account_id:
+            products['workers'] = classify(client.list_worker_scripts(account_id))
+            products['tunnels'] = classify(client.list_tunnels(account_id))
+            products['storage'] = classify(client.list_r2_buckets(account_id))
+        else:
+            products['workers'] = products['tunnels'] = products['storage'] = 'missing_scope'
+        return {'success': True, 'zone': cls._zone_dict(zone), 'products': products}

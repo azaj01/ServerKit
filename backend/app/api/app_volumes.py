@@ -1,3 +1,5 @@
+# Bucket: PER-APP (plan 29 #9). Volume routes gate on the shared app-access seam
+# (can_access_app for reads, can_edit_app for attach/detach mutations).
 """Per-app managed volume API — attach/list/detach first-class persistent
 volumes for an application. Mounted under ``/api/v1/apps`` alongside the main
 apps blueprint (routes are ``/<app_id>/volumes*``).

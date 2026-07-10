@@ -69,8 +69,8 @@ class JobService:
     def get(cls, job_id):
         return Job.query.get(job_id)
 
-    @classmethod
-    def list(cls, status=None, kind=None, owner_type=None, owner_id=None, limit=50, offset=0):
+    @staticmethod
+    def _filtered_query(status=None, kind=None, owner_type=None, owner_id=None, q=None):
         query = Job.query
         if status:
             query = query.filter_by(status=status)
@@ -80,7 +80,25 @@ class JobService:
             query = query.filter_by(owner_type=owner_type)
         if owner_id is not None:
             query = query.filter_by(owner_id=str(owner_id))
+        if q and str(q).strip():
+            from sqlalchemy import func, or_
+            like = f'%{str(q).strip().lower()}%'
+            query = query.filter(or_(
+                func.lower(Job.kind).like(like),
+                func.lower(Job.owner_type).like(like),
+                func.lower(Job.owner_id).like(like),
+            ))
+        return query
+
+    @classmethod
+    def list(cls, status=None, kind=None, owner_type=None, owner_id=None, q=None, limit=50, offset=0):
+        query = cls._filtered_query(status, kind, owner_type, owner_id, q)
         return query.order_by(Job.created_at.desc()).limit(limit).offset(offset).all()
+
+    @classmethod
+    def count(cls, status=None, kind=None, owner_type=None, owner_id=None, q=None):
+        """Total rows matching the same filters as ``list`` (before paging)."""
+        return cls._filtered_query(status, kind, owner_type, owner_id, q).count()
 
     @classmethod
     def cancel(cls, job_id):
@@ -133,6 +151,42 @@ class JobService:
                    .filter(Job.completed_at < cutoff)
                    .delete(synchronize_session=False))
         db.session.commit()
+        return deleted
+
+    @classmethod
+    def prune_terminal(cls, retention_days=14, batch_size=5000):
+        """Prune accumulated terminal jobs so scheduler-tick rows don't grow
+        without bound. Succeeded/cancelled jobs are kept ``retention_days``;
+        failed jobs 3x as long (they're worth keeping longer for diagnosis).
+        Queued/running rows are never touched. Deletes in batches so a huge
+        backlog doesn't lock the table in one statement. Returns the count.
+        """
+        from sqlalchemy import func
+        now = datetime.utcnow()
+        age = func.coalesce(Job.completed_at, Job.created_at)
+        specs = [
+            ((Job.STATUS_SUCCEEDED, Job.STATUS_CANCELLED),
+             now - timedelta(days=retention_days)),
+            ((Job.STATUS_FAILED,),
+             now - timedelta(days=retention_days * 3)),
+        ]
+        deleted = 0
+        for statuses, cutoff in specs:
+            while True:
+                ids = [row[0] for row in (
+                    db.session.query(Job.id)
+                    .filter(Job.status.in_(statuses))
+                    .filter(age < cutoff)
+                    .limit(batch_size)
+                    .all())]
+                if not ids:
+                    break
+                deleted += (Job.query
+                            .filter(Job.id.in_(ids))
+                            .delete(synchronize_session=False))
+                db.session.commit()
+                if len(ids) < batch_size:
+                    break
         return deleted
 
 

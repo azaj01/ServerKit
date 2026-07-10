@@ -252,14 +252,18 @@ class CloudflareClient:
     # helper rather than a bespoke method per call. It normalizes the envelope so
     # every caller can rely on ``{success, error?, result?}``.
     def request(self, method: str, path: str, json: dict = None,
-                params: dict = None, timeout: int = 20) -> dict:
+                params: dict = None, timeout: int = 20, headers: dict = None) -> dict:
         """Make a Cloudflare v4 call. ``path`` is relative to the API base (a
         leading slash is optional). Returns the parsed envelope dict (always with
         a ``success`` key and, on failure, a human ``error``), or a normalized
-        ``{success: False, error}`` on a transport error."""
+        ``{success: False, error}`` on a transport error.
+
+        ``headers`` overrides the default auth headers — used by the Origin CA
+        endpoints, which authenticate with the account-level Origin CA service key
+        (``X-Auth-User-Service-Key``) rather than the zone token."""
         try:
             url = f'{API_BASE}/{path.lstrip("/")}'
-            resp = requests.request(method.upper(), url, headers=self._headers(),
+            resp = requests.request(method.upper(), url, headers=headers or self._headers(),
                                     json=json, params=params, timeout=timeout)
             try:
                 data = resp.json()
@@ -292,6 +296,57 @@ class CloudflareClient:
         """Purge the zone's Cloudflare cache. ``payload`` is one of
         ``{purge_everything: true}`` or ``{files|hosts|prefixes|tags: [...]}``."""
         return self.request('POST', f'/zones/{zone_id}/purge_cache', json=payload)
+
+    # ── DNSSEC ────────────────────────────────────────────────────────────────
+    # DNSSEC is a per-zone toggle; enabling it returns the DS record payload the
+    # operator must place at their registrar. No registrar automation — display.
+    def get_dnssec(self, zone_id: str) -> dict:
+        """The zone's DNSSEC status + DS record fields (``result`` carries ``status``,
+        ``ds``, ``digest``, ``key_tag``, …)."""
+        return self.request('GET', f'/zones/{zone_id}/dnssec')
+
+    def set_dnssec(self, zone_id: str, status: str) -> dict:
+        """Enable (``status='active'``) or disable (``status='disabled'``) DNSSEC."""
+        return self.request('PATCH', f'/zones/{zone_id}/dnssec', json={'status': status})
+
+    # ── Origin CA certificates ────────────────────────────────────────────────
+    # Origin CA certs are valid ONLY behind the Cloudflare proxy. They authenticate
+    # with the account-level Origin CA *service key* (``X-Auth-User-Service-Key``)
+    # OR a token carrying the SSL and Certificates permission. The CSR is generated
+    # panel-side; the private key never leaves the box.
+    ORIGIN_CA_BASE = 'certificates'
+
+    def _origin_ca_headers(self, service_key: str = None) -> dict:
+        """Auth headers for the Origin CA endpoints. Prefer the dedicated service
+        key when present; otherwise fall back to the zone's normal token headers
+        (a suitably-scoped token also authenticates these calls)."""
+        if service_key:
+            return {'X-Auth-User-Service-Key': service_key,
+                    'Content-Type': 'application/json'}
+        return self._headers()
+
+    def create_origin_certificate(self, *, csr: str, hostnames: list,
+                                  requested_validity: int = 5475,
+                                  request_type: str = 'origin-rsa',
+                                  service_key: str = None) -> dict:
+        """Sign a panel-generated CSR into an Origin CA certificate for ``hostnames``
+        (``result.certificate`` is the signed PEM). ``requested_validity`` is in days
+        (7, 30, 90, 365, 730, 1095 or 5475)."""
+        return self.request(
+            'POST', f'/{self.ORIGIN_CA_BASE}',
+            json={'csr': csr, 'hostnames': hostnames,
+                  'requested_validity': requested_validity, 'request_type': request_type},
+            headers=self._origin_ca_headers(service_key))
+
+    def list_origin_certificates(self, zone_id: str, *, service_key: str = None) -> dict:
+        """List Origin CA certificates for a zone (``result`` is a list)."""
+        return self.request('GET', f'/{self.ORIGIN_CA_BASE}', params={'zone_id': zone_id},
+                            headers=self._origin_ca_headers(service_key))
+
+    def revoke_origin_certificate(self, certificate_id: str, *, service_key: str = None) -> dict:
+        """Revoke an Origin CA certificate by id."""
+        return self.request('DELETE', f'/{self.ORIGIN_CA_BASE}/{certificate_id}',
+                            headers=self._origin_ca_headers(service_key))
 
     # ── WAF / rulesets ────────────────────────────────────────────────────────
     # Custom firewall rules live in the zone's ``http_request_firewall_custom``

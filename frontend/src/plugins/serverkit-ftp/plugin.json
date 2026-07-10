@@ -2,7 +2,7 @@
   "name": "serverkit-ftp",
   "display_name": "FTP Server",
   "version": "1.0.0",
-  "description": "FTP server management (vsftpd/proftpd) — install, users, config and logs — as a tab in the Files group.",
+  "description": "FTP server management (vsftpd/proftpd) with install, users, config and logs, as a tab in the Files group.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "utility",

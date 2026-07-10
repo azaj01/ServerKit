@@ -66,9 +66,13 @@ def install_plugin():
     if not url:
         return jsonify({'error': 'url cannot be empty'}), 400
 
+    # Optional checksum continuity: the preview step returns the resolved URL +
+    # sha256; passing them here pins the install to the exact previewed bytes.
+    expected_sha256 = (data.get('sha256') or None)
+
     from app.services.plugin_service import install_from_url
     try:
-        plugin = install_from_url(url, user_id=user.id)
+        plugin = install_from_url(url, user_id=user.id, expected_sha256=expected_sha256)
         AuditService.log(
             action=AuditLog.ACTION_RESOURCE_CREATE,
             user_id=user.id,
@@ -91,6 +95,44 @@ def install_plugin():
         )
         return jsonify({
             'error': 'Installation failed. Check server logs.',
+            'ref': ref,
+        }), 500
+
+
+@plugins_bp.route('/preview', methods=['POST'])
+@jwt_required()
+def preview_plugin():
+    """Preview a GitHub/zip extension WITHOUT installing it.
+
+    Body: { "url": "owner/repo" | "owner/repo@tag" | "https://github.com/..." | ".zip URL" }
+
+    Resolves the source, downloads it, reads plugin.json, and returns the
+    metadata a user consents to (slug, version, permissions, panel-version gate)
+    plus the resolved download URL, its sha256, and any warnings — so the UI can
+    show a consent card before the install re-downloads the exact same bytes.
+    """
+    user = get_current_user()
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+
+    data = request.get_json() or {}
+    url = (data.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url required'}), 400
+
+    from app.services.plugin_service import preview_from_url
+    try:
+        return jsonify(preview_from_url(url))
+    except ValueError as e:
+        # GitHubResolveError is a ValueError subclass — its message is already
+        # user-actionable (rate limit / 404 / private / no plugin.json).
+        return jsonify({'error': str(e)}), 400
+    except Exception:
+        import logging, uuid
+        ref = uuid.uuid4().hex[:8]
+        logging.getLogger(__name__).exception('Plugin preview failed (ref=%s)', ref)
+        return jsonify({
+            'error': 'Preview failed. Check server logs.',
             'ref': ref,
         }), 500
 

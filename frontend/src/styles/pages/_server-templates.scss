@@ -8,9 +8,7 @@
         border-radius: $radius-lg;
         border: 1px solid $border-default;
 
-        &__stats {
-            display: flex;
-            gap: $space-8;
+        .sk-kpiband-wrap {
             margin-bottom: $space-4;
         }
 
@@ -27,26 +25,6 @@
                 transition: width 0.3s ease;
             }
         }
-    }
-
-    .stat-item {
-        display: flex;
-        flex-direction: column;
-
-        &__value {
-            font-size: 1.5rem;
-            font-weight: 700;
-        }
-
-        &__label {
-            font-size: 0.8rem;
-            color: $text-tertiary;
-            text-transform: uppercase;
-        }
-
-        &--success .stat-item__value { color: $success; }
-        &--danger .stat-item__value { color: $danger; }
-        &--muted .stat-item__value { color: $text-tertiary; }
     }
 
     .templates-grid {

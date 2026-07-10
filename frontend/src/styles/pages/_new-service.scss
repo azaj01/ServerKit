@@ -185,6 +185,60 @@
         }
     }
 
+    &__section-docs {
+        margin-left: auto;
+    }
+
+    // Per-source explainer strip above the selected source's form.
+    &__source-guide {
+        margin: $space-3 0 $space-4;
+        padding: $space-3 $space-4;
+        border: 1px solid $border-color;
+        border-radius: $radius-md;
+        background: $bg-elevated;
+
+        p {
+            margin: 0 0 $space-2;
+            font-size: $font-size-sm;
+            color: $text-secondary;
+        }
+    }
+
+    &__source-guide-what {
+        color: $text-primary !important;
+        font-weight: $font-weight-medium;
+    }
+
+    &__source-guide-need strong {
+        color: $text-secondary;
+    }
+
+    &__source-guide-steps {
+        margin: 0;
+        padding-left: $space-4;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+
+        li {
+            font-size: $font-size-sm;
+            color: $text-tertiary;
+        }
+    }
+
+    &__template-example {
+        margin-left: $space-2;
+        padding: 1px $space-2;
+        border-radius: $radius-sm;
+        background: rgba($accent-primary-raw, 0.15);
+        color: $accent-primary;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-medium;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        vertical-align: middle;
+    }
+
     &__provider-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));

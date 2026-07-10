@@ -2,14 +2,19 @@
 // FLEET PAGES (Agent Fleet + Fleet Monitor)
 // ============================================
 
-// KPI strip (MetricCard grid) on the Agent Fleet dashboard
+// KPI band (Total agents / Online / Offline / Success rate). The rule was lost
+// in the recovery rebuild, so the tiles stacked full-width.
 .fleet-kpis {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: $space-3;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: $space-5;
 
-    @media (max-width: $breakpoint-md) {
-        grid-template-columns: repeat(2, 1fr);
+    @media (max-width: 1100px) {
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    }
+    @media (max-width: 560px) {
+        grid-template-columns: 1fr 1fr;
     }
 }
 
@@ -163,6 +168,62 @@
         &__row > :nth-child(5),
         &__row > :nth-child(6) {
             display: none;
+        }
+    }
+}
+
+// Fleet doctor rollup card (plan 26) — checks-by-status per server on the
+// Agent Fleet dashboard, consuming the same rows as the Doctor panel.
+.fleet-doctor-rollup {
+    margin-bottom: $space-4;
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    &__summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: $space-2;
+        margin-bottom: $space-3;
+    }
+
+    &__note {
+        margin-left: auto;
+        font-size: $font-size-sm;
+        color: $text-secondary;
+    }
+
+    &__servers {
+        display: flex;
+        flex-direction: column;
+        gap: $space-2;
+    }
+
+    &__server {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        width: 100%;
+        padding: $space-2 $space-3;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        cursor: pointer;
+        text-align: left;
+        transition: border-color 0.12s ease;
+
+        &:hover { border-color: $border-default; }
+
+        &-name { font-weight: 600; }
+
+        &-counts {
+            margin-left: auto;
+            font-size: $font-size-sm;
+            color: $text-secondary;
         }
     }
 }

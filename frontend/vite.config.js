@@ -3,6 +3,40 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'url'
 
+// Runtime-extension import map (plan 25 Decision 2). A runtime-loaded extension
+// bundle externalizes exactly these bare specifiers and resolves them at load
+// time to the panel's own singleton instances via the `/serverkit-vendor/*.mjs`
+// shims (fed by src/plugins/runtime/vendorShare.js). Injected into index.html at
+// BUILD time only: Vite's dev server does its own bare-specifier resolution, and
+// runtime loading is a production concern (dev uses the build-time glob path).
+// The map is inert for the host's own code (bundled to hashed relative chunks,
+// never bare specifiers) — it only affects the extension blobs.
+const VENDOR_IMPORTMAP = {
+    imports: {
+        'react': '/serverkit-vendor/react.mjs',
+        'react-dom': '/serverkit-vendor/react-dom.mjs',
+        'react-dom/client': '/serverkit-vendor/react-dom-client.mjs',
+        'react/jsx-runtime': '/serverkit-vendor/react-jsx-runtime.mjs',
+        'react-router-dom': '/serverkit-vendor/react-router-dom.mjs',
+        'serverkit-sdk': '/serverkit-vendor/serverkit-sdk.mjs',
+    },
+}
+
+function serverkitImportmap() {
+    return {
+        name: 'serverkit-vendor-importmap',
+        apply: 'build',
+        transformIndexHtml() {
+            return [{
+                tag: 'script',
+                attrs: { type: 'importmap' },
+                children: JSON.stringify(VENDOR_IMPORTMAP),
+                injectTo: 'head-prepend',
+            }]
+        },
+    }
+}
+
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '')
     const frontendPort = Number(env.SERVERKIT_FRONTEND_PORT) || 41921
@@ -17,7 +51,7 @@ export default defineConfig(({ mode }) => {
     }
 
     return {
-        plugins: [react()],
+        plugins: [react(), serverkitImportmap()],
         resolve: {
             alias: {
                 '@': fileURLToPath(new URL('./src', import.meta.url)),

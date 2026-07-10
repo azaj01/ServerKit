@@ -2,7 +2,7 @@
   "name": "serverkit-remote-access",
   "display_name": "Remote Access",
   "version": "1.0.0",
-  "description": "WireGuard remote-access tunnels between paired agents — expose NAT'd home services through an edge server. Fleet-wide view as a tab in the Servers group; per-server management stays on the server detail page.",
+  "description": "WireGuard remote-access tunnels between paired agents to expose NAT'd home services through an edge server. Fleet-wide view as a tab in the Servers group; per-server management stays on the server detail page.",
   "author": "ServerKit",
   "license": "MIT",
   "category": "integration",

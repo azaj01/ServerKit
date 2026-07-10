@@ -1,141 +1,115 @@
+// Jobs — admin view over the unified job system (job orchestration, "Phase 9").
+//
+// Tab-group page (the Marketplace/Domains pattern): a shared PageTopbar carries
+// the Activity/Scheduled sub-nav (JOBS_TABS) plus the reusable SearchField +
+// FilterDrawer (status/kind) + Refresh. Activity shows clickable compact KPIs, a
+// DataTable of runs, and server-side pagination over a job store that can hold
+// six figures of scheduler-tick rows; Scheduled is its own tab so it's not
+// buried below the runs. Wired to the real ApiService job methods
+// (see frontend/src/services/api/jobs.js).
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-    Layers, RefreshCw, Inbox, Play, X, RotateCcw, ChevronRight, Clock,
-} from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { ListChecks, RefreshCw, RotateCcw, XCircle, Play, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../services/api';
-import { PageTopbar, MetricCard, Pill } from '@/components/ds';
+import {
+    MetricCard, KpiBand, Pill, DataTable,
+    SearchField, FilterDrawer, FilterButton, countActiveFilters,
+} from '@/components/ds';
 import { Button } from '@/components/ui/button';
+import { useTopbarActions } from '@/hooks/useTopbarActions';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { timeAgo } from '../utils/timeAgo';
 
-const STATUSES = ['all', 'pending', 'running', 'succeeded', 'failed', 'cancelled'];
+const titleCase = (value = '') => value.charAt(0).toUpperCase() + value.slice(1);
+
+const STATUSES = ['all', 'queued', 'running', 'succeeded', 'failed', 'cancelled'];
+const PAGE_SIZE = 50;
 const POLL_MS = 5000;
 
-// Job status -> Pill colour.
-const PILL_KIND = {
-    succeeded: 'green',
+// Map a job status to a DS Pill colour.
+const STATUS_KIND = {
+    queued: 'gray',
+    pending: 'gray',
+    scheduled: 'gray',
     running: 'cyan',
-    pending: 'amber',
+    succeeded: 'green',
+    success: 'green',
+    completed: 'green',
     failed: 'red',
-    cancelled: 'gray',
+    error: 'red',
+    cancelled: 'amber',
+    canceled: 'amber',
 };
 
-function StatusPill({ status }) {
-    return <Pill kind={PILL_KIND[status] || 'gray'}>{status}</Pill>;
+function statusKind(status) {
+    return STATUS_KIND[String(status || '').toLowerCase()] || 'gray';
 }
 
-function describeSchedule(s) {
-    if (s.schedule_kind === 'cron' && s.cron) return s.cron;
-    const sec = s.interval_seconds;
-    if (!sec) return '—';
-    if (sec % 86400 === 0) return `every ${sec / 86400}d`;
-    if (sec % 3600 === 0) return `every ${sec / 3600}h`;
-    if (sec % 60 === 0) return `every ${sec / 60}m`;
-    return `every ${sec}s`;
+function ownerLabel(job) {
+    if (!job.owner_type) return '—';
+    return `${job.owner_type}${job.owner_id ? ` #${job.owner_id}` : ''}`;
 }
 
-function JobDetail({ detail }) {
-    if (!detail) return <div className="jobs-detail jobs-detail--loading">Loading details…</div>;
-    const payload = detail.payload && Object.keys(detail.payload).length > 0 ? detail.payload : null;
-    return (
-        <div className="jobs-detail">
-            <div className="jobs-detail__grid">
-                <span>ID</span><code>{detail.id}</code>
-                <span>Correlation</span><code>{detail.correlation_id || '—'}</code>
-                <span>Started</span><span>{detail.started_at ? new Date(detail.started_at).toLocaleString() : '—'}</span>
-                <span>Completed</span><span>{detail.completed_at ? new Date(detail.completed_at).toLocaleString() : '—'}</span>
-                <span>Duration</span><span>{detail.duration != null ? `${detail.duration.toFixed(2)}s` : '—'}</span>
-            </div>
-            {detail.error_message && (
-                <div className="jobs-detail__block jobs-detail__block--error">
-                    <span>Error</span>
-                    <pre>{detail.error_message}</pre>
-                </div>
-            )}
-            {payload && (
-                <div className="jobs-detail__block">
-                    <span>Payload</span>
-                    <pre>{JSON.stringify(payload, null, 2)}</pre>
-                </div>
-            )}
-            {detail.result != null && (
-                <div className="jobs-detail__block">
-                    <span>Result</span>
-                    <pre>{JSON.stringify(detail.result, null, 2)}</pre>
-                </div>
-            )}
-        </div>
-    );
+function progressLabel(job) {
+    if (typeof job.progress === 'number') return `${Math.round(job.progress)}%`;
+    if (job.completed_units != null && job.total_units != null) {
+        return `${job.completed_units}/${job.total_units}`;
+    }
+    return '—';
 }
 
-function JobRow({ job, expanded, detail, onToggle, onCancel, onRetry }) {
-    const canCancel = job.status === 'pending' || job.status === 'running';
-    const canRetry = job.status === 'failed' || job.status === 'cancelled';
-    return (
-        <>
-            <tr className={`jobs-row${expanded ? ' is-open' : ''}`} onClick={onToggle}>
-                <td className="jobs-caret">
-                    <ChevronRight size={14} className={expanded ? 'is-open' : ''} />
-                </td>
-                <td><StatusPill status={job.status} /></td>
-                <td className="jobs-mono">{job.kind}</td>
-                <td className="jobs-owner">
-                    {job.owner_type ? `${job.owner_type}${job.owner_id ? `:${job.owner_id}` : ''}` : '—'}
-                </td>
-                <td>{job.attempts}/{job.max_attempts}</td>
-                <td className="jobs-when">{timeAgo(job.created_at)}</td>
-                <td className="jobs-actions" onClick={(e) => e.stopPropagation()}>
-                    {canCancel && (
-                        <Button variant="ghost" size="sm" onClick={onCancel}><X size={14} /> Cancel</Button>
-                    )}
-                    {canRetry && (
-                        <Button variant="ghost" size="sm" onClick={onRetry}><RotateCcw size={14} /> Retry</Button>
-                    )}
-                </td>
-            </tr>
-            {expanded && (
-                <tr className="jobs-detail-row">
-                    <td colSpan={7}><JobDetail detail={detail} /></td>
-                </tr>
-            )}
-        </>
-    );
-}
+const isRunning = (s) => ['running', 'queued', 'pending', 'scheduled'].includes(String(s || '').toLowerCase());
+const canRetry = (s) => ['failed', 'error', 'cancelled', 'canceled'].includes(String(s || '').toLowerCase());
 
 export default function Jobs() {
     const { isAdmin } = useAuth();
     const toast = useToast();
+    const location = useLocation();
+    const scheduledView = location.pathname.endsWith('/scheduled');
     const [jobs, setJobs] = useState([]);
+    const [total, setTotal] = useState(0);
     const [stats, setStats] = useState(null);
-    const [kinds, setKinds] = useState([]);
     const [scheduled, setScheduled] = useState([]);
-    const [status, setStatus] = useState('all');
-    const [kind, setKind] = useState('all');
-    const [expandedId, setExpandedId] = useState(null);
-    const [detail, setDetail] = useState(null);
+    // Advanced filters live in the shared FilterDrawer (status + kind, single-
+    // select; '' = all). Search is a separate debounced term.
+    const [filters, setFilters] = useState({ status: '', kind: '' });
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [kinds, setKinds] = useState([]);
+    const [q, setQ] = useState('');
+    const [page, setPage] = useState(0);
     const [loading, setLoading] = useState(true);
     const pollRef = useRef(null);
 
     const load = useCallback(async () => {
         try {
-            const params = {};
-            if (status !== 'all') params.status = status;
-            if (kind !== 'all') params.kind = kind;
-            const [jobsData, statsData, schedData] = await Promise.all([
+            const params = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
+            if (filters.status) params.status = filters.status;
+            if (filters.kind) params.kind = filters.kind;
+            if (q) params.q = q;
+            const [jobsRes, statsRes, schedRes] = await Promise.all([
                 api.getJobs(params),
-                api.getJobStats(),
-                api.getScheduledJobs(),
+                api.getJobStats().catch(() => null),
+                api.getScheduledJobs().catch(() => null),
             ]);
-            setJobs(jobsData.jobs || []);
-            setStats(statsData || null);
-            setScheduled(schedData.scheduled || []);
+            setJobs(jobsRes?.jobs || []);
+            setTotal(jobsRes?.total ?? (jobsRes?.jobs?.length || 0));
+            setStats(statsRes?.stats || statsRes || null);
+            setScheduled(schedRes?.scheduled || schedRes?.jobs || schedRes || []);
         } catch {
-            // leave the last good state on screen
+            // Keep the last good state on screen rather than blanking the page.
         } finally {
             setLoading(false);
         }
-    }, [status, kind]);
+    }, [filters, q, page]);
+
+    useEffect(() => {
+        if (!isAdmin) return undefined;
+        api.getJobKinds()
+            .then((res) => setKinds(res?.kinds || res || []))
+            .catch(() => { /* filter just won't populate */ });
+        return undefined;
+    }, [isAdmin]);
 
     useEffect(() => {
         if (!isAdmin) return undefined;
@@ -144,177 +118,220 @@ export default function Jobs() {
         return () => clearInterval(pollRef.current);
     }, [isAdmin, load]);
 
-    useEffect(() => {
-        if (!isAdmin) return;
-        api.getJobKinds().then((d) => setKinds(d.kinds || [])).catch(() => {});
-    }, [isAdmin]);
+    // KPI tiles are quick status filters; the drawer owns the full set.
+    const setStatusQuick = (value) => { setFilters((f) => ({ ...f, status: value })); setPage(0); };
+    const onFiltersChange = (next) => { setFilters(next); setPage(0); };
+    const onSearch = (value) => { setQ(value.trim()); setPage(0); };
+    const resetFilters = () => { setFilters({ status: '', kind: '' }); setQ(''); setPage(0); };
+    const activeFilterCount = countActiveFilters(filters);
 
-    const toggleDetail = async (job) => {
-        if (expandedId === job.id) {
-            setExpandedId(null);
-            setDetail(null);
-            return;
-        }
-        setExpandedId(job.id);
-        setDetail(null);
-        try {
-            const data = await api.getJob(job.id);
-            setDetail(data.job || null);
-        } catch {
-            setDetail(null);
-        }
+    // Search + advanced-filter trigger + Refresh sit in the shared page top bar
+    // (the Marketplace/Domains pattern). Search/filters only apply to the
+    // Activity tab; the Scheduled tab just gets Refresh.
+    useTopbarActions(() => {
+        if (!isAdmin) return null;
+        return (
+            <>
+                {!scheduledView && (
+                    <>
+                        <SearchField value={q} onSearch={onSearch} placeholder="Search by kind or owner…" />
+                        <FilterButton count={activeFilterCount} onClick={() => setFiltersOpen(true)} />
+                    </>
+                )}
+                <Button variant="outline" size="sm" onClick={load}>
+                    <RefreshCw size={14} /> Refresh
+                </Button>
+            </>
+        );
+    }, [isAdmin, scheduledView, q, activeFilterCount, load]);
+
+    const onRetry = async (id) => {
+        try { await api.retryJob(id); toast.success('Job re-queued'); load(); }
+        catch { toast.error('Retry failed'); }
     };
-
-    const action = async (fn, okMsg, failMsg) => {
-        try {
-            await fn();
-            toast.success(okMsg);
-            load();
-        } catch (e) {
-            toast.error(e?.message || failMsg);
-        }
+    const onCancel = async (id) => {
+        try { await api.cancelJob(id); toast.success('Job cancelled'); load(); }
+        catch { toast.error('Cancel failed'); }
+    };
+    const onRunScheduled = async (id) => {
+        try { await api.runScheduledJob(id); toast.success('Scheduled job triggered'); load(); }
+        catch { toast.error('Trigger failed'); }
+    };
+    const onToggleScheduled = async (id, enabled) => {
+        try { await api.setScheduledJobEnabled(id, enabled); load(); }
+        catch { toast.error('Update failed'); }
     };
 
     if (!isAdmin) {
         return (
-            <>
-                <PageTopbar icon={<Layers size={18} />} title="Jobs" />
-                <div className="jobs-page"><div className="jobs-empty">Admins only.</div></div>
-            </>
+            <div className="sk-tabgroup__inner jobs-page">
+                <div className="sk-jobs"><div className="sk-jobs__empty">Admins only.</div></div>
+            </div>
         );
     }
 
     const byStatus = stats?.by_status || {};
+    const hasFilters = Boolean(filters.status || filters.kind || q);
+    const hasPrev = page > 0;
+    const hasNext = (page + 1) * PAGE_SIZE < total;
+
+    const kindOptions = kinds
+        .map((k) => (typeof k === 'string' ? k : k.kind || k.name))
+        .filter(Boolean);
+
+    const filterGroups = [
+        {
+            key: 'status',
+            label: 'Status',
+            type: 'single',
+            options: STATUSES.filter((s) => s !== 'all').map((s) => ({ value: s, label: titleCase(s) })),
+        },
+        {
+            key: 'kind',
+            label: 'Kind',
+            type: 'single',
+            options: kindOptions.map((k) => ({ value: k, label: k })),
+        },
+    ];
+
+    const jobColumns = [
+        { key: 'status', header: 'Status', render: (j) => <Pill kind={statusKind(j.status)}>{j.status}</Pill> },
+        { key: 'kind', header: 'Kind', cellClassName: 'sk-jobs__kind', render: (j) => j.kind || '—' },
+        { key: 'owner', header: 'Owner', cellClassName: 'sk-jobs__owner', render: ownerLabel },
+        {
+            key: 'progress',
+            header: 'Progress',
+            render: (j) => (
+                <>
+                    {progressLabel(j)}
+                    {j.error_message && (
+                        <div className="sk-jobs__error" title={j.error_message}>{j.error_message}</div>
+                    )}
+                </>
+            ),
+        },
+        { key: 'when', header: 'When', cellClassName: 'sk-jobs__when', render: (j) => timeAgo(j.created_at || j.updated_at) },
+        {
+            key: 'actions',
+            header: '',
+            className: 'sk-jobs__actions-col',
+            cellClassName: 'sk-jobs__actions-cell',
+            render: (j) => (
+                <div className="sk-jobs__actions">
+                    {isRunning(j.status) && (
+                        <Button variant="ghost" size="sm" onClick={() => onCancel(j.id)}>
+                            <XCircle size={14} /> Cancel
+                        </Button>
+                    )}
+                    {canRetry(j.status) && (
+                        <Button variant="ghost" size="sm" onClick={() => onRetry(j.id)}>
+                            <RotateCcw size={14} /> Retry
+                        </Button>
+                    )}
+                </div>
+            ),
+        },
+    ];
+
+    const scheduledColumns = [
+        { key: 'name', header: 'Name', render: (s) => s.name || s.kind || `#${s.id}` },
+        { key: 'kind', header: 'Kind', cellClassName: 'sk-jobs__kind', render: (s) => s.kind || '—' },
+        { key: 'schedule', header: 'Schedule', cellClassName: 'sk-jobs__owner', render: (s) => s.schedule || s.cron || (s.interval_seconds ? `every ${s.interval_seconds}s` : '—') },
+        { key: 'next', header: 'Next run', cellClassName: 'sk-jobs__when', render: (s) => (s.next_run_at ? timeAgo(s.next_run_at) : '—') },
+        { key: 'enabled', header: 'Enabled', render: (s) => <Pill kind={s.enabled ? 'green' : 'gray'}>{s.enabled ? 'On' : 'Off'}</Pill> },
+        {
+            key: 'actions',
+            header: '',
+            className: 'sk-jobs__actions-col',
+            cellClassName: 'sk-jobs__actions-cell',
+            render: (s) => (
+                <div className="sk-jobs__actions">
+                    <Button variant="ghost" size="sm" onClick={() => onRunScheduled(s.id)}>
+                        <Play size={14} /> Run now
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onToggleScheduled(s.id, !s.enabled)}>
+                        {s.enabled ? 'Disable' : 'Enable'}
+                    </Button>
+                </div>
+            ),
+        },
+    ];
 
     return (
-        <>
-            <PageTopbar
-                icon={<Layers size={18} />}
-                title="Jobs"
-                meta="Background work across the Queue Bus"
-                actions={(
-                    <Button variant="outline" size="sm" onClick={load}>
-                        <RefreshCw size={14} /> Refresh
-                    </Button>
-                )}
-            />
-
-            <div className="jobs-page">
-                <div className="jobs-stats">
-                    <MetricCard label="Total" value={stats?.total ?? 0} tone="accent" />
-                    <MetricCard label="Running" value={byStatus.running ?? 0} />
-                    <MetricCard label="Pending" value={byStatus.pending ?? 0} tone="amber" />
-                    <MetricCard label="Succeeded" value={byStatus.succeeded ?? 0} tone="green" />
-                    <MetricCard label="Failed" value={byStatus.failed ?? 0} tone="red" />
-                </div>
-
-                <div className="jobs-filters">
-                    <label>
-                        Status
-                        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </label>
-                    <label>
-                        Kind
-                        <select value={kind} onChange={(e) => setKind(e.target.value)}>
-                            <option value="all">all</option>
-                            {kinds.map((k) => <option key={k} value={k}>{k}</option>)}
-                        </select>
-                    </label>
-                </div>
-
-                {loading && jobs.length === 0 ? (
-                    <div className="jobs-empty">Loading…</div>
-                ) : jobs.length === 0 ? (
-                    <div className="jobs-empty">
-                        <Inbox size={24} aria-hidden="true" />
-                        <p>No jobs match these filters.</p>
-                    </div>
+        <div className="sk-tabgroup__inner jobs-page">
+            <div className="sk-jobs">
+                {scheduledView ? (
+                    <DataTable
+                        columns={scheduledColumns}
+                        data={scheduled}
+                        keyField="id"
+                        sortable={false}
+                        loading={loading && scheduled.length === 0}
+                        emptyState={(
+                            <div className="sk-jobs__empty">
+                                <Clock size={24} aria-hidden="true" />
+                                <p>No scheduled jobs yet.</p>
+                            </div>
+                        )}
+                    />
                 ) : (
-                    <div className="jobs-table-wrap">
-                        <table className="jobs-table">
-                            <thead>
-                                <tr>
-                                    <th aria-label="expand" />
-                                    <th>Status</th>
-                                    <th>Kind</th>
-                                    <th>Owner</th>
-                                    <th>Tries</th>
-                                    <th>Created</th>
-                                    <th aria-label="Actions" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {jobs.map((j) => (
-                                    <JobRow
-                                        key={j.id}
-                                        job={j}
-                                        expanded={expandedId === j.id}
-                                        detail={expandedId === j.id ? detail : null}
-                                        onToggle={() => toggleDetail(j)}
-                                        onCancel={() => action(() => api.cancelJob(j.id), 'Job cancelled', 'Cancel failed')}
-                                        onRetry={() => action(() => api.retryJob(j.id), 'Job re-queued', 'Retry failed')}
-                                    />
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                    <>
+                        <KpiBand>
+                            <MetricCard label="Total" value={stats?.total ?? total ?? 0} tone="accent" compact
+                                onClick={() => setStatusQuick('')} />
+                            <MetricCard label="Running" value={byStatus.running ?? 0} tone="cyan" compact
+                                onClick={() => setStatusQuick('running')} />
+                            <MetricCard label="Queued" value={byStatus.pending ?? byStatus.queued ?? 0} tone="amber" compact
+                                onClick={() => setStatusQuick('queued')} />
+                            <MetricCard label="Failed" value={byStatus.failed ?? 0} tone="red" compact
+                                onClick={() => setStatusQuick('failed')} />
+                        </KpiBand>
 
-                <div className="jobs-section-head">
-                    <Clock size={16} aria-hidden="true" />
-                    <h2>Scheduled jobs</h2>
-                </div>
+                        {hasFilters && (
+                            <div className="sk-jobs__resultbar">
+                                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                                    Reset filters
+                                </Button>
+                            </div>
+                        )}
 
-                {scheduled.length === 0 ? (
-                    <div className="jobs-empty"><p>No scheduled jobs.</p></div>
-                ) : (
-                    <div className="jobs-table-wrap">
-                        <table className="jobs-table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Kind</th>
-                                    <th>Schedule</th>
-                                    <th>Next run</th>
-                                    <th>Last run</th>
-                                    <th aria-label="Actions" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {scheduled.map((s) => (
-                                    <tr key={s.id} className={s.enabled ? '' : 'is-disabled'}>
-                                        <td className="jobs-mono">{s.name}</td>
-                                        <td className="jobs-mono">{s.kind}</td>
-                                        <td>{describeSchedule(s)}</td>
-                                        <td>
-                                            {s.enabled
-                                                ? (s.next_run_at ? timeAgo(s.next_run_at) : '—')
-                                                : <Pill kind="gray">paused</Pill>}
-                                        </td>
-                                        <td className="jobs-when">{s.last_run_at ? timeAgo(s.last_run_at) : '—'}</td>
-                                        <td className="jobs-actions">
-                                            <Button variant="ghost" size="sm" title="Run now"
-                                                onClick={() => action(() => api.runScheduledJob(s.id), `Enqueued "${s.name}"`, 'Run failed')}>
-                                                <Play size={14} /> Run
-                                            </Button>
-                                            <Button variant="ghost" size="sm"
-                                                onClick={() => action(
-                                                    () => api.setScheduledJobEnabled(s.id, !s.enabled),
-                                                    s.enabled ? `Paused "${s.name}"` : `Enabled "${s.name}"`,
-                                                    'Update failed',
-                                                )}>
-                                                {s.enabled ? 'Pause' : 'Enable'}
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                        <DataTable
+                            columns={jobColumns}
+                            data={jobs}
+                            keyField="id"
+                            sortable={false}
+                            loading={loading && jobs.length === 0}
+                            emptyState={(
+                                <div className="sk-jobs__empty">
+                                    <ListChecks size={24} aria-hidden="true" />
+                                    <p>{hasFilters ? 'No jobs match these filters.' : 'No jobs have run yet.'}</p>
+                                </div>
+                            )}
+                        />
+
+                        {(hasPrev || hasNext) && (
+                            <div className="sk-jobs__pager">
+                                <Button variant="outline" size="sm" disabled={!hasPrev} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                                    <ChevronLeft size={14} /> Prev
+                                </Button>
+                                <span className="sk-jobs__pager-label">Page {page + 1}</span>
+                                <Button variant="outline" size="sm" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
+                                    Next <ChevronRight size={14} />
+                                </Button>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
-        </>
+
+            <FilterDrawer
+                open={filtersOpen}
+                onOpenChange={setFiltersOpen}
+                groups={filterGroups}
+                value={filters}
+                onChange={onFiltersChange}
+                title="Filter jobs"
+            />
+        </div>
     );
 }

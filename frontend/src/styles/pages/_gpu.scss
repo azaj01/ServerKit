@@ -7,16 +7,9 @@
         padding: $spacing-xl 0;
     }
 
-    .gpu-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: $spacing-lg;
-        margin-top: $spacing-lg;
-
-        @media (max-width: $breakpoint-sm) {
-            grid-template-columns: 1fr;
-        }
-    }
+    // Per-GPU meter cards now lay out via <KpiBand> (grid/spacing/responsive
+    // collapse); the .gpu-card internals below stay as custom live-meter tiles
+    // (Plan 20 Decision 5).
 }
 
 .gpu-card {

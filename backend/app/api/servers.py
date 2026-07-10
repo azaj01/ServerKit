@@ -112,6 +112,11 @@ PERMISSION_PROFILES = {
             'docker:volume:read',
             'docker:network:read',
             'system:metrics:read',
+            # Fleet doctor / survey reads (plan 28 #7): let the panel probe
+            # host health without granting any mutating verb.
+            'doctor:read',
+            'systemd:read',
+            'survey:read',
         ]
     },
     'docker_manager': {
@@ -125,6 +130,9 @@ PERMISSION_PROFILES = {
             'docker:network:*',
             'system:metrics:read',
             'system:logs:read',
+            'doctor:read',
+            'systemd:read',
+            'survey:read',
         ]
     },
     'deployment_runner': {
@@ -141,6 +149,9 @@ PERMISSION_PROFILES = {
             'file:list',
             'system:metrics:read',
             'system:logs:read',
+            'doctor:read',
+            'systemd:read',
+            'survey:read',
         ]
     },
     'full_access': {

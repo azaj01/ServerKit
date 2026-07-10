@@ -14,6 +14,7 @@ import ServerDockerTab from '../components/serverdetail/ServerDockerTab';
 import CronTab from '../components/serverdetail/CronTab';
 import CloudflaredTab from '../components/serverdetail/CloudflaredTab';
 import ServerMetricsTab from '../components/serverdetail/ServerMetricsTab';
+import SurveyTab from '../components/serverdetail/SurveyTab';
 import ServerSettingsTab, { TokenModal } from '../components/serverdetail/ServerSettingsTab';
 import {
     STATUS_PILL_KIND,
@@ -38,7 +39,7 @@ const ServerDetail = () => {
     const [securityAlerts, setSecurityAlerts] = useState([]);
     const toast = useToast();
 
-    const validTabs = ['overview', 'docker', 'proxy', 'cron', 'cloudflared', 'packages', 'services', 'metrics', 'alerts', 'remote-access', 'settings'];
+    const validTabs = ['overview', 'docker', 'proxy', 'cron', 'cloudflared', 'packages', 'services', 'survey', 'metrics', 'alerts', 'remote-access', 'settings'];
     const activeTab = validTabs.includes(tab) ? tab : 'overview';
 
     const loadServer = useCallback(async () => {
@@ -224,6 +225,7 @@ const ServerDetail = () => {
         ...(server.capabilities?.cloudflared ? [{ id: 'cloudflared', label: 'Tunnels' }] : []),
         ...(server.capabilities?.packages ? [{ id: 'packages', label: 'Packages' }] : []),
         ...(server.capabilities?.systemd ? [{ id: 'services', label: 'Services' }] : []),
+        ...(server.capabilities?.survey ? [{ id: 'survey', label: 'Survey' }] : []),
         { id: 'metrics', label: 'Metrics' },
         ...(totalAlertCount > 0
             ? [{ id: 'alerts', label: 'Alerts', badge: totalAlertCount }]
@@ -349,6 +351,11 @@ const ServerDetail = () => {
                     {server.capabilities?.systemd && (
                         <TabsContent value="services">
                             <ServicesTab serverId={id} serverStatus={server.status} />
+                        </TabsContent>
+                    )}
+                    {server.capabilities?.survey && (
+                        <TabsContent value="survey">
+                            <SurveyTab serverId={id} serverStatus={server.status} server={server} />
                         </TabsContent>
                     )}
                     <TabsContent value="metrics">

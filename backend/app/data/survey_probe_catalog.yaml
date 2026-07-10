@@ -1,0 +1,120 @@
+# ServerKit survey probe catalog (plan 27, Decision 2).
+#
+# A VERSIONED, declarative list of every location/service the read-only survey
+# ("flight") looks at on a paired Linux box, and how to read it. The panel ships
+# this file, sends it to the agent per survey run, and shows the index verbatim
+# to the operator so the honest answer to "what will you look at on my server?"
+# is this file.
+#
+# The agent executes each probe with a FIXED allowlist of read-only primitives
+# only (see docs/AGENT_SURVEY_SPEC.md): file-exists, glob, unit-status,
+# socket-list, process-list, and parse-light line extraction. Catalog entries
+# can only COMBINE those primitives — they can never name a shell command. A
+# compromised panel can at worst enumerate paths; it can never execute. Env and
+# credential files are listed by PATH ONLY and never read.
+#
+# Bump `version` whenever the probe set changes; snapshots record the version
+# they were taken with so a diff can note "catalog changed between flights".
+version: 1
+
+probes:
+  - id: nginx
+    kind: service+config
+    title: Nginx web server
+    reads: Service status, listening ports, and enabled vhost files (server_name / root / proxy_pass lines only).
+    detect:
+      ports: [80, 443]
+      units: [nginx]
+      bins: [nginx]
+    map:
+      # server_name -> document root / upstream. Parse-light: only the
+      # server_name, root, and proxy_pass directives are extracted.
+      vhosts: [/etc/nginx/sites-enabled/*, /etc/nginx/conf.d/*.conf]
+
+  - id: apache
+    kind: service+config
+    title: Apache web server
+    reads: Service status and enabled vhost files (ServerName / DocumentRoot / ProxyPass lines only).
+    detect:
+      units: [apache2, httpd]
+      bins: [apache2, httpd]
+    map:
+      vhosts: [/etc/apache2/sites-enabled/*, /etc/httpd/conf.d/*.conf]
+
+  - id: php-fpm
+    kind: service+config
+    title: PHP-FPM runtime
+    reads: Detected PHP-FPM pools and the version directory they live under.
+    detect:
+      units: [php*-fpm, php-fpm]
+      bins: [php-fpm]
+    map:
+      pools: [/etc/php/*/fpm/pool.d/*.conf, /etc/php-fpm.d/*.conf]
+
+  - id: foreign-panel
+    kind: marker
+    title: Other control panel
+    reads: Presence of well-known control-panel marker directories (existence check only — contents are never read).
+    detect:
+      # Marker directories kept as DATA, never as names in code paths
+      # (Decision 8). Detection SUGGESTS Observed mode; it never flips it.
+      paths:
+        - /usr/local/cpanel
+        - /usr/local/directadmin
+        - /usr/local/hestia
+        - /usr/local/vesta
+        - /usr/local/cwp
+        - /usr/local/psa          # Plesk
+        - /usr/local/ispconfig
+        - /var/webmin
+
+  - id: docker
+    kind: service
+    title: Docker
+    reads: Docker service status, running containers, their published ports, and compose project labels.
+    detect:
+      units: [docker]
+      bins: [docker]
+      ports: [2375, 2376]
+
+  - id: databases
+    kind: service
+    title: Database engines
+    reads: Database service status and listening sockets (MySQL / MariaDB / PostgreSQL / MongoDB). No database contents are read.
+    detect:
+      units: [mysql, mariadb, postgresql, mongod]
+      bins: [mysqld, mariadbd, postgres, mongod]
+      ports: [3306, 5432, 27017]
+
+  - id: crontabs
+    kind: inventory
+    title: Cron jobs
+    reads: Per-user crontab inventory (the schedule lines). Read-only.
+    detect:
+      paths: [/var/spool/cron, /var/spool/cron/crontabs, /etc/cron.d]
+    map:
+      crontabs: [/var/spool/cron/*, /var/spool/cron/crontabs/*, /etc/cron.d/*]
+
+  - id: certs
+    kind: inventory
+    title: TLS certificates
+    reads: Let's Encrypt live certificate directories (domain names and expiry only — private keys are never read).
+    detect:
+      paths: [/etc/letsencrypt/live]
+    map:
+      certs: [/etc/letsencrypt/live/*]
+
+  - id: mail
+    kind: service
+    title: Mail server
+    reads: Mail service status and SMTP/submission port bindings (25 / 465 / 587). No mailbox contents are read.
+    detect:
+      units: [postfix, dovecot, exim4, opendkim]
+      bins: [postfix, dovecot, exim]
+      ports: [25, 465, 587]
+
+  - id: listeners
+    kind: inventory
+    title: Listening ports
+    reads: Catch-all — every listening TCP/UDP socket mapped to the owning process name (not its command line).
+    detect: {}

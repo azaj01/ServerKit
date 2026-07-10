@@ -27,6 +27,7 @@ import Security from './pages/Security';
 import Services from './pages/Services';
 import NewService from './pages/NewService';
 import ImportWizard from './pages/ImportWizard';
+import Coexistence from './pages/Coexistence';
 import ServiceDetail from './pages/ServiceDetail';
 import Templates from './pages/Templates';
 import Servers from './pages/Servers';
@@ -43,6 +44,7 @@ import { MARKET_TABS } from './components/marketplace/marketTabs';
 import { BACKUP_TABS } from './components/backups/backupTabs';
 import { SECURITY_TABS } from './components/security/securityTabs';
 import { ORG_TABS } from './components/organization/organizationTabs';
+import { JOBS_TABS } from './components/jobs/jobsTabs';
 import Downloads from './pages/Downloads';
 import SSLCertificates from './pages/SSLCertificates';
 import SSOCallback from './pages/SSOCallback';
@@ -81,6 +83,7 @@ const PAGE_TITLES = {
     '/services': 'Services',
     '/services/new': 'New Service',
     '/imports': 'Import a Site',
+    '/imports/coexistence': 'Running Alongside Another Panel',
     '/projects': 'Projects',
     '/shared-variables': 'Shared Variables',
     '/fleet-proxy': 'Fleet Proxy',
@@ -312,6 +315,7 @@ function AppRoutes() {
                     so the Settings left-nav is shareable and survives a refresh. */}
                 <Route path="services/:id/:tab/:section" element={<ServiceDetail />} />
                 <Route path="imports" element={<ImportWizard />} />
+                <Route path="imports/coexistence" element={<Coexistence />} />
                 <Route path="apps" element={<Navigate to="/services" replace />} />
                 <Route path="apps/:id" element={<LegacyAppRedirect />} />
                 <Route path="apps/:id/:tab" element={<LegacyAppRedirect />} />
@@ -370,6 +374,7 @@ function AppRoutes() {
                 <Route path="workspaces/:id/:tab/:section" element={<WorkspaceDetail />} />
                 <Route element={<TabGroupLayout tabs={MARKET_TABS} />}>
                     <Route path="marketplace" element={<Marketplace />} />
+                    <Route path="marketplace/installed" element={<Marketplace />} />
                     <Route path="downloads" element={<Downloads />} />
                 </Route>
                 <Route path="style-guide" element={<StyleGuide />} />
@@ -428,7 +433,10 @@ function AppRoutes() {
                 <Route path="queue/:groupSlug/:queueSlug" element={<QueueDetail />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="admin/notifications" element={<DeliveryLog />} />
-                <Route path="jobs" element={<Jobs />} />
+                <Route element={<TabGroupLayout tabs={JOBS_TABS} />}>
+                    <Route path="jobs" element={<Jobs />} />
+                    <Route path="jobs/scheduled" element={<Jobs />} />
+                </Route>
                 <Route path="settings" element={<Settings />} />
                 <Route path="settings/:tab" element={<Settings />} />
                 {dashboardRoutes}

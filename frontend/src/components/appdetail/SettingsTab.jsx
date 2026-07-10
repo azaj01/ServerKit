@@ -22,7 +22,18 @@ const SettingsTab = ({ app, onUpdate }) => {
     };
 
     async function handleDelete() {
-        const firstConfirm = await confirmAppSettings({ title: 'Delete Application', message: `Delete ${app.name}? This action cannot be undone.` });
+        // Surface the schedules this delete will strand (kept but detached) so the
+        // operator decides with eyes open — the honest-delete half of plan 34 #3.
+        let cronNote = '';
+        try {
+            const jobs = (await api.getCronJobsForApp(app.id))?.jobs || [];
+            if (jobs.length) {
+                const names = jobs.map((j) => j.name || 'Unnamed').join(', ');
+                cronNote = ` ${jobs.length} scheduled task${jobs.length > 1 ? 's' : ''} will be kept but detached from this app: ${names}.`;
+            }
+        } catch { /* cron visibility is best-effort — never block the delete */ }
+
+        const firstConfirm = await confirmAppSettings({ title: 'Delete Application', message: `Delete ${app.name}? This action cannot be undone.${cronNote}` });
         if (!firstConfirm) return;
         const secondConfirm = await confirmAppSettings({ title: 'Confirm Deletion', message: 'Are you sure? This will permanently delete the application and all its data.' });
         if (!secondConfirm) return;
