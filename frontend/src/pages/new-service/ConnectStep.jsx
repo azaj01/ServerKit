@@ -1,19 +1,34 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    ArrowRight, CheckCircle2, FileArchive, FolderOpen, GitBranch, Info,
+    ArrowRight, CheckCircle2, FileArchive, GitBranch, Info,
     Package, RefreshCw, Search, Settings2,
 } from 'lucide-react';
 import { SiGithub } from 'react-icons/si';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { SOURCE_NEEDS } from './useNewServiceForm';
+
+// Templates flagged as featured get a badge in the picker.
+const FEATURED_TEMPLATES = ['agentsite'];
+
+// Template icon with a graceful fallback to a Package glyph if the inline/URL
+// icon is missing or fails to load.
+const TemplateIcon = ({ template }) => {
+    const [failed, setFailed] = useState(false);
+    if (template.icon && !failed) {
+        return <img src={template.icon} alt="" onError={() => setFailed(true)} />;
+    }
+    return <Package size={22} />;
+};
 
 // Step 2 — Connect. Only the source-specific input, plus the editable detected
 // service name + branch shown inline (not buried in Advanced).
 const ConnectStep = ({ form }) => {
     const {
-        sourceMode, githubConnection, githubConfigured, reposLoading, repos, repoSearch,
+        sourceMode, selectSource, githubConnection, githubConfigured, reposLoading, repos, repoSearch,
         setRepoSearch, selectedRepo, setSelectedRepo, loadGithubRepos, handleConnectGithub,
         templates, templatesLoading, selectedTemplate, selectTemplateById,
         manualRepoUrl, handleManualRepoChange, localPath, setLocalPath, composeFile,
@@ -121,35 +136,61 @@ const ConnectStep = ({ form }) => {
 
             {sourceMode === 'template' && (
                 <div className="new-service-page__pane">
-                    <div className="new-service-page__template-list">
-                        {templatesLoading && <div className="new-service-page__repo-state">Loading templates…</div>}
-                        {!templatesLoading && templates.length === 0 && (
-                            <div className="new-service-page__repo-state">No deploy templates available yet.</div>
-                        )}
-                        {!templatesLoading && templates.map(template => (
+                    {templatesLoading && <div className="new-service-page__repo-state">Loading templates…</div>}
+                    {!templatesLoading && templates.length === 0 && (
+                        <div className="new-service-page__repo-state">No deploy templates available yet.</div>
+                    )}
+                    {!templatesLoading && templates.map(template => {
+                        const active = selectedTemplate?.id === template.id;
+                        return (
                             <button
                                 key={template.id}
                                 type="button"
-                                className={`new-service-page__template-row ${selectedTemplate?.id === template.id ? 'new-service-page__template-row--active' : ''}`}
+                                className={`new-service-page__template-card ${active ? 'new-service-page__template-card--active' : ''}`}
                                 onClick={() => selectTemplateById(template.id)}
                             >
-                                <span className="new-service-page__template-main">
-                                    <strong>{template.name}</strong>
-                                    <small>{template.description}</small>
-                                    {template.repo?.url && <em>{template.repo.url}</em>}
+                                <span className="new-service-page__template-card-icon">
+                                    <TemplateIcon template={template} />
                                 </span>
-                                {selectedTemplate?.id === template.id ? <CheckCircle2 size={18} /> : <ArrowRight size={18} />}
+                                <span className="new-service-page__template-card-body">
+                                    <span className="new-service-page__template-card-head">
+                                        <strong>{template.name}</strong>
+                                        {FEATURED_TEMPLATES.includes(template.id) && (
+                                            <Badge variant="info">Featured</Badge>
+                                        )}
+                                        {template.version && <Badge variant="outline">v{template.version}</Badge>}
+                                    </span>
+                                    <span className="new-service-page__template-card-desc">{template.description}</span>
+                                    <span className="new-service-page__template-card-meta">
+                                        {(template.categories || []).slice(0, 3).map(cat => (
+                                            <span key={cat} className="tg">{cat}</span>
+                                        ))}
+                                        {template.repo?.url && <em>{template.repo.url}</em>}
+                                    </span>
+                                </span>
+                                {active ? <CheckCircle2 size={20} /> : <ArrowRight size={20} />}
                             </button>
-                        ))}
-                    </div>
-                    <div className="new-service-page__pane-actions">
-                        <Button type="button" variant="outline" asChild>
-                            <Link to="/templates?kind=repo">
-                                <Package size={16} />
-                                Browse all templates
-                            </Link>
+                        );
+                    })}
+
+                    {/* Bring your own — no curated entry needed. Any repo with a
+                        serverkit.yml / Docker Compose / Dockerfile deploys the same
+                        way; this switches to the Git-remote input in place. */}
+                    <div className="new-service-page__byo">
+                        <div>
+                            <strong>Bring your own manifest</strong>
+                            <span>Deploy any Git repo that ships a serverkit.yml, Docker Compose, or Dockerfile — we detect it for you.</span>
+                        </div>
+                        <Button type="button" variant="outline" onClick={() => selectSource('manual')}>
+                            <GitBranch size={16} />
+                            Use a repo URL
                         </Button>
                     </div>
+
+                    <Link to="/templates?kind=repo" className="new-service-page__pane-link">
+                        <Package size={14} />
+                        Open the full template library
+                    </Link>
                 </div>
             )}
 

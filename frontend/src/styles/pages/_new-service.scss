@@ -14,6 +14,7 @@
     &__stepper {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: $space-2;
         margin-bottom: $space-5;
     }
@@ -457,6 +458,151 @@
             font-style: normal;
             font-family: $font-mono;
         }
+    }
+
+    // Richer featured template card (icon + name + preview + categories).
+    &__template-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: $space-4;
+        width: 100%;
+        padding: $space-4;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-lg;
+        color: $text-primary;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color $transition-fast, background $transition-fast, transform $transition-fast;
+
+        &:hover {
+            background: $bg-hover;
+            border-color: $border-hover;
+            transform: translateY(-1px);
+        }
+
+        &--active {
+            border-color: rgba(20, 184, 166, 0.55);
+            box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.18);
+
+            > svg { color: $success; }
+        }
+    }
+
+    &__template-card-icon {
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        flex-shrink: 0;
+        border-radius: $radius-lg;
+        background: var(--surface-2);
+        color: var(--accent-bright);
+        overflow: hidden;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 8px;
+        }
+
+        svg { display: block; }
+    }
+
+    &__template-card-body {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    &__template-card-head {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+
+        strong {
+            color: $text-primary;
+            font-size: $font-size-base;
+            font-weight: $font-weight-semibold;
+        }
+    }
+
+    &__template-card-desc {
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
+    &__template-card-meta {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        flex-wrap: wrap;
+        margin-top: 2px;
+
+        .tg {
+            padding: 1px 7px;
+            border-radius: $radius-sm;
+            background: var(--surface-2);
+            color: var(--text-dim);
+            font-size: 10.5px;
+            font-family: $font-mono;
+            text-transform: capitalize;
+        }
+
+        em {
+            color: var(--text-faint);
+            font-size: $font-size-xs;
+            font-family: $font-mono;
+            font-style: normal;
+            overflow-wrap: anywhere;
+        }
+    }
+
+    // "Bring your own" — deploy any repo with a serverkit.yml / compose file.
+    &__byo {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-3;
+        padding: $space-4;
+        background: $bg-elevated;
+        border: 1px dashed $border-subtle;
+        border-radius: $radius-md;
+
+        div {
+            min-width: 0;
+        }
+
+        strong {
+            display: block;
+            color: $text-secondary;
+            font-size: $font-size-sm;
+            font-weight: $font-weight-semibold;
+        }
+
+        span {
+            display: block;
+            margin-top: 2px;
+            color: $text-tertiary;
+            font-size: $font-size-xs;
+            line-height: 1.4;
+        }
+    }
+
+    &__pane-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+        text-decoration: none;
+
+        &:hover { color: $accent-primary; }
     }
 
     // ── Fields (shared) ─────────────────────────────────────
