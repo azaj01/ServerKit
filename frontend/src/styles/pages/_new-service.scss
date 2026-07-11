@@ -1,83 +1,158 @@
 // ============================================
-// NEW SERVICE PAGE
+// NEW SERVICE PAGE (plan 43 — three-step wizard)
+// A slim stepper header over one centered column (~760px). The right rail of the
+// old form-wall is gone; only the review step has real content. Sub-component
+// blocks (repo list, template rows, manifest card, fields) are shared across
+// steps and kept below.
 // ============================================
 
 .new-service-page {
-    max-width: 1200px;
+    max-width: 820px;
+    margin: 0 auto;
 
-    &__breadcrumb {
+    // ── Stepper header ──────────────────────────────────────
+    &__stepper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: $space-2;
+        margin-bottom: $space-5;
+    }
+
+    &__stepper-item {
         display: flex;
         align-items: center;
         gap: $space-2;
-        margin-bottom: $space-4;
+        padding: $space-2 $space-3;
+        background: transparent;
+        border: none;
+        border-radius: $radius-md;
         color: $text-tertiary;
-        font-size: $font-size-sm;
+        font: inherit;
+        cursor: default;
 
-        a {
+        &::after {
+            content: '';
+            width: 28px;
+            height: 1px;
+            margin-left: $space-2;
+            background: $border-subtle;
+        }
+
+        &:last-child::after {
+            display: none;
+        }
+
+        &--done {
+            cursor: pointer;
             color: $text-secondary;
-            text-decoration: none;
+        }
 
-            &:hover {
-                color: $text-primary;
-            }
+        &--current {
+            color: $text-primary;
         }
     }
 
-    &__header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: $space-4;
-        margin-bottom: $space-5;
+    &__stepper-dot {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: $radius-full;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        color: inherit;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-semibold;
 
-        h1 {
+        svg { display: block; }
+    }
+
+    &__stepper-item--current &__stepper-dot {
+        background: var(--accent-bg);
+        border-color: var(--accent-dim);
+        color: var(--accent-bright);
+    }
+
+    &__stepper-item--done &__stepper-dot {
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.35);
+        color: $success;
+    }
+
+    &__stepper-label {
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+    }
+
+    // ── Single centered column ──────────────────────────────
+    &__wizard-col {
+        display: grid;
+        gap: $space-5;
+    }
+
+    &__step {
+        display: grid;
+        gap: $space-4;
+    }
+
+    &__step-head {
+        display: grid;
+        gap: $space-1;
+
+        h2 {
             margin: 0;
             color: $text-primary;
-            font-size: $font-size-2xl;
-            font-weight: $font-weight-bold;
+            font-size: $font-size-xl;
+            font-weight: $font-weight-semibold;
         }
 
         p {
-            max-width: 620px;
-            margin: $space-1 0 0;
+            margin: 0;
             color: $text-tertiary;
             font-size: $font-size-sm;
             line-height: 1.5;
         }
     }
 
-    // Redesign: the demo's horizontal "method card" chooser (.method-grid).
-    &__method-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-bottom: $space-4;
-    }
+    // "you'll need X" one-liner
+    &__need {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        margin: 0 !important;
+        color: $text-tertiary !important;
 
-    @media (max-width: $breakpoint-md) {
-        &__method-grid {
-            grid-template-columns: 1fr;
+        svg {
+            flex-shrink: 0;
+            color: $accent-primary;
         }
     }
 
-    &__method-card {
-        display: block;
-        position: relative;
-        padding: 18px;
+    // ── Step 1: source radio-cards ──────────────────────────
+    &__sources {
+        display: grid;
+        gap: $space-3;
+    }
+
+    &__source-card {
+        display: flex;
+        align-items: center;
+        gap: $space-3;
+        padding: $space-4;
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         color: $text-primary;
         font: inherit;
         text-align: left;
-        text-decoration: none;
         cursor: pointer;
         transition: border-color $transition-fast, background $transition-fast, transform $transition-fast;
 
         &:hover {
             background: var(--surface-2);
             border-color: var(--border-strong);
-            transform: translateY(-2px);
+            transform: translateY(-1px);
         }
 
         &--on {
@@ -86,260 +161,71 @@
         }
     }
 
-    // method-card icon tile: dim by default, accent when its card is selected
-    &__method-icon {
+    &__source-icon {
+        display: grid;
+        place-items: center;
         width: 42px;
         height: 42px;
-        margin-bottom: 13px;
+        flex-shrink: 0;
         border-radius: 11px;
         background: var(--surface-2);
         color: var(--text-dim);
         transition: background $transition-fast, color $transition-fast;
+
+        svg { display: block; }
     }
-    &__method-card--on &__method-icon {
+
+    &__source-card--on &__source-icon {
         background: var(--accent-bg);
         color: var(--accent-bright);
     }
 
-    &__method-title {
-        display: block;
-        font-size: 14px;
-        font-weight: $font-weight-semibold;
+    &__source-text {
+        display: grid;
+        gap: 3px;
+
+        strong {
+            font-size: 14px;
+            font-weight: $font-weight-semibold;
+        }
+
+        span {
+            color: var(--text-faint);
+            font-size: 12px;
+            line-height: 1.45;
+        }
     }
 
-    &__method-sub {
-        display: block;
-        margin-top: 4px;
-        color: var(--text-faint);
-        font-size: 12px;
-        line-height: 1.45;
+    // ── Step 2: source-specific pane ────────────────────────
+    &__pane {
+        display: grid;
+        gap: $space-4;
     }
 
-    // Icon tiles: grid + place-items is the most reliable centering (no inline
-    // baseline/descender offset that inline-flex leaves behind), and a block SVG
-    // drops the phantom inline gap — that's what left the glyphs off-center.
-    &__method-icon,
-    &__connect-icon,
-    &__deploy-icon {
+    &__pane-actions {
+        display: flex;
+        gap: $space-2;
+    }
+
+    &__inline-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: $space-4;
+        padding-top: $space-2;
+        border-top: 1px solid $border-subtle;
+    }
+
+    &__connect-icon {
         display: grid;
         place-items: center;
-        flex-shrink: 0;
-
-        svg { display: block; }
-    }
-    &__provider-title svg {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-
-    &__connect-icon,
-    &__deploy-icon {
         width: 36px;
         height: 36px;
+        flex-shrink: 0;
         border-radius: $radius-lg;
         background: $bg-elevated;
         color: $accent-primary;
-    }
 
-    &__wizard {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
-        gap: $space-4;
-        align-items: start;
-    }
-
-    &__panel {
-        background: $bg-card;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-    }
-
-    &__provider-panel,
-    &__review-panel {
-        display: grid;
-        gap: $space-5;
-        padding: $space-5;
-    }
-
-    &__review-panel {
-        position: sticky;
-        top: $space-4;
-    }
-
-    &__section-heading {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-
-        svg {
-            color: $accent-primary;
-        }
-
-        h2 {
-            margin: 0;
-            color: $text-primary;
-            font-size: $font-size-base;
-            font-weight: $font-weight-semibold;
-        }
-    }
-
-    &__section-docs {
-        margin-left: auto;
-    }
-
-    // Per-source explainer strip above the selected source's form.
-    &__source-guide {
-        margin: $space-3 0 $space-4;
-        padding: $space-3 $space-4;
-        border: 1px solid $border-color;
-        border-radius: $radius-md;
-        background: $bg-elevated;
-
-        p {
-            margin: 0 0 $space-2;
-            font-size: $font-size-sm;
-            color: $text-secondary;
-        }
-    }
-
-    &__source-guide-what {
-        color: $text-primary !important;
-        font-weight: $font-weight-medium;
-    }
-
-    &__source-guide-need strong {
-        color: $text-secondary;
-    }
-
-    &__source-guide-steps {
-        margin: 0;
-        padding-left: $space-4;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-
-        li {
-            font-size: $font-size-sm;
-            color: $text-tertiary;
-        }
-    }
-
-    &__template-example {
-        margin-left: $space-2;
-        padding: 1px $space-2;
-        border-radius: $radius-sm;
-        background: rgba($accent-primary-raw, 0.15);
-        color: $accent-primary;
-        font-size: $font-size-xs;
-        font-weight: $font-weight-medium;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        vertical-align: middle;
-    }
-
-    &__provider-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: $space-3;
-    }
-
-    &__provider-card {
-        position: relative;
-        display: grid;
-        gap: $space-3;
-        min-height: 160px;
-        padding: $space-4;
-        background: $bg-elevated;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-        color: $text-primary;
-        text-align: left;
-        cursor: pointer;
-        transition: border-color $transition-fast, background $transition-fast, transform $transition-fast;
-
-        &:hover {
-            background: $bg-hover;
-            border-color: $border-hover;
-            transform: translateY(-1px);
-        }
-
-        &--active {
-            border-color: rgba(20, 184, 166, 0.55);
-            box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.18);
-        }
-
-        > svg {
-            position: absolute;
-            top: $space-4;
-            right: $space-4;
-            color: $success;
-        }
-
-        small {
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-            line-height: 1.5;
-        }
-    }
-
-    &__provider-meta {
-        width: max-content;
-        padding: 3px $space-2;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-full;
-        color: $text-tertiary;
-        font-size: $font-size-xs;
-        line-height: 1;
-    }
-
-    &__provider-title {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-
-        svg {
-            color: $accent-primary;
-        }
-
-        strong {
-            font-size: $font-size-base;
-            font-weight: $font-weight-semibold;
-        }
-    }
-
-    &__connect-box {
-        display: grid;
-        gap: $space-4;
-        padding: $space-4;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
-        border: 1px solid $border-subtle;
-        border-radius: $radius-lg;
-    }
-
-    &__connect-heading {
-        display: flex;
-        align-items: center;
-        gap: $space-3;
-
-        strong,
-        span {
-            display: block;
-        }
-
-        strong {
-            color: $text-primary;
-            font-size: $font-size-sm;
-            font-weight: $font-weight-semibold;
-        }
-
-        span {
-            margin-top: 2px;
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-            line-height: 1.4;
-        }
+        svg { display: block; }
     }
 
     &__github-account {
@@ -395,7 +281,7 @@
     &__repo-list {
         display: grid;
         gap: $space-2;
-        max-height: 430px;
+        max-height: 380px;
         overflow-y: auto;
         padding-right: $space-1;
     }
@@ -478,7 +364,7 @@
         padding: $space-8 $space-4;
         text-align: center;
 
-        h2 {
+        h3 {
             margin: 0;
             color: $text-primary;
             font-size: $font-size-lg;
@@ -500,24 +386,23 @@
         justify-content: center;
         gap: $space-2;
         flex-wrap: wrap;
-
-        &--left {
-            justify-content: flex-start;
-        }
     }
 
     &__template-list {
         display: grid;
         gap: $space-2;
+        max-height: 420px;
+        overflow-y: auto;
+        padding-right: $space-1;
     }
 
     &__template-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
         gap: $space-3;
         width: 100%;
-        min-height: 86px;
+        min-height: 72px;
         padding: $space-3;
         background: $bg-elevated;
         border: 1px solid $border-subtle;
@@ -571,28 +456,165 @@
 
         em {
             font-style: normal;
+            font-family: $font-mono;
         }
     }
 
-    &__template-badges {
+    // Mini app gallery: icon + title tiles, ~4 across. Collapsed to two rows;
+    // expands into a scrollable, searchable grid.
+    &__tpl-gallery {
+        display: grid;
+        gap: $space-3;
+    }
+
+    &__tpl-gallery-search {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: $space-2;
+        padding: $space-2;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+
+        > svg {
+            margin-left: $space-2;
+            color: $text-tertiary;
+        }
+    }
+
+    &__tpl-gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: $space-3;
+
+        &--scroll {
+            max-height: 440px;
+            overflow-y: auto;
+            padding-right: $space-1;
+        }
+    }
+
+    &__tpl-tile {
+        position: relative;
+        display: grid;
+        place-items: center;
+        gap: $space-2;
+        min-height: 120px;
+        padding: $space-4 $space-3;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        color: $text-primary;
+        font: inherit;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color $transition-fast, background $transition-fast, transform $transition-fast;
+
+        &:hover {
+            background: $bg-hover;
+            border-color: $border-hover;
+            transform: translateY(-2px);
+        }
+
+        &--active {
+            border-color: rgba(20, 184, 166, 0.55);
+            box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.18);
+        }
+    }
+
+    &__tpl-tile-icon {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: $radius-lg;
+        background: var(--surface-2);
+        color: var(--accent-bright);
+        overflow: hidden;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 8px;
+        }
+
+        svg { display: block; }
+    }
+
+    &__tpl-tile-name {
+        max-width: 100%;
+        color: $text-primary;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    &__tpl-tile-badge {
+        position: absolute;
+        top: $space-2;
+        right: $space-2;
+    }
+
+    &__tpl-gallery-toggle {
+        justify-self: start;
+        padding: $space-2 0;
+        background: none;
+        border: none;
+        color: $accent-primary;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+        cursor: pointer;
+
+        &:hover { text-decoration: underline; }
+    }
+
+    // "Bring your own" — deploy any repo with a serverkit.yml / compose file.
+    &__byo {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        gap: $space-1;
-        flex-wrap: wrap;
-        max-width: 210px;
+        justify-content: space-between;
+        gap: $space-3;
+        padding: $space-4;
+        background: $bg-elevated;
+        border: 1px dashed $border-subtle;
+        border-radius: $radius-md;
+
+        div {
+            min-width: 0;
+        }
+
+        strong {
+            display: block;
+            color: $text-secondary;
+            font-size: $font-size-sm;
+            font-weight: $font-weight-semibold;
+        }
 
         span {
-            padding: 3px $space-2;
-            background: rgba(20, 184, 166, 0.1);
-            border: 1px solid rgba(20, 184, 166, 0.22);
-            border-radius: $radius-full;
-            color: $accent-primary;
+            display: block;
+            margin-top: 2px;
+            color: $text-tertiary;
             font-size: $font-size-xs;
-            line-height: 1;
+            line-height: 1.4;
         }
     }
 
+    &__pane-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+        text-decoration: none;
+
+        &:hover { color: $accent-primary; }
+    }
+
+    // ── Fields (shared) ─────────────────────────────────────
     &__field {
         display: grid;
         gap: $space-2;
@@ -626,107 +648,54 @@
         }
     }
 
-    &__repo-preview,
-    &__summary {
+    &__optional {
+        color: $text-tertiary;
+        font-weight: $font-weight-normal;
+    }
+
+    &__upload-drop {
         display: grid;
-        gap: $space-2;
+        place-items: center;
+        gap: $space-3;
+        min-height: 160px;
+        padding: $space-5;
+        background: $bg-elevated;
+        border: 2px dashed $border-subtle;
+        border-radius: $radius-lg;
+        color: $text-tertiary;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color $transition-fast, background $transition-fast, color $transition-fast;
 
-        > div {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: $space-3;
-            min-width: 0;
-            padding: $space-3;
-            background: $bg-elevated;
-            border: 1px solid $border-subtle;
-            border-radius: $radius-md;
-        }
-
-        span,
-        strong {
-            display: block;
+        &:hover,
+        &--over {
+            background: var(--accent-bg, rgba(109, 124, 255, 0.08));
+            border-color: var(--accent-dim, $accent-primary);
+            color: $text-secondary;
         }
 
         span {
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-            line-height: 1.4;
-        }
-
-        strong {
-            min-width: 0;
-            color: $text-primary;
             font-size: $font-size-sm;
-            font-weight: $font-weight-semibold;
-            overflow-wrap: anywhere;
-            text-align: right;
-        }
-    }
-
-    &__repo-preview {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-
-        > div {
-            display: grid;
-            justify-content: stretch;
-        }
-
-        strong {
-            text-align: left;
-        }
-    }
-
-    &__deploy-card {
-        display: flex;
-        gap: $space-3;
-        align-items: flex-start;
-
-        h2 {
-            margin: 0;
-            color: $text-primary;
-            font-size: $font-size-lg;
-            font-weight: $font-weight-semibold;
-        }
-
-        p {
-            margin: $space-1 0 0;
-            color: $text-tertiary;
-            font-size: $font-size-sm;
-            line-height: 1.5;
-        }
-    }
-
-    &__deploy-icon {
-        background: rgba(16, 185, 129, 0.1);
-        color: $success;
-    }
-
-    &__flow {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr auto 1fr;
-        align-items: center;
-        gap: $space-2;
-        color: $text-tertiary;
-
-        > div {
-            display: grid;
-            place-items: center;
-            gap: $space-2;
-            min-height: 68px;
-            background: $bg-elevated;
-            border: 1px solid $border-subtle;
-            border-radius: $radius-md;
-            color: $text-secondary;
-            font-size: $font-size-xs;
             font-weight: $font-weight-medium;
         }
+
+        input {
+            display: none;
+        }
     }
 
-    &__manifest-card {
+    // ── Step 3: review ──────────────────────────────────────
+    &__fields-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: $space-4;
+    }
+
+    &__manifest-card,
+    &__env-card {
         display: grid;
         gap: $space-3;
-        padding: $space-3;
+        padding: $space-4;
         background: $bg-elevated;
         border: 1px solid $border-subtle;
         border-radius: $radius-md;
@@ -757,6 +726,24 @@
             font-weight: $font-weight-semibold;
             text-transform: capitalize;
         }
+    }
+
+    &__env-head {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        color: $text-secondary;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+
+        svg { color: $accent-primary; }
+    }
+
+    &__env-note {
+        margin: 0;
+        color: $text-tertiary;
+        font-size: $font-size-xs;
+        line-height: 1.45;
     }
 
     &__manifest-grid {
@@ -934,6 +921,54 @@
         }
     }
 
+    &__toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-4;
+        min-height: 72px;
+        padding: $space-3;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+
+        label,
+        span {
+            display: block;
+        }
+
+        label {
+            color: $text-secondary;
+            font-size: $font-size-sm;
+            font-weight: $font-weight-medium;
+        }
+
+        span {
+            margin-top: 3px;
+            color: $text-tertiary;
+            font-size: $font-size-xs;
+            line-height: 1.4;
+        }
+    }
+
+    &__note {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        min-height: 40px;
+        padding: 0 $space-3;
+        background: $bg-elevated;
+        border: 1px solid $border-subtle;
+        border-radius: $radius-md;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+
+        svg {
+            color: $text-secondary;
+            flex-shrink: 0;
+        }
+    }
+
     &__advanced-toggle {
         display: flex;
         align-items: center;
@@ -976,138 +1011,29 @@
         padding-top: $space-1;
     }
 
-    &__two-col {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: $space-4;
+    &__advanced-note {
+        margin: 0;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+        line-height: 1.5;
     }
 
-    &__toggle {
+    // ── Footer nav ──────────────────────────────────────────
+    &__footer {
         display: flex;
-        align-items: center;
         justify-content: space-between;
-        gap: $space-4;
-        min-height: 72px;
-        padding: $space-3;
-        background: $bg-elevated;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-
-        label,
-        span {
-            display: block;
-        }
-
-        label {
-            color: $text-secondary;
-            font-size: $font-size-sm;
-            font-weight: $font-weight-medium;
-        }
-
-        span {
-            margin-top: 3px;
-            color: $text-tertiary;
-            font-size: $font-size-xs;
-            line-height: 1.4;
-        }
-    }
-
-    &__notes {
-        display: grid;
         gap: $space-2;
-    }
-
-    &__note {
-        display: flex;
-        align-items: flex-start;
-        gap: $space-2;
-        padding: $space-3;
-        background: $bg-elevated;
-        border: 1px solid $border-subtle;
-        border-radius: $radius-md;
-        color: $text-tertiary;
-        font-size: $font-size-xs;
-        line-height: 1.45;
-
-        svg {
-            margin-top: 1px;
-            color: $text-secondary;
-            flex-shrink: 0;
-        }
-    }
-
-    &__actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: $space-2;
-        padding-top: $space-1;
-    }
-
-    &__upload-drop {
-        display: grid;
-        place-items: center;
-        gap: $space-3;
-        min-height: 160px;
-        padding: $space-5;
-        background: $bg-elevated;
-        border: 2px dashed $border-subtle;
-        border-radius: $radius-lg;
-        color: $text-tertiary;
-        text-align: center;
-        cursor: pointer;
-        transition: border-color $transition-fast, background $transition-fast, color $transition-fast;
-
-        &:hover,
-        &--over {
-            background: var(--accent-bg, rgba(109, 124, 255, 0.08));
-            border-color: var(--accent-dim, $accent-primary);
-            color: $text-secondary;
-        }
-
-        span {
-            font-size: $font-size-sm;
-            font-weight: $font-weight-medium;
-        }
-
-        input {
-            display: none;
-        }
-    }
-}
-
-@media (max-width: $breakpoint-xl) {
-    .new-service-page {
-        &__provider-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-}
-
-@media (max-width: $breakpoint-lg) {
-    .new-service-page {
-        &__wizard {
-            grid-template-columns: 1fr;
-        }
-
-        &__review-panel {
-            position: static;
-        }
+        padding-top: $space-2;
+        border-top: 1px solid $border-subtle;
     }
 }
 
 @media (max-width: $breakpoint-md) {
     .new-service-page {
-        &__header {
-            display: grid;
-        }
-
-        &__method-grid,
-        &__provider-grid,
-        &__repo-preview,
-        &__repo-search,
-        &__template-row,
+        &__inline-fields,
+        &__fields-grid,
         &__manifest-grid,
-        &__two-col {
+        &__repo-search {
             grid-template-columns: 1fr;
         }
 
@@ -1121,22 +1047,11 @@
             }
         }
 
-        &__flow {
-            grid-template-columns: 1fr;
-
-            > svg {
-                justify-self: center;
-                transform: rotate(90deg);
-            }
-        }
-
-        &__actions {
-            flex-direction: column-reverse;
-
+        &__footer {
             .btn,
             button,
             a {
-                width: 100%;
+                flex: 1;
             }
         }
     }

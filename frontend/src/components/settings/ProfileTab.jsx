@@ -3,9 +3,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const ProfileTab = () => {
     const { user, updateUser } = useAuth();
+    const register = useSettingFocus();
     const [formData, setFormData] = useState({
         username: '',
         email: ''
@@ -50,7 +52,7 @@ const ProfileTab = () => {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="settings-form">
+            <form onSubmit={handleSubmit} {...register('profile-username', 'settings-form')}>
                 <div className="form-group">
                     <Label>Username</Label>
                     <Input

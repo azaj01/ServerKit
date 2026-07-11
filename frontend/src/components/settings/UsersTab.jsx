@@ -7,8 +7,10 @@ import LoginLinksSection from './LoginLinksSection';
 import Modal from '../Modal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const UsersTab = () => {
+    const register = useSettingFocus();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -123,7 +125,7 @@ const UsersTab = () => {
 
             {error && <div className="error-message">{error}</div>}
 
-            <div className="users-table-container">
+            <div {...register('users-management', 'users-table-container')}>
                 <table className="users-table">
                     <thead>
                         <tr>

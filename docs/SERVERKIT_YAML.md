@@ -102,6 +102,7 @@ environment.
 | `type` | all | `web` / `worker` / `static` / `docker` → Application; `postgres` / `mysql` / `mariadb` / `redis` → ManagedDatabase. |
 | `runtime` | app | Build runtime hint (`python`, `node`, `static`, `docker`). |
 | `buildCommand` / `startCommand` | app | Buildpack command overrides. |
+| `dockerfilePath` | app | Build the service from this Dockerfile in the repository (repo root = build context). Mutually exclusive with `image` and `containers` — see [Building from a Dockerfile](#building-from-a-dockerfile). |
 | `port` | app | Container listen port (1–65535). Keeps its HTTP/nginx semantics. |
 | `ports[]` | app | Typed L4 publishes (appliance tier) — see [Ports](#ports-appliance-tier). |
 | `healthCheckPath` | app | Used for health checks and the zero-downtime restart gate. |
@@ -202,6 +203,43 @@ mountpoint** of the named docker volume — so the backup captures the real byte
 not the empty in-container path. `schedule` is one of
 `hourly` / `daily` / `weekly` / `monthly`; `retain` is the number of backups to
 keep.
+
+## Building from a Dockerfile
+
+A service has exactly one image source: a buildpack (`runtime` +
+`buildCommand`/`startCommand`), a ready-made `image:`, or a **Dockerfile in the
+repository**. `dockerfilePath` is the third path — the monorepo story: one
+repo, several services, each built from its own Dockerfile.
+
+```yaml
+services:
+  - name: api-worker
+    type: worker
+    dockerfilePath: services/api/Dockerfile
+    autoDeploy: true
+  - name: mail-worker
+    type: worker
+    dockerfilePath: services/mail/Dockerfile
+    autoDeploy: true
+```
+
+- **Context is the repo root.** The path is relative to the repository;
+  absolute paths and `..` segments are validation errors. Every service built
+  from the same repo shares the same context, so Dockerfiles can `COPY` shared
+  code.
+- **Source resolution.** Apply clones the project's repository into the managed
+  apps directory and writes the same git-deployment + build config the import
+  wizard does — the normal deploy pipeline (including the push webhook and
+  per-service `autoDeploy`) takes over from there. The repository is the stored
+  manifest's provenance (recorded at import / on push), or, failing that, the
+  git deployment of a sibling app in the project. Neither on record is a
+  plan-time **blocker** (`dockerfile_no_source`).
+- **Mutually exclusive** with `image:` (build from source *or* bring an image)
+  and with `containers:` (unit containers declare ready-made images).
+- **Panel host only for now.** Like the other appliance features, a Dockerfile
+  build on a remote `server:` target is a plan-time blocker (`remote_target`).
+- **Drift.** A changed `dockerfilePath` shows up in the plan as an app update
+  and rewrites the build config on apply.
 
 ## BYO image & host requirements
 

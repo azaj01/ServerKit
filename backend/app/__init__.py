@@ -449,6 +449,10 @@ def create_app(config_name=None):
     from app.api.plugins import plugins_bp
     app.register_blueprint(plugins_bp, url_prefix='/api/v1/plugins')
 
+    # Register blueprints - Unified entity omnisearch
+    from app.api.search import search_bp
+    app.register_blueprint(search_bp, url_prefix='/api/v1/search')
+
     # Register blueprints - Modules (core-vertical toggles)
     from app.api.modules import modules_bp
     app.register_blueprint(modules_bp, url_prefix='/api/v1/modules')

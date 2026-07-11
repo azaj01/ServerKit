@@ -1,0 +1,100 @@
+import { Link } from 'react-router-dom';
+import { Check, Link2, Rocket } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useTopbarActions } from '@/hooks/useTopbarActions';
+import DocsLink from '@/components/DocsLink';
+import { useNewServiceForm } from './useNewServiceForm';
+import SourceStep from './SourceStep';
+import ConnectStep from './ConnectStep';
+import ReviewStep from './ReviewStep';
+
+const STEPS = [
+    { n: 1, label: 'Source' },
+    { n: 2, label: 'Connect' },
+    { n: 3, label: 'Review' },
+];
+
+// New Service — a real three-step wizard (plan 43 Phase 3). Step state and
+// submit live in the form hook; each step is a presentational component.
+const NewService = () => {
+    const form = useNewServiceForm();
+    const { step, setStep, submitting, canSubmit, canProceedFromConnect, handleSubmit } = form;
+
+    useTopbarActions(() =>
+        <>
+            <DocsLink to="deploySources" />
+            <Button type="button" variant="outline" size="sm" asChild>
+                <Link to="/settings/connections">
+                    <Link2 size={16} />
+                    Connections
+                </Link>
+            </Button>
+        </>,
+        []
+    );
+
+    return (
+        <div className="sk-tabgroup__inner new-service-page">
+            {/* Slim stepper header */}
+            <nav className="new-service-page__stepper" aria-label="Progress">
+                {STEPS.map(({ n, label }) => {
+                    const state = step === n ? 'current' : step > n ? 'done' : 'todo';
+                    return (
+                        <button
+                            key={n}
+                            type="button"
+                            className={`new-service-page__stepper-item new-service-page__stepper-item--${state}`}
+                            onClick={() => { if (step > n) setStep(n); }}
+                            disabled={step < n}
+                            aria-current={step === n ? 'step' : undefined}
+                        >
+                            <span className="new-service-page__stepper-dot">
+                                {step > n ? <Check size={14} /> : n}
+                            </span>
+                            <span className="new-service-page__stepper-label">{label}</span>
+                        </button>
+                    );
+                })}
+            </nav>
+
+            <form className="new-service-page__wizard-col" onSubmit={handleSubmit}>
+                {step === 1 && <SourceStep form={form} />}
+                {step === 2 && <ConnectStep form={form} />}
+                {step === 3 && <ReviewStep form={form} />}
+
+                {/* Footer nav — Source advances on card click, so it shows only Cancel. */}
+                <div className="new-service-page__footer">
+                    {step === 1 ? (
+                        <Button type="button" variant="outline" asChild>
+                            <Link to="/services">Cancel</Link>
+                        </Button>
+                    ) : (
+                        <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
+                            Back
+                        </Button>
+                    )}
+
+                    {step === 2 && (
+                        <Button
+                            type="button"
+                            onClick={() => setStep(3)}
+                            disabled={!canProceedFromConnect}
+                        >
+                            Continue
+                        </Button>
+                    )}
+                    {step === 3 && (
+                        <Button type="submit" disabled={!canSubmit || submitting}>
+                            <Rocket size={16} />
+                            {submitting
+                                ? (form.sourceMode === 'local' ? 'Registering…' : form.sourceMode === 'upload' ? 'Uploading…' : 'Deploying…')
+                                : (form.sourceMode === 'local' ? 'Register service' : form.sourceMode === 'upload' ? 'Upload & deploy' : 'Deploy service')}
+                        </Button>
+                    )}
+                </div>
+            </form>
+        </div>
+    );
+};
+
+export default NewService;

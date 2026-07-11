@@ -108,6 +108,7 @@ MANIFEST_SCHEMA: Dict[str, Any] = {
                 "runtime": {"type": "string"},
                 "buildCommand": {"type": "string"},
                 "startCommand": {"type": "string"},
+                "dockerfilePath": {"type": "string", "minLength": 1},
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
                 "ports": {"type": "array", "items": {"$ref": "#/definitions/portDecl"}},
                 "image": {"type": "string"},
@@ -464,6 +465,23 @@ class ManifestSpecService:
                                                              or svc.get('host_requirements'))
         containers = cls._normalize_containers(svc, prefix, errors)
 
+        # Dockerfile build: the service is built from a Dockerfile in the
+        # repository (repo root = build context). Exactly one image source per
+        # service — a declared path excludes BYO `image` and `containers`.
+        dockerfile_path = cls._alias(svc, 'dockerfilePath', 'dockerfile_path')
+        if dockerfile_path:
+            if kind == 'database':
+                errors.append(f'{prefix}: `dockerfilePath` does not apply to database services')
+            if image:
+                errors.append(f'{prefix}: `dockerfilePath` and `image` are mutually exclusive '
+                              '— build from source or bring an image, not both')
+            if containers:
+                errors.append(f'{prefix}: `dockerfilePath` cannot be combined with `containers` '
+                              '— unit containers declare ready-made images')
+            if not cls._safe_relative_path(dockerfile_path):
+                errors.append(f'{prefix}: `dockerfilePath` must be a relative path inside the '
+                              'repository (no leading `/`, no `..`)')
+
         return {
             'name': name,
             'type': stype,
@@ -473,6 +491,7 @@ class ManifestSpecService:
             'runtime': svc.get('runtime'),
             'build_command': cls._alias(svc, 'buildCommand', 'build_command'),
             'start_command': cls._alias(svc, 'startCommand', 'start_command'),
+            'dockerfile_path': dockerfile_path or None,
             'port': svc.get('port'),
             'ports': ports,
             'bootstrap': bootstrap,
@@ -794,6 +813,17 @@ class ManifestSpecService:
         }
 
     # -- helpers ------------------------------------------------------------
+
+    @staticmethod
+    def _safe_relative_path(path: Any) -> bool:
+        """True for a repo-relative path with no traversal — rejects absolute
+        paths (POSIX or drive-letter) and any `..` segment."""
+        if not isinstance(path, str) or not path.strip():
+            return False
+        p = path.replace('\\', '/')
+        if p.startswith('/') or re.match(r'^[A-Za-z]:', p):
+            return False
+        return not any(part == '..' for part in p.split('/'))
 
     @staticmethod
     def _alias(obj: Dict[str, Any], camel: str, snake: str, default: Any = None) -> Any:

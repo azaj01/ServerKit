@@ -20,6 +20,61 @@ awaiting a stable release:
 
 ### Added
 
+- **Command palette is now an everything-search (F1 / Ctrl+Shift+P / Ctrl+K)** —
+  the palette went from a page-jumper to omnisearch. Type to search across pages,
+  individual **settings** (the actual card, e.g. "Require two-factor for all
+  members" or "SMTP", not just the tab), runnable **actions** (`>` prefix — New
+  Service, Add Server, Toggle theme, Sign out…), live **entities** (services,
+  servers, domains, databases, WordPress sites, cron jobs, extensions, vaults —
+  via a new authz-aware `GET /api/v1/search`), and **docs** (`?` prefix). Results
+  rank by match quality plus your own usage (per-user frecency), an empty query
+  shows Recently used, and pressing Enter on a settings result lands you on the
+  exact card — scrolled into view and briefly highlighted. VS Code's F1 and
+  Ctrl/Cmd+Shift+P now open it alongside the original Ctrl/Cmd+K. Results are
+  filtered by the same admin + workspace-nav rules as the sidebar, so a member's
+  palette never surfaces admin-only pages, settings, or actions.
+- **One-click GitHub setup (GitHub App manifest flow)** — connecting GitHub no
+  longer means hand-registering an OAuth app and pasting a client id + secret.
+  An admin clicks **Set up in one click** in Settings → Connections; ServerKit
+  hands GitHub an app *manifest*, the admin confirms once on github.com, and
+  GitHub returns freshly-minted credentials that are stored **locally on the
+  server** (client id/secret in settings, private key encrypted) — nothing
+  secret ships in the open-source build. Setup then chains straight into the
+  app's install screen, which grants repo access and authorizes in one hop. The
+  connect flow routes through the app install URL, and repositories are listed
+  per-installation (GitHub Apps don't use `/user/repos`). Bringing your own
+  OAuth app still works, tucked under an "Advanced" disclosure. New endpoints:
+  `GET/POST /api/v1/source-connections/admin/github/app-manifest[/complete]`.
+- **New Service is a real three-step wizard, and Templates is one catalog** —
+  `/services/new` was a form-wall that rendered everything at once (a "Ready to
+  Import" rail of placeholder rows, a decorative Connect→Detect→Deploy strip,
+  two boilerplate note boxes). It is now a slim stepper — **Source → Connect →
+  Review** — in one centered column; nothing renders until it has real data, and
+  the `?template=`/`?source=` deep links land preloaded on Connect. Deploy
+  templates are no longer a hardcoded frontend constant: they live in the backend
+  catalog as `kind: repo` YAML entries (starting with AgentSite) that blend into
+  the one Templates grid alongside the 105 one-click templates, each badged
+  **Git repo** vs **One-click**. The Templates page adopts the Marketplace
+  treatment — topbar search + a filter drawer (category, type, sort) with a row
+  of quick category chips — replacing the stacked "Deploy templates" section and
+  the "More +95" chip wall. A new `GET /api/v1/templates/<id>/manifest` inspects
+  a repo template's **public** repository (no clone, no OAuth) for deploy
+  manifests and falls back to the template's declared hints, clearly labeled.
+  The old `#deploy-templates` anchor redirects to the repo-filtered grid.
+- **`serverkit.yaml` — build services from a Dockerfile (`dockerfilePath`)** —
+  a manifest service can now declare `dockerfilePath: services/api/Dockerfile`
+  as a third image source next to buildpacks and BYO `image:`. This is the
+  monorepo path: one repository, several services, each built from its own
+  Dockerfile with the repo root as the shared build context. Apply clones the
+  project's repository (from the stored manifest's provenance, or a sibling
+  app's git deployment) and writes the same git-deployment + build config the
+  import wizard does, so the existing deploy pipeline — push webhook and
+  per-service `autoDeploy` included — takes over unchanged. Relative paths only
+  (`..`/absolute are validation errors); mutually exclusive with `image` and
+  `containers`; a project with no repository on record is a plan-time blocker
+  (`dockerfile_no_source`), and remote targets refuse like the other appliance
+  features. Scaffold round-trips it, and the import wizard seeds
+  `build_method: dockerfile` from the manifest.
 - **Appliance tier for `serverkit.yaml` — typed L4 ports + a plan-time blockers
   rail** — a service can now declare raw `ports[]` (`{port, containerPort,
   protocol: tcp|udp, expose: public|local}`) as an escape hatch for

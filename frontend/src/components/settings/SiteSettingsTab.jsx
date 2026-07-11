@@ -5,8 +5,10 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ds';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const SiteSettingsTab = ({ onDevModeChange }) => {
+    const register = useSettingFocus();
     const [settings, setSettings] = useState({
         registration_enabled: false,
         dev_mode: false
@@ -269,7 +271,7 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                 <div className={`message ${message.type}`}>{message.text}</div>
             )}
 
-            <div className="settings-card">
+            <div {...register('site-registration', 'settings-card')}>
                 <h3>User Registration</h3>
                 <p>Allow new users to create accounts on the login page.</p>
 
@@ -290,7 +292,7 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('site-app-ports', 'settings-card')}>
                 <h3>Managed App Ports</h3>
                 <p>Control the host port assigned to new WordPress sites and other managed apps.</p>
 
@@ -323,7 +325,7 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('site-base-domains', 'settings-card')}>
                 <h3>Managed Sites — Base Domains</h3>
                 <p>Publish managed sites at <code>&lt;name&gt;.&lt;base-domain&gt;</code>. Register one or more base domains; a new site can be created under any of them, defaulting to the one marked <strong>Default</strong>. Point a wildcard record <code>*.&lt;base&gt;</code> (or per-site A records) at this server.</p>
 
@@ -442,7 +444,7 @@ const SiteSettingsTab = ({ onDevModeChange }) => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('site-dev-mode', 'settings-card')}>
                 <h3>Developer Mode</h3>
                 <p>Enable developer tools and diagnostics.</p>
 

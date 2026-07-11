@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+    History, SlidersHorizontal, LayoutGrid, Zap, Server, Globe,
+    Database, Boxes, Puzzle, BookOpen, KeyRound, Clock, ExternalLink,
+} from 'lucide-react';
 import api from '../services/api';
 import {
     CommandDialog,
@@ -10,175 +14,322 @@ import {
     CommandItem,
 } from '@/components/ui/command';
 import { useContributions } from '../plugins/contributions';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import usePaletteAuthz from '../hooks/usePaletteAuthz';
+import { PALETTE_PAGES } from '../data/palettePages';
+import { SETTINGS_INDEX } from '../data/settingsIndex';
+import { COMMAND_ACTIONS } from '../data/commandActions';
+import { DOCS_LINKS } from '../utils/docsLinks';
+import { scoreItem } from '../utils/paletteScore';
+import { frecencyScore, recordUse, recentIds } from '../utils/paletteFrecency';
 
-const STATIC_PAGES = [
-    { label: 'Services', path: '/services', category: 'Pages', keywords: 'apps containers' },
-    { label: 'Docker', path: '/docker', category: 'Pages', keywords: 'containers images' },
-    { label: 'Databases', path: '/databases', category: 'Pages', keywords: 'mysql postgres sql' },
-    { label: 'Domains', path: '/domains', category: 'Pages', keywords: 'dns nginx records nameserver zones' },
-    { label: 'SSL Certificates', path: '/ssl', category: 'Pages', keywords: 'https tls' },
-    { label: 'Templates', path: '/templates', category: 'Pages', keywords: 'deploy one-click' },
-    { label: 'Deployments', path: '/deployments', category: 'Pages', keywords: 'deploy jobs status logs' },
-    // WordPress palette entries are contributed by the serverkit-wordpress extension.
-    { label: 'Files', path: '/files', category: 'Pages', keywords: 'file manager explorer' },
-    // The FTP Server palette entry is contributed by the serverkit-ftp extension.
-    { label: 'Observability', path: '/monitoring', category: 'Pages', keywords: 'metrics uptime monitoring alerts' },
-    { label: 'Backups', path: '/backups', category: 'Pages', keywords: 'snapshots restore' },
-    { label: 'Cron Jobs', path: '/cron', category: 'Pages', keywords: 'schedule tasks' },
-    { label: 'Security', path: '/security', category: 'Pages', keywords: 'firewall fail2ban' },
-    { label: 'Terminal', path: '/terminal', category: 'Pages', keywords: 'shell ssh console' },
-    { label: 'Servers', path: '/servers', category: 'Pages', keywords: 'fleet agents' },
-    { label: 'Fleet Monitor', path: '/fleet-monitor', category: 'Pages', keywords: 'agents status' },
-    // Status Pages / Cloud Provision / Remote Access palette entries are
-    // contributed by the serverkit-status / serverkit-cloud-provision /
-    // serverkit-remote-access extensions.
-    { label: 'Marketplace', path: '/marketplace', category: 'Pages', keywords: 'extensions plugins' },
-    { label: 'Import a Site', path: '/imports', category: 'Pages', keywords: 'import migrate cpanel directadmin hestia backup adoption move existing' },
-    { label: 'Downloads', path: '/downloads', category: 'Pages', keywords: 'agent installer' },
-    { label: 'Projects', path: '/projects', category: 'Pages', keywords: 'organization group' },
-    { label: 'Shared Variables', path: '/shared-variables', category: 'Pages', keywords: 'env secrets shared' },
-    { label: 'Workspaces', path: '/workspaces', category: 'Pages', keywords: 'organization team' },
-    // GPU Monitor + Workflow Builder command-palette entries are contributed by
-    // the serverkit-gpu / serverkit-workflows builtin extensions.
-    { label: 'Queue', path: '/queue', category: 'Pages', keywords: 'bus operations tasks' },
-    { label: 'Jobs', path: '/jobs', category: 'Pages', keywords: 'scheduler background work' },
-    { label: 'Events', path: '/telemetry', category: 'Pages', keywords: 'telemetry metrics observability system events' },
-    { label: 'Vaults', path: '/vaults', category: 'Pages', keywords: 'secrets tokens credentials vault' },
-    { label: 'Webhooks', path: '/webhooks', category: 'Pages', keywords: 'webhook receive forward delivery' },
-    { label: 'Settings', path: '/settings', category: 'Settings', keywords: 'profile preferences' },
-    { label: 'Settings: Users', path: '/settings/users', category: 'Settings', keywords: 'accounts team' },
-    { label: 'Settings: API Keys', path: '/settings/api', category: 'Settings', keywords: 'tokens access' },
-    { label: 'Settings: SSO', path: '/settings/sso', category: 'Settings', keywords: 'oauth saml login' },
-    { label: 'Settings: Appearance', path: '/settings/appearance', category: 'Settings', keywords: 'theme dark light' },
-    { label: 'Settings: Notifications', path: '/settings/notifications', category: 'Settings', keywords: 'alerts email slack' },
-    { label: 'Settings: System', path: '/settings/system', category: 'Settings', keywords: 'server config' },
+// Group order in the list, plus a per-category icon and a scoring weight so the
+// headline categories (Settings, Pages, Actions) outrank raw entity hits on ties.
+const GROUP_ORDER = [
+    'Recently used', 'Settings', 'Pages', 'Actions', 'Services', 'Servers',
+    'Domains', 'Databases', 'Sites', 'Cron Jobs', 'Vaults', 'Extensions', 'Docs',
+];
+const CATEGORY_ICONS = {
+    'Recently used': History,
+    Settings: SlidersHorizontal,
+    Pages: LayoutGrid,
+    Actions: Zap,
+    Services: Boxes,
+    Servers: Server,
+    Domains: Globe,
+    Databases: Database,
+    Sites: Globe,
+    'Cron Jobs': Clock,
+    Vaults: KeyRound,
+    Extensions: Puzzle,
+    Docs: BookOpen,
+};
+const CATEGORY_WEIGHT = {
+    Settings: 6, Pages: 4, Actions: 4, Services: 2, Servers: 2, Domains: 2,
+    Databases: 2, Sites: 2, 'Cron Jobs': 1, Vaults: 1, Extensions: 1, Docs: 0,
+};
+// Backend /search row `type` -> palette category.
+const ENTITY_CATEGORY = {
+    service: 'Services', app: 'Services', server: 'Servers', domain: 'Domains',
+    database: 'Databases', site: 'Sites', cron: 'Cron Jobs',
+    extension: 'Extensions', plugin: 'Extensions', vault: 'Vaults',
+};
+
+// Docs entries derived from the single docsLinks map (plan 40). Hidden under
+// White Label since they point at the public serverkit.ai docs.
+const DOCS_ENTRIES = [
+    { key: 'deploySources', label: 'Docs: Deploy sources', keywords: 'deploy source repo git' },
+    { key: 'manifest', label: 'Docs: serverkit.yaml manifest', keywords: 'manifest yaml declarative' },
+    { key: 'extensions', label: 'Docs: Extensions', keywords: 'extension plugin' },
+    { key: 'extensionsInstalling', label: 'Docs: Installing extensions', keywords: 'install extension' },
+    { key: 'extensionsBuilding', label: 'Docs: Building extensions', keywords: 'build extension develop sdk' },
+    { key: 'extensionsPublishing', label: 'Docs: Publishing extensions', keywords: 'publish extension registry' },
+    { key: 'extensionsSecurity', label: 'Docs: Extension security', keywords: 'extension security permissions' },
 ];
 
-function fuzzyMatch(text, query) {
-    const lower = text.toLowerCase();
-    const q = query.toLowerCase();
-    const idx = lower.indexOf(q);
-    if (idx === -1) return -1;
-    return idx === 0 ? 2 : 1;
-}
+const PER_GROUP_CAP = 6;
+const OVERALL_CAP = 30;
 
-function scoreItem(item, query) {
-    const labelScore = fuzzyMatch(item.label, query);
-    if (labelScore > 0) return labelScore + 1;
-    const kwScore = fuzzyMatch(item.keywords || '', query);
-    if (kwScore > 0) return kwScore;
-    const pathScore = fuzzyMatch(item.path, query);
-    if (pathScore > 0) return pathScore;
-    return -1;
+// Cap results per category and overall, preserving the incoming (sorted) order.
+function capGroups(items, perGroup = PER_GROUP_CAP, overall = OVERALL_CAP) {
+    const counts = {};
+    const out = [];
+    for (const it of items) {
+        const c = counts[it.category] || 0;
+        if (c >= perGroup) continue;
+        counts[it.category] = c + 1;
+        out.push(it);
+        if (out.length >= overall) break;
+    }
+    return out;
 }
 
 const CommandPalette = ({ open, onClose }) => {
     const [query, setQuery] = useState('');
-    const [dynamicItems, setDynamicItems] = useState([]);
+    const [entityItems, setEntityItems] = useState([]);
     const navigate = useNavigate();
     const { command_palette: pluginPaletteItems } = useContributions();
+    const { logout } = useAuth();
+    const { resolvedTheme, setTheme, whiteLabel } = useTheme();
+    const { allowItem } = usePaletteAuthz();
 
-    // Fetch dynamic items (services/containers + servers) when opened
+    // Prefix modes: `>` = actions only, `?` = docs only, bare = everything.
+    const { mode, term } = useMemo(() => {
+        if (query.startsWith('>')) return { mode: 'actions', term: query.slice(1).trimStart() };
+        if (query.startsWith('?')) return { mode: 'docs', term: query.slice(1).trimStart() };
+        return { mode: 'all', term: query };
+    }, [query]);
+
+    // Reset transient state each time the palette opens/closes.
     useEffect(() => {
-        if (!open) return;
-        setQuery('');
-
-        let cancelled = false;
-        async function fetchDynamic() {
-            const items = [];
-            try {
-                const containers = await api.getContainers();
-                if (!cancelled && Array.isArray(containers)) {
-                    containers.forEach(c => {
-                        items.push({
-                            label: c.name || c.Names?.[0]?.replace(/^\//, ''),
-                            path: `/docker`,
-                            category: 'Containers',
-                            keywords: `${c.Image || ''} ${c.State || ''}`,
-                        });
-                    });
-                }
-            } catch (_e) {} // eslint-disable-line no-empty
-            try {
-                const serverData = await api.getServers();
-                const servers = serverData?.servers || serverData || [];
-                if (!cancelled && Array.isArray(servers)) {
-                    servers.forEach(s => {
-                        items.push({
-                            label: s.name || s.hostname,
-                            path: `/servers/${s.id}`,
-                            category: 'Servers',
-                            keywords: `${s.hostname || ''} ${s.ip_address || ''}`,
-                        });
-                    });
-                }
-            } catch (_e) {} // eslint-disable-line no-empty
-            if (!cancelled) setDynamicItems(items);
-        }
-        fetchDynamic();
-        return () => { cancelled = true; };
+        if (open) setQuery('');
+        else setEntityItems([]);
     }, [open]);
 
-    const allItems = useMemo(() => {
-        const fromPlugins = (pluginPaletteItems || [])
+    // --- Sync providers ------------------------------------------------------
+    const pageItems = useMemo(
+        () => PALETTE_PAGES.filter(allowItem),
+        [allowItem],
+    );
+
+    const settingsItems = useMemo(
+        () => SETTINGS_INDEX
+            .filter((s) => allowItem({ adminOnly: s.adminOnly }))
+            .map((s) => ({
+                id: `setting:${s.id}`,
+                label: s.label,
+                sublabel: s.description || '',
+                keywords: `${s.keywords || ''} ${s.tab} settings`,
+                path: `/settings/${s.tab}?focus=setting:${s.id}`,
+                category: 'Settings',
+            })),
+        [allowItem],
+    );
+
+    const actionItems = useMemo(
+        () => COMMAND_ACTIONS
+            .filter((a) => allowItem({ adminOnly: a.adminOnly }))
+            .map((a) => ({
+                id: `action:${a.id}`,
+                label: a.label,
+                keywords: a.keywords || '',
+                category: 'Actions',
+                suggested: a.suggested,
+                perform: a.perform,
+            })),
+        [allowItem],
+    );
+
+    const pluginItems = useMemo(
+        () => (pluginPaletteItems || [])
             .filter((it) => it && it.label && it.path)
             .map((it) => ({
+                id: `plugin:${it.path}:${it.label}`,
                 label: it.label,
+                keywords: it.keywords || '',
                 path: it.path,
                 category: it.category || 'Extensions',
-                keywords: it.keywords || '',
+            })),
+        [pluginPaletteItems],
+    );
+
+    const docItems = useMemo(() => {
+        if (whiteLabel?.enabled) return [];
+        return DOCS_ENTRIES
+            .filter((d) => DOCS_LINKS[d.key])
+            .map((d) => ({
+                id: `docs:${d.key}`,
+                label: d.label,
+                keywords: d.keywords || '',
+                path: DOCS_LINKS[d.key],
+                category: 'Docs',
+                external: true,
             }));
-        return [...STATIC_PAGES, ...fromPlugins, ...dynamicItems];
-    }, [dynamicItems, pluginPaletteItems]);
+    }, [whiteLabel]);
 
+    // --- Async entity provider (backend /search), debounced 200ms ------------
+    useEffect(() => {
+        if (!open) return undefined;
+        const t = term.trim();
+        if (mode !== 'all' || t.length < 2) {
+            setEntityItems([]);
+            return undefined;
+        }
+        let cancelled = false;
+        const handle = setTimeout(async () => {
+            try {
+                const res = await api.search(t);
+                if (cancelled) return;
+                const rows = res?.results || [];
+                setEntityItems(rows.map((r) => ({
+                    id: `entity:${r.type}:${r.path}`,
+                    label: r.label,
+                    sublabel: r.sublabel || '',
+                    path: r.path,
+                    category: ENTITY_CATEGORY[r.type] || 'Results',
+                })));
+            } catch {
+                if (!cancelled) setEntityItems([]);
+            }
+        }, 200);
+        return () => { cancelled = true; clearTimeout(handle); };
+    }, [open, term, mode]);
+
+    // --- Results -------------------------------------------------------------
     const results = useMemo(() => {
-        if (!query.trim()) return allItems.slice(0, 20);
-        return allItems
-            .map(item => ({ ...item, score: scoreItem(item, query.trim()) }))
-            .filter(item => item.score > 0)
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 20);
-    }, [query, allItems]);
+        const t = term.trim();
 
+        // Empty query: recently used + suggestions (bare), or the full small set
+        // for a prefix mode.
+        if (!t) {
+            if (mode === 'actions') return capGroups(actionItems);
+            if (mode === 'docs') return capGroups(docItems);
+            const pool = [...settingsItems, ...pageItems, ...actionItems, ...pluginItems, ...docItems];
+            const byId = new Map(pool.map((i) => [i.id, i]));
+            const recents = recentIds(8)
+                .map((id) => byId.get(id))
+                .filter(Boolean)
+                .map((i) => ({ ...i, category: 'Recently used' }));
+            const base = recents.length
+                ? recents
+                : pageItems.slice(0, 6).map((i) => ({ ...i, category: 'Recently used' }));
+            const suggestions = actionItems.filter((a) => a.suggested).slice(0, 4);
+            return capGroups([...base, ...suggestions], 8, OVERALL_CAP);
+        }
+
+        const syncPool = mode === 'actions'
+            ? actionItems
+            : mode === 'docs'
+                ? docItems
+                : [...settingsItems, ...pageItems, ...actionItems, ...pluginItems, ...docItems];
+
+        const scored = [];
+        for (const item of syncPool) {
+            const s = scoreItem(item, t);
+            if (s < 0) continue;
+            const weight = CATEGORY_WEIGHT[item.category] ?? 1;
+            const frec = Math.min(frecencyScore(item.id), 10);
+            scored.push({ ...item, _score: s + weight + frec });
+        }
+        if (mode === 'all') {
+            for (const item of entityItems) {
+                // Entities already matched server-side; score locally only for
+                // ordering, and never drop them.
+                const s = scoreItem(item, t);
+                const weight = CATEGORY_WEIGHT[item.category] ?? 1;
+                scored.push({ ...item, _score: (s < 0 ? 0 : s) + weight });
+            }
+        }
+        scored.sort((a, b) => b._score - a._score);
+        return capGroups(scored);
+    }, [term, mode, settingsItems, pageItems, actionItems, pluginItems, docItems, entityItems]);
+
+    // --- Selection -----------------------------------------------------------
     const handleSelect = useCallback((item) => {
-        navigate(item.path);
+        recordUse(item.id);
         onClose();
-    }, [navigate, onClose]);
+        if (typeof item.perform === 'function') {
+            item.perform({
+                navigate,
+                logout,
+                api,
+                toggleTheme: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'),
+            });
+            return;
+        }
+        if (item.external) {
+            window.open(item.path, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        navigate(item.path);
+    }, [navigate, onClose, logout, resolvedTheme, setTheme]);
 
-    // Group results by category
+    // Group + order for rendering.
     const grouped = useMemo(() => {
         const groups = {};
-        results.forEach(item => {
-            if (!groups[item.category]) groups[item.category] = [];
-            groups[item.category].push(item);
-        });
-        return groups;
+        for (const it of results) (groups[it.category] = groups[it.category] || []).push(it);
+        return Object.keys(groups)
+            .sort((a, b) => {
+                const ia = GROUP_ORDER.indexOf(a);
+                const ib = GROUP_ORDER.indexOf(b);
+                return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+            })
+            .map((k) => [k, groups[k]]);
     }, [results]);
 
+    const placeholder = mode === 'actions'
+        ? 'Run an action…'
+        : mode === 'docs'
+            ? 'Search docs…'
+            : 'Search pages, settings, actions, services…';
+
     return (
-        <CommandDialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+        <CommandDialog
+            open={open}
+            shouldFilter={false}
+            label="Command palette"
+            onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}
+        >
             <CommandInput
-                placeholder="Search pages, services, servers..."
+                placeholder={placeholder}
                 value={query}
                 onValueChange={setQuery}
             />
             <CommandList>
                 <CommandEmpty>No results found</CommandEmpty>
-                {Object.entries(grouped).map(([category, items]) => (
-                    <CommandGroup key={category} heading={category}>
-                        {items.map(item => (
-                            <CommandItem
-                                key={`${item.category}-${item.path}-${item.label}`}
-                                value={`${item.label} ${item.path} ${item.keywords || ''}`}
-                                onSelect={() => handleSelect(item)}
-                            >
-                                <span className="command-palette__item-label">{item.label}</span>
-                                <span className="command-palette__item-path">{item.path}</span>
-                            </CommandItem>
-                        ))}
-                    </CommandGroup>
-                ))}
+                {grouped.map(([category, items]) => {
+                    const Icon = CATEGORY_ICONS[category] || LayoutGrid;
+                    return (
+                        <CommandGroup key={category} heading={category}>
+                            {items.map((item) => (
+                                <CommandItem
+                                    key={item.id}
+                                    value={item.id}
+                                    onSelect={() => handleSelect(item)}
+                                >
+                                    <Icon className="command-palette__item-icon" aria-hidden="true" />
+                                    <span className="command-palette__item-body">
+                                        <span className="command-palette__item-label">{item.label}</span>
+                                        {item.sublabel && (
+                                            <span className="command-palette__item-sublabel">{item.sublabel}</span>
+                                        )}
+                                    </span>
+                                    {item.external && (
+                                        <ExternalLink className="command-palette__item-ext" aria-hidden="true" />
+                                    )}
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    );
+                })}
             </CommandList>
+            <div className="command-palette__footer">
+                <span className="command-palette__hint"><kbd>↵</kbd> open</span>
+                <span className="command-palette__hint"><kbd>&gt;</kbd> actions</span>
+                <span className="command-palette__hint"><kbd>?</kbd> docs</span>
+                <span className="command-palette__hint"><kbd>esc</kbd> close</span>
+            </div>
         </CommandDialog>
     );
 };

@@ -6,11 +6,13 @@ import api from '../../services/api';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import EmptyState from '../EmptyState';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 // Admin-only card to enable/disable the optional feature verticals (Email,
 // WordPress). Toggling writes through the /modules API and then refreshes the
 // shared module state so the sidebar + route guards update immediately.
 const ModulesTab = () => {
+    const register = useSettingFocus();
     const { isAdmin } = useAuth();
     const { modules, refresh } = useModules();
     const [saving, setSaving] = useState({});
@@ -49,7 +51,7 @@ const ModulesTab = () => {
             {!modules ? (
                 <EmptyState loading title="Loading modules..." />
             ) : (
-                <div className="settings-card">
+                <div {...register('modules-toggle', 'settings-card')}>
                     {modules.map((mod) => (
                         <div className="settings-row" key={mod.name}>
                             <div className="settings-label">

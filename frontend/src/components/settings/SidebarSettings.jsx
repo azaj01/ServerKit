@@ -10,6 +10,7 @@ import {
     CATEGORY_LABELS
 } from '../sidebarItems';
 import { Button } from '@/components/ui/button';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const PRESET_ICONS = {
     recommended: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
@@ -27,6 +28,7 @@ const SidebarSettings = () => {
     const [hiddenItems, setHiddenItems] = useState(currentConfig.hiddenItems || []);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
+    const register = useSettingFocus();
 
     const toggleableItems = useMemo(
         () => SIDEBAR_ITEMS.filter(item => !item.alwaysVisible),
@@ -94,7 +96,7 @@ const SidebarSettings = () => {
 
     return (
         <div className="sidebar-settings">
-            <div className="settings-section">
+            <div {...register('sidebar-view-profiles', 'settings-section')}>
                 <h3>View Profiles</h3>
                 <p className="settings-section-desc">
                     Choose a preset or build a custom view. Only visible items appear in your sidebar.
@@ -143,7 +145,7 @@ const SidebarSettings = () => {
                 </div>
             </div>
 
-            <div className="settings-section">
+            <div {...register('sidebar-items', 'settings-section')}>
                 <div className="settings-section-header">
                     <h3>Sidebar Items</h3>
                     <span className="sidebar-item-count">{visibleCount} of {SIDEBAR_ITEMS.length} visible</span>

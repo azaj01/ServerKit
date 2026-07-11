@@ -154,8 +154,9 @@ serverkit_uninstall_core() {
     # ---- apt lock-wait drop-in (only the installer creates this) -----------
     _u_try rm -f /etc/apt/apt.conf.d/99-serverkit-lock-wait.conf
 
-    # ---- CLI symlink -------------------------------------------------------
+    # ---- CLI symlink + bash completion -------------------------------------
     _u_try rm -f /usr/local/bin/serverkit
+    _u_try rm -f /etc/bash_completion.d/serverkit
 
     # ---- Code: install dir + blue/green slots + backup snapshot ------------
     _u_info "Removing installation files..."

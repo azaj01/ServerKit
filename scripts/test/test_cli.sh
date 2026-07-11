@@ -561,5 +561,140 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# T17 — migrate-db must forward to the Click verb `db-migrate`. The old code
+# forwarded the wrapper's own name (`migrate-db`), which cli.py never defined,
+# so `serverkit migrate-db` died with "No such command" on every real box.
+# --------------------------------------------------------------------------
+out="$(
+    set -Eeuo pipefail
+    check_installed() { :; }
+    run_cli() { printf 'CLI:%s' "$*"; }
+    cmd_migrate_db 2>&1
+)"
+rc=$?
+if [ "$rc" -eq 0 ] && [ "$out" = "CLI:db-migrate" ]; then
+    ok "migrate-db forwards to the Click verb 'db-migrate'"
+else
+    bad "migrate-db forwarding wrong: rc=$rc out=[$out]"
+fi
+
+# --------------------------------------------------------------------------
+# T18 — panel-CLI forwarding: every Click-only verb must be dispatched (reach
+# run_cli / fail on the missing venv), never rejected as "Unknown command".
+# `completion` is pure output and must succeed anywhere.
+# --------------------------------------------------------------------------
+t="$WORK/t18"; mkdir -p "$t/install"
+unknown=""
+for c in manifest services apps repair login-url support-bundle \
+         db-migrate db-status db-history panel-status panel-doctor; do
+    out="$(SERVERKIT_DIR="$t/install" bash "$CLI" "$c" 2>&1)" || true
+    if printf '%s' "$out" | grep -q 'Unknown command'; then
+        unknown="$unknown $c"
+    fi
+done
+out_comp="$(SERVERKIT_DIR="$t/install" bash "$CLI" completion 2>&1)"
+rc_comp=$?
+if [ -z "$unknown" ] && [ "$rc_comp" -eq 0 ] \
+   && printf '%s' "$out_comp" | grep -q 'complete -F _serverkit serverkit'; then
+    ok "panel-CLI verbs are all dispatched; completion prints a complete(1) script"
+else
+    bad "forwarding gaps:[$unknown] completion rc=$rc_comp"
+fi
+
+# --------------------------------------------------------------------------
+# T19 — parity guards (the drift that hid the migrate-db bug for months):
+#  (a) every top-level Click verb in backend/cli.py is reachable from the
+#      wrapper — as itself, as panel-<verb>, or via a documented exception;
+#  (b) every wrapper dispatch label is offered by `serverkit completion`.
+# --------------------------------------------------------------------------
+cli_cmds="$(awk '
+    /^@cli\.(command|group)\(/ {
+        if (match($0, /\047[a-z0-9-]+\047/)) {
+            print substr($0, RSTART + 1, RLENGTH - 2)
+        } else {
+            pending = 1
+        }
+        next
+    }
+    pending && /^def / {
+        name = $2
+        sub(/\(.*/, "", name)
+        gsub(/_/, "-", name)
+        print name
+        pending = 0
+    }
+' "$SCRIPT_DIR/../../backend/cli.py")"
+dispatch_labels="$(sed -n '/^case "\${1:-help}" in/,/^esac$/p' "$CLI" \
+    | sed -n 's/^[[:space:]]*\([a-z][a-z0-9|-]*\))$/\1/p' | tr '|' '\n')"
+missing=""
+for c in $cli_cmds; do
+    case "$c" in
+        drop-db) continue ;;   # deliberately unexposed (factory-reset is the supported flow)
+    esac
+    if ! printf '%s\n' "$dispatch_labels" | grep -qx "$c" \
+       && ! printf '%s\n' "$dispatch_labels" | grep -qx "panel-$c"; then
+        missing="$missing $c"
+    fi
+done
+if [ -n "$cli_cmds" ] && [ -z "$missing" ]; then
+    ok "every backend/cli.py verb is reachable through the wrapper dispatch"
+else
+    bad "cli.py verbs missing from the wrapper dispatch:[$missing]"
+fi
+comp_words="$(cmd_completion | sed -n 's/^ *commands="\(.*\)"$/\1/p')"
+not_completed=""
+for label in $dispatch_labels; do
+    case "$label" in -*) continue ;; esac
+    if ! printf ' %s ' "$comp_words" | grep -qF " $label "; then
+        not_completed="$not_completed $label"
+    fi
+done
+if [ -n "$comp_words" ] && [ -z "$not_completed" ]; then
+    ok "every dispatch label is offered by 'serverkit completion'"
+else
+    bad "dispatch labels missing from completion:[$not_completed]"
+fi
+
+# --------------------------------------------------------------------------
+# T20 — end-to-end flag passthrough: flags typed after a wrapper command must
+# reach cli.py verbatim (the DO-box live test caught `list-apps --json`
+# silently dropping --json in cmd_list_apps' hand-rolled flag mapping).
+# A fake venv with a recording `python` stub captures exactly what run_cli
+# would execute, through the real executed-mode dispatch.
+# --------------------------------------------------------------------------
+t="$WORK/t20"; mkdir -p "$t/install/backend" "$t/venv/bin"
+printf 'export PATH="%s:$PATH"\n' "$t/venv/bin" > "$t/venv/bin/activate"
+cat > "$t/venv/bin/python" <<'EOF'
+#!/usr/bin/env bash
+printf 'ARGS:%s\n' "$*"
+EOF
+chmod +x "$t/venv/bin/python"
+run_wrapped() {
+    SERVERKIT_DIR="$t/install" SERVERKIT_VENV_DIR="$t/venv" bash "$CLI" "$@" 2>&1
+}
+t20_fail=""
+check_args() {
+    local expected="$1"; shift
+    local out
+    out="$(run_wrapped "$@")" || true
+    printf '%s' "$out" | grep -qF "ARGS:cli.py $expected" \
+        || t20_fail="$t20_fail [$*→$out]"
+}
+check_args 'list-apps --json'                      list-apps --json
+check_args 'list-apps --all'                       list-apps -a
+check_args 'list-users --json'                     list-users --json
+check_args 'list-servers --json'                   list-servers --json
+check_args 'db-migrate'                            migrate-db
+check_args 'manifest plan --project 1 --json'      manifest plan --project 1 --json
+check_args 'services list --json'                  services list --json
+check_args 'status --json'                         panel-status --json
+check_args 'doctor --repair --yes'                 panel-doctor --repair --yes
+if [ -z "$t20_fail" ]; then
+    ok "executed-mode flag passthrough: wrapper commands reach cli.py verbatim"
+else
+    bad "flags lost between wrapper and cli.py:$t20_fail"
+fi
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]

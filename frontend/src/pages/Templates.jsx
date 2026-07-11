@@ -4,7 +4,7 @@ import {
     Search, X, Star, ExternalLink, BookOpen, Container, Globe, BarChart3,
     Database, Shield, Cloud, MessageSquare, Video, Music, Image, Home,
     Code, Server, GitBranch, Workflow, HardDrive, Lock, Users, FileText,
-    Settings, Layers, LayoutTemplate, ChevronDown, Copy, Check, Tag, Cpu,
+    Settings, Layers, LayoutTemplate, Copy, Check, Tag, Cpu,
     Newspaper, TrendingUp, Rocket
 } from 'lucide-react';
 import api from '../services/api';
@@ -12,9 +12,12 @@ import { useToast } from '../contexts/ToastContext';
 import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+    SearchField, FilterDrawer, FilterButton, countActiveFilters,
+} from '@/components/ds';
 import { useTopbarActions } from '@/hooks/useTopbarActions';
 import EmptyState from '../components/EmptyState';
-import { DEPLOY_TEMPLATES } from '@/data/deployTemplates';
 
 // Featured templates (curated list)
 const FEATURED_TEMPLATES = [
@@ -37,6 +40,7 @@ const TEMPLATE_ICONS = {
     'langflow': Workflow,
     'anythingllm': Cpu,
     'librechat': MessageSquare,
+    'agentsite': Cpu,
     // Monitoring
     'uptime-kuma': BarChart3,
     'grafana': BarChart3,
@@ -153,6 +157,17 @@ const TEMPLATE_ICONS = {
     'node-app': Code
 };
 
+const SORT_OPTIONS = [
+    { value: 'featured', label: 'Featured first' },
+    { value: 'name-asc', label: 'Name (A–Z)' },
+    { value: 'name-desc', label: 'Name (Z–A)' },
+];
+
+const KIND_OPTIONS = [
+    { value: 'compose', label: 'One-click' },
+    { value: 'repo', label: 'Git repo' },
+];
+
 const Templates = () => {
     const navigate = useNavigate();
     const toast = useToast();
@@ -165,10 +180,14 @@ const Templates = () => {
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [showInstallModal, setShowInstallModal] = useState(false);
     const [copiedCompose, setCopiedCompose] = useState(false);
-    const [showAllCategories, setShowAllCategories] = useState(false);
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    // Repo-template manifest inspection (populated when a repo detail opens).
+    const [repoManifest, setRepoManifest] = useState(null);
+    const [repoManifestLoading, setRepoManifestLoading] = useState(false);
 
     // Initialize from URL params
-    const selectedCategory = searchParams.get('category') || null;
+    const selectedCategory = searchParams.get('category') || '';
+    const selectedKind = searchParams.get('kind') || '';
     const searchQuery = searchParams.get('search') || '';
     const sortBy = searchParams.get('sort') || 'featured';
     const installTemplateId = searchParams.get('install');
@@ -177,20 +196,30 @@ const Templates = () => {
         loadData();
     }, []);
 
-    // Auto-open install modal if template ID is in URL
+    // Compat: the old `#deploy-templates` anchor (linked from the wizard + docs)
+    // now redirects to the repo-kind filtered view of the unified grid.
+    useEffect(() => {
+        if (window.location.hash === '#deploy-templates' && !selectedKind) {
+            updateFilters({ kind: 'repo' });
+            // Drop the hash so a refresh doesn't re-trigger.
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Auto-open install modal if template ID is in URL (compose templates only;
+    // repo templates deploy through the wizard, never the install modal).
     useEffect(() => {
         if (installTemplateId && templates.length > 0 && !loading) {
-            // WordPress has its own dedicated page
             if (installTemplateId === 'wordpress') {
                 navigate('/wordpress', { replace: true });
                 return;
             }
             const template = templates.find(t => t.id === installTemplateId);
-            if (template) {
+            if (template && template.kind !== 'repo') {
                 handleViewTemplate(template).then(() => {
                     setShowInstallModal(true);
                 });
-                // Clear the install param from URL
                 const newParams = new URLSearchParams(searchParams);
                 newParams.delete('install');
                 setSearchParams(newParams, { replace: true });
@@ -222,10 +251,6 @@ const Templates = () => {
         updateFilters({ search: search || null });
     }
 
-    function setSortByFilter(sort) {
-        updateFilters({ sort });
-    }
-
     function clearAllFilters() {
         setSearchParams(new URLSearchParams());
     }
@@ -247,7 +272,7 @@ const Templates = () => {
 
     async function loadTemplates() {
         try {
-            const result = await api.listTemplates(selectedCategory, searchQuery || null);
+            const result = await api.listTemplates(selectedCategory || null, searchQuery || null);
             setTemplates(result.templates || []);
         } catch (err) {
             console.error('Failed to load templates:', err);
@@ -309,6 +334,8 @@ const Templates = () => {
             chat: MessageSquare,
             'low-code': Workflow,
             workflow: Workflow,
+            website: Globe,
+            deployment: Rocket,
             // Search
             search: Search,
             vector: Database,
@@ -360,14 +387,37 @@ const Templates = () => {
             const result = await api.getTemplate(template.id);
             if (result.template) {
                 setSelectedTemplate(result.template);
+                if (result.template.kind === 'repo') {
+                    loadRepoManifest(result.template);
+                }
             }
         } catch (err) {
             toast.error('Failed to load template details');
         }
     }
 
-    // Hover-reveal Deploy: skip the detail modal, go straight to install
+    // Fetch the repo template's detected manifests / env from the Phase 1
+    // endpoint so the detail body shows real data (or labeled hints).
+    function loadRepoManifest(template) {
+        setRepoManifest(null);
+        setRepoManifestLoading(true);
+        api.inspectTemplateManifest(template.id, template.repo?.branch)
+            .then(data => setRepoManifest(data))
+            .catch(() => setRepoManifest(null))
+            .finally(() => setRepoManifestLoading(false));
+    }
+
+    function deployRepoTemplate(templateId) {
+        navigate(`/services/new?template=${encodeURIComponent(templateId)}`);
+    }
+
+    // Hover-reveal primary action. Repo templates route to the wizard; compose
+    // templates skip the detail modal and go straight to install.
     async function handleDeploy(template) {
+        if (template.kind === 'repo') {
+            deployRepoTemplate(template.id);
+            return;
+        }
         if (template.id === 'wordpress') {
             navigate('/wordpress');
             return;
@@ -388,8 +438,8 @@ const Templates = () => {
     }
 
     // Sort templates
-    function sortTemplates(templates) {
-        const sorted = [...templates];
+    function sortTemplates(list) {
+        const sorted = [...list];
         switch (sortBy) {
             case 'name-asc':
                 return sorted.sort((a, b) => a.name.localeCompare(b.name));
@@ -408,27 +458,62 @@ const Templates = () => {
         }
     }
 
-    const sortedTemplates = sortTemplates(templates);
-    const hasActiveFilters = selectedCategory || searchQuery;
-    const visibleCategories = showAllCategories ? categories : categories.slice(0, 10);
-    const hiddenCategoryCount = Math.max(categories.length - visibleCategories.length, 0);
+    // Kind is filtered client-side (the list endpoint filters category + search).
+    const kindFiltered = selectedKind
+        ? templates.filter(t => (t.kind || 'compose') === selectedKind)
+        : templates;
+    const sortedTemplates = sortTemplates(kindFiltered);
+
+    // One row of the largest categories as quick chips (no spillover button).
+    const quickCategories = categories.slice(0, 8);
+
+    // The active-filter badge counts real filters only (category + kind); sort is
+    // an ordering, not a filter, so it never inflates the count.
+    const activeFilterCount = countActiveFilters({ category: selectedCategory, kind: selectedKind });
+    const hasActiveFilters = Boolean(selectedCategory || selectedKind || searchQuery
+        || (sortBy && sortBy !== 'featured'));
+
+    const filterGroups = [
+        {
+            key: 'kind',
+            label: 'Type',
+            type: 'single',
+            options: KIND_OPTIONS,
+        },
+        {
+            key: 'category',
+            label: 'Category',
+            type: 'single',
+            options: categories.map(cat => ({ value: cat, label: cat })),
+        },
+        {
+            key: 'sort',
+            label: 'Sort',
+            type: 'single',
+            options: SORT_OPTIONS,
+        },
+    ];
+
+    const filterValue = { category: selectedCategory, kind: selectedKind, sort: sortBy };
+
+    function handleFilterChange(next) {
+        updateFilters({
+            category: next.category || null,
+            kind: next.kind || null,
+            sort: next.sort && next.sort !== 'featured' ? next.sort : null,
+        });
+    }
 
     useTopbarActions(() =>
-        <div className="search-box">
-            <Search size={18} className="search-icon" />
-            <Input
-                type="text"
-                placeholder="Search templates..."
+        <>
+            <SearchField
                 value={searchQuery}
-                onChange={(e) => setSearchQueryFilter(e.target.value)}
+                onSearch={setSearchQueryFilter}
+                placeholder="Search templates…"
             />
-            {searchQuery && (
-                <Button variant="ghost" size="icon" className="search-clear" onClick={() => setSearchQueryFilter('')}>
-                    <X size={16} />
-                </Button>
-            )}
-        </div>,
-        [searchQuery]
+            <FilterButton count={activeFilterCount} onClick={() => setFiltersOpen(true)} />
+        </>,
+        [searchQuery, activeFilterCount]
     );
 
     if (loading) {
@@ -441,45 +526,8 @@ const Templates = () => {
 
     return (
         <div className="sk-tabgroup__inner templates-page">
-            {/* Deploy templates — manifest-ready repos, shared with the New
-                Service wizard's "Deploy Template" source. */}
-            <section id="deploy-templates" className="deploy-templates-section">
-                <div className="deploy-templates-section__head">
-                    <div>
-                        <h3>Deploy templates</h3>
-                        <p>Manifest-ready repositories that prefill the New Service wizard.</p>
-                    </div>
-                </div>
-                <div className="deploy-templates-list">
-                    {DEPLOY_TEMPLATES.map(template => (
-                        <div key={template.id} className="deploy-template-row">
-                            <div className="deploy-template-row__main">
-                                <div className="deploy-template-row__title">
-                                    <strong>{template.name}</strong>
-                                    {template.example && (
-                                        <span className="deploy-template-row__example">Example</span>
-                                    )}
-                                </div>
-                                <p>{template.description}</p>
-                                <code>{template.repoUrl}</code>
-                                <div className="deploy-template-row__badges">
-                                    {(template.badges || []).map(badge => (
-                                        <span key={badge}>{badge}</span>
-                                    ))}
-                                </div>
-                            </div>
-                            <Button
-                                size="sm"
-                                onClick={() => navigate(`/services/new?template=${encodeURIComponent(template.id)}`)}
-                            >
-                                <Rocket size={14} /> Use template
-                            </Button>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* Results and Filters */}
+            {/* Quick category chips + result count. The full category list, kind,
+                and sort live in the shared FilterDrawer (opened from the topbar). */}
             <div className="templates-results-header">
                 <span className="results-count">
                     {sortedTemplates.length} template{sortedTemplates.length !== 1 ? 's' : ''}
@@ -491,38 +539,32 @@ const Templates = () => {
                     >
                         All
                     </button>
-                    {visibleCategories.map(category => (
+                    {quickCategories.map(category => (
                         <button type="button"
                             key={category}
                             className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
-                            onClick={() => setSelectedCategoryFilter(category)}
+                            onClick={() => setSelectedCategoryFilter(
+                                selectedCategory === category ? null : category
+                            )}
                         >
                             {getCategoryIcon(category)} {category}
                         </button>
                     ))}
-                    {categories.length > 10 && (
-                        <button type="button"
-                            className="category-btn category-btn--more"
-                            onClick={() => setShowAllCategories(prev => !prev)}
-                        >
-                            {showAllCategories ? 'Less' : `More +${hiddenCategoryCount}`}
-                        </button>
-                    )}
-                </div>
-                <div className="sort-dropdown">
-                    <label>Sort by:</label>
-                    <select value={sortBy} onChange={(e) => setSortByFilter(e.target.value)}>
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
-                        <option value="featured">Featured First</option>
-                    </select>
-                    <ChevronDown size={16} className="dropdown-icon" />
                 </div>
             </div>
 
             {/* Active Filters */}
             {hasActiveFilters && (
                 <div className="active-filters">
+                    {selectedKind && (
+                        <span className="filter-chip">
+                            <GitBranch size={14} />
+                            {KIND_OPTIONS.find(k => k.value === selectedKind)?.label || selectedKind}
+                            <button type="button" onClick={() => updateFilters({ kind: null })}>
+                                <X size={14} />
+                            </button>
+                        </span>
+                    )}
                     {selectedCategory && (
                         <span className="filter-chip">
                             <Tag size={14} />
@@ -561,58 +603,64 @@ const Templates = () => {
                         )}
                     />
                 ) : (
-                    sortedTemplates.map(template => (
-                        <div key={template.id} className="tpl-card" onClick={() => handleViewTemplate(template)}>
-                            {isFeatured(template.id) && (
-                                <span className="tpl-ft" title="Featured">
-                                    <Star size={14} />
-                                </span>
-                            )}
-                            <div className="tpl-top">
-                                <span className="tpl-ico">
-                                    {renderIcon(template, 22)}
-                                </span>
-                                <div className="tpl-id">
-                                    <div className="tpl-name">{template.name}</div>
-                                    <div className="tpl-ver">v{template.version}</div>
+                    sortedTemplates.map(template => {
+                        const isRepo = (template.kind || 'compose') === 'repo';
+                        return (
+                            <div key={template.id} className="tpl-card" onClick={() => handleViewTemplate(template)}>
+                                {isFeatured(template.id) && (
+                                    <span className="tpl-ft" title="Featured">
+                                        <Star size={14} />
+                                    </span>
+                                )}
+                                <div className="tpl-top">
+                                    <span className="tpl-ico">
+                                        {renderIcon(template, 22)}
+                                    </span>
+                                    <div className="tpl-id">
+                                        <div className="tpl-name">{template.name}</div>
+                                        <div className="tpl-ver">v{template.version}</div>
+                                    </div>
+                                </div>
+                                <p className="tpl-desc">{template.description}</p>
+                                <div className="tpl-tags">
+                                    <Badge variant={isRepo ? 'info' : 'outline'} className="tpl-kind">
+                                        {isRepo ? 'Git repo' : 'One-click'}
+                                    </Badge>
+                                    {(template.categories || []).slice(0, 2).map(cat => (
+                                        <span key={cat} className="tg">
+                                            {cat}
+                                        </span>
+                                    ))}
+                                    {template.website && (
+                                        <span className="tpl-link" title="Has website">
+                                            <ExternalLink size={12} />
+                                        </span>
+                                    )}
+                                    {template.documentation && (
+                                        <span className="tpl-link" title="Has documentation">
+                                            <BookOpen size={12} />
+                                        </span>
+                                    )}
+                                    <Button
+                                        size="sm"
+                                        className="tpl-deploy"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeploy(template);
+                                        }}
+                                    >
+                                        <Rocket size={12} /> Deploy
+                                    </Button>
                                 </div>
                             </div>
-                            <p className="tpl-desc">{template.description}</p>
-                            <div className="tpl-tags">
-                                {(template.categories || []).slice(0, 3).map(cat => (
-                                    <span key={cat} className="tg">
-                                        {cat}
-                                    </span>
-                                ))}
-                                {template.website && (
-                                    <span className="tpl-link" title="Has website">
-                                        <ExternalLink size={12} />
-                                    </span>
-                                )}
-                                {template.documentation && (
-                                    <span className="tpl-link" title="Has documentation">
-                                        <BookOpen size={12} />
-                                    </span>
-                                )}
-                                <Button
-                                    size="sm"
-                                    className="tpl-deploy"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeploy(template);
-                                    }}
-                                >
-                                    <Rocket size={12} /> Deploy
-                                </Button>
-                            </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
 
             {/* Template Detail Modal */}
             {selectedTemplate && !showInstallModal && (
-                <div className="modal-overlay" onClick={() => setSelectedTemplate(null)}>
+                <div className="modal-overlay" onClick={() => { setSelectedTemplate(null); setRepoManifest(null); }}>
                     <div className="modal template-detail-drawer" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <div className="template-detail-header">
@@ -624,7 +672,7 @@ const Templates = () => {
                                     <span className="template-version">Version {selectedTemplate.version}</span>
                                 </div>
                             </div>
-                            <button type="button" className="modal-close" onClick={() => setSelectedTemplate(null)}>&times;</button>
+                            <button type="button" className="modal-close" onClick={() => { setSelectedTemplate(null); setRepoManifest(null); }}>&times;</button>
                         </div>
                         <div className="modal-body">
                             <p className="template-full-description">{selectedTemplate.description}</p>
@@ -646,122 +694,133 @@ const Templates = () => {
                                 )}
                             </div>
 
-                            <div className="template-details-grid">
-                                <div className="detail-section">
-                                    <h4><Tag size={16} /> Categories</h4>
-                                    <div className="template-categories">
-                                        {(selectedTemplate.categories || []).map(cat => (
-                                            <span key={cat} className="category-badge">
-                                                {getCategoryIcon(cat)} {cat}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {selectedTemplate.requirements && (
+                            {selectedTemplate.kind === 'repo' ? (
+                                <RepoTemplateDetailBody
+                                    template={selectedTemplate}
+                                    manifest={repoManifest}
+                                    loading={repoManifestLoading}
+                                    getCategoryIcon={getCategoryIcon}
+                                />
+                            ) : (
+                                <div className="template-details-grid">
                                     <div className="detail-section">
-                                        <h4><Cpu size={16} /> Requirements</h4>
-                                        <div className="requirements-list">
-                                            {selectedTemplate.requirements.memory && (
-                                                <div className="requirement-item">
-                                                    <span className="requirement-label">Memory:</span>
-                                                    <span className="requirement-value">{selectedTemplate.requirements.memory}</span>
-                                                </div>
-                                            )}
-                                            {selectedTemplate.requirements.storage && (
-                                                <div className="requirement-item">
-                                                    <span className="requirement-label">Storage:</span>
-                                                    <span className="requirement-value">{selectedTemplate.requirements.storage}</span>
-                                                </div>
-                                            )}
+                                        <h4><Tag size={16} /> Categories</h4>
+                                        <div className="template-categories">
+                                            {(selectedTemplate.categories || []).map(cat => (
+                                                <span key={cat} className="category-badge">
+                                                    {getCategoryIcon(cat)} {cat}
+                                                </span>
+                                            ))}
                                         </div>
                                     </div>
-                                )}
 
-                                {selectedTemplate.variables && selectedTemplate.variables.length > 0 && (
-                                    <div className="detail-section">
-                                        <h4><Settings size={16} /> Configuration Variables</h4>
-                                        <div className="variables-list">
-                                            {selectedTemplate.variables
-                                                .filter(v => !v.hidden)
-                                                .sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0))
-                                                .map(variable => (
-                                                <div key={variable.name} className={`variable-item ${variable.required ? 'required' : ''}`}>
-                                                    <div className="variable-header">
-                                                        <span className="variable-name">{variable.name}</span>
-                                                        {variable.required && <span className="required-badge">Required</span>}
-                                                        {variable.auto_generated && <span className="auto-badge">Auto</span>}
+                                    {selectedTemplate.requirements && (
+                                        <div className="detail-section">
+                                            <h4><Cpu size={16} /> Requirements</h4>
+                                            <div className="requirements-list">
+                                                {selectedTemplate.requirements.memory && (
+                                                    <div className="requirement-item">
+                                                        <span className="requirement-label">Memory:</span>
+                                                        <span className="requirement-value">{selectedTemplate.requirements.memory}</span>
                                                     </div>
-                                                    {variable.description && (
-                                                        <span className="variable-description">{variable.description}</span>
-                                                    )}
-                                                    {variable.default && !variable.auto_generated && (
-                                                        <span className="variable-default">Default: {variable.default}</span>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                )}
+                                                {selectedTemplate.requirements.storage && (
+                                                    <div className="requirement-item">
+                                                        <span className="requirement-label">Storage:</span>
+                                                        <span className="requirement-value">{selectedTemplate.requirements.storage}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {selectedTemplate.ports && selectedTemplate.ports.length > 0 && (
-                                    <div className="detail-section">
-                                        <h4><Server size={16} /> Exposed Ports</h4>
-                                        <div className="ports-list">
-                                            {selectedTemplate.ports.map((port, index) => (
-                                                <div key={index} className="port-item">
-                                                    <span className="port-number">{port.port}</span>
-                                                    <span className="port-protocol">{port.protocol}</span>
-                                                    {port.description && (
-                                                        <span className="port-description">{port.description}</span>
-                                                    )}
-                                                </div>
-                                            ))}
+                                    {selectedTemplate.variables && selectedTemplate.variables.length > 0 && (
+                                        <div className="detail-section">
+                                            <h4><Settings size={16} /> Configuration Variables</h4>
+                                            <div className="variables-list">
+                                                {selectedTemplate.variables
+                                                    .filter(v => !v.hidden)
+                                                    .sort((a, b) => (b.required ? 1 : 0) - (a.required ? 1 : 0))
+                                                    .map(variable => (
+                                                    <div key={variable.name} className={`variable-item ${variable.required ? 'required' : ''}`}>
+                                                        <div className="variable-header">
+                                                            <span className="variable-name">{variable.name}</span>
+                                                            {variable.required && <span className="required-badge">Required</span>}
+                                                            {variable.auto_generated && <span className="auto-badge">Auto</span>}
+                                                        </div>
+                                                        {variable.description && (
+                                                            <span className="variable-description">{variable.description}</span>
+                                                        )}
+                                                        {variable.default && !variable.auto_generated && (
+                                                            <span className="variable-default">Default: {variable.default}</span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {selectedTemplate.has_compose && (
-                                    <div className="detail-section">
-                                        <h4>
-                                            <Container size={16} /> Docker Compose
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="copy-btn"
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText('docker-compose.yml available after install');
-                                                    setCopiedCompose(true);
-                                                    setTimeout(() => setCopiedCompose(false), 2000);
-                                                }}
-                                            >
-                                                {copiedCompose ? <Check size={14} /> : <Copy size={14} />}
-                                            </Button>
-                                        </h4>
-                                        <div className="compose-preview">
-                                            <code>Docker Compose configuration will be generated during installation</code>
+                                    {selectedTemplate.ports && selectedTemplate.ports.length > 0 && (
+                                        <div className="detail-section">
+                                            <h4><Server size={16} /> Exposed Ports</h4>
+                                            <div className="ports-list">
+                                                {selectedTemplate.ports.map((port, index) => (
+                                                    <div key={index} className="port-item">
+                                                        <span className="port-number">{port.port}</span>
+                                                        <span className="port-protocol">{port.protocol}</span>
+                                                        {port.description && (
+                                                            <span className="port-description">{port.description}</span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+
+                                    {selectedTemplate.has_compose && (
+                                        <div className="detail-section">
+                                            <h4>
+                                                <Container size={16} /> Docker Compose
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="copy-btn"
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText('docker-compose.yml available after install');
+                                                        setCopiedCompose(true);
+                                                        setTimeout(() => setCopiedCompose(false), 2000);
+                                                    }}
+                                                >
+                                                    {copiedCompose ? <Check size={14} /> : <Copy size={14} />}
+                                                </Button>
+                                            </h4>
+                                            <div className="compose-preview">
+                                                <code>Docker Compose configuration will be generated during installation</code>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                         <div className="modal-footer">
-                            <Button variant="outline" onClick={() => setSelectedTemplate(null)}>
+                            <Button variant="outline" onClick={() => { setSelectedTemplate(null); setRepoManifest(null); }}>
                                 Close
                             </Button>
-                            <Button
-                                onClick={() => {
-                                    setShowInstallModal(true);
-                                }}
-                            >
-                                Install Template
-                            </Button>
+                            {selectedTemplate.kind === 'repo' ? (
+                                <Button onClick={() => deployRepoTemplate(selectedTemplate.id)}>
+                                    <Rocket size={14} /> Deploy
+                                </Button>
+                            ) : (
+                                <Button onClick={() => setShowInstallModal(true)}>
+                                    Install Template
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Install Modal */}
+            {/* Install Modal (compose templates only) */}
             {showInstallModal && selectedTemplate && (
                 <InstallModal
                     template={selectedTemplate}
@@ -776,6 +835,98 @@ const Templates = () => {
                         navigate(`/apps/${appId}`);
                     }}
                 />
+            )}
+
+            <FilterDrawer
+                open={filtersOpen}
+                onOpenChange={setFiltersOpen}
+                groups={filterGroups}
+                value={filterValue}
+                onChange={handleFilterChange}
+                title="Filter templates"
+            />
+        </div>
+    );
+};
+
+// Repo-template detail body: repo URL, detected manifests, and env preview from
+// the /templates/<id>/manifest endpoint (real inspection or labeled hints).
+const RepoTemplateDetailBody = ({ template, manifest, loading, getCategoryIcon }) => {
+    const repo = template.repo || {};
+    const data = manifest?.manifest || null;
+    const sourceLabel = manifest?.source === 'repo'
+        ? 'Detected from repository'
+        : manifest?.source === 'template-hints'
+            ? 'From template hints'
+            : null;
+
+    return (
+        <div className="template-details-grid">
+            <div className="detail-section">
+                <h4><GitBranch size={16} /> Repository</h4>
+                <div className="repo-detail">
+                    <a href={repo.url} target="_blank" rel="noopener noreferrer" className="repo-detail__url">
+                        {repo.url}
+                    </a>
+                    <div className="repo-detail__meta">
+                        {repo.branch && <span>branch: <code>{repo.branch}</code></span>}
+                        {repo.app_type && <span>type: <code>{repo.app_type}</code></span>}
+                        {repo.build_method && <span>build: <code>{repo.build_method}</code></span>}
+                        {repo.port && <span>port: <code>{repo.port}</code></span>}
+                    </div>
+                </div>
+            </div>
+
+            {(template.categories || []).length > 0 && (
+                <div className="detail-section">
+                    <h4><Tag size={16} /> Categories</h4>
+                    <div className="template-categories">
+                        {(template.categories || []).map(cat => (
+                            <span key={cat} className="category-badge">
+                                {getCategoryIcon(cat)} {cat}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="detail-section">
+                <h4>
+                    <Layers size={16} /> Detected manifests
+                    {sourceLabel && <span className="detail-source-tag">{sourceLabel}</span>}
+                </h4>
+                {loading ? (
+                    <p className="text-muted">Inspecting repository…</p>
+                ) : (data?.manifests || []).length > 0 ? (
+                    <div className="manifest-file-list">
+                        {data.manifests.map(m => (
+                            <span key={m.file} className="manifest-file">
+                                <Check size={13} /> {m.file}
+                            </span>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-muted">No deploy manifests detected.</p>
+                )}
+            </div>
+
+            {!loading && (data?.env || []).length > 0 && (
+                <div className="detail-section">
+                    <h4><Lock size={16} /> Environment</h4>
+                    <div className="env-preview-list">
+                        {data.env.map(env => (
+                            <span
+                                key={env.key}
+                                className={`env-preview-chip ${env.secret ? 'env-preview-chip--secret' : ''}`}
+                            >
+                                {env.key}{env.required ? ' *' : ''}
+                            </span>
+                        ))}
+                    </div>
+                    <p className="env-preview-note text-muted">
+                        Secret values stay empty until you add them to the service environment.
+                    </p>
+                </div>
             )}
         </div>
     );

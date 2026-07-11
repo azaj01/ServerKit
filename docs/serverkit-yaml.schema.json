@@ -67,6 +67,11 @@
           "description": "Command used to start the app (buildpack override).",
           "type": "string"
         },
+        "dockerfilePath": {
+          "description": "Build the service from this Dockerfile in the repository (repo root = build context) — the monorepo path: one repo, several services, each built from its own Dockerfile. Relative path only; mutually exclusive with `image` and `containers`.",
+          "type": "string",
+          "minLength": 1
+        },
         "port": {
           "description": "Container port the app listens on.",
           "type": "integer",

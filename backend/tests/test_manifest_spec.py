@@ -242,3 +242,54 @@ def test_validate_endpoint(client, auth_headers, app):
                        json={'manifest': VALID})
     assert resp.status_code == 200
     assert resp.get_json()['valid'] is True
+
+
+# -- Dockerfile builds ------------------------------------------------------
+
+def _dockerfile_manifest(**svc_extra):
+    svc = {'name': 'api', 'type': 'worker'}
+    svc.update(svc_extra)
+    return {'version': 1, 'services': [svc]}
+
+
+def test_dockerfile_path_normalizes():
+    n = ManifestSpecService.normalize(
+        _dockerfile_manifest(dockerfilePath='services/api/Dockerfile'))
+    assert n['services'][0]['dockerfile_path'] == 'services/api/Dockerfile'
+
+
+def test_dockerfile_path_snake_alias():
+    n = ManifestSpecService.normalize(
+        _dockerfile_manifest(dockerfile_path='Dockerfile.api'))
+    assert n['services'][0]['dockerfile_path'] == 'Dockerfile.api'
+
+
+def test_dockerfile_path_exclusive_with_image():
+    with pytest.raises(ManifestError) as exc:
+        ManifestSpecService.normalize(
+            _dockerfile_manifest(dockerfilePath='Dockerfile', image='nginx:1'))
+    assert any('mutually exclusive' in e for e in exc.value.errors)
+
+
+def test_dockerfile_path_exclusive_with_containers():
+    with pytest.raises(ManifestError) as exc:
+        ManifestSpecService.normalize(_dockerfile_manifest(
+            dockerfilePath='Dockerfile',
+            containers={'main': {'image': 'nginx:1'}}))
+    assert any('containers' in e for e in exc.value.errors)
+
+
+def test_dockerfile_path_rejects_unsafe_paths():
+    for bad in ('../evil/Dockerfile', '/abs/Dockerfile', 'C:\evil\Dockerfile',
+                'services/../../evil'):
+        with pytest.raises(ManifestError):
+            ManifestSpecService.normalize(_dockerfile_manifest(dockerfilePath=bad))
+
+
+def test_dockerfile_path_not_for_databases():
+    with pytest.raises(ManifestError) as exc:
+        ManifestSpecService.normalize({
+            'version': 1,
+            'services': [{'name': 'db', 'type': 'postgres',
+                          'dockerfilePath': 'Dockerfile'}]})
+    assert any('database' in e for e in exc.value.errors)

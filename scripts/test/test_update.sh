@@ -898,5 +898,43 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# T29 — refresh_bash_completion: regenerates the completion file from the
+# switched-in CLI, honours DRY_RUN, and no-ops on boxes without a
+# bash-completion directory. (SERVERKIT_COMPLETION_DIR is the test seam.)
+# --------------------------------------------------------------------------
+t="$WORK/t29"; mkdir -p "$t/comp" "$t/comp-dry"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+t29_rc=0
+out="$(
+    {
+        set -Eeuo pipefail
+        SERVERKIT_COMPLETION_DIR="$t/comp"; INSTALL_DIR="$REPO_ROOT"; DRY_RUN=0
+        refresh_bash_completion
+    } 2>&1
+)" || t29_rc=$?
+t29b_rc=0
+out_dry="$(
+    {
+        set -Eeuo pipefail
+        SERVERKIT_COMPLETION_DIR="$t/comp-dry"; INSTALL_DIR="$REPO_ROOT"; DRY_RUN=1
+        refresh_bash_completion
+    } 2>&1
+)" || t29b_rc=$?
+t29c_rc=0
+(
+    set -Eeuo pipefail
+    SERVERKIT_COMPLETION_DIR="$t/absent"; INSTALL_DIR="$REPO_ROOT"; DRY_RUN=0
+    refresh_bash_completion
+) >/dev/null 2>&1 || t29c_rc=$?
+if [ "$t29_rc" -eq 0 ] && grep -q 'complete -F _serverkit serverkit' "$t/comp/serverkit" \
+   && [ "$t29b_rc" -eq 0 ] && printf '%s' "$out_dry" | grep -q 'dry-run' \
+   && [ ! -f "$t/comp-dry/serverkit" ] \
+   && [ "$t29c_rc" -eq 0 ]; then
+    ok "refresh_bash_completion writes the file, honours dry-run, skips absent dirs"
+else
+    bad "refresh_bash_completion broken: rc=$t29_rc/$t29b_rc/$t29c_rc out=[$out] dry=[$out_dry]"
+fi
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]

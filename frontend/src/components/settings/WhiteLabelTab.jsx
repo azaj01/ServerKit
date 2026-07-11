@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const WHITELABEL_MODES = [
     { id: 'image_text', label: 'Logo + Text', icon: Layers, desc: 'Mini logo with brand name' },
@@ -15,6 +16,7 @@ const WHITELABEL_MODES = [
 const WhiteLabelTab = () => {
     const { whiteLabel, setWhiteLabel } = useTheme();
     const logoInputRef = useRef(null);
+    const register = useSettingFocus();
 
     return (
         <div className="settings-section">
@@ -23,7 +25,7 @@ const WhiteLabelTab = () => {
                 <p>Replace the default ServerKit branding with your own</p>
             </div>
 
-            <div className="settings-card">
+            <div {...register('whitelabel-branding', 'settings-card')}>
                 <h3>Custom Branding</h3>
                 <p>Replace the sidebar logo, name, and GitHub star link</p>
 

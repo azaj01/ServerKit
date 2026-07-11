@@ -4,8 +4,10 @@ import ContributionGraph from './ContributionGraph';
 import { Search, Filter, X, User as UserIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const ActivityTab = () => {
+    const register = useSettingFocus();
     const [summary, setSummary] = useState(null);
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -130,7 +132,7 @@ const ActivityTab = () => {
 
             {summary && (
                 <>
-                    <div className="activity-stats">
+                    <div {...register('activity-dashboard', 'activity-stats')}>
                         <span className="activity-stats__item">
                             <span className="activity-stats__value">{summary.active_users_today}</span>
                             active today
@@ -184,7 +186,7 @@ const ActivityTab = () => {
                 </>
             )}
 
-            <div className="activity-feed-section">
+            <div {...register('activity-audit-log', 'activity-feed-section')}>
                 <div className="section-header">
                     <h4>Audit Log</h4>
                 </div>

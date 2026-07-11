@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
+import useSettingFocus from '../../hooks/useSettingFocus';
 import { InfoList, InfoItem } from '../InfoList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ function formatUptime(seconds) {
 }
 
 const SystemTab = () => {
+    const register = useSettingFocus();
     const { isAdmin } = useAuth();
     const { whiteLabel } = useTheme();
     const brand = whiteLabel?.enabled && whiteLabel?.brandName ? whiteLabel.brandName : 'ServerKit';
@@ -163,7 +165,7 @@ const SystemTab = () => {
             </div>
 
             <div className="system-info-grid">
-                <div className="settings-card">
+                <div {...register('system-cpu', 'settings-card')}>
                     <h3>CPU</h3>
                     <InfoList>
                         <InfoItem label="Usage" value={`${metrics?.cpu?.percent?.toFixed(1) || 0}%`} />
@@ -175,7 +177,7 @@ const SystemTab = () => {
                     </InfoList>
                 </div>
 
-                <div className="settings-card">
+                <div {...register('system-memory', 'settings-card')}>
                     <h3>Memory</h3>
                     <InfoList>
                         <InfoItem label="Usage" value={`${metrics?.memory?.percent?.toFixed(1) || 0}%`} />
@@ -184,7 +186,7 @@ const SystemTab = () => {
                     </InfoList>
                 </div>
 
-                <div className="settings-card">
+                <div {...register('system-disk', 'settings-card')}>
                     <h3>Disk</h3>
                     <InfoList>
                         <InfoItem label="Usage" value={`${metrics?.disk?.percent?.toFixed(1) || 0}%`} />
@@ -193,7 +195,7 @@ const SystemTab = () => {
                     </InfoList>
                 </div>
 
-                <div className="settings-card">
+                <div {...register('system-network', 'settings-card')}>
                     <h3>Network</h3>
                     <InfoList>
                         <InfoItem label="Bytes Sent" value={formatBytes(metrics?.network?.bytes_sent)} />
@@ -220,7 +222,7 @@ const SystemTab = () => {
             )}
 
             {/* Server Time & Timezone */}
-            <div className="settings-card">
+            <div {...register('system-timezone', 'settings-card')}>
                 <h3>Server Time & Timezone</h3>
                 {metrics?.time && (
                     <InfoList style={{ marginBottom: '1rem' }}>
@@ -266,7 +268,7 @@ const SystemTab = () => {
             </div>
 
             {/* Panel Domain */}
-            <div className="settings-card">
+            <div {...register('system-canonical-domain', 'settings-card')}>
                 <h3>Panel Domain</h3>
                 {!encryptionConfigured && (
                     <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>

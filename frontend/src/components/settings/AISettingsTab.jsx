@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import useSettingFocus from '../../hooks/useSettingFocus';
 import { useAuth } from '../../contexts/AuthContext';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 const AI_CONFIG_CHANGED_EVENT = 'serverkit:ai-config-changed';
 
 const AISettingsTab = () => {
+    const register = useSettingFocus();
     const { isAdmin } = useAuth();
     const [settings, setSettings] = useState({
         enabled: false, provider: '', model: '', endpoint: '',
@@ -112,7 +114,7 @@ const AISettingsTab = () => {
 
             {message && <div className={`message ${message.type}`}>{message.text}</div>}
 
-            <div className="settings-card">
+            <div {...register('ai-provider', 'settings-card')}>
                 <div className="form-group">
                     <div className="settings-row">
                         <div className="settings-label"><Label>Enable AI assistant</Label></div>

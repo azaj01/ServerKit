@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import api from '../../../services/api';
+import useSettingFocus from '../../../hooks/useSettingFocus';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import {
@@ -20,7 +21,23 @@ import {
 import ProviderCard from './ProviderCard';
 import ConnectProviderModal from './ConnectProviderModal';
 
+// The settings-index deep-link id each category section is landable from. The
+// cards are rendered by ProviderCard (presentational, no ref), so the flash
+// lands on the section container. The source section carries `connections-github`
+// (its headline); `connections-gitlab` still deep-links to the tab correctly.
+// The `chat` category has no settings-index entry, so it is left unregistered.
+const CATEGORY_FOCUS_ID = {
+    source: 'connections-github',
+    infra: 'connections-cloud-provider',
+    registry: 'connections-container-registry',
+    dns: 'connections-dns-provider',
+    registrar: 'connections-registrar',
+    email: 'connections-email-relay',
+    storage: 'connections-storage',
+};
+
 export default function ConnectionsHub() {
+    const register = useSettingFocus();
     const { isAdmin } = useAuth();
     const toast = useToast();
 
@@ -103,6 +120,30 @@ export default function ConnectionsHub() {
             toast.error(err.message || 'Failed to disconnect');
         }
     }, [toast, loadData]);
+
+    // One-click GitHub App setup: fetch the manifest, then POST it to github.com
+    // via an auto-submitted form (GitHub only accepts the manifest as a form
+    // field). GitHub redirects back to the callback which finishes the setup.
+    const onSetupGithubApp = useCallback(async () => {
+        try {
+            const baseUrl = window.location.origin;
+            const redirectUri = `${baseUrl}/connections/github-app/callback`;
+            const { manifest, state, post_url } = await api.getGithubAppManifest(baseUrl, redirectUri);
+            sessionStorage.setItem('sourceConnectionReturnTo', '/settings/connections');
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `${post_url}?state=${encodeURIComponent(state)}`;
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'manifest';
+            input.value = JSON.stringify(manifest);
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        } catch (err) {
+            toast.error(err.message || 'Failed to start GitHub App setup');
+        }
+    }, [toast]);
 
     const onSaveSourceConfig = useCallback(async (provider, config) => {
         try {
@@ -446,8 +487,14 @@ export default function ConnectionsHub() {
                 CONNECTION_CATEGORIES.map((cat) => {
                     const providers = CONNECTION_PROVIDERS.filter((p) => p.category === cat.key);
                     if (!providers.length) return null;
+                    const focusId = CATEGORY_FOCUS_ID[cat.key];
                     return (
-                        <section key={cat.key} className="connections-hub__category">
+                        <section
+                            key={cat.key}
+                            {...(focusId
+                                ? register(focusId, 'connections-hub__category')
+                                : { className: 'connections-hub__category' })}
+                        >
                             <header className="connections-hub__category-head">
                                 <h3>{cat.label}</h3>
                                 <p>{cat.blurb}</p>
@@ -482,6 +529,7 @@ export default function ConnectionsHub() {
                 onConnectSource={onConnectSource}
                 onDisconnectSource={onDisconnectSource}
                 onSaveSourceConfig={onSaveSourceConfig}
+                onSetupGithubApp={onSetupGithubApp}
                 onAddDns={onAddDns}
                 onRemoveDns={onRemoveDns}
                 onTestDns={onTestDns}

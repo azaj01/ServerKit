@@ -121,6 +121,7 @@ class ManifestApplyService:
             'healthcheck_path': svc.get('healthcheck_path'),
             'build_command': svc.get('build_command'),
             'start_command': svc.get('start_command'),
+            'dockerfile_path': svc.get('dockerfile_path'),
             'cpu': cls._stringify(svc.get('cpu')),
             'memory': cls._stringify(svc.get('memory')),
             'auto_deploy': svc.get('auto_deploy', False),
@@ -205,6 +206,11 @@ class ManifestApplyService:
         if resolved.get('image'):
             expected['image'] = resolved['image']
             observed['image'] = app.docker_image
+        if resolved.get('dockerfile_path'):
+            from app.services.build_service import BuildService
+            build_cfg = BuildService.get_app_build_config(app.id) or {}
+            expected['dockerfile_path'] = resolved['dockerfile_path']
+            observed['dockerfile_path'] = build_cfg.get('dockerfile_path')
 
         declared_env = sorted(list(resolved.get('env', {}).keys())
                               + [r['key'] for r in resolved.get('env_refs', [])])
@@ -317,6 +323,11 @@ class ManifestApplyService:
                 if resolved.get('registry'):
                     reg = cls._resolve_registry(resolved['registry'])
                     payload['registry_id'] = reg.id if reg else None
+            # Dockerfile build: carry the path + autoDeploy so create can wire
+            # the git deployment and build config (monorepo: repo root = context)
+            if resolved.get('dockerfile_path'):
+                payload['dockerfile_path'] = resolved['dockerfile_path']
+                payload['auto_deploy'] = resolved.get('auto_deploy', False)
             # fleet targeting (#21): route the app to a server when declared
             server_ref = resolved.get('server')
             if server_ref:
@@ -327,9 +338,11 @@ class ManifestApplyService:
                     issues.append({'service': name, 'kind': 'unknown_server',
                                    'server': server_ref})
             target = ' @ ' + server_ref if server_ref else ''
+            built = (f' — built from `{resolved["dockerfile_path"]}`'
+                     if resolved.get('dockerfile_path') else '')
             steps.append({
                 'type': 'create_app', 'service': name,
-                'description': f'Create app `{name}` ({resolved["app_type"]}){target}',
+                'description': f'Create app `{name}` ({resolved["app_type"]}){target}{built}',
                 'payload': payload,
             })
         else:
@@ -501,6 +514,8 @@ class ManifestApplyService:
             feats.append('a first-boot bootstrap')
         if resolved.get('containers'):
             feats.append('a multi-container unit')
+        if resolved.get('dockerfile_path'):
+            feats.append('a Dockerfile build')
         return feats
 
     @classmethod
@@ -530,6 +545,17 @@ class ManifestApplyService:
                     'kind': 'fromserver_no_ip', 'service': name,
                     'message': f'service {name} binds its public IP via fromServer, but '
                                f'{where} has no recorded public IP — set it, then re-apply.'})
+
+            # A Dockerfile build needs a repository to clone. Plan-time, like a
+            # missing secret: the stored manifest's provenance, or a git
+            # deployment already configured on a sibling app in the project.
+            if resolved.get('dockerfile_path') and cls._project_source(project) is None:
+                blockers.append({
+                    'kind': 'dockerfile_no_source', 'service': name,
+                    'message': f'service {name} builds from `{resolved["dockerfile_path"]}`, '
+                               f'but the project has no source repository on record — import '
+                               f'the project from its repository (or configure a git deployment '
+                               f'on one of its apps), then re-apply.'})
 
             feats = cls._service_features(resolved)
             if not feats:
@@ -687,6 +713,25 @@ class ManifestApplyService:
             return SiteDomainService.server_ip()
         except Exception:
             return None
+
+    @classmethod
+    def _project_source(cls, project) -> Optional[Dict[str, str]]:
+        """The repository a Dockerfile-built service clones: the stored
+        manifest's provenance, else the git deployment of a sibling app in the
+        project. None when neither exists (a plan-time blocker)."""
+        row = ApplicationManifest.query.filter_by(project_id=project.id).first()
+        if row is not None and row.source_repo:
+            return {'repo_url': row.source_repo, 'branch': row.source_ref or 'main'}
+        try:
+            from app.services.git_service import GitService
+            deploy_configs = GitService.get_config().get('apps', {})
+        except Exception:
+            return None
+        for sibling in Application.query.filter_by(project_id=project.id).all():
+            cfg = deploy_configs.get(str(sibling.id))
+            if cfg and cfg.get('repo_url'):
+                return {'repo_url': cfg['repo_url'], 'branch': cfg.get('branch') or 'main'}
+        return None
 
     @staticmethod
     def _registry_has_credential(reg) -> bool:
@@ -870,7 +915,53 @@ class ManifestApplyService:
         )
         db.session.add(app)
         db.session.commit()
+        if payload.get('dockerfile_path'):
+            cls._wire_dockerfile_source(project, app, payload)
         return {'app_id': app.id, 'server_id': app.server_id}
+
+    @classmethod
+    def _wire_dockerfile_source(cls, project, app, payload):
+        """Give a Dockerfile-built manifest service real source: clone the
+        project's repository into the managed apps dir and write the same git
+        deployment + build config the import wizard does, so the existing
+        deploy pipeline builds `dockerfile_path` with the repo root as context."""
+        import os
+        from app import paths
+        from app.services.git_service import GitService
+        from app.services.build_service import BuildService
+
+        source = cls._project_source(project)
+        if not source:
+            raise RuntimeError('no source repository on record for the project')
+
+        base_dir = os.path.abspath(paths.APPS_DIR)
+        app_path = os.path.abspath(os.path.join(base_dir, app.name))
+        if app_path == base_dir or not app_path.startswith(base_dir + os.sep):
+            raise RuntimeError('invalid application path')
+
+        # idempotent: a re-apply after a partial failure reuses the checkout
+        if not os.path.isdir(os.path.join(app_path, '.git')):
+            cloned = GitService.clone_repository(app_path, source['repo_url'],
+                                                 source['branch'])
+            if not cloned.get('success'):
+                raise RuntimeError(cloned.get('error') or 'clone failed')
+
+        app.root_path = app_path
+        db.session.commit()
+
+        deploy = GitService.configure_deployment(
+            app_id=app.id, app_path=app_path,
+            repo_url=source['repo_url'], branch=source['branch'],
+            auto_deploy=bool(payload.get('auto_deploy')))
+        if not deploy.get('success'):
+            raise RuntimeError(deploy.get('error') or 'failed to configure deployment')
+
+        built = BuildService.configure_build(
+            app_id=app.id, app_path=app_path,
+            build_method='dockerfile',
+            dockerfile_path=payload['dockerfile_path'])
+        if not built.get('success'):
+            raise RuntimeError(built.get('error') or 'failed to configure build')
 
     @classmethod
     def _do_update_app(cls, project, env, payload, user_id):
@@ -901,6 +992,20 @@ class ManifestApplyService:
             if 'start_command' in changes:
                 overrides['start_command'] = changes['start_command']
             app.buildpack_overrides = json.dumps(overrides)
+        if 'dockerfile_path' in changes:
+            from app.services.build_service import BuildService
+            cfg = BuildService.get_config()
+            entry = cfg.get('apps', {}).get(str(app.id))
+            if entry:
+                entry['dockerfile_path'] = changes['dockerfile_path']
+                entry['build_method'] = 'dockerfile'
+                BuildService.save_config(cfg)
+            else:
+                # app existed without a build config (e.g. created pre-manifest)
+                BuildService.configure_build(
+                    app_id=app.id, app_path=app.root_path,
+                    build_method='dockerfile',
+                    dockerfile_path=changes['dockerfile_path'])
         db.session.commit()
         return {'app_id': app.id, 'changed': list(changes.keys())}
 
@@ -1092,6 +1197,11 @@ class ManifestApplyService:
             changes['memory'] = resolved['memory']
         if resolved.get('image') and app.docker_image != resolved['image']:
             changes['image'] = resolved['image']
+        if resolved.get('dockerfile_path'):
+            from app.services.build_service import BuildService
+            build_cfg = BuildService.get_app_build_config(app.id) or {}
+            if build_cfg.get('dockerfile_path') != resolved['dockerfile_path']:
+                changes['dockerfile_path'] = resolved['dockerfile_path']
         overrides = {}
         if app.buildpack_overrides:
             try:

@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import requests
 import yaml
 
 try:
@@ -41,6 +42,65 @@ class RepositoryManifestService:
             + cls.APP_FILES
             + cls.BUILD_FILES
         ))
+
+    @classmethod
+    def analyze_public_repo(cls, repo_url: str, branch: str = 'main') -> Dict:
+        """Inspect a PUBLIC repository by fetching its supported manifest files
+        from the provider's raw host (raw.githubusercontent.com, GitLab/Bitbucket
+        raw endpoints). No clone and no OAuth — this is the connection-less path
+        used to inspect a deploy-template repo the operator has not connected.
+
+        Returns the same shape as :meth:`analyze_files`. On an unsupported host
+        or a total fetch failure, returns an empty result with a warning so the
+        caller can fall back to declared template hints.
+        """
+        raw_base = cls._raw_base_url(repo_url, branch)
+        if not raw_base:
+            return cls._empty_result([f'Unsupported repository host: {repo_url}'])
+
+        file_map = {}
+        for file_name in cls.supported_files():
+            content = cls._fetch_raw(f'{raw_base}/{file_name}')
+            if content is not None:
+                file_map[file_name] = content
+
+        if not file_map:
+            return cls._empty_result(
+                [f'No supported manifest files found in {repo_url}@{branch}'])
+
+        return cls.analyze_files(file_map, root_files=sorted(file_map.keys()))
+
+    @staticmethod
+    def _raw_base_url(repo_url: str, branch: str) -> Optional[str]:
+        """Map a repository web/clone URL to its raw-file base URL for ``branch``.
+        Supports GitHub, GitLab, and Bitbucket; returns None otherwise."""
+        url = (repo_url or '').strip()
+        branch = branch or 'main'
+        m = re.match(r'^(?:https?://|git@)github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?/?$', url)
+        if m:
+            return f'https://raw.githubusercontent.com/{m.group(1)}/{m.group(2)}/{branch}'
+        m = re.match(r'^(?:https?://|git@)gitlab\.com[:/]([^/]+)/([^/]+?)(?:\.git)?/?$', url)
+        if m:
+            return f'https://gitlab.com/{m.group(1)}/{m.group(2)}/-/raw/{branch}'
+        m = re.match(r'^(?:https?://|git@)bitbucket\.org[:/]([^/]+)/([^/]+?)(?:\.git)?/?$', url)
+        if m:
+            return f'https://bitbucket.org/{m.group(1)}/{m.group(2)}/raw/{branch}'
+        return None
+
+    @staticmethod
+    def _fetch_raw(url: str) -> Optional[str]:
+        """Fetch a single raw file, returning its text or None (missing/too big/
+        unreachable). Isolated so tests can monkeypatch it deterministically."""
+        try:
+            response = requests.get(url, timeout=10)
+        except requests.RequestException:
+            return None
+        if response.status_code != 200:
+            return None
+        content = response.content or b''
+        if len(content) > RepositoryManifestService.MAX_FILE_BYTES:
+            return None
+        return content.decode('utf-8', errors='replace')
 
     @classmethod
     def analyze_path(cls, repo_path: str) -> Dict:
@@ -183,7 +243,9 @@ class RepositoryManifestService:
                 result,
                 strategy='serverkit',
                 app_type=first_app.get('app_type'),
+                build_method='dockerfile' if first_app.get('dockerfile_path') else None,
                 port=first_app.get('port'),
+                dockerfile_path=first_app.get('dockerfile_path'),
                 custom_build_cmd=first_app.get('build_command'),
                 custom_start_cmd=first_app.get('start_command'),
                 healthcheck_path=first_app.get('healthcheck_path'),

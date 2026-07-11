@@ -4,6 +4,7 @@ import { Database, Loader, CheckCircle, ArrowUpCircle, ShieldCheck } from 'lucid
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 // Revisions in this project are short descriptive slugs (e.g. 016_resource_grants),
 // so show them in full rather than truncating mid-word.
@@ -12,6 +13,7 @@ const short = (rev) => rev || '';
 const MigrationHistoryTab = () => {
     const toast = useToast();
     const { confirm } = useConfirm();
+    const register = useSettingFocus();
 
     const [revisions, setRevisions] = useState([]);
     const [status, setStatus] = useState(null);
@@ -124,7 +126,7 @@ const MigrationHistoryTab = () => {
             </div>
 
             {hasPending ? (
-                <div className="migration-pending-banner">
+                <div {...register('migrations-apply', 'migration-pending-banner')}>
                     <ArrowUpCircle size={20} className="migration-pending-icon" aria-hidden="true" />
                     <div className="migration-pending-body">
                         <p className="migration-pending-title">
@@ -186,7 +188,7 @@ const MigrationHistoryTab = () => {
                     <p>No migration history found.</p>
                 </div>
             ) : (
-                <div className="table-container">
+                <div {...register('migrations-history', 'table-container')}>
                     <table className="data-table">
                         <thead>
                             <tr>

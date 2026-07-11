@@ -363,106 +363,11 @@
     }
 }
 
-// Results Header
-.deploy-templates-section {
-    margin-bottom: $space-5;
-    padding-bottom: $space-4;
-    border-bottom: 1px solid $border-color;
-
-    &__head {
-        margin-bottom: $space-3;
-
-        h3 {
-            margin: 0 0 2px;
-            font-size: $font-size-base;
-            font-weight: $font-weight-semibold;
-            color: $text-primary;
-        }
-
-        p {
-            margin: 0;
-            font-size: $font-size-sm;
-            color: $text-tertiary;
-        }
-    }
-}
-
-.deploy-templates-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: $space-3;
-}
-
-.deploy-template-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: $space-3;
-    padding: $space-3 $space-4;
-    border: 1px solid $border-color;
-    border-radius: $radius-md;
-    background: $bg-card;
-
-    &__main {
-        min-width: 0;
-
-        p {
-            margin: 2px 0 $space-1;
-            font-size: $font-size-sm;
-            color: $text-secondary;
-        }
-
-        code {
-            display: block;
-            font-size: $font-size-xs;
-            color: $text-tertiary;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-    }
-
-    &__title {
-        display: flex;
-        align-items: center;
-        gap: $space-2;
-
-        strong {
-            color: $text-primary;
-            font-weight: $font-weight-semibold;
-        }
-    }
-
-    &__example {
-        padding: 1px $space-2;
-        border-radius: $radius-sm;
-        background: rgba($accent-primary-raw, 0.15);
-        color: $accent-primary;
-        font-size: $font-size-xs;
-        font-weight: $font-weight-medium;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    &__badges {
-        display: flex;
-        flex-wrap: wrap;
-        gap: $space-1;
-        margin-top: $space-2;
-
-        span {
-            padding: 1px $space-2;
-            border: 1px solid $border-color;
-            border-radius: $radius-sm;
-            font-size: $font-size-xs;
-            color: $text-tertiary;
-        }
-    }
-}
-
+// Quick-chips row + result count. Full category list, kind, and sort live in
+// the shared FilterDrawer opened from the topbar.
 .templates-results-header {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: $space-3;
     margin-bottom: $space-4;
@@ -477,42 +382,91 @@
     white-space: nowrap;
 }
 
-.sort-dropdown {
-    display: flex;
-    align-items: center;
-    gap: $space-2;
-    position: relative;
+// Kind badge on catalog cards ("Git repo" / "One-click").
+.tpl-kind {
+    text-transform: none;
+}
 
-    label {
+// Repo-template detail body
+.repo-detail {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+
+    &__url {
         font-family: var(--mono);
-        font-size: 11px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--text-faint);
+        font-size: $font-size-sm;
+        color: var(--accent-bright);
+        word-break: break-all;
     }
 
-    select {
-        appearance: none;
-        padding: $space-2 $space-8 $space-2 $space-3;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: $radius-md;
-        font-size: $font-size-sm + 1;
-        color: $text-primary;
-        cursor: pointer;
+    &__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $space-3;
+        font-size: $font-size-sm;
+        color: $text-tertiary;
 
-        &:focus {
-            outline: none;
-            border-color: var(--accent-primary);
+        code {
+            font-family: var(--mono);
+            color: $text-secondary;
         }
     }
+}
 
-    .dropdown-icon {
-        position: absolute;
-        right: $space-2;
-        pointer-events: none;
-        color: var(--text-faint);
+.detail-source-tag {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: var(--text-faint);
+    background: var(--surface-2);
+    padding: 2px $space-2;
+    border-radius: $radius-sm;
+}
+
+.manifest-file-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+}
+
+.manifest-file {
+    display: inline-flex;
+    align-items: center;
+    gap: $space-1;
+    padding: 2px 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+    background: var(--green-bg);
+    border-radius: $radius-sm;
+}
+
+.env-preview-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $space-2;
+}
+
+.env-preview-chip {
+    padding: 2px 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border-radius: $radius-sm;
+
+    &--secret {
+        color: var(--amber);
+        background: rgba($accent-primary-raw, 0.1);
     }
+}
+
+.env-preview-note {
+    margin: $space-2 0 0;
+    font-size: $font-size-xs;
 }
 
 // Template icon (detail modal header)
@@ -907,13 +861,5 @@
 
     .category-filters {
         width: 100%;
-    }
-
-    .sort-dropdown {
-        width: 100%;
-
-        select {
-            flex: 1;
-        }
     }
 }

@@ -1467,6 +1467,12 @@ install_service() {
     chmod +x "$INSTALL_DIR/serverkit"
     ln -sf "$INSTALL_DIR/serverkit" /usr/local/bin/serverkit
 
+    # Bash tab-completion (best-effort — not every distro ships bash-completion).
+    if [ -d /etc/bash_completion.d ]; then
+        bash "$INSTALL_DIR/serverkit" completion > /etc/bash_completion.d/serverkit 2>/dev/null \
+            || rm -f /etc/bash_completion.d/serverkit
+    fi
+
     # Without systemd (LXC/WSL/containers) we can't enable the unit — say so
     # clearly instead of failing cryptically (Goal G5). The probe is inline
     # (svc_has_systemd) so it holds even when scripts/lib never made it to

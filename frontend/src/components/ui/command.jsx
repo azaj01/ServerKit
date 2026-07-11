@@ -11,11 +11,11 @@ const Command = React.forwardRef(({ className, ...props }, ref) => (
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-function CommandDialog({ children, ...props }) {
+function CommandDialog({ children, shouldFilter, label, ...props }) {
   return (
     <Dialog {...props}>
       <DialogContent className="ui-command-dialog">
-        <Command>{children}</Command>
+        <Command shouldFilter={shouldFilter} label={label}>{children}</Command>
       </DialogContent>
     </Dialog>
   );

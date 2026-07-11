@@ -47,7 +47,13 @@ const DashboardLayout = () => {
     ));
 
     const handleKeyDown = useCallback((e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        // Open aliases: Ctrl/Cmd+K (original), plus VS Code muscle memory —
+        // F1 and Ctrl/Cmd+Shift+P. preventDefault on F1 keeps the browser
+        // help panel from stealing it.
+        const cmdK = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'k';
+        const cmdShiftP = (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'p';
+        const f1 = e.key === 'F1';
+        if (cmdK || cmdShiftP || f1) {
             e.preventDefault();
             setPaletteOpen(prev => !prev);
         }

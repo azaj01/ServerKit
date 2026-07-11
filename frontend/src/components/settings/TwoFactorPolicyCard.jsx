@@ -16,7 +16,9 @@ const POLICY_LABELS = {
     all: 'Everyone — all accounts must enrol',
 };
 
-const TwoFactorPolicyCard = () => {
+// `props` are spread onto the card root so a parent can attach a ref /
+// focus-highlight class (see useSettingFocus / command-palette deep links).
+const TwoFactorPolicyCard = (props) => {
     const [policy, setPolicy] = useState('off');
     const [graceDays, setGraceDays] = useState(7);
     const [loading, setLoading] = useState(true);
@@ -55,7 +57,7 @@ const TwoFactorPolicyCard = () => {
     if (loading) return null;
 
     return (
-        <div className="settings-card">
+        <div className="settings-card" {...props}>
             <h3>Two-Factor Authentication Policy</h3>
             <p className="form-help" style={{ marginTop: 0 }}>
                 Require accounts to protect themselves with a passkey or authenticator

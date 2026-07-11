@@ -47,7 +47,13 @@ class ManifestScaffoldService:
             service['port'] = app.port
 
         # Appliance tier (plan 35): round-trip a BYO image + typed L4 ports.
-        if getattr(app, 'docker_image', None):
+        # A Dockerfile-built app round-trips its build config instead — its
+        # recorded docker_image is the build artifact, not a declaration.
+        from app.services.build_service import BuildService
+        build_cfg = BuildService.get_app_build_config(app.id) or {}
+        if build_cfg.get('build_method') == 'dockerfile' and build_cfg.get('dockerfile_path'):
+            service['dockerfilePath'] = build_cfg['dockerfile_path']
+        elif getattr(app, 'docker_image', None):
             service['image'] = app.docker_image
         ports = cls._ports(app)
         if ports:

@@ -1212,6 +1212,20 @@ ensure_firewall() {
     good "Firewall ensured ($backend): 80/tcp and 443/tcp open"
 }
 
+refresh_bash_completion() {
+    # Regenerate bash tab-completion from the switched-in CLI so new commands
+    # complete immediately after an update. Best-effort: boxes without the
+    # bash-completion package simply skip it.
+    local dir="${SERVERKIT_COMPLETION_DIR:-/etc/bash_completion.d}"
+    [ -d "$dir" ] || return 0
+    if [ "$DRY_RUN" = "1" ]; then
+        info "[dry-run] would refresh $dir/serverkit"
+        return 0
+    fi
+    bash "$INSTALL_DIR/serverkit" completion > "$dir/serverkit" 2>/dev/null \
+        || { rm -f "$dir/serverkit"; warn "Could not refresh bash completion (non-fatal)"; }
+}
+
 # ---------------------------------------------------------------------------
 # All-Docker deployment (compose) detection + update path
 # ---------------------------------------------------------------------------
@@ -1637,6 +1651,9 @@ fi
 
 # Keep the firewall in sync (idempotent, best-effort).
 ensure_firewall || true
+
+# Keep bash tab-completion in sync with the updated CLI (best-effort).
+refresh_bash_completion || true
 
 # Cleanup.
 cleanup

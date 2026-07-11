@@ -516,6 +516,86 @@
 }
 
 // Connect / add form (shared by GitHub config + DNS add)
+// One-click GitHub App setup card.
+.conn-oneclick {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+    padding: $space-4;
+    background: var(--accent-bg, rgba(109, 124, 255, 0.08));
+    border: 1px solid var(--accent-dim, $border-subtle);
+    border-radius: $radius-md;
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+
+        svg { color: $accent-primary; }
+    }
+
+    &__blurb {
+        margin: 0;
+        font-size: $font-size-xs;
+        line-height: 1.5;
+        color: $text-tertiary;
+    }
+
+    &__done {
+        display: flex;
+        align-items: center;
+        gap: $space-2;
+        flex-wrap: wrap;
+        font-size: $font-size-xs;
+        color: $text-secondary;
+
+        svg { color: $success; }
+
+        strong { color: $text-primary; }
+
+        a {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: $accent-primary;
+            text-decoration: none;
+
+            &:hover { text-decoration: underline; }
+        }
+    }
+}
+
+// Advanced (manual OAuth app) disclosure.
+.conn-advanced {
+    display: flex;
+    flex-direction: column;
+    gap: $space-3;
+
+    &__toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $space-2;
+        padding: $space-2 0;
+        background: none;
+        border: none;
+        color: $text-tertiary;
+        font-size: $font-size-sm;
+        cursor: pointer;
+
+        span {
+            display: flex;
+            align-items: center;
+            gap: $space-2;
+        }
+
+        &:hover { color: $text-secondary; }
+    }
+}
+
 .conn-form {
     display: flex;
     flex-direction: column;

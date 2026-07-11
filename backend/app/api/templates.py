@@ -16,6 +16,7 @@ from app.middleware.rbac import admin_required
 from app.models import User, Application
 from app.services.deployment_job_service import DeploymentJobService
 from app.services.template_service import TemplateService
+from app.services.repository_manifest_service import RepositoryManifestService
 from app.services.resource_grant_service import ResourceGrantService
 from app.utils.slug import validate_app_name
 
@@ -104,6 +105,8 @@ def get_template(template_id):
             'description': template.get('description'),
             'icon': template.get('icon'),
             'categories': template.get('categories', []),
+            'kind': template.get('kind', 'compose'),
+            'repo': template.get('repo') if template.get('kind') == 'repo' else None,
             'source': template.get('source'),
             'documentation': template.get('documentation'),
             'website': template.get('website'),
@@ -115,6 +118,47 @@ def get_template(template_id):
             'ports': template.get('ports', [])
         }
     }), 200
+
+
+@templates_bp.route('/<template_id>/manifest', methods=['GET'])
+@jwt_required()
+def get_template_manifest(template_id):
+    """Inspect a repo template's public repository for deploy manifests.
+
+    Fetches the supported manifest files from the repo's raw host (no clone, no
+    OAuth) and analyzes them. When live inspection turns up nothing (private
+    repo, host down, no manifests), falls back to the template's declared
+    ``repo`` hints and tags ``source: 'template-hints'`` so the wizard can label
+    the confidence honestly.
+    """
+    result = TemplateService.get_template(template_id)
+    if not result.get('success'):
+        return jsonify(result), 404
+
+    template = result['template']
+    if template.get('kind') != 'repo':
+        return jsonify({'error': 'Manifest inspection is only available for repo templates'}), 400
+
+    repo = template.get('repo') or {}
+    repo_url = repo.get('url')
+    branch = request.args.get('branch') or repo.get('branch') or 'main'
+
+    manifest = None
+    if repo_url:
+        try:
+            manifest = RepositoryManifestService.analyze_public_repo(repo_url, branch)
+        except Exception:
+            manifest = None
+
+    # A real inspection detected an actual strategy or at least one manifest file.
+    if manifest and (manifest.get('strategy') or manifest.get('manifests')):
+        manifest['source'] = 'repo'
+        return jsonify({'manifest': manifest, 'source': 'repo'}), 200
+
+    # Honest fallback: the declared hints, clearly labeled.
+    hints = TemplateService.build_template_hints(template)
+    hints['source'] = 'template-hints'
+    return jsonify({'manifest': hints, 'source': 'template-hints'}), 200
 
 
 # ==================== CATALOG SCHEMA ====================

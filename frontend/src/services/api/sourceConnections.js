@@ -49,6 +49,21 @@ export async function updateGithubSourceConfig(config) {
     });
 }
 
+// One-click GitHub App setup (manifest flow). `getGithubAppManifest` returns the
+// manifest + state + post_url to POST to github.com; `completeGithubAppManifest`
+// converts the returned code into stored app credentials.
+export async function getGithubAppManifest(baseUrl, redirectUri) {
+    const params = new URLSearchParams({ base_url: baseUrl, redirect_uri: redirectUri });
+    return this.request(`/source-connections/admin/github/app-manifest?${params.toString()}`);
+}
+
+export async function completeGithubAppManifest(code, state) {
+    return this.request('/source-connections/admin/github/app-manifest/complete', {
+        method: 'POST',
+        body: { code, state },
+    });
+}
+
 // GitLab mirrors the GitHub surface (same generic connect/disconnect helpers
 // above, which already take a `provider` argument).
 

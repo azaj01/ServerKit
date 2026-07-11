@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import useSettingFocus from '../../hooks/useSettingFocus';
+import TwoFactorPolicyCard from './TwoFactorPolicyCard';
 import SSOProviderIcon from '../SSOProviderIcon';
 import Modal from '../Modal';
 import { Button } from '@/components/ui/button';
@@ -8,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 
-const LinkedAccounts = () => {
+const LinkedAccounts = ({ register }) => {
     const { ssoProviders } = useAuth();
     const [identities, setIdentities] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ const LinkedAccounts = () => {
     const availableToLink = (ssoProviders || []).filter(p => !linkedProviderIds.includes(p.id));
 
     return (
-        <div className="settings-card">
+        <div {...register('security-linked-accounts', 'settings-card')}>
             <h3>Linked Accounts</h3>
             <p className="text-secondary">Connect external identity providers to your account</p>
 
@@ -116,7 +118,8 @@ const LinkedAccounts = () => {
 };
 
 const SecuritySettingsTab = () => {
-    const { updateUser, user } = useAuth();
+    const { updateUser, user, isAdmin } = useAuth();
+    const register = useSettingFocus();
     const [formData, setFormData] = useState({
         currentPassword: '',
         newPassword: '',
@@ -295,7 +298,7 @@ Keep these codes in a safe place.`;
             )}
 
             {/* Two-Factor Authentication Section */}
-            <div className="settings-card two-fa-card">
+            <div {...register('security-2fa', 'settings-card two-fa-card')}>
                 <div className="two-fa-header">
                     <div className="two-fa-icon">
                         <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2">
@@ -365,7 +368,7 @@ Keep these codes in a safe place.`;
                 )}
             </div>
 
-            <form onSubmit={handleSubmit} className="settings-form">
+            <form onSubmit={handleSubmit} {...register('security-password', 'settings-form')}>
                 <h3>Change Password</h3>
 
                 <div className="form-group">
@@ -408,7 +411,7 @@ Keep these codes in a safe place.`;
                 </div>
             </form>
 
-            <div className="settings-card">
+            <div {...register('security-sessions', 'settings-card')}>
                 <h3>Sessions</h3>
                 <p>Manage your active sessions</p>
                 <div className="session-item current">
@@ -427,8 +430,11 @@ Keep these codes in a safe place.`;
                 </div>
             </div>
 
+            {/* Require-2FA policy (admin only) — a policy, never a default. */}
+            {isAdmin && <TwoFactorPolicyCard {...register('security-2fa-policy', 'settings-card')} />}
+
             {/* Linked Accounts */}
-            <LinkedAccounts />
+            <LinkedAccounts register={register} />
 
             {/* 2FA Setup Modal */}
             {showSetupModal && setupData && (

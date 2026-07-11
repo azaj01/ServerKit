@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import useSettingFocus from '../../hooks/useSettingFocus';
 import SSOProviderIcon from '../SSOProviderIcon';
 import {
     Save, RefreshCw, CheckCircle, XCircle, AlertTriangle, Shield, Globe,
@@ -39,6 +40,7 @@ const FIELD_LABELS = {
 };
 
 const SSOConfigTab = () => {
+    const register = useSettingFocus();
     const [config, setConfig] = useState({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState({});
@@ -162,7 +164,7 @@ const SSOConfigTab = () => {
             )}
 
             {/* General Settings */}
-            <div className="settings-card sso-general-card">
+            <div {...register('sso-general-settings', 'settings-card sso-general-card')}>
                 <div className="settings-card__header">
                     <div className="settings-card__header-left">
                         <Globe size={20} />
@@ -250,7 +252,7 @@ const SSOConfigTab = () => {
                 const testResult = testResults[provider.id];
 
                 return (
-                    <div key={provider.id} className={`settings-card sso-provider-config ${enabled ? 'sso-provider-config--enabled' : ''}`}>
+                    <div key={provider.id} {...register(`sso-${provider.id}`, `settings-card sso-provider-config ${enabled ? 'sso-provider-config--enabled' : ''}`)}>
                         <div
                             className="sso-provider-config__header"
                             onClick={() => setExpandedProvider(isExpanded ? null : provider.id)}

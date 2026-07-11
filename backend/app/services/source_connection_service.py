@@ -22,6 +22,7 @@ class SourceConnectionService:
     GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
     GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
     GITHUB_API_URL = 'https://api.github.com'
+    GITHUB_APP_NEW_URL = 'https://github.com/settings/apps/new'
     GITHUB_SCOPES = ['repo', 'read:user', 'user:email']
 
     GITLAB_AUTHORIZE_URL = 'https://gitlab.com/oauth/authorize'
@@ -45,11 +46,21 @@ class SourceConnectionService:
         if redacted and client_secret:
             client_secret = f'****{client_secret[-4:]}'
 
+        # When GitHub was set up via the one-click GitHub App manifest flow, we
+        # also track the app slug so the UI can show it and the connect flow can
+        # route through the app's install URL. `provider_kind` is 'app' for a
+        # manifest-provisioned GitHub App, 'oauth' for a hand-entered OAuth app.
+        app_slug = SettingsService.get('source_github_app_slug', '') or ''
         return {
             'client_id': client_id,
             'client_secret': client_secret,
             'configured': bool(client_id and client_secret),
             'scopes': cls.GITHUB_SCOPES,
+            'provider_kind': 'app' if app_slug else 'oauth',
+            'app_slug': app_slug,
+            'app_name': SettingsService.get('source_github_app_name', '') or '',
+            'app_html_url': SettingsService.get('source_github_app_html_url', '') or '',
+            'install_url': f'https://github.com/apps/{app_slug}/installations/new' if app_slug else '',
         }
 
     @classmethod
@@ -65,6 +76,108 @@ class SourceConnectionService:
                 updated.append('client_secret')
         return {'updated': updated, 'config': cls.get_github_config(redacted=True)}
 
+    # ==================================================================
+    # One-click GitHub App setup (manifest flow)
+    # ------------------------------------------------------------------
+    # An open-source, self-hosted panel can't ship a client secret, and asking
+    # every operator to hand-register an OAuth app and copy two secrets is
+    # friction. GitHub's app-manifest flow lets each instance create its OWN
+    # GitHub App in a couple of clicks: we hand GitHub a manifest, the operator
+    # confirms on github.com, and GitHub hands back freshly-minted credentials
+    # that we store locally. No shared secret, no infra on our side.
+    # ==================================================================
+
+    @classmethod
+    def build_github_app_manifest(cls, redirect_uri, base_url):
+        """Return ``(manifest, state, post_url)`` for the GitHub App manifest flow.
+
+        The frontend POSTs ``manifest`` (JSON) to ``post_url?state=<state>``; the
+        operator confirms on github.com; GitHub redirects to ``redirect_uri`` with
+        ``?code=&state=`` which :meth:`complete_github_app_manifest` converts into
+        stored credentials.
+        """
+        if not redirect_uri or not base_url:
+            raise ValueError('redirect_uri and base_url are required')
+
+        base_url = base_url.rstrip('/')
+        state = secrets.token_urlsafe(32)
+        session['source_github_app_state'] = state
+
+        # App names are globally unique on GitHub; a short random suffix avoids
+        # collisions between instances/re-runs.
+        suffix = secrets.token_hex(3)
+        manifest = {
+            'name': f'ServerKit {suffix}',
+            'url': base_url,
+            'redirect_url': redirect_uri,
+            # Where GitHub sends the user after they install the app (also the
+            # user-to-server OAuth callback, so install + authorize land here).
+            'callback_urls': [f'{base_url}/connections/callback/github'],
+            'setup_url': f'{base_url}/connections/callback/github',
+            'setup_on_update': False,
+            'public': False,
+            'default_permissions': {
+                'contents': 'read',
+                'metadata': 'read',
+                'pull_requests': 'read',
+            },
+            'default_events': ['push', 'pull_request'],
+            # Issue a user-to-server token as part of installation so the connect
+            # step is a single hop (install + authorize together).
+            'request_oauth_on_install': True,
+        }
+        return manifest, state, cls.GITHUB_APP_NEW_URL
+
+    @classmethod
+    def complete_github_app_manifest(cls, code, state, user_id=None):
+        """Convert a manifest ``code`` into a GitHub App and persist its
+        credentials. Returns a small summary incl. the install URL."""
+        expected_state = session.pop('source_github_app_state', None)
+        if not expected_state or state != expected_state:
+            raise ValueError('Invalid GitHub App manifest state')
+        if not code:
+            raise ValueError('Missing manifest code')
+
+        response = requests.post(
+            f'{cls.GITHUB_API_URL}/app-manifests/{quote(code)}/conversions',
+            headers={'Accept': 'application/vnd.github+json'},
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        client_id = data.get('client_id')
+        client_secret = data.get('client_secret')
+        slug = data.get('slug')
+        if not (client_id and client_secret and slug):
+            raise ValueError('GitHub did not return complete app credentials')
+
+        SettingsService.set('source_github_client_id', client_id, user_id=user_id)
+        SettingsService.set('source_github_client_secret', client_secret, user_id=user_id)
+        SettingsService.set('source_github_app_id', str(data.get('id') or ''), user_id=user_id)
+        SettingsService.set('source_github_app_slug', slug, user_id=user_id)
+        SettingsService.set('source_github_app_name', data.get('name') or '', user_id=user_id)
+        SettingsService.set('source_github_app_html_url', data.get('html_url') or '', user_id=user_id)
+        # The private key and webhook secret are sensitive — store encrypted.
+        if data.get('pem'):
+            SettingsService.set('source_github_app_pem', encrypt_secret(data['pem']), user_id=user_id)
+        if data.get('webhook_secret'):
+            SettingsService.set(
+                'source_github_app_webhook_secret',
+                encrypt_secret(data['webhook_secret']), user_id=user_id,
+            )
+
+        return {
+            'slug': slug,
+            'name': data.get('name') or slug,
+            'html_url': data.get('html_url') or '',
+            'install_url': f'https://github.com/apps/{slug}/installations/new',
+        }
+
+    @classmethod
+    def _github_app_slug(cls):
+        return SettingsService.get('source_github_app_slug', '') or ''
+
     @classmethod
     def generate_github_authorize_url(cls, redirect_uri):
         config = cls.get_github_config()
@@ -73,6 +186,14 @@ class SourceConnectionService:
 
         state = secrets.token_urlsafe(32)
         session['source_github_state'] = state
+
+        # GitHub App: send the user to the install screen (with OAuth-on-install
+        # this grants repo access AND returns an authorization code to our
+        # callback in one hop). Classic OAuth app: the plain authorize screen.
+        slug = cls._github_app_slug()
+        if slug:
+            params = {'state': state}
+            return f'https://github.com/apps/{slug}/installations/new?{urlencode(params)}', state
 
         params = {
             'client_id': config['client_id'],
@@ -152,17 +273,44 @@ class SourceConnectionService:
         db.session.commit()
 
     @classmethod
+    def _list_github_app_repos(cls, token):
+        """List repositories a GitHub App user-to-server token can reach, across
+        every installation the user has granted. (GitHub Apps don't use
+        ``/user/repos`` — repo access is per-installation.)"""
+        repos = []
+        installations = cls._github_get(token, '/user/installations?per_page=100')
+        items = installations.get('installations', []) if isinstance(installations, dict) else []
+        for installation in items:
+            inst_id = installation.get('id')
+            if not inst_id:
+                continue
+            page = 1
+            while True:
+                data = cls._github_get(
+                    token, f'/user/installations/{inst_id}/repositories?per_page=100&page={page}')
+                batch = data.get('repositories', []) if isinstance(data, dict) else []
+                repos.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+        return repos
+
+    @classmethod
     def list_github_repositories(cls, user_id, search='', page=1, per_page=50):
         token = cls._get_github_token(user_id)
-        params = {
-            'visibility': 'all',
-            'affiliation': 'owner,collaborator,organization_member',
-            'sort': 'updated',
-            'direction': 'desc',
-            'page': max(int(page or 1), 1),
-            'per_page': min(max(int(per_page or 50), 1), 100),
-        }
-        repos = cls._github_get(token, f'/user/repos?{urlencode(params)}')
+        if cls._github_app_slug():
+            repos = cls._list_github_app_repos(token)
+            repos.sort(key=lambda r: r.get('updated_at') or '', reverse=True)
+        else:
+            params = {
+                'visibility': 'all',
+                'affiliation': 'owner,collaborator,organization_member',
+                'sort': 'updated',
+                'direction': 'desc',
+                'page': max(int(page or 1), 1),
+                'per_page': min(max(int(per_page or 50), 1), 100),
+            }
+            repos = cls._github_get(token, f'/user/repos?{urlencode(params)}')
         search_text = (search or '').strip().lower()
         if search_text:
             repos = [

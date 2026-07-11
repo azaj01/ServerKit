@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import ServerKitLogo from '../ServerKitLogo';
 import { Button } from '@/components/ui/button';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const STAR_PROMPT_KEY = 'serverkit-star-prompt-dismissed';
 
@@ -16,6 +17,7 @@ const AboutTab = () => {
     const [showStarPrompt, setShowStarPrompt] = useState(() => {
         return localStorage.getItem(STAR_PROMPT_KEY) !== 'true';
     });
+    const register = useSettingFocus();
 
     useEffect(() => {
         const fetchVersion = async () => {
@@ -52,7 +54,7 @@ const AboutTab = () => {
                 <p>Server management made simple</p>
             </div>
 
-            <div className="about-card">
+            <div {...register('about-version', 'about-card')}>
                 <div className="about-logo">
                     <ServerKitLogo width={64} height={64} />
                 </div>
@@ -162,7 +164,7 @@ const AboutTab = () => {
                 </ul>
             </div>
 
-            <div className="settings-card">
+            <div {...register('about-links', 'settings-card')}>
                 <h3>Links</h3>
                 <div className="link-list">
                     <a href="https://github.com/jhd3197/ServerKit" target="_blank" rel="noopener noreferrer" className="link-item">

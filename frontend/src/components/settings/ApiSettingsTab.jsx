@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import useSettingFocus from '../../hooks/useSettingFocus';
 import ApiKeyModal from './ApiKeyModal';
 import WebhookSubscriptionModal from './WebhookSubscriptionModal';
 import {
@@ -28,6 +29,7 @@ const ApiSettingsTab = () => {
 
 // ─── API Keys Section ──────────────────────────────────
 const ApiKeysSection = () => {
+    const register = useSettingFocus();
     const [keys, setKeys] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -68,7 +70,7 @@ const ApiKeysSection = () => {
     };
 
     return (
-        <div className="settings-card">
+        <div {...register('api-keys', 'settings-card')}>
             <div className="settings-card__header">
                 <div className="settings-card__header-left">
                     <Key size={20} />
@@ -184,6 +186,7 @@ const ApiKeysSection = () => {
 
 // ─── Rate Limits Section ───────────────────────────────
 const RateLimitsSection = () => {
+    const register = useSettingFocus();
     const [limits, setLimits] = useState({
         rate_limit_standard: '100 per minute',
         rate_limit_elevated: '500 per minute',
@@ -227,7 +230,7 @@ const RateLimitsSection = () => {
     };
 
     return (
-        <div className="settings-card">
+        <div {...register('api-rate-limits', 'settings-card')}>
             <div className="settings-card__header">
                 <div className="settings-card__header-left">
                     <Activity size={20} />
@@ -270,6 +273,7 @@ const RateLimitsSection = () => {
 
 // ─── Webhook Subscriptions Section ─────────────────────
 const WebhookSection = () => {
+    const register = useSettingFocus();
     const [subscriptions, setSubscriptions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -328,7 +332,7 @@ const WebhookSection = () => {
     };
 
     return (
-        <div className="settings-card">
+        <div {...register('api-webhooks', 'settings-card')}>
             <div className="settings-card__header">
                 <div className="settings-card__header-left">
                     <Zap size={20} />
@@ -457,6 +461,7 @@ const WebhookSection = () => {
 
 // ─── Analytics Section ─────────────────────────────────
 const AnalyticsSection = () => {
+    const register = useSettingFocus();
     const [overview, setOverview] = useState(null);
     const [endpoints, setEndpoints] = useState([]);
     const [timeseries, setTimeseries] = useState([]);
@@ -481,7 +486,7 @@ const AnalyticsSection = () => {
     const maxCount = Math.max(...timeseries.map(d => d.count), 1);
 
     return (
-        <div className="settings-card">
+        <div {...register('api-analytics', 'settings-card')}>
             <div className="settings-card__header">
                 <div className="settings-card__header-left">
                     <BarChart3 size={20} />

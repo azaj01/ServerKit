@@ -42,6 +42,7 @@ import * as htaccessToolMethods from './htaccessTools.js';
 import * as manifestMethods from './manifests.js';
 import * as surveyMethods from './survey.js';
 import * as dnsCutoverMethods from './dnsCutover.js';
+import * as searchMethods from './search.js';
 
 class ApiService extends ApiClient {
     constructor() {
@@ -91,6 +92,7 @@ class ApiService extends ApiClient {
             manifestMethods,
             surveyMethods,
             dnsCutoverMethods,
+            searchMethods,
         ];
         for (const mod of modules) {
             for (const [key, fn] of Object.entries(mod)) {

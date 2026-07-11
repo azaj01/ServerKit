@@ -132,6 +132,39 @@ def update_github_admin_config():
     return jsonify(result), 200
 
 
+@source_connections_bp.route('/admin/github/app-manifest', methods=['GET'])
+@admin_required
+def github_app_manifest():
+    """Build the GitHub App manifest for the one-click setup flow."""
+    redirect_uri = request.args.get('redirect_uri', '')
+    base_url = request.args.get('base_url', '') or request.host_url
+    try:
+        manifest, state, post_url = SourceConnectionService.build_github_app_manifest(
+            redirect_uri, base_url)
+        return jsonify({'manifest': manifest, 'state': state, 'post_url': post_url}), 200
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+
+@source_connections_bp.route('/admin/github/app-manifest/complete', methods=['POST'])
+@admin_required
+def complete_github_app_manifest():
+    """Convert the manifest code GitHub returned into a stored GitHub App."""
+    user = User.query.get(get_jwt_identity())
+    data = request.get_json() or {}
+    try:
+        result = SourceConnectionService.complete_github_app_manifest(
+            code=data.get('code', ''),
+            state=data.get('state', ''),
+            user_id=user.id if user else None,
+        )
+        return jsonify(result), 200
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except HTTPError as exc:
+        return jsonify({'error': _github_error(exc)}), 400
+
+
 def _github_error(exc):
     response = getattr(exc, 'response', None)
     if response is None:

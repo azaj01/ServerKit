@@ -3,6 +3,7 @@
 
 import os
 import click
+import json
 import secrets
 import sys
 from pathlib import Path
@@ -53,6 +54,11 @@ def cli(ctx, debug):
     ctx.obj['debug'] = debug
     if debug and _env_loaded:
         click.echo(f"Loaded environment from: {_env_loaded}")
+
+
+def _echo_json(payload):
+    """Machine-readable output for the --json flags (stdout only)."""
+    click.echo(json.dumps(payload, indent=2, default=str))
 
 
 @cli.command()
@@ -175,11 +181,26 @@ def activate_user(email):
 
 
 @cli.command()
-def list_users():
+@click.option('--json', 'as_json', is_flag=True, help='Output machine-readable JSON')
+def list_users(as_json):
     """List all users."""
     app = create_app()
     with app.app_context():
         users = User.query.all()
+
+        if as_json:
+            _echo_json({'users': [
+                {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'is_active': user.is_active,
+                    'is_locked': user.is_locked,
+                }
+                for user in users
+            ]})
+            return
 
         if not users:
             click.echo('No users found.')
@@ -223,12 +244,17 @@ def init_db():
 
 
 @cli.command()
-def db_status():
+@click.option('--json', 'as_json', is_flag=True, help='Output machine-readable JSON')
+def db_status(as_json):
     """Show current database migration status."""
     app = create_app()
     with app.app_context():
         from app.services.migration_service import MigrationService
         status = MigrationService.get_status()
+
+        if as_json:
+            _echo_json(status)
+            return
 
         click.echo(f"\nCurrent revision: {status['current_revision'] or 'none'}")
         click.echo(f"Head revision:    {status['head_revision'] or 'none'}")
@@ -586,14 +612,33 @@ def factory_reset():
 
 @cli.command()
 @click.option('--all', 'show_all', is_flag=True, help='Also show Docker container status')
-def list_apps(show_all):
+@click.option('--json', 'as_json', is_flag=True,
+              help='Output machine-readable JSON (not combinable with --all)')
+def list_apps(show_all, as_json):
     """List all user applications (excludes ServerKit infrastructure)."""
     import subprocess
     from app.models import Application
 
+    if as_json and show_all:
+        _fail('--json cannot be combined with --all (the Docker section is table-only).')
+
     app = create_app()
     with app.app_context():
         apps = Application.query.all()
+
+        if as_json:
+            _echo_json({'apps': [
+                {
+                    'id': application.id,
+                    'name': application.name,
+                    'app_type': application.app_type,
+                    'status': application.status,
+                    'port': application.port,
+                    'root_path': application.root_path,
+                }
+                for application in apps
+            ]})
+            return
 
         click.echo('\n' + '=' * 90)
         click.echo('  USER APPLICATIONS')
@@ -648,13 +693,17 @@ def list_apps(show_all):
 
 
 @cli.command('list-servers')
-def list_servers():
+@click.option('--json', 'as_json', is_flag=True, help='Output machine-readable JSON')
+def list_servers(as_json):
     """List deployment targets."""
     app = create_app()
     with app.app_context():
         from app.services.remote_docker_service import RemoteDockerService
 
         servers = RemoteDockerService.get_available_servers()
+        if as_json:
+            _echo_json({'servers': servers})
+            return
         click.echo(f"\n{'ID':<38} {'Name':<28} {'Status':<12} {'Target'}")
         click.echo('-' * 90)
         for server in servers:
@@ -718,7 +767,8 @@ def deploy_template(template_id, app_name, server_id, variables, wait):
 @cli.command('deployment-status')
 @click.argument('job_id')
 @click.option('--logs', is_flag=True, help='Show job logs')
-def deployment_status(job_id, logs):
+@click.option('--json', 'as_json', is_flag=True, help='Output machine-readable JSON')
+def deployment_status(job_id, logs, as_json):
     """Show deployment job status."""
     app = create_app()
     with app.app_context():
@@ -728,6 +778,10 @@ def deployment_status(job_id, logs):
         if not job:
             click.echo(click.style('Deployment job not found', fg='red'))
             sys.exit(1)
+
+        if as_json:
+            _echo_json({'job': job})
+            return
 
         click.echo(f"\nJob:    {job['id']}")
         click.echo(f"Kind:   {job['kind']}")
@@ -792,7 +846,8 @@ def _echo_table(headers, rows):
 
 
 @cli.command()
-def status():
+@click.option('--json', 'as_json', is_flag=True, help='Output machine-readable JSON')
+def status(as_json):
     """Show panel health and version."""
     from app.utils.version import get_panel_version
     from app.services.cli_api_client import CliApiError
@@ -803,6 +858,10 @@ def status():
         health = _api_client(with_token=False).get('/system/health')
     except CliApiError as exc:
         _fail(str(exc))
+
+    if as_json:
+        _echo_json({'version': version, 'health': health})
+        return
 
     rows = [
         ('Panel version', version),
@@ -821,7 +880,8 @@ def services():
 
 
 @services.command('list')
-def services_list():
+@click.option('--json', 'as_json', is_flag=True, help='Output machine-readable JSON')
+def services_list(as_json):
     """List monitored system services."""
     from app.services.cli_api_client import CliApiError
 
@@ -831,6 +891,9 @@ def services_list():
         _fail(str(exc))
 
     entries = data.get('services', [])
+    if as_json:
+        _echo_json({'services': entries})
+        return
     if not entries:
         click.echo('No services reported.')
         return
@@ -857,7 +920,8 @@ def apps():
 
 
 @apps.command('list')
-def apps_list():
+@click.option('--json', 'as_json', is_flag=True, help='Output machine-readable JSON')
+def apps_list(as_json):
     """List applications known to the panel."""
     from app.services.cli_api_client import CliApiError
 
@@ -867,6 +931,9 @@ def apps_list():
         _fail(str(exc))
 
     entries = data.get('apps', [])
+    if as_json:
+        _echo_json({'apps': entries})
+        return
     if not entries:
         click.echo('No applications found.')
         return
@@ -920,15 +987,24 @@ def login_url(ttl, ip, user_ref):
 @cli.command()
 @click.option('--repair', 'do_repair', is_flag=True, help='Repair all repairable findings')
 @click.option('--yes', is_flag=True, help='Skip the repair confirmation prompt')
-def doctor(do_repair, yes):
+@click.option('--json', 'as_json', is_flag=True,
+              help='Output the report as JSON (not combinable with --repair)')
+def doctor(do_repair, yes, as_json):
     """Run panel diagnostics (and optionally repair findings)."""
     from app.services.cli_api_client import CliApiError
+
+    if as_json and do_repair:
+        _fail('--json cannot be combined with --repair (JSON mode is read-only).')
 
     try:
         client = _api_client()
         data = client.post('/doctor/run')
     except CliApiError as exc:
         _fail(str(exc))
+
+    if as_json:
+        _echo_json(data.get('report') or {})
+        return
 
     checks = (data.get('report') or {}).get('checks', [])
     if not checks:
@@ -1035,7 +1111,8 @@ def manifest():
 @click.option('--project', 'project_id', type=int, required=True, help='Project id')
 @click.option('--file', 'file_path', type=click.Path(exists=True), default=None,
               help='Manifest file to plan (defaults to the stored manifest)')
-def manifest_plan(project_id, file_path):
+@click.option('--json', 'as_json', is_flag=True, help='Output the plan as JSON')
+def manifest_plan(project_id, file_path, as_json):
     """Compute the change plan for a project's manifest (dry run)."""
     from app.services.cli_api_client import CliApiError
 
@@ -1045,6 +1122,9 @@ def manifest_plan(project_id, file_path):
         _fail(str(exc))
 
     plan = data.get('plan') or {}
+    if as_json:
+        _echo_json(plan)
+        return
     steps = plan.get('steps') or []
     _echo_plan_steps(steps)
     _echo_plan_issues(plan.get('issues'))

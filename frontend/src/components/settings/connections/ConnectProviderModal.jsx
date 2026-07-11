@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import {
     CheckCircle2, ExternalLink, KeyRound, Link2, Mail, PlugZap, Server, Globe,
-    HardDrive, ShieldCheck, ShieldAlert, Trash2, Activity, ChevronDown, Boxes,
+    HardDrive, ShieldCheck, ShieldAlert, Trash2, Activity, ChevronDown, Boxes, Zap,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -27,7 +27,7 @@ import DnsActivity from './DnsActivity';
 export default function ConnectProviderModal({
     provider, open, onOpenChange, isAdmin,
     sourceStatus, sourceConfig, dnsProviders, cloudProviders, storageConfig, registrarConnections, containerRegistries, relayConfig,
-    onConnectSource, onDisconnectSource, onSaveSourceConfig,
+    onConnectSource, onDisconnectSource, onSaveSourceConfig, onSetupGithubApp,
     onAddDns, onRemoveDns, onTestDns,
     onAddCloud, onRemoveCloud,
     onSaveStorage, onTestStorage,
@@ -58,6 +58,7 @@ export default function ConnectProviderModal({
                             onConnect={() => onConnectSource(provider)}
                             onDisconnect={() => onDisconnectSource(provider)}
                             onSaveConfig={(cfg) => onSaveSourceConfig(provider, cfg)}
+                            onSetupApp={onSetupGithubApp}
                         />
                     )}
 
@@ -113,12 +114,17 @@ export default function ConnectProviderModal({
     );
 }
 
-// ── Source: GitHub / GitLab ──
-function SourceBody({ provider, status, config, isAdmin, onConnect, onDisconnect, onSaveConfig }) {
+// ── Source: GitHub / GitLab / Bitbucket ──
+function SourceBody({ provider, status, config, isAdmin, onConnect, onDisconnect, onSaveConfig, onSetupApp }) {
     const connection = status?.connection;
     const configured = status?.configured;
+    const isGithub = provider.provider === 'github';
+    const appSlug = config?.app_slug || '';
     const callbackUrl = `${window.location.origin}/connections/callback/${provider.provider}`;
     const [cfg, setCfg] = useState({ client_id: config?.client_id || '', client_secret: config?.client_secret || '' });
+    // GitHub leads with the one-click app; the manual OAuth form is tucked under
+    // "Advanced". Other providers keep the manual form open.
+    const [advancedOpen, setAdvancedOpen] = useState(!isGithub);
     const [busy, setBusy] = useState(false);
 
     async function save(e) {
@@ -144,10 +150,12 @@ function SourceBody({ provider, status, config, isAdmin, onConnect, onDisconnect
                 <div className="conn-empty">
                     <span className="conn-empty__icon"><Link2 size={18} /></span>
                     <div className="conn-empty__text">
-                        <strong>{configured ? `Connect your ${provider.name} account` : `${provider.name} OAuth is not configured yet`}</strong>
+                        <strong>{configured ? `Connect your ${provider.name} account` : `${provider.name} is not set up yet`}</strong>
                         <span>{configured
                             ? 'Authorize ServerKit once, then pick repositories directly on the New Service page.'
-                            : 'An admin needs to add an OAuth app below before anyone can connect.'}</span>
+                            : isGithub
+                                ? 'Set it up in one click below — no copying secrets — then connect your account.'
+                                : 'An admin needs to add an OAuth app below before anyone can connect.'}</span>
                     </div>
                     <Button type="button" size="sm" disabled={!configured || busy} onClick={onConnect}>
                         <PlugZap size={15} /> Connect {provider.name}
@@ -155,31 +163,72 @@ function SourceBody({ provider, status, config, isAdmin, onConnect, onDisconnect
                 </div>
             )}
 
-            {isAdmin && (
-                <form className="conn-form" onSubmit={save}>
-                    <div className="conn-form__heading"><KeyRound size={15} /> OAuth app credentials</div>
-                    <div className="conn-form__grid">
-                        <div className="form-group">
-                            <Label htmlFor="src-client-id">Client ID</Label>
-                            <Input id="src-client-id" value={cfg.client_id} onChange={(e) => setCfg((c) => ({ ...c, client_id: e.target.value }))} placeholder={`${provider.name} OAuth client ID`} autoComplete="off" />
+            {/* One-click GitHub App setup (admin, GitHub only). */}
+            {isAdmin && isGithub && (
+                <div className="conn-oneclick">
+                    <div className="conn-oneclick__head"><Zap size={15} /> One-click setup</div>
+                    <p className="conn-oneclick__blurb">
+                        Create a dedicated GitHub App for this server. You confirm once on GitHub —
+                        no OAuth secrets to copy — and its credentials are stored locally on your server.
+                    </p>
+                    {appSlug && (
+                        <div className="conn-oneclick__done">
+                            <CheckCircle2 size={14} /> App <strong>{config.app_name || appSlug}</strong> is set up.
+                            {config.app_html_url && (
+                                <a href={config.app_html_url} target="_blank" rel="noreferrer">
+                                    <ExternalLink size={12} /> Manage on GitHub
+                                </a>
+                            )}
                         </div>
-                        <div className="form-group">
-                            <Label htmlFor="src-client-secret">Client Secret</Label>
-                            <Input id="src-client-secret" type="password" value={cfg.client_secret} onChange={(e) => setCfg((c) => ({ ...c, client_secret: e.target.value }))} placeholder={`${provider.name} OAuth client secret`} autoComplete="off" />
-                        </div>
-                    </div>
-                    <div className="conn-form__callback">
-                        <CheckCircle2 size={14} /> Callback URL: <code>{callbackUrl}</code>
-                    </div>
-                    {provider.docUrl && (
-                        <a className="conn-form__doc" href={provider.docUrl} target="_blank" rel="noreferrer">
-                            <ExternalLink size={13} /> Create an OAuth app on {provider.name}
-                        </a>
                     )}
                     <div className="conn-form__actions">
-                        <Button type="submit" size="sm" disabled={busy}>{busy ? 'Saving…' : 'Save OAuth app'}</Button>
+                        <Button type="button" size="sm" onClick={onSetupApp}>
+                            <Zap size={15} /> {appSlug ? 'Re-create GitHub App' : 'Set up in one click'}
+                        </Button>
                     </div>
-                </form>
+                </div>
+            )}
+
+            {isAdmin && (
+                <div className="conn-advanced">
+                    {isGithub && (
+                        <button
+                            type="button"
+                            className="conn-advanced__toggle"
+                            onClick={() => setAdvancedOpen((o) => !o)}
+                            aria-expanded={advancedOpen}
+                        >
+                            <span><KeyRound size={14} /> Advanced: use your own OAuth app</span>
+                            <ChevronDown size={15} className={advancedOpen ? 'conn-list__chev is-open' : 'conn-list__chev'} />
+                        </button>
+                    )}
+                    {advancedOpen && (
+                        <form className="conn-form" onSubmit={save}>
+                            {!isGithub && <div className="conn-form__heading"><KeyRound size={15} /> OAuth app credentials</div>}
+                            <div className="conn-form__grid">
+                                <div className="form-group">
+                                    <Label htmlFor="src-client-id">Client ID</Label>
+                                    <Input id="src-client-id" value={cfg.client_id} onChange={(e) => setCfg((c) => ({ ...c, client_id: e.target.value }))} placeholder={`${provider.name} OAuth client ID`} autoComplete="off" />
+                                </div>
+                                <div className="form-group">
+                                    <Label htmlFor="src-client-secret">Client Secret</Label>
+                                    <Input id="src-client-secret" type="password" value={cfg.client_secret} onChange={(e) => setCfg((c) => ({ ...c, client_secret: e.target.value }))} placeholder={`${provider.name} OAuth client secret`} autoComplete="off" />
+                                </div>
+                            </div>
+                            <div className="conn-form__callback">
+                                <CheckCircle2 size={14} /> Callback URL: <code>{callbackUrl}</code>
+                            </div>
+                            {provider.docUrl && (
+                                <a className="conn-form__doc" href={provider.docUrl} target="_blank" rel="noreferrer">
+                                    <ExternalLink size={13} /> Create an OAuth app on {provider.name}
+                                </a>
+                            )}
+                            <div className="conn-form__actions">
+                                <Button type="submit" size="sm" disabled={busy}>{busy ? 'Saving…' : 'Save OAuth app'}</Button>
+                            </div>
+                        </form>
+                    )}
+                </div>
             )}
         </>
     );

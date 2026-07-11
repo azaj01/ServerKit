@@ -167,3 +167,90 @@ def test_redis_declared_but_warns(project, owner):
     assert plan['steps'][0]['type'] == 'warn'
     result = ManifestApplyService.apply(project, n, user_id=owner.id)
     assert result['success'] is True
+
+
+# -- Dockerfile builds ------------------------------------------------------
+
+DOCKERFILE_MANIFEST = {
+    'version': 1,
+    'services': [
+        {'name': 'api-worker', 'type': 'worker', 'autoDeploy': True,
+         'dockerfilePath': 'services/api/Dockerfile',
+         'envVars': [{'key': 'LOG_LEVEL', 'value': 'info'}]},
+    ],
+}
+
+
+def _store_source(project, repo='https://example.com/acme/mono.git', ref='main'):
+    from app import db
+    from app.models.application_manifest import ApplicationManifest
+    row = ApplicationManifest(project_id=project.id, source_repo=repo, source_ref=ref)
+    db.session.add(row)
+    db.session.commit()
+    return row
+
+
+def test_dockerfile_build_plans_and_blocks_without_source(project):
+    n = ManifestSpecService.normalize(DOCKERFILE_MANIFEST)
+    plan = ManifestApplyService.plan(project, n)
+    create = next(s for s in plan['steps'] if s['type'] == 'create_app')
+    assert create['payload']['dockerfile_path'] == 'services/api/Dockerfile'
+    assert create['payload']['auto_deploy'] is True
+    assert 'services/api/Dockerfile' in create['description']
+    # no repository on record -> plan-time blocker (apply would refuse)
+    assert any(b['kind'] == 'dockerfile_no_source' for b in plan['blockers'])
+
+
+def test_dockerfile_build_applies_end_to_end(project, owner, monkeypatch, tmp_path):
+    import os
+    from app import paths
+    from app.models import Application
+    from app.services.git_service import GitService
+    from app.services.build_service import BuildService
+
+    monkeypatch.setattr(paths, 'APPS_DIR', str(tmp_path / 'apps'))
+    calls = {}
+
+    def _clone(cls, app_path, repo_url, branch='main'):
+        os.makedirs(os.path.join(app_path, '.git'))
+        calls['clone'] = {'path': app_path, 'repo': repo_url, 'branch': branch}
+        return {'success': True, 'path': app_path}
+
+    def _deploy(cls, app_id, app_path, repo_url, branch='main',
+                auto_deploy=True, **kw):
+        calls['deploy'] = {'app_id': app_id, 'repo': repo_url,
+                           'branch': branch, 'auto_deploy': auto_deploy}
+        return {'success': True}
+
+    def _build(cls, app_id, app_path, **kw):
+        calls['build'] = {'app_id': app_id, **kw}
+        return {'success': True}
+
+    monkeypatch.setattr(GitService, 'clone_repository', classmethod(_clone))
+    monkeypatch.setattr(GitService, 'configure_deployment', classmethod(_deploy))
+    monkeypatch.setattr(BuildService, 'configure_build', classmethod(_build))
+
+    _store_source(project)
+    n = ManifestSpecService.normalize(DOCKERFILE_MANIFEST)
+    result = ManifestApplyService.apply(project, n, user_id=owner.id)
+    assert result['success'] is True, result
+
+    app_row = Application.query.filter_by(project_id=project.id,
+                                          name='api-worker').first()
+    assert app_row is not None
+    assert app_row.root_path == calls['clone']['path']
+    assert calls['clone']['repo'] == 'https://example.com/acme/mono.git'
+    assert calls['deploy']['auto_deploy'] is True
+    assert calls['build']['build_method'] == 'dockerfile'
+    assert calls['build']['dockerfile_path'] == 'services/api/Dockerfile'
+
+
+def test_dockerfile_build_remote_target_blocked(project):
+    manifest = {'version': 1,
+                'services': [{**DOCKERFILE_MANIFEST['services'][0],
+                              'server': 'edge-1'}]}
+    _store_source(project)
+    n = ManifestSpecService.normalize(manifest)
+    plan = ManifestApplyService.plan(project, n)
+    assert any(b['kind'] in ('remote_target', 'observed_server')
+               for b in plan['blockers'])

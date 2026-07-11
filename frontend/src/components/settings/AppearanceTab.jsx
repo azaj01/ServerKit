@@ -3,6 +3,7 @@ import useDashboardLayout from '../../hooks/useDashboardLayout';
 import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const ACCENT_PRESETS = [
     { label: 'Indigo', color: '#6366f1' },
@@ -18,6 +19,7 @@ const ACCENT_PRESETS = [
 const AppearanceTab = () => {
     const { theme, setTheme, accentColor, setAccentColor } = useTheme();
     const { widgets, toggleWidget, moveWidget, resetLayout } = useDashboardLayout();
+    const register = useSettingFocus();
 
     return (
         <div className="settings-section">
@@ -26,7 +28,7 @@ const AppearanceTab = () => {
                 <p>Customize the look and feel of your dashboard</p>
             </div>
 
-            <div className="settings-card">
+            <div {...register('appearance-theme', 'settings-card')}>
                 <h3>Theme</h3>
                 <p>Select your preferred color scheme</p>
                 <div className="theme-options">
@@ -72,7 +74,7 @@ const AppearanceTab = () => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('appearance-accent-color', 'settings-card')}>
                 <h3>Accent Color</h3>
                 <p>Choose the primary accent color used across the interface</p>
                 <div className="accent-presets">
@@ -101,7 +103,7 @@ const AppearanceTab = () => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('appearance-widgets', 'settings-card')}>
                 <h3>Dashboard Widgets</h3>
                 <p>Toggle visibility and reorder widgets on the dashboard</p>
                 <div className="widget-list">

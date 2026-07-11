@@ -25,7 +25,7 @@ import FileManager from './pages/FileManager';
 import CronJobs from './pages/CronJobs';
 import Security from './pages/Security';
 import Services from './pages/Services';
-import NewService from './pages/NewService';
+import NewService from './pages/new-service/NewService';
 import ImportWizard from './pages/ImportWizard';
 import Coexistence from './pages/Coexistence';
 import ServiceDetail from './pages/ServiceDetail';
@@ -49,6 +49,7 @@ import Downloads from './pages/Downloads';
 import SSLCertificates from './pages/SSLCertificates';
 import SSOCallback from './pages/SSOCallback';
 import SourceConnectionCallback from './pages/SourceConnectionCallback';
+import GithubAppCallback from './pages/GithubAppCallback';
 import DatabaseMigration from './pages/DatabaseMigration';
 import ServerTemplates from './pages/ServerTemplates';
 import Workspaces from './pages/Workspaces';
@@ -106,6 +107,7 @@ const PAGE_TITLES = {
     '/terminal': 'Terminal',
     '/settings': 'Settings',
     '/connections/callback/github': 'GitHub Connection',
+    '/connections/github-app/callback': 'GitHub Setup',
     '/migrate': 'Database Migration',
     '/fleet': 'Agent Fleet',
     '/fleet-monitor': 'Fleet Monitor',
@@ -274,6 +276,11 @@ function AppRoutes() {
             <Route path="/connections/callback/:provider" element={
                 <PrivateRoute>
                     <SourceConnectionCallback />
+                </PrivateRoute>
+            } />
+            <Route path="/connections/github-app/callback" element={
+                <PrivateRoute>
+                    <GithubAppCallback />
                 </PrivateRoute>
             } />
             <Route path="/status/:slug" element={<PublicStatusPage />} />
