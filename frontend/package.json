@@ -6,7 +6,8 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "lint": "eslint .",
+        "lint": "eslint . && node scripts/check-settings-index.mjs",
+        "lint:settings-index": "node scripts/check-settings-index.mjs",
         "preview": "vite preview"
     },
     "optionalDependencies": {

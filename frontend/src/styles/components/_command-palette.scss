@@ -206,3 +206,29 @@
 .ui-command-item[data-selected='true'] .command-palette__item-icon {
     color: $text-primary;
 }
+
+// --------------------------------------------
+// Settings deep-link flash (plan 41, Phase 2): a palette result lands on the
+// exact card via ?focus=setting:<id>; useSettingFocus scrolls it into view and
+// adds .is-setting-focused for ~2s. Token-based ring + brief background wash.
+// --------------------------------------------
+.is-setting-focused {
+    scroll-margin-top: $space-6;
+    animation: setting-focus-flash 2s ease-out;
+    border-radius: $radius-md;
+}
+
+@keyframes setting-focus-flash {
+    0% {
+        box-shadow: 0 0 0 3px var(--accent-bright);
+        background-color: var(--accent-bg-soft);
+    }
+    70% {
+        box-shadow: 0 0 0 3px var(--accent-bright);
+        background-color: var(--accent-bg-soft);
+    }
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+        background-color: transparent;
+    }
+}

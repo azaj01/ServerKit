@@ -8,9 +8,11 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import EmptyState from '../EmptyState';
+import useSettingFocus from '../../hooks/useSettingFocus';
 
 const NotificationsTab = () => {
     const { isAdmin, user } = useAuth();
+    const register = useSettingFocus();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(null);
@@ -143,7 +145,7 @@ const NotificationsTab = () => {
 
     const userPrefsUI = (
         <div className="user-notification-prefs">
-            <div className="settings-card">
+            <div {...register('notifications-enable', 'settings-card')}>
                 <div className="form-group">
                     <div className="flex items-center gap-3">
                         <Switch
@@ -155,7 +157,7 @@ const NotificationsTab = () => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('notifications-channels', 'settings-card')}>
                 <h3>Notification Channels</h3>
                 <p>Choose how you want to receive notifications</p>
                 <div className="channel-toggles">
@@ -177,7 +179,7 @@ const NotificationsTab = () => {
             </div>
 
             {userPrefs.channels?.includes('email') && (
-                <div className="settings-card">
+                <div {...register('notifications-email', 'settings-card')}>
                     <h3>Email Settings</h3>
                     <div className="form-group">
                         <Label>Notification Email (optional)</Label>
@@ -193,7 +195,7 @@ const NotificationsTab = () => {
             )}
 
             {userPrefs.channels?.includes('discord') && (
-                <div className="settings-card">
+                <div {...register('notifications-discord-webhook', 'settings-card')}>
                     <h3>Personal Discord Webhook</h3>
                     <div className="form-group">
                         <Label>Webhook URL</Label>
@@ -209,7 +211,7 @@ const NotificationsTab = () => {
             )}
 
             {userPrefs.channels?.includes('telegram') && (
-                <div className="settings-card">
+                <div {...register('notifications-telegram', 'settings-card')}>
                     <h3>Personal Telegram</h3>
                     <div className="form-group">
                         <Label>Your Chat ID</Label>
@@ -224,7 +226,7 @@ const NotificationsTab = () => {
                 </div>
             )}
 
-            <div className="settings-card">
+            <div {...register('notifications-severity', 'settings-card')}>
                 <h3>Severity Levels</h3>
                 <p>Which alert types do you want to receive?</p>
                 <div className="severity-toggles">
@@ -245,7 +247,7 @@ const NotificationsTab = () => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('notifications-categories', 'settings-card')}>
                 <h3>Notification Categories</h3>
                 <p>What types of events should trigger notifications?</p>
                 <div className="category-toggles">
@@ -269,7 +271,7 @@ const NotificationsTab = () => {
                 </div>
             </div>
 
-            <div className="settings-card">
+            <div {...register('notifications-quiet-hours', 'settings-card')}>
                 <h3>Quiet Hours</h3>
                 <p>Pause non-critical notifications during these hours</p>
                 <div className="form-group">
