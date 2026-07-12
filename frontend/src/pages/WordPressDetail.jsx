@@ -10,6 +10,7 @@ import AttachDomainModal from '../components/wordpress/AttachDomainModal';
 import { Pill, EnvTag, PageTopbar } from '../components/ds';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import EmptyState from '../components/EmptyState';
+import PluginSlot from '../components/PluginSlot';
 import Modal from '@/components/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -445,6 +446,9 @@ const WordPressDetail = () => {
                     )}
                 </ErrorBoundary>
             </div>
+
+            {/* Extension slot: widgets contributed to the WordPress detail page */}
+            <PluginSlot name="wordpress.detail.panel" context={{ site }} />
             </div>
         </div>
     );

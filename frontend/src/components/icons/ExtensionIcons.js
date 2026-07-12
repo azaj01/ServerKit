@@ -7,6 +7,7 @@
 // PNGs are bundled + hashed by Vite via these URL imports.
 import automations from '../../assets/extension-icons/automations.png';
 import backup from '../../assets/extension-icons/backup.png';
+import faro from '../../assets/extension-icons/faro.png';
 import cloudflare from '../../assets/extension-icons/cloudflare.png';
 import extensions from '../../assets/extension-icons/extensions.png';
 import git from '../../assets/extension-icons/git.png';
@@ -31,6 +32,9 @@ const KEYWORD_RULES = [
     // tramo/Automations ships its own illustrated cover; keep it ahead of the
     // generic workflow rule so 'serverkit-tramo' resolves to it.
     { keys: ['tramo', 'automation'], icon: automations },
+    // Faro ships its own illustrated lighthouse cover; keep it ahead of the
+    // generic 'remote' rule so 'serverkit-faro' resolves here.
+    { keys: ['faro'], icon: faro },
     { keys: ['cloudflare'], icon: cloudflare },
     { keys: ['gitea', 'forgejo', 'git'], icon: git },
     { keys: ['gpu', 'nvidia', 'cuda'], icon: gpu },
