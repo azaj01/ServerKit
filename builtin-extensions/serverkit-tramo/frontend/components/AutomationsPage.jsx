@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
     Workflow, RefreshCw, Plus, Trash2, Rocket, Pencil, Play, LayoutTemplate,
     Server, Power, KeyRound, CheckCircle2, X, Send, Github, MessageSquare,
-    Zap, ChevronRight, MousePointerClick, Clock, Webhook, Check,
+    Zap, MousePointerClick, Clock, Webhook, Check, Search, Star,
+    Upload, FileJson,
 } from 'lucide-react';
 import api from '@/services/api';
 import { PageTopbar, Pill } from '@/components/ds';
@@ -20,10 +21,23 @@ import '../styles/tramo-automations.scss';
 // Route-driven tabs (manifest maps /automations and /automations/:tab here).
 const TABS = [
     { slug: 'workflows', to: '/automations', label: 'Workflows', end: true },
+    { slug: 'templates', to: '/automations/templates', label: 'Templates' },
     { slug: 'runs', to: '/automations/runs', label: 'Runs' },
     { slug: 'settings', to: '/automations/settings', label: 'Settings' },
 ];
 const VALID_TABS = TABS.map((t) => t.slug);
+
+// Favorited template ids live in the browser for now (per-device). A server-side
+// favorites store can replace this later without touching the card UI.
+const FAVORITES_KEY = 'tramo:favorite-templates';
+const readFavorites = () => {
+    try {
+        const raw = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+        return new Set(Array.isArray(raw) ? raw : []);
+    } catch {
+        return new Set();
+    }
+};
 
 // Presentation for the starter templates (icon + accent + tags). Keyed by the
 // backend template id; unknown ids fall back to a neutral card so new templates
@@ -102,8 +116,13 @@ const AutomationsPage = () => {
     const [newModal, setNewModal] = useState(false);
     const [newName, setNewName] = useState('');
     const [newTrigger, setNewTrigger] = useState('manual');
-    const [templateModal, setTemplateModal] = useState(false);
     const [templates, setTemplates] = useState([]);
+    const [templatesLoading, setTemplatesLoading] = useState(false);
+    const [templateSearch, setTemplateSearch] = useState('');
+    const [favorites, setFavorites] = useState(readFavorites);
+    const [importModal, setImportModal] = useState(false);
+    const [importName, setImportName] = useState('');
+    const [importText, setImportText] = useState('');
 
     // Runs tab
     const [runs, setRuns] = useState([]);
@@ -164,11 +183,33 @@ const AutomationsPage = () => {
         }
     }, [toast]);
 
+    const loadTemplates = useCallback(async () => {
+        setTemplatesLoading(true);
+        try {
+            const data = await api.request('/tramo/templates');
+            setTemplates(data.templates || []);
+        } catch (error) {
+            toast.error(`Could not load templates: ${error.message}`);
+        } finally {
+            setTemplatesLoading(false);
+        }
+    }, [toast]);
+
     useEffect(() => {
         if (activeTab === 'workflows') loadWorkflows();
+        else if (activeTab === 'templates') loadTemplates();
         else if (activeTab === 'runs') loadRuns();
         else if (activeTab === 'settings') loadSettings();
-    }, [activeTab, loadWorkflows, loadRuns, loadSettings]);
+    }, [activeTab, loadWorkflows, loadTemplates, loadRuns, loadSettings]);
+
+    const toggleFavorite = (id) => {
+        setFavorites((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            try { localStorage.setItem(FAVORITES_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+            return next;
+        });
+    };
 
     // ── Workflow actions ──
     const openNewModal = () => {
@@ -197,25 +238,60 @@ const AutomationsPage = () => {
         }
     };
 
-    const openTemplateModal = async () => {
-        setTemplateModal(true);
-        try {
-            const data = await api.request('/tramo/templates');
-            setTemplates(data.templates || []);
-        } catch (error) {
-            toast.error(`Could not load templates: ${error.message}`);
-        }
-    };
-
     const handleFromTemplate = async (template) => {
         setBusy(true);
         try {
             const wf = await api.request(`/tramo/workflows/from-template/${template.id}`, { method: 'POST', body: {} });
-            setTemplateModal(false);
             toast.success(`Created "${wf.name}" from ${template.name}`);
             navigate(`/automations/edit/${wf.slug}`);
         } catch (error) {
             toast.error(`Could not create from template: ${error.message}`);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const openImportModal = () => {
+        setImportName('');
+        setImportText('');
+        setImportModal(true);
+    };
+
+    const handleImportFile = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            setImportText(await file.text());
+            if (!importName.trim()) setImportName(file.name.replace(/\.json$/i, ''));
+        } catch {
+            toast.error('Could not read that file.');
+        }
+        e.target.value = '';
+    };
+
+    const handleImport = async () => {
+        let doc;
+        try {
+            doc = JSON.parse(importText);
+        } catch {
+            toast.error('That is not valid JSON. Paste a tramo workflow document.');
+            return;
+        }
+        if (!doc || typeof doc !== 'object' || !Array.isArray(doc.nodes)) {
+            toast.error('That JSON does not look like a workflow (missing a nodes array).');
+            return;
+        }
+        const name = importName.trim() || doc.name || 'Imported automation';
+        setBusy(true);
+        try {
+            const wf = await api.request('/tramo/workflows', {
+                method: 'POST', body: { name, doc: { ...doc, name } },
+            });
+            setImportModal(false);
+            toast.success(`Imported "${wf.name}"`);
+            navigate(`/automations/edit/${wf.slug}`);
+        } catch (error) {
+            toast.error(`Could not import: ${error.message}`);
         } finally {
             setBusy(false);
         }
@@ -403,6 +479,83 @@ const AutomationsPage = () => {
     };
 
     // ── Renderers ──
+    const renderTemplates = () => {
+        const q = templateSearch.trim().toLowerCase();
+        const filtered = templates.filter((t) => !q
+            || t.name.toLowerCase().includes(q)
+            || (t.description || '').toLowerCase().includes(q));
+        // Favorites float to the top; otherwise preserve the incoming order.
+        const sorted = [...filtered].sort(
+            (a, b) => (favorites.has(a.id) ? 0 : 1) - (favorites.has(b.id) ? 0 : 1));
+        return (
+            <div className="tramo-templates">
+                <div className="tramo-templates__bar">
+                    <div className="tramo-search">
+                        <Search size={15} />
+                        <input
+                            type="text"
+                            placeholder="Search templates..."
+                            value={templateSearch}
+                            onChange={(e) => setTemplateSearch(e.target.value)}
+                        />
+                    </div>
+                    <span className="tramo-templates__count">
+                        {filtered.length} template{filtered.length === 1 ? '' : 's'}
+                    </span>
+                </div>
+                {templatesLoading ? (
+                    <EmptyState loading title="Loading templates..." />
+                ) : sorted.length === 0 ? (
+                    <EmptyState
+                        icon={LayoutTemplate}
+                        title={q ? 'No templates match your search' : 'No templates yet'}
+                        description={q ? 'Try a different search.' : 'Import your own to get started.'}
+                    />
+                ) : (
+                    <div className="tramo-tpl-grid">
+                        {sorted.map((t) => {
+                            const meta = TEMPLATE_META[t.id] || DEFAULT_TEMPLATE_META;
+                            const { Icon } = meta;
+                            const fav = favorites.has(t.id);
+                            return (
+                                <div className="tramo-card" key={t.id}>
+                                    <div className="tramo-card__top">
+                                        <span className={`tramo-card__icon tramo-card__icon--${meta.brand}`}>
+                                            <Icon size={20} />
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className={`tramo-card__fav${fav ? ' is-fav' : ''}`}
+                                            onClick={() => toggleFavorite(t.id)}
+                                            title={fav ? 'Remove from favorites' : 'Add to favorites'}
+                                            aria-pressed={fav}
+                                        >
+                                            <Star size={16} />
+                                        </button>
+                                    </div>
+                                    <h4 className="tramo-card__name">{t.name}</h4>
+                                    {t.description && <p className="tramo-card__desc">{t.description}</p>}
+                                    {meta.tags.length > 0 && (
+                                        <div className="tramo-card__tags">
+                                            {meta.tags.map((tag) => (
+                                                <span className="tramo-card__tag" key={tag}>{tag}</span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="tramo-card__foot">
+                                        <Button variant="default" size="sm" disabled={busy} onClick={() => handleFromTemplate(t)}>
+                                            <Plus size={14} /> Use template
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     const renderWorkflows = () => (
         <div className="card">
             <div className="card-body">
@@ -705,13 +858,16 @@ const AutomationsPage = () => {
                 <Button variant="outline" size="sm" onClick={handleDeploy} disabled={busy}>
                     <Rocket size={14} /> Deploy
                 </Button>
-                <Button variant="secondary" size="sm" onClick={openTemplateModal}>
-                    <LayoutTemplate size={14} /> New from template
-                </Button>
                 <Button variant="default" size="sm" onClick={openNewModal}>
                     <Plus size={14} /> New workflow
                 </Button>
             </>
+        );
+    } else if (activeTab === 'templates') {
+        topbarActions = (
+            <Button variant="default" size="sm" onClick={openImportModal}>
+                <Upload size={14} /> Import template
+            </Button>
         );
     } else if (activeTab === 'runs') {
         topbarActions = (
@@ -739,6 +895,7 @@ const AutomationsPage = () => {
             <div className="sk-tabgroup__content">
                 <div className="sk-tabgroup__inner">
                     {activeTab === 'workflows' && renderWorkflows()}
+                    {activeTab === 'templates' && renderTemplates()}
                     {activeTab === 'runs' && renderRuns()}
                     {activeTab === 'settings' && renderSettings()}
                 </div>
@@ -828,59 +985,50 @@ const AutomationsPage = () => {
                 </div>
             </Modal>
 
-            {/* New from template modal */}
+            {/* Import template / workflow modal */}
             <Modal
-                open={templateModal}
-                onClose={() => setTemplateModal(false)}
-                title="Start from a template"
+                open={importModal}
+                onClose={() => setImportModal(false)}
+                title="Import a template"
                 size="lg"
                 footer={(
-                    <Button variant="outline" onClick={() => setTemplateModal(false)}>
-                        <X size={14} /> Close
-                    </Button>
+                    <>
+                        <Button variant="outline" onClick={() => setImportModal(false)}>Cancel</Button>
+                        <Button variant="default" onClick={handleImport} disabled={busy || !importText.trim()}>
+                            <Upload size={14} /> Import
+                        </Button>
+                    </>
                 )}
             >
                 <p className="tramo-tpl-intro">
-                    Pick a ready-made automation. You will land on the visual editor to
-                    customize it and add the credentials its integrations need.
+                    Paste a tramo workflow document (JSON), or load one from a file. It is
+                    created as a new automation you can edit and deploy.
                 </p>
-                {templates.length === 0 ? (
-                    <EmptyState icon={LayoutTemplate} title="No templates available" />
-                ) : (
-                    <div className="tramo-tpl-list">
-                        {templates.map((t) => {
-                            const meta = TEMPLATE_META[t.id] || DEFAULT_TEMPLATE_META;
-                            const { Icon } = meta;
-                            return (
-                                <button
-                                    type="button"
-                                    className="tramo-tpl"
-                                    key={t.id}
-                                    onClick={() => handleFromTemplate(t)}
-                                    disabled={busy}
-                                >
-                                    <span className={`tramo-tpl__icon tramo-tpl__icon--${meta.brand}`}>
-                                        <Icon size={20} />
-                                    </span>
-                                    <span className="tramo-tpl__body">
-                                        <span className="tramo-tpl__name">{t.name}</span>
-                                        {t.description && (
-                                            <span className="tramo-tpl__desc">{t.description}</span>
-                                        )}
-                                        {meta.tags.length > 0 && (
-                                            <span className="tramo-tpl__tags">
-                                                {meta.tags.map((tag) => (
-                                                    <span className="tramo-tpl__tag" key={tag}>{tag}</span>
-                                                ))}
-                                            </span>
-                                        )}
-                                    </span>
-                                    <ChevronRight className="tramo-tpl__arrow" size={18} />
-                                </button>
-                            );
-                        })}
+                <div className="form-group">
+                    <Label>Name (optional)</Label>
+                    <Input
+                        type="text"
+                        value={importName}
+                        placeholder="My imported automation"
+                        onChange={(e) => setImportName(e.target.value)}
+                    />
+                </div>
+                <div className="form-group">
+                    <div className="tramo-import__labelrow">
+                        <Label>Workflow JSON</Label>
+                        <label className="tramo-import__file">
+                            <FileJson size={14} /> Load file
+                            <input type="file" accept="application/json,.json" onChange={handleImportFile} hidden />
+                        </label>
                     </div>
-                )}
+                    <textarea
+                        className="tramo-import__text"
+                        value={importText}
+                        placeholder={'{\n  "name": "My flow",\n  "nodes": [],\n  "edges": []\n}'}
+                        onChange={(e) => setImportText(e.target.value)}
+                        spellCheck={false}
+                    />
+                </div>
             </Modal>
 
             {confirmDialog && (
