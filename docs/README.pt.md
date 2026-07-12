@@ -2,9 +2,9 @@
 
 # ServerKit
 
-<img width="700" alt="server-kit" src="https://github.com/user-attachments/assets/bfc59e75-8f90-4674-a222-e18213b628b7" />
+<img width="100%" alt="ServerKit — Deploy, manage, and monitor servers" src="screenshots/poster.png" />
 
-**Infraestrutura auto-hospedada, de forma simples.**
+**Implante, gerencie e monitore servidores.**
 
 Um painel de controle de servidores leve e moderno para gerenciar aplicações web, bancos de dados,
 containers Docker e segurança — sem a complexidade do Kubernetes

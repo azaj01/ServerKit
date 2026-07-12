@@ -2,9 +2,9 @@
 
 # ServerKit
 
-<img width="700" alt="server-kit" src="https://github.com/user-attachments/assets/bfc59e75-8f90-4674-a222-e18213b628b7" />
+<img width="100%" alt="ServerKit — Deploy, manage, and monitor servers" src="docs/screenshots/poster.png" />
 
-**Self-hosted infrastructure, made simple.**
+**Deploy, manage, and monitor servers.**
 
 A lightweight, modern server control panel for managing web apps, databases,
 Docker containers, and security — without the complexity of Kubernetes

@@ -2,9 +2,9 @@
 
 # ServerKit
 
-<img width="700" alt="server-kit" src="https://github.com/user-attachments/assets/bfc59e75-8f90-4674-a222-e18213b628b7" />
+<img width="100%" alt="ServerKit — Deploy, manage, and monitor servers" src="screenshots/poster.png" />
 
-**自托管基础设施，化繁为简。**
+**部署、管理和监控服务器。**
 
 一款轻量、现代的服务器控制面板，用于管理 Web 应用、数据库、
 Docker 容器和安全策略——无需 Kubernetes 的复杂性，
