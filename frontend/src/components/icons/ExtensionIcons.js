@@ -5,6 +5,7 @@
 // the caller falls back to the brand mark, manifest SVG, or category glyph.
 //
 // PNGs are bundled + hashed by Vite via these URL imports.
+import automations from '../../assets/extension-icons/automations.png';
 import backup from '../../assets/extension-icons/backup.png';
 import cloudflare from '../../assets/extension-icons/cloudflare.png';
 import extensions from '../../assets/extension-icons/extensions.png';
@@ -27,6 +28,9 @@ const normalizeSlug = (slug) => String(slug || '').toLowerCase().replace(/^serve
 
 // Ordered keyword rules — first match wins. Keep the most specific keys first.
 const KEYWORD_RULES = [
+    // tramo/Automations ships its own illustrated cover; keep it ahead of the
+    // generic workflow rule so 'serverkit-tramo' resolves to it.
+    { keys: ['tramo', 'automation'], icon: automations },
     { keys: ['cloudflare'], icon: cloudflare },
     { keys: ['gitea', 'forgejo', 'git'], icon: git },
     { keys: ['gpu', 'nvidia', 'cuda'], icon: gpu },

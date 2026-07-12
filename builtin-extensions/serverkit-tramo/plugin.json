@@ -7,6 +7,8 @@
   "license": "MIT",
   "category": "deployment",
   "homepage": "https://github.com/jhd3197/ServerKit",
+  "featured": true,
+  "feature_score": 100,
   "permissions": ["docker", "shell", "filesystem", "network"],
   "min_panel_version": "1.7.0",
   "entry_point": "tramo:tramo_bp",

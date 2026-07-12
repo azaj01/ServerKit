@@ -13,6 +13,7 @@ import {
     ServerCog,
     ShieldCheck,
     Sparkles,
+    Star,
     UploadCloud,
 } from 'lucide-react';
 import api from '../services/api';
@@ -93,6 +94,8 @@ const getRegistryCatalogEntry = (entry) => ({
     extensionType: 'registry',
     installed: Boolean(entry.installed),
     status: entry.status,
+    featured: Boolean(entry.featured),
+    featureScore: Number(entry.feature_score) || 0,
 });
 
 // Source badge tint: built-in is 'warning', registry is 'info'.
@@ -125,6 +128,8 @@ const getLocalCatalogEntry = (builtin) => {
         extensionType: 'built-in',
         installed: Boolean(builtin.installed),
         status: builtin.status,
+        featured: Boolean(manifest.featured),
+        featureScore: Number(manifest.feature_score) || 0,
     };
 };
 
@@ -326,7 +331,21 @@ const Marketplace = () => {
         if (update.plugin_id != null) updatesByKey.set(String(update.plugin_id), update);
         if (update.slug) updatesByKey.set(update.slug, update);
     });
-    const mergedCatalogEntries = [...localCatalogEntries, ...registryCatalogEntries];
+    // Featured entries float to the top of the catalog, ordered by their
+    // feature score (higher = more prominent). The score itself is not shown —
+    // it only drives ordering; featured cards just get a "Featured" badge.
+    const mergedCatalogEntries = [...localCatalogEntries, ...registryCatalogEntries]
+        .map((entry, index) => ({ entry, index }))
+        .sort((a, b) => {
+            const fa = a.entry.featured ? 1 : 0;
+            const fb = b.entry.featured ? 1 : 0;
+            if (fa !== fb) return fb - fa;
+            if (fa && a.entry.featureScore !== b.entry.featureScore) {
+                return b.entry.featureScore - a.entry.featureScore;
+            }
+            return a.index - b.index; // stable: preserve original order otherwise
+        })
+        .map(({ entry }) => entry);
     const catalogCategories = deriveCatalogCategories(mergedCatalogEntries);
     const filterGroups = [
         {
@@ -575,7 +594,7 @@ const CatalogExtensionCard = ({ entry, installing, onInstall, onOpenDetail, stat
 
     return (
         <article
-            className={`extension-card extension-card--${entry.source} extension-card--${category} extension-card--clickable card`}
+            className={`extension-card extension-card--${entry.source} extension-card--${category} extension-card--clickable card${entry.featured ? ' extension-card--featured' : ''}`}
             role="button"
             tabIndex={0}
             onClick={openDetail}
@@ -583,6 +602,11 @@ const CatalogExtensionCard = ({ entry, installing, onInstall, onOpenDetail, stat
         >
             <div {...coverProps('extension-card__cover', entry, category)}>
                 <ExtensionCover entry={entry} category={category} brandSize={34} />
+                {entry.featured && (
+                    <span className="extension-featured-badge">
+                        <Star aria-hidden="true" /> Featured
+                    </span>
+                )}
             </div>
             <div className="extension-card__badges">
                 <Badge variant={sourceBadgeVariant(entry.source)}>{entry.sourceLabel}</Badge>
