@@ -238,7 +238,7 @@ const Marketplace = () => {
     const handleManualInstalled = () => {
         setManualInstallSource(null);
         loadExtensions();
-        navigate('/marketplace/installed');
+        navigate('/extensions/installed');
     };
 
     // Open the data-policy dialog instead of uninstalling immediately, so the
@@ -444,7 +444,7 @@ const Marketplace = () => {
                         <EmptyState
                             icon={PackageCheck}
                             title="No extensions installed"
-                            description="Install one from Marketplace or use Install manually."
+                            description="Install one from Extensions or use Install manually."
                         />
                     )}
                 </section>

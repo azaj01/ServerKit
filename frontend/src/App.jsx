@@ -112,7 +112,7 @@ const PAGE_TITLES = {
     '/migrate': 'Database Migration',
     '/fleet': 'Agent Fleet',
     '/fleet-monitor': 'Fleet Monitor',
-    '/agent-plugins': 'Marketplace',
+    '/agent-plugins': 'Extensions',
     '/server-templates': 'Server Templates',
     '/workspaces': 'Workspaces',
     '/workspaces/:id': 'Workspace',
@@ -125,7 +125,8 @@ const PAGE_TITLES = {
     '/workspaces/:id/settings/general': 'Workspace Settings',
     '/workspaces/:id/settings/navigation': 'Workspace Navigation Permissions',
     '/dns': 'DNS Zones',
-    '/marketplace': 'Marketplace',
+    '/extensions': 'Extensions',
+    '/extensions/installed': 'Installed Extensions',
     '/vaults': 'Vaults',
     '/webhooks': 'Webhooks',
     '/style-guide': 'Style Guide',
@@ -367,7 +368,7 @@ function AppRoutes() {
                 </Route>
                 <Route path="servers/:id" element={<ServerDetail />} />
                 <Route path="servers/:id/:tab" element={<ServerDetail />} />
-                <Route path="agent-plugins" element={<Navigate to="/marketplace" replace />} />
+                <Route path="agent-plugins" element={<Navigate to="/extensions" replace />} />
                 {/* Organization tab group — Projects / Shared Variables /
                     Workspaces share one PageTopbar + tabs (ORG_TABS) instead of
                     a collapsible sidebar sub-menu. Detail routes stay outside. */}
@@ -383,10 +384,13 @@ function AppRoutes() {
                 <Route path="workspaces/:id/:tab" element={<WorkspaceDetail />} />
                 <Route path="workspaces/:id/:tab/:section" element={<WorkspaceDetail />} />
                 <Route element={<TabGroupLayout tabs={MARKET_TABS} />}>
-                    <Route path="marketplace" element={<Marketplace />} />
-                    <Route path="marketplace/installed" element={<Marketplace />} />
+                    <Route path="extensions" element={<Marketplace />} />
+                    <Route path="extensions/installed" element={<Marketplace />} />
                     <Route path="downloads" element={<Downloads />} />
                 </Route>
+                {/* Old /marketplace paths redirect to /extensions (renamed for clarity). */}
+                <Route path="marketplace" element={<Navigate to="/extensions" replace />} />
+                <Route path="marketplace/installed" element={<Navigate to="/extensions/installed" replace />} />
                 <Route path="style-guide" element={<StyleGuide />} />
                 <Route path="style-guide/:tab" element={<StyleGuide />} />
                 <Route path="app-map" element={<AppMap />} />

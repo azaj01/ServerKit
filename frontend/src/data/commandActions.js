@@ -45,7 +45,7 @@ export const COMMAND_ACTIONS = [
         id: 'install-extension',
         label: 'Install Extension',
         keywords: 'marketplace plugin add manual install extension',
-        perform: ({ navigate }) => navigate('/marketplace'),
+        perform: ({ navigate }) => navigate('/extensions'),
     },
     {
         id: 'open-terminal',

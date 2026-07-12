@@ -64,7 +64,7 @@ export const SETTINGS_INDEX = [
     { id: 'site-dns-mode', label: 'DNS mode', description: 'Choose between wildcard or per-site DNS records', keywords: 'dns mode wildcard per-site', tab: 'site', adminOnly: true },
     { id: 'site-https-setup', label: 'HTTPS certificate setup', description: 'Set up wildcard SSL certificates for base domains', keywords: 'https ssl certificate letsencrypt', tab: 'site', adminOnly: true },
     { id: 'site-dev-mode', label: 'Developer mode', description: 'Enable developer tools and diagnostics', keywords: 'dev mode developer tools debug', tab: 'site', adminOnly: true },
-    { id: 'site-registry-url', label: 'Extension registry URL', description: 'Set the source URL for the extension marketplace index', keywords: 'registry url marketplace extensions index', tab: 'site', adminOnly: true },
+    { id: 'site-registry-url', label: 'Extension registry URL', description: 'Set the source URL for the Extensions registry index', keywords: 'registry url marketplace extensions index', tab: 'site', adminOnly: true },
 
     { id: 'connections-github', label: 'GitHub connection', description: 'Connect GitHub for source code repositories and deployments', keywords: 'github source control oauth', tab: 'connections', adminOnly: true },
     { id: 'connections-gitlab', label: 'GitLab connection', description: 'Connect GitLab for source code repositories', keywords: 'gitlab source control oauth', tab: 'connections', adminOnly: true },

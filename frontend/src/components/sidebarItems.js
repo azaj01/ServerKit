@@ -196,11 +196,11 @@ export const SIDEBAR_ITEMS = [
         // Downloads now lives in the page's top bar (PageTopbar MARKET_TABS), not
         // as a sidebar sub-item. Route /downloads is unchanged.
         id: 'marketplace',
-        label: 'Marketplace',
-        route: '/marketplace',
+        label: 'Extensions',
+        route: '/extensions',
         matchPrefixes: groupPrefixes(MARKET_TABS),
         category: 'system',
-        // Always visible, like Dashboard — the Marketplace is the front door to
+        // Always visible, like Dashboard — Extensions is the front door to
         // extensions, so no onboarding preset (or custom config) should hide it.
         alwaysVisible: true,
         icon: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>'

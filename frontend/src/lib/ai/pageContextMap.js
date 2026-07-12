@@ -20,7 +20,7 @@ const ROUTES = [
     { re: /^\/dns(\/|$)/, label: 'DNS', entity: 'dns' },
     { re: /^\/domains(\/|$)/, label: 'Domains', entity: 'domains' },
     { re: /^\/files(\/|$)/, label: 'File Manager', entity: 'files' },
-    { re: /^\/marketplace/, label: 'Marketplace', entity: 'marketplace' },
+    { re: /^\/extensions/, label: 'Extensions', entity: 'marketplace' },
     { re: /^\/$/, label: 'Dashboard', entity: 'dashboard' },
 ];
 

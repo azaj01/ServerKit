@@ -36,8 +36,8 @@ export default function NotFound() {
                 title="Page not found"
                 description={
                     `We couldn't find ${location.pathname}. It may have moved, or it `
-                    + `belongs to an extension that isn't installed. Check the `
-                    + `Marketplace to install it.`
+                    + `belongs to an extension that isn't installed. Check `
+                    + `Extensions to install it.`
                 }
                 action={(
                     <div className="not-found__actions">
@@ -45,9 +45,9 @@ export default function NotFound() {
                             <LayoutDashboard size={16} />
                             Go to dashboard
                         </Button>
-                        <Button variant="outline" onClick={() => navigate('/marketplace')}>
+                        <Button variant="outline" onClick={() => navigate('/extensions')}>
                             <Blocks size={16} />
-                            Browse Marketplace
+                            Browse Extensions
                         </Button>
                     </div>
                 )}

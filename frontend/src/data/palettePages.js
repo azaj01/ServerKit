@@ -28,7 +28,7 @@ export const PALETTE_PAGES = [
     { label: 'Terminal', path: '/terminal', navId: 'terminal', keywords: 'shell ssh console logs' },
     { label: 'Servers', path: '/servers', navId: 'servers', keywords: 'fleet agents' },
     { label: 'Fleet Monitor', path: '/fleet-monitor', navId: 'servers', keywords: 'agents status' },
-    { label: 'Marketplace', path: '/marketplace', navId: 'marketplace', keywords: 'extensions plugins' },
+    { label: 'Extensions', path: '/extensions', navId: 'marketplace', keywords: 'extensions plugins marketplace' },
     { label: 'Downloads', path: '/downloads', navId: 'marketplace', keywords: 'agent installer' },
     { label: 'Import a Site', path: '/imports', keywords: 'import migrate cpanel directadmin hestia backup adoption move existing' },
     { label: 'Projects', path: '/projects', navId: 'organization', keywords: 'organization group' },
