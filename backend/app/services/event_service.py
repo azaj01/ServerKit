@@ -57,6 +57,12 @@ EVENT_CATALOG = [
     {'type': 'wordpress.update_rolled_back', 'category': 'WordPress', 'description': 'A WordPress update was auto-rolled-back'},
     {'type': 'wordpress.deployed', 'category': 'WordPress', 'description': 'A WordPress git deploy completed'},
     {'type': 'wordpress.deploy_failed', 'category': 'WordPress', 'description': 'A WordPress git deploy failed'},
+    # Ported from the retired Workflow Builder event bus (plan 45 Phase 4) so
+    # Automations (tramo) workflows can trigger on them via the events bridge.
+    {'type': 'health.check_failed', 'category': 'Monitoring', 'description': 'An environment health check failed'},
+    {'type': 'git.push', 'category': 'Deployments', 'description': 'A git push was received for an app'},
+    {'type': 'monitor.high_cpu', 'category': 'Monitoring', 'description': 'A server crossed its high-CPU alert threshold'},
+    {'type': 'monitor.high_memory', 'category': 'Monitoring', 'description': 'A server crossed its high-memory alert threshold'},
 ]
 
 

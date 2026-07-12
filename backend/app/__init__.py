@@ -332,9 +332,8 @@ def create_app(config_name=None):
     from app.api.metrics import metrics_bp
     app.register_blueprint(metrics_bp, url_prefix='/api/v1/metrics')
 
-    # Register blueprints - Workflows
-    from app.api.workflows import workflows_bp
-    app.register_blueprint(workflows_bp, url_prefix='/api/v1/workflows')
+    # The /api/v1/workflows blueprint (React-Flow Workflow Builder) was retired
+    # in plan 45 Phase 4 -- the Automations extension (tramo) replaces it.
 
     # Register blueprints - Servers (Multi-server management)
     from app.api.servers import servers_bp
@@ -620,8 +619,7 @@ def create_app(config_name=None):
         # scheduled backups).
         from app.services.deployment_job_service import DeploymentJobService
         DeploymentJobService.register_jobs()
-        from app.services.workflow_engine import WorkflowEngine
-        WorkflowEngine.register_jobs()
+        # WorkflowEngine.register_jobs() removed in plan 45 Phase 4 (engine retired).
         from app.services.backup_service import BackupService
         BackupService.register_jobs()
         from app.services.backup_policy_service import BackupPolicyService

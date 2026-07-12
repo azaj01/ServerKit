@@ -303,24 +303,28 @@ class MonitoringService:
                 commit=True,
             )
 
-        # Emit events for workflow triggers
+        # Emit panel events so Automations (tramo) workflows can trigger on a
+        # high-CPU/memory alert through the events bridge (plan 45 Ph4, ported
+        # from the retired Workflow Builder's 'high_cpu'/'high_memory').
         try:
-            from app.services.workflow_engine import WorkflowEventBus
+            from app.services.event_service import EventService
             for alert in alerts_to_send:
                 if alert['type'] == 'cpu':
-                    WorkflowEventBus.emit('high_cpu', {
+                    EventService.emit('monitor.high_cpu', {
+                        'event': 'monitor.high_cpu',
                         'percent': alert.get('value'),
                         'threshold': alert.get('threshold'),
-                        'severity': alert.get('severity')
+                        'severity': alert.get('severity'),
                     })
                 elif alert['type'] == 'memory':
-                    WorkflowEventBus.emit('high_memory', {
+                    EventService.emit('monitor.high_memory', {
+                        'event': 'monitor.high_memory',
                         'percent': alert.get('value'),
                         'threshold': alert.get('threshold'),
-                        'severity': alert.get('severity')
+                        'severity': alert.get('severity'),
                     })
         except Exception:
-            logger.exception("Error emitting workflow events for alerts")
+            logger.exception("Error emitting monitor events for alerts")
 
     @classmethod
     def log_alert(cls, alerts: List[Dict]) -> None:

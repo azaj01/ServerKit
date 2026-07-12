@@ -436,13 +436,16 @@ class GitService:
                 'message': f'Ignoring push to {ref}, configured branch is {branch}'
             }
 
-        # Emit event for workflow triggers
+        # Emit a panel event so Automations (tramo) workflows can trigger on a
+        # git push through the events bridge (plan 45 Ph4, ported from the
+        # retired Workflow Builder's 'git_push').
         try:
-            from app.services.workflow_engine import WorkflowEventBus
-            WorkflowEventBus.emit('git_push', {
+            from app.services.event_service import EventService
+            EventService.emit('git.push', {
+                'event': 'git.push',
                 'app_id': app_id,
                 'branch': branch,
-                'ref': ref
+                'ref': ref,
             })
         except Exception:
             pass

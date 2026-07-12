@@ -61,47 +61,16 @@ def check_auto_sync_schedules():
 
 
 def check_workflow_schedules():
-    """Check all active workflows with cron triggers and run those that are due."""
-    from app.models.workflow import Workflow
-    from app.services.workflow_engine import WorkflowEngine
-    from datetime import datetime
-    import json
+    """Retired no-op (plan 45 Phase 4).
 
-    try:
-        from croniter import croniter
-    except ImportError:
-        logger.debug('croniter not installed, skipping workflow schedule check')
-        return
-
-    workflows = Workflow.query.filter_by(is_active=True, trigger_type='cron').all()
-    if not workflows:
-        return
-
-    now = datetime.utcnow()
-
-    for workflow in workflows:
-        try:
-            config = json.loads(workflow.trigger_config) if workflow.trigger_config else {}
-            cron_expr = config.get('cron')
-            if not cron_expr or not croniter.is_valid(cron_expr):
-                continue
-            cron = croniter(cron_expr, now)
-            prev_run = cron.get_prev(datetime)
-            seconds_since_due = (now - prev_run).total_seconds()
-            # Don't run multiple times for the same slot.
-            if 0 < seconds_since_due <= 90:
-                if workflow.last_run_at:
-                    seconds_since_last_run = (now - workflow.last_run_at).total_seconds()
-                    if seconds_since_last_run < 110:
-                        continue
-                logger.info(f'Scheduled workflow triggered: {workflow.name} (ID: {workflow.id})')
-                WorkflowEngine.enqueue_execution(
-                    workflow_id=workflow.id,
-                    trigger_type='cron',
-                    context={'scheduled_at': prev_run.isoformat()},
-                )
-        except Exception as e:
-            logger.error(f'Workflow schedule check failed for workflow {workflow.id}: {e}')
+    The React-Flow Workflow Builder and its execution engine were removed in
+    favour of the Automations extension (tramo), whose own in-process scheduler
+    drives ``cron-trigger`` nodes inside the managed engine. The legacy
+    ``workflows`` tables are kept for read-only export, so this scheduled handler
+    is retained as a no-op (avoids an orphaned-handler error for any persisted
+    ``workflow-schedules`` schedule row) but no longer executes anything.
+    """
+    return
 
 
 # How often the per-site WordPress health poller runs (seconds).

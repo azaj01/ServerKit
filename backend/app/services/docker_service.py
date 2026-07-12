@@ -263,13 +263,10 @@ class DockerService:
                 capture_output=True, text=True
             )
             if result.returncode == 0:
-                try:
-                    from app.services.workflow_engine import WorkflowEventBus
-                    WorkflowEventBus.emit('app_stopped', {
-                        'container_id': container_id
-                    })
-                except Exception as e:
-                    logger.error(f"Failed to emit app_stopped event: {e}")
+                # The panel emits the `app.stopped` event via the audit trail
+                # (AuditService.log('app.stop') -> EventService.emit_for_audit),
+                # so this low-level helper no longer emits its own event -- doing
+                # so would double-fire it for Automations triggers (plan 45 Ph4).
                 return {'success': True}
             return {'success': False, 'error': result.stderr}
         except Exception as e:

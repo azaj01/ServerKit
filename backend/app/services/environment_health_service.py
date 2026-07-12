@@ -100,15 +100,17 @@ class EnvironmentHealthService:
         site.last_health_check = datetime.utcnow()
         db.session.commit()
 
-        # Emit event for workflow triggers on every failing poll (back-compat for
-        # existing event-trigger workflows keyed on 'health_check_failed').
+        # Emit a panel event on every failing poll so Automations (tramo)
+        # workflows can trigger on it through the events bridge (plan 45 Ph4,
+        # ported from the retired Workflow Builder's 'health_check_failed').
         if overall in ('unhealthy', 'degraded'):
             try:
-                from app.services.workflow_engine import WorkflowEventBus
-                WorkflowEventBus.emit('health_check_failed', {
+                from app.services.event_service import EventService
+                EventService.emit('health.check_failed', {
+                    'event': 'health.check_failed',
                     'site_id': site_id,
                     'overall_status': overall,
-                    'checks': checks
+                    'checks': checks,
                 })
             except Exception:
                 pass

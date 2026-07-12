@@ -392,71 +392,6 @@ class TestDeploymentInstallHandler:
         assert unified.correlation_id == dep.correlation_id
 
 
-class TestWorkflowExecutionHandler:
-    """Phase 6 — workflow executions run as a 'workflow.execute' unified job
-    instead of inline/threaded. Empty-node workflows run for real to success;
-    the failure path patches _run_execution to blow up."""
-
-    def _make_workflow(self, nodes='[]', edges='[]'):
-        from app.models.workflow import Workflow
-        wf = Workflow(name='wf-test', user_id=1, nodes=nodes, edges=edges,
-                      is_active=True, trigger_type='manual')
-        db.session.add(wf)
-        db.session.commit()
-        return wf
-
-    def test_register_jobs_adds_handler(self, app):
-        from app.services.workflow_engine import WorkflowEngine, WORKFLOW_JOB_KIND
-        WorkflowEngine.register_jobs()
-        assert WORKFLOW_JOB_KIND == 'workflow.execute'
-        assert registry.is_registered('workflow.execute')
-
-    def test_enqueue_creates_running_row_and_job(self, app):
-        from app.services.workflow_engine import WorkflowEngine
-        from app.models.workflow import WorkflowExecution
-        wf = self._make_workflow()
-
-        execution_id = WorkflowEngine.enqueue_execution(wf.id, trigger_type='manual')
-
-        ex = WorkflowExecution.query.get(execution_id)
-        assert ex is not None and ex.status == 'running'
-        unified = Job.query.filter_by(kind='workflow.execute', owner_id=str(wf.id)).first()
-        assert unified is not None
-        assert unified.get_payload() == {'execution_id': execution_id}
-        assert unified.max_attempts == 1
-
-    def test_handler_runs_empty_workflow_to_success(self, app):
-        from app.services.workflow_engine import WorkflowEngine
-        from app.models.workflow import WorkflowExecution
-        WorkflowEngine.register_jobs()
-        wf = self._make_workflow(nodes='[]', edges='[]')
-
-        execution_id = WorkflowEngine.enqueue_execution(wf.id)
-        _drain_once()
-
-        assert WorkflowExecution.query.get(execution_id).status == 'success'
-        unified = Job.query.filter_by(kind='workflow.execute').first()
-        assert unified.status == Job.STATUS_SUCCEEDED
-
-    def test_handler_failure_marks_job_failed(self, app, monkeypatch):
-        from app.services.workflow_engine import WorkflowEngine
-        from app.models.workflow import WorkflowExecution
-
-        def boom(execution_id, nodes, edges):
-            raise RuntimeError('node blew up')
-
-        monkeypatch.setattr(WorkflowEngine, '_run_execution', staticmethod(boom))
-        WorkflowEngine.register_jobs()
-        wf = self._make_workflow(nodes='[{"id":"a","type":"trigger","data":{}}]', edges='[]')
-
-        execution_id = WorkflowEngine.enqueue_execution(wf.id)
-        _drain_once()
-
-        assert WorkflowExecution.query.get(execution_id).status == 'failed'
-        unified = Job.query.filter_by(kind='workflow.execute').first()
-        assert unified.status == Job.STATUS_FAILED
-
-
 class TestBackupScheduleHandler:
     """Phase 7 — scheduled backups run as 'backup.run' unified jobs, enqueued by
     the builtin.backup_scheduler tick (replacing the orphaned daemon loop).
@@ -522,46 +457,7 @@ class TestBackupScheduleHandler:
         assert Job.query.get(bad.id).status == Job.STATUS_FAILED
 
 
-class TestWorkflowEventDispatch:
-    """Event-bus cleanup — WorkflowEventBus.emit enqueues a 'workflow.dispatch'
-    job instead of spawning a per-event thread; the handler fans out to matching
-    event-subscribed workflows."""
-
-    def _make_event_workflow(self, event_type):
-        import json as _json
-        from app.models.workflow import Workflow
-        wf = Workflow(name=f'evt-{event_type}', user_id=1, nodes='[]', edges='[]',
-                      is_active=True, trigger_type='event',
-                      trigger_config=_json.dumps({'eventType': event_type}))
-        db.session.add(wf)
-        db.session.commit()
-        return wf
-
-    def test_register_adds_dispatch_handler(self, app):
-        from app.services.workflow_engine import WorkflowEngine
-        WorkflowEngine.register_jobs()
-        assert registry.is_registered('workflow.dispatch')
-
-    def test_emit_enqueues_dispatch_job(self, app):
-        from app.services.workflow_engine import WorkflowEventBus
-        WorkflowEventBus.emit('high_cpu', {'value': 95})
-        evt_jobs = Job.query.filter_by(kind='workflow.dispatch').all()
-        assert len(evt_jobs) == 1
-        assert evt_jobs[0].get_payload() == {'event_type': 'high_cpu', 'data': {'value': 95}}
-        assert evt_jobs[0].owner_id == 'high_cpu'
-
-    def test_dispatch_fans_out_to_matching_workflow_only(self, app):
-        from app.services.workflow_engine import WorkflowEngine, WorkflowEventBus
-        from app.models.workflow import WorkflowExecution
-        WorkflowEngine.register_jobs()
-        match = self._make_event_workflow('high_cpu')
-        self._make_event_workflow('git_push')  # different event — must be ignored
-
-        WorkflowEventBus.emit('high_cpu', {'value': 95})
-        _drain_once()  # process workflow.dispatch -> enqueues workflow.execute
-
-        execs = WorkflowExecution.query.all()
-        assert len(execs) == 1
-        assert execs[0].workflow_id == match.id
-        assert execs[0].trigger_type == 'event'
-        assert Job.query.filter_by(kind='workflow.execute').count() == 1
+# TestWorkflowEventDispatch removed in plan 45 Phase 4: the React-Flow Workflow
+# Builder engine (WorkflowEngine / WorkflowEventBus) was retired. Its four event
+# emitters were ported to EventService (health.check_failed, git.push,
+# monitor.high_cpu/high_memory); those are covered in test_tramo_extension.py.
