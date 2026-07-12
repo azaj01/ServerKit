@@ -20,6 +20,22 @@ awaiting a stable release:
 
 ### Added
 
+- **Automations (tramo) replaces the Workflow Builder** — the drag-and-drop
+  React-Flow Workflow Builder is retired in favour of **Automations**
+  (`/automations`), an opt-in builtin extension that embeds
+  [tramo](https://github.com/jhd3197/tramo): a node-based automation editor
+  (triggers, actions, branches, loops, approval gates) with 21 brand
+  integration packs (Telegram, GitHub, Gmail, Discord, Notion, Stripe,
+  Cloudflare, Postgres, Twilio and more). Enabled workflows deploy to a managed
+  `@tramo/server` container on the panel host that runs them headless — webhooks,
+  cron, run history, and approvals, all proxied through the panel. Panel events
+  reach workflows through an opt-in events bridge (a managed webhook
+  subscription), and a scoped API key lets workflows act back on the panel
+  (start/stop/deploy apps, run backups, send notifications). The old `/workflow`
+  route now redirects to `/automations`. Existing Workflow Builder data is kept
+  (read-only export for manual rebuild); its four event triggers
+  (`app.stopped`, `health.check_failed`, `git.push`, `monitor.high_cpu` /
+  `monitor.high_memory`) are ported to the panel event bus.
 - **Command palette is now an everything-search (F1 / Ctrl+Shift+P / Ctrl+K)** —
   the palette went from a page-jumper to omnisearch. Type to search across pages,
   individual **settings** (the actual card, e.g. "Require two-factor for all
