@@ -679,7 +679,7 @@ const AutomationsPage = () => {
     }
 
     return (
-        <div className="page-container tramo-page">
+        <div className="page-container page-container--full-bleed sk-tabgroup tramo-page">
             <PageTopbar
                 icon={<Workflow size={18} />}
                 title="Automations"
@@ -687,9 +687,11 @@ const AutomationsPage = () => {
                 actions={topbarActions}
             />
 
-            {activeTab === 'workflows' && renderWorkflows()}
-            {activeTab === 'runs' && renderRuns()}
-            {activeTab === 'settings' && renderSettings()}
+            <div className="sk-tabgroup__content">
+                {activeTab === 'workflows' && renderWorkflows()}
+                {activeTab === 'runs' && renderRuns()}
+                {activeTab === 'settings' && renderSettings()}
+            </div>
 
             {/* New workflow modal */}
             <Modal open={newModal} onClose={() => setNewModal(false)} title="New workflow">
