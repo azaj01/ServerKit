@@ -132,3 +132,42 @@ def test_upgrade_with_gpu_installs(app, gated_gpu_builtin, monkeypatch):
     p = InstalledPlugin.query.filter_by(slug='serverkit-gpu').first()
     assert p is not None
     assert p.status == InstalledPlugin.STATUS_ACTIVE
+
+
+@pytest.fixture
+def retired_leftovers(tmp_path, monkeypatch):
+    """Plant leftover files for a retired extension slug in both plugin dirs."""
+    backend = tmp_path / 'backend_plugins'
+    frontend = tmp_path / 'frontend_plugins'
+    for d in (backend, frontend):
+        (d / 'serverkit-oldthing').mkdir(parents=True)
+    (backend / 'serverkit-oldthing' / '__init__.py').write_text('')
+    (frontend / 'serverkit-oldthing' / 'index.jsx').write_text("import 'gone';\n")
+    monkeypatch.setattr(plugin_service, 'BACKEND_PLUGINS_DIR', str(backend))
+    monkeypatch.setattr(plugin_service, 'FRONTEND_PLUGINS_DIR', str(frontend))
+    monkeypatch.setattr(extension_migration, 'RETIRED_EXTENSION_SLUGS',
+                        ['serverkit-oldthing'])
+    return backend, frontend
+
+
+def test_retired_extension_sweep(app, retired_leftovers):
+    """Retired leftovers (files + row) are swept at boot; the sweep is idempotent.
+
+    This is the serverkit-workflows scenario: a stale dir in the live tree was
+    carried into every update by the plugin preservation step, where its dead
+    imports broke the frontend build.
+    """
+    backend, frontend = retired_leftovers
+    db.session.add(InstalledPlugin(
+        name='serverkit-oldthing', display_name='Old Thing',
+        slug='serverkit-oldthing', version='1.0.0'))
+    db.session.commit()
+
+    extension_migration.remove_retired_extensions()
+
+    assert not (backend / 'serverkit-oldthing').exists()
+    assert not (frontend / 'serverkit-oldthing').exists()
+    assert InstalledPlugin.query.filter_by(slug='serverkit-oldthing').first() is None
+
+    # Second sweep on an already-clean tree is a quiet no-op.
+    extension_migration.remove_retired_extensions()

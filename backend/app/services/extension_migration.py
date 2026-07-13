@@ -18,6 +18,7 @@ the marker only governs whether the contribution is switched on.
 """
 import json
 import logging
+import os
 import shutil
 
 from app import db
@@ -28,12 +29,51 @@ logger = logging.getLogger(__name__)
 # Builtin extensions that were previously shipped as core pages. Append a slug
 # here when its page is converted; existing panels then auto-install it once.
 CONVERTED_BUILTIN_SLUGS = [
-    'serverkit-workflows',
     'serverkit-ftp',
     'serverkit-cloud-provision',
     'serverkit-remote-access',
     'serverkit-status',
 ]
+
+# Extensions deliberately deleted from the product (replaced or retired) — the
+# Workflow Builder was superseded by serverkit-tramo (plan 45). Their leftover
+# copy-installed files must be swept from the live tree: update.sh's plugin
+# carry-forward would otherwise preserve them into every fresh deploy, where
+# their dead imports (workflows → reactflow) sink the bundle build. The updater
+# has its own skip list (RETIRED_PLUGIN_SLUGS in scripts/update.sh); this sweep
+# is the backstop for trees updated by an older/offline updater.
+RETIRED_EXTENSION_SLUGS = [
+    'serverkit-workflows',
+]
+
+
+def remove_retired_extensions():
+    """Sweep files and DB rows of retired extensions. Idempotent, best-effort.
+
+    Runs at boot BEFORE the plugin loader so a retired backend plugin is never
+    loaded and the repair pass never tries to resurrect its row.
+    """
+    from app.services.plugin_service import (
+        BACKEND_PLUGINS_DIR,
+        FRONTEND_PLUGINS_DIR,
+    )
+    for slug in RETIRED_EXTENSION_SLUGS:
+        for base in (BACKEND_PLUGINS_DIR, FRONTEND_PLUGINS_DIR):
+            path = os.path.join(base, slug)
+            if os.path.isdir(path):
+                try:
+                    shutil.rmtree(path)
+                    logger.info(f'Removed retired extension files: {path}')
+                except OSError as e:
+                    logger.warning(f'Could not remove retired extension {path}: {e}')
+        try:
+            row = InstalledPlugin.query.filter_by(slug=slug).first()
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+                logger.info(f'Removed retired extension row: {slug}')
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f'Could not remove retired extension row {slug}: {e}')
 
 
 def _email_was_configured():

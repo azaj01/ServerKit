@@ -569,6 +569,16 @@ def create_app(config_name=None):
             import logging
             logging.getLogger(__name__).warning(f'Flagship seed: {e}')
 
+        # Sweep files/rows of retired extensions (e.g. serverkit-workflows)
+        # BEFORE the loader, so they are never loaded, never "repaired" back,
+        # and never carried forward into the next update's frontend build.
+        try:
+            from app.services.extension_migration import remove_retired_extensions
+            remove_retired_extensions()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'Retired extension sweep: {e}')
+
         # Load installed plugins (dynamic blueprints) AFTER migrations,
         # so the installed_plugins table exists.
         try:
