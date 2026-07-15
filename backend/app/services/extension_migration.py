@@ -68,6 +68,10 @@ GATED_BUILTIN_SLUGS = {
 }
 
 _MARKER_KEY = 'extensions.auto_installed_slugs'
+# Slugs whose now-extracted backend has been re-acquired on an upgraded panel
+# (plan 47 Phase 2). Separate from _MARKER_KEY so the one-shot backend pickup
+# runs even for slugs already auto-installed frontend-only in a prior release.
+_BACKEND_ACQUIRED_KEY = 'extensions.backend_acquired_slugs'
 
 
 def _processed_slugs():
@@ -153,3 +157,72 @@ def run_auto_install():
 
     if changed:
         _save_processed(processed)
+
+
+def _backend_acquired_slugs():
+    from app.services.settings_service import SettingsService
+    raw = SettingsService.get(_BACKEND_ACQUIRED_KEY, '')
+    if not raw:
+        return set()
+    try:
+        return set(json.loads(raw))
+    except (ValueError, TypeError):
+        return {s.strip() for s in str(raw).split(',') if s.strip()}
+
+
+def run_backend_acquisition():
+    """Re-acquire the backend for converted builtins that gained one (plan 47).
+
+    Some builtins (ftp, cloud-provision, remote-access, status) first shipped as
+    *frontend-only* extensions whose API was still served by CORE. Plan 47 moves
+    that backend into the extension and deregisters it from core. On an upgraded
+    panel that already installed such an extension frontend-only, the installed
+    row has ``has_backend=False`` and no backend on disk — so without this pass
+    the API would simply vanish. For each converted slug that is installed but
+    missing the now-available backend, force-reinstall from ``builtin-extensions/``
+    once (idempotent via a marker). Best-effort; never blocks startup.
+    """
+    import os
+
+    done = _backend_acquired_slugs()
+    try:
+        from app.services import plugin_service
+        builtins = {e['slug']: e for e in plugin_service.list_builtin_extensions()}
+    except Exception as e:
+        logger.warning(f'Backend acquisition skipped (builtins unavailable): {e}')
+        return
+
+    changed = False
+    for slug in CONVERTED_BUILTIN_SLUGS:
+        if slug in done:
+            continue
+        entry = builtins.get(slug)
+        # Only slugs that now actually ship a backend/ dir are candidates.
+        if not entry or not os.path.isdir(os.path.join(entry['path'], 'backend')):
+            continue
+        row = InstalledPlugin.query.filter_by(slug=slug).first()
+        if not row:
+            # Not installed — run_auto_install handles fresh (re-)acquisition,
+            # and a fresh panel discovers it in the Marketplace.
+            continue
+        backend_on_disk = os.path.isdir(
+            os.path.join(plugin_service.BACKEND_PLUGINS_DIR, slug))
+        if row.has_backend and backend_on_disk:
+            done.add(slug)
+            changed = True
+            continue
+        try:
+            plugin_service.install_from_path(
+                entry['path'], user_id=row.installed_by, force=True,
+                source_type='builtin')
+            logger.info(f'Acquired extracted backend for {slug} (plan 47)')
+            done.add(slug)
+            changed = True
+        except Exception as e:
+            logger.warning(
+                f'Backend acquisition for {slug} failed (retry next boot): {e}')
+            continue  # leave unmarked so we retry
+
+    if changed:
+        from app.services.settings_service import SettingsService
+        SettingsService.set(_BACKEND_ACQUIRED_KEY, json.dumps(sorted(done)))

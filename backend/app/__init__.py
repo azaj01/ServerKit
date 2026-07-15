@@ -425,9 +425,9 @@ def create_app(config_name=None):
     from app.api.status_pages import status_pages_bp
     app.register_blueprint(status_pages_bp, url_prefix='/api/v1/status')
 
-    # Register blueprints - Cloud Provisioning
-    from app.api.cloud_provisioning import cloud_provisioning_bp
-    app.register_blueprint(cloud_provisioning_bp, url_prefix='/api/v1/cloud')
+    # Cloud Provisioning is an opt-in builtin extension (serverkit-cloud-provision,
+    # plan 47) — its blueprint loads from builtin-extensions/ when installed, not
+    # from core. The CloudProvider/CloudServer models stay core (G2).
 
     # Register blueprints - Remote Access (WireGuard tunnels; imported above)
     app.register_blueprint(tunnels_bp, url_prefix='/api/v1/tunnels')
@@ -529,10 +529,14 @@ def create_app(config_name=None):
         try:
             from app.services.dns_provider_service import DNSProviderService
             from app.services.storage_provider_service import StorageProviderService
-            from app.services.cloud_provisioning_service import CloudProvisioningService
             n_dns = DNSProviderService.encrypt_legacy_secrets()
             n_store = StorageProviderService.encrypt_legacy_secrets()
-            n_cloud = CloudProvisioningService.encrypt_legacy_secrets()
+            # Cloud-provider legacy-secret encryption moved out with the
+            # serverkit-cloud-provision extension (plan 47). It was a one-time
+            # migration of pre-encryption rows; any panel reaching this version
+            # already ran it in an earlier boot (idempotent), and the extension
+            # encrypts on write, so there's nothing left for core to do here.
+            n_cloud = 0
             n_settings = SettingsService.migrate_legacy_secrets()
             # Migrate DNS zones with an inline Cloudflare token onto the canonical
             # connection store (idempotent), so every zone resolves creds the same way.
@@ -587,6 +591,16 @@ def create_app(config_name=None):
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f'Extension auto-install: {e}')
+
+        # One-shot: re-acquire the now-extracted backend for converted builtins
+        # that first shipped frontend-only (plan 47 Phase 2), so an upgraded panel
+        # that installed them frontend-only doesn't lose the API. Best-effort.
+        try:
+            from app.services.extension_migration import run_backend_acquisition
+            run_backend_acquisition()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'Extension backend acquisition: {e}')
 
         # Start metrics history collection in background
         from app.services.metrics_history_service import MetricsHistoryService

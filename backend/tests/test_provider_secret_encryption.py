@@ -107,20 +107,10 @@ def test_dns_legacy_plaintext_migration(app):
 
 
 # ── cloud providers ─────────────────────────────────────────────────────────
-
-def test_cloud_provider_secret_encrypted_at_rest(app):
-    from app.models.cloud_server import CloudProvider
-    from app.services.cloud_provisioning_service import CloudProvisioningService
-    from app.utils.crypto import is_encrypted, decrypt_secret_safe
-
-    p = CloudProvisioningService.create_provider(
-        {'provider_type': 'digitalocean', 'name': 'do', 'api_key': 'do-token-xyz'})
-    row = CloudProvider.query.get(p.id)
-    assert row.api_key_encrypted != 'do-token-xyz'
-    assert is_encrypted(row.api_key_encrypted) is True
-    assert decrypt_secret_safe(row.api_key_encrypted) == 'do-token-xyz'
-    # the auth header uses the decrypted token, not the stored blob
-    assert CloudProvisioningService._auth_headers(row)['Authorization'] == 'Bearer do-token-xyz'
+# CloudProvisioningService moved to the serverkit-cloud-provision extension
+# (plan 47); its secret-at-rest coverage now lives in
+# tests/test_cloud_provision_extraction.py (installs the extension first). The
+# CloudProvider model stays core (G2).
 
 
 # ── storage (config-file backed) ────────────────────────────────────────────

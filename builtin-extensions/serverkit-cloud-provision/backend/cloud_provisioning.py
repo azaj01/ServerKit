@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from app.services.cloud_provisioning_service import CloudProvisioningService
+from .cloud_provisioning_service import CloudProvisioningService
 
 cloud_provisioning_bp = Blueprint('cloud_provisioning', __name__)
 
