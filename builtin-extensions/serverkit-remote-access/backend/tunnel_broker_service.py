@@ -14,7 +14,7 @@ from app import db
 from app.models.server import Server
 from app.models.tunnel import Tunnel
 from app.services.agent_registry import agent_registry
-from app.services import tunnel_netutil
+from . import tunnel_netutil
 
 logger = logging.getLogger(__name__)
 

@@ -303,8 +303,14 @@ class AgentNamespace(Namespace):
         try:
             caps = (data or {}).get('capabilities') or {}
             if caps.get('wireguard'):
-                from app.services.tunnel_broker_service import TunnelBrokerService
-                TunnelBrokerService.schedule_reconcile(agent.server_id)
+                # TunnelBrokerService now lives in the serverkit-remote-access
+                # extension (plan 47); reach it only when installed, no-op otherwise.
+                from app.services.plugin_service import get_installed_extension_attr
+                TunnelBrokerService = get_installed_extension_attr(
+                    'serverkit-remote-access', 'tunnel_broker_service',
+                    'TunnelBrokerService')
+                if TunnelBrokerService is not None:
+                    TunnelBrokerService.schedule_reconcile(agent.server_id)
         except Exception:
             logger.debug("tunnel reconcile scheduling skipped", exc_info=True)
 

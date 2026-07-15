@@ -117,7 +117,6 @@ def create_app(config_name=None):
     # Register blueprints - Core
     from app.api.apps import apps_bp
     from app.api.domains import domains_bp
-    from app.api.tunnels import tunnels_bp
     from app.api.private_urls import private_urls_bp
     app.register_blueprint(apps_bp, url_prefix='/api/v1/apps')
     # "Services" is the user-facing term for Applications (§1 unification).
@@ -429,8 +428,11 @@ def create_app(config_name=None):
     # plan 47) — its blueprint loads from builtin-extensions/ when installed, not
     # from core. The CloudProvider/CloudServer models stay core (G2).
 
-    # Register blueprints - Remote Access (WireGuard tunnels; imported above)
-    app.register_blueprint(tunnels_bp, url_prefix='/api/v1/tunnels')
+    # Remote Access (WireGuard tunnels) is an opt-in builtin extension
+    # (serverkit-remote-access, plan 47) — its blueprint loads from
+    # builtin-extensions/ when installed, not from core. The Tunnel/ExposedService
+    # models stay core (G2); the agent gateway reaches its reconcile helper via
+    # get_installed_extension_attr only when the extension is present.
 
     # Register blueprints - Performance
     from app.api.performance import performance_bp

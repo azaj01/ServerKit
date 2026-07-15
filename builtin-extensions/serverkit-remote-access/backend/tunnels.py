@@ -9,8 +9,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.models.tunnel import Tunnel
-from app.services.tunnel_broker_service import TunnelBrokerService, TunnelBrokerError
-from app.services.tunnel_publish_service import TunnelPublishService, TunnelPublishError
+from .tunnel_broker_service import TunnelBrokerService, TunnelBrokerError
+from .tunnel_publish_service import TunnelPublishService, TunnelPublishError
 from app.middleware.rbac import developer_required
 
 tunnels_bp = Blueprint('tunnels', __name__)

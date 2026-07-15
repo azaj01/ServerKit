@@ -1650,6 +1650,22 @@ def finalize_setup_flagships():
             _set_flagship_uninstalled(slug, True)
 
 
+def get_installed_extension_attr(slug, module, attr, default=None):
+    """Return ``attr`` from an installed extension's backend module, else default.
+
+    A core seam that calls into a feature which now lives in an extracted
+    extension (plan 47) uses this so it no-ops cleanly when the extension isn't
+    installed. Resolves ``app.plugins.<slug>.<module>`` (the dashed package the
+    plugin loader wires up on install); any import/lookup failure yields
+    ``default``."""
+    try:
+        import importlib
+        mod = importlib.import_module(f'app.plugins.{slug}.{module}')
+        return getattr(mod, attr, default)
+    except Exception:
+        return default
+
+
 def install_builtin_extension(slug, user_id=None):
     """Install a builtin extension by its slug (folder lookup)."""
     if not os.path.isdir(BUILTIN_EXTENSIONS_DIR):
