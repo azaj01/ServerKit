@@ -182,11 +182,11 @@ function PageTitleUpdater() {
                 else if (path.startsWith('/servers/')) title = 'Server Details';
                 else if (path.startsWith('/wordpress/pipelines/') || path.startsWith('/wordpress/projects/')) title = 'WordPress Pipeline';
                 else if (path.startsWith('/wordpress/')) title = 'WordPress Site';
-                else title = '';
+                else title = 'ServerKit';
             }
         }
 
-        document.title = title ? `${title} | Control Panel` : 'Control Panel';
+        document.title = title ? `${title} | ServerKit` : 'ServerKit';
     }, [location, pluginTitles]);
 
     return null;

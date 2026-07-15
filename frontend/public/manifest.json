@@ -1,7 +1,7 @@
 {
-    "name": "Control Panel",
-    "short_name": "Control Panel",
-    "description": "Management console",
+    "name": "ServerKit",
+    "short_name": "ServerKit",
+    "description": "Server control panel for managing web applications, databases, and infrastructure",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#0f172a",

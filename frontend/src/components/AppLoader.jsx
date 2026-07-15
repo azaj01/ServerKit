@@ -1,14 +1,14 @@
 /**
  * Full-screen initial loader shown while auth/setup state is resolved.
  *
- * A branded tile holding the server glyph whose status LEDs blink like
+ * A ServerKit-branded tile holding the server glyph whose status LEDs blink like
  * a machine booting, plus a slim indeterminate progress bar. No spinner — the
  * server "powering on" is the loading metaphor. Matches the sidebar brand mark
  * and the favicon so first paint feels of-a-piece.
  */
 export function AppLoader() {
     return (
-        <div className="app-loader" role="status" aria-live="polite" aria-label="Loading">
+        <div className="app-loader" role="status" aria-live="polite" aria-label="Loading ServerKit">
             <div className="app-loader__logo">
                 <svg
                     className="app-loader__glyph"
@@ -30,7 +30,7 @@ export function AppLoader() {
             <div className="app-loader__bar" aria-hidden="true">
                 <span className="app-loader__bar-fill" />
             </div>
-            <span className="app-loader__label">Loading</span>
+            <span className="app-loader__label">Loading ServerKit</span>
         </div>
     );
 }

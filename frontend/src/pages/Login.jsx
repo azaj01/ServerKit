@@ -291,7 +291,7 @@ const Login = () => {
                         <div className="brand-logo">
                             <ServerKitLogo width={40} height={40} />
                         </div>
-                        <h1>Control Panel</h1>
+                        <h1>ServerKit</h1>
                         <p>Signing you in…</p>
                     </div>
                 </div>
@@ -307,7 +307,7 @@ const Login = () => {
                     <div className="brand-logo">
                         <ServerKitLogo width={40} height={40} />
                     </div>
-                    <h1>Control Panel</h1>
+                    <h1>ServerKit</h1>
                     <p>Sign in to your account</p>
                 </div>
 

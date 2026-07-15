@@ -118,7 +118,7 @@ const Setup = () => {
             <div className="wizard-card">
                 <div className="wizard-header">
                     <ServerKitLogo className="wizard-logo" width={48} height={48} />
-                    <h1>Welcome</h1>
+                    <h1>Welcome to ServerKit</h1>
                     <p>Let&apos;s get your server ready</p>
                 </div>
 
