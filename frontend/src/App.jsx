@@ -425,9 +425,14 @@ function AppRoutes() {
                     <Route path="backups/:tab" element={<Backups />} />
                 </Route>
                 <Route path="cron" element={<CronJobs />} />
-                <Route element={<TabGroupLayout tabs={SECURITY_TABS} />}>
+                {/* Security tab group. groupId="security" (plan 47 Phase 3a) lets
+                    extracted security features (fail2ban, clamav, …) contribute
+                    tabs + group-nested routes via their manifests, so they return
+                    as tabs in the place users know. */}
+                <Route element={<TabGroupLayout tabs={SECURITY_TABS} groupId="security" />}>
                     <Route path="security" element={<Security />} />
                     <Route path="security/:tab" element={<Security />} />
+                    {groupRoutes.security}
                 </Route>
                 {/* Email routes are gated by the Email module toggle
                     (Settings → Modules); disabled ⇒ redirect to the dashboard. */}
