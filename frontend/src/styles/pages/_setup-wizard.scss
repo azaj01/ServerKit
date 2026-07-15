@@ -386,6 +386,97 @@
 }
 
 // --------------------------------------------
+// Recommended extensions — install checkboxes (plan 47)
+// --------------------------------------------
+.recommendation-hint {
+    margin: 0 0 $space-3;
+    font-size: $font-size-sm;
+    color: $text-secondary;
+}
+
+.recommendation-list {
+    display: flex;
+    flex-direction: column;
+    gap: $space-2;
+}
+
+.recommendation-item {
+    display: flex;
+    align-items: flex-start;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    background: $bg-secondary;
+    border: 1px solid $border-default;
+    border-radius: $radius-lg;
+    cursor: pointer;
+
+    &:hover {
+        border-color: $primary-color;
+    }
+
+    &__check {
+        margin-top: 3px;
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+
+    &__body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    &__name {
+        font-size: $font-size-sm;
+        font-weight: $font-weight-medium;
+        color: $text-primary;
+    }
+
+    &__desc {
+        font-size: $font-size-xs;
+        color: $text-secondary;
+    }
+
+    &__spinner {
+        color: $text-secondary;
+        animation: spin 1s linear infinite;
+        flex-shrink: 0;
+    }
+
+    &__status {
+        font-size: $font-size-xs;
+        flex-shrink: 0;
+
+        &--installed {
+            color: $text-secondary;
+        }
+
+        &--done {
+            color: $success-color;
+            flex-shrink: 0;
+        }
+
+        &--error {
+            color: $danger-color;
+            flex-shrink: 0;
+        }
+    }
+}
+
+.recommendation-error {
+    margin: $space-3 0 0;
+    font-size: $font-size-sm;
+    color: $danger-color;
+
+    a {
+        color: $primary-color;
+        text-decoration: underline;
+    }
+}
+
+// --------------------------------------------
 // Navigation buttons
 // --------------------------------------------
 .wizard-nav {

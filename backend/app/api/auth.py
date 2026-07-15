@@ -179,8 +179,28 @@ def complete_onboarding():
     if invalid:
         return jsonify({'error': f'Invalid use cases: {", ".join(invalid)}'}), 400
 
-    # Save onboarding use cases
+    # Slugs the wizard installed (recorded for Setup Health / support). The
+    # actual installs happen client-side via the plugin install endpoints; this
+    # just persists what onboarding did (plan 47).
+    installed_extensions = data.get('installed_extensions', [])
+    if not isinstance(installed_extensions, list):
+        return jsonify({'error': 'installed_extensions must be a list'}), 400
+    installed_extensions = [
+        s for s in installed_extensions if isinstance(s, str) and s.strip()
+    ]
+
+    # Save onboarding use cases + what the wizard installed
     SettingsService.set('onboarding_use_cases', use_cases, user_id=user.id)
+    SettingsService.set('onboarding_installed_extensions', installed_extensions,
+                        user_id=user.id)
+
+    # Keep the panel lean: suppress wizard-optional flagships (WordPress) the
+    # user didn't install so the boot seeder won't re-add them (plan 47).
+    try:
+        from app.services import plugin_service
+        plugin_service.finalize_setup_flagships()
+    except Exception:
+        pass
 
     # Mark setup as complete
     SettingsService.complete_setup(user_id=user.id)

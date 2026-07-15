@@ -65,6 +65,14 @@ BUILTIN_EXTENSIONS_DIR = os.environ.get(
 FLAGSHIP_SLUGS = ['serverkit-wordpress', 'serverkit-cloudflare-ops']
 _FLAGSHIP_UNINSTALLED_KEY = 'extensions.flagship_uninstalled'
 
+# Wizard-optional flagships (plan 47): offered — not force-installed — during
+# onboarding. On a FRESH install (setup wizard not yet completed) the boot-time
+# seeder skips these so the panel stays lean; the wizard installs them only when
+# their use case is picked. Existing installs (setup already completed) keep the
+# prior always-seeded behavior — zero regression. cloudflare-ops is NOT here: it
+# is route-only (no sidebar item) and stays seeded for the CF connection surface.
+WIZARD_OPTIONAL_FLAGSHIP_SLUGS = ['serverkit-wordpress']
+
 
 def _ensure_builtin_backend_importable(slug):
     """Register ``builtin-extensions/<slug>/backend`` as the dashed package
@@ -1560,6 +1568,88 @@ def list_builtin_extensions():
     return out
 
 
+# ── Onboarding wizard: use-case → recommended extension slugs (plan 47) ──
+#
+# Drives the setup wizard's "Recommended for you" install checkboxes. Every slug
+# here MUST resolve to a real bundled builtin (builtin-extensions/) or a registry
+# entry — guarded by tests/test_onboarding_recommendations.py so the map can never
+# point at a dead slug. Order within a use case is significant; the resolver
+# de-dupes across the selected use cases preserving first-seen order.
+RECOMMENDED_EXTENSIONS_BY_USE_CASE = {
+    'wordpress': ['serverkit-wordpress'],
+    'web-apps': ['serverkit-git', 'serverkit-status'],
+    'self-hosted': ['serverkit-dns-server', 'serverkit-status', 'serverkit-mail'],
+    'devops': ['serverkit-k8s', 'serverkit-tramo', 'serverkit-git'],
+}
+
+
+def _recommendation_index():
+    """slug -> {slug, display_name, description, category, source, installed,
+    status}. Merges the registry catalog with bundled builtins so a recommended
+    slug resolves regardless of where it lives; builtins win on slug collision."""
+    index = {}
+    try:
+        from app.services import registry_service
+        for entry in registry_service.list_catalog(include_bundled=True):
+            slug = entry.get('slug')
+            if not slug:
+                continue
+            index[slug] = {
+                'slug': slug,
+                'display_name': entry.get('display_name') or slug,
+                'description': entry.get('description') or '',
+                'category': entry.get('category') or 'utility',
+                'source': 'registry',
+                'installed': bool(entry.get('installed')),
+                'status': entry.get('status') or 'not_installed',
+            }
+    except Exception as e:
+        logger.debug(f'Registry unavailable for onboarding recommendations: {e}')
+    for entry in list_builtin_extensions():
+        manifest = entry.get('manifest') or {}
+        slug = entry['slug']
+        index[slug] = {
+            'slug': slug,
+            'display_name': manifest.get('display_name') or slug,
+            'description': manifest.get('description') or '',
+            'category': manifest.get('category') or 'utility',
+            'source': 'builtin',
+            'installed': bool(entry.get('installed')),
+            'status': entry.get('status') or 'not_installed',
+        }
+    return index
+
+
+def recommend_extensions_for_use_cases(use_cases):
+    """Resolve selected onboarding use cases to installable extension metadata.
+
+    Returns a de-duped, order-preserving list of dicts (one per recommended
+    extension). Slugs that don't resolve to a builtin/registry entry are silently
+    dropped (defensive — the map is test-guarded against dead slugs)."""
+    index = _recommendation_index()
+    seen = set()
+    out = []
+    for use_case in (use_cases or []):
+        for slug in RECOMMENDED_EXTENSIONS_BY_USE_CASE.get(use_case, []):
+            if slug in seen:
+                continue
+            seen.add(slug)
+            meta = index.get(slug)
+            if meta:
+                out.append(meta)
+    return out
+
+
+def finalize_setup_flagships():
+    """Keep the panel lean after onboarding completes: any wizard-optional
+    flagship (WordPress) the user didn't install during the wizard gets the
+    uninstall marker so the boot-time flagship seeder won't re-add it on later
+    boots. Called from the complete-onboarding endpoint (plan 47)."""
+    for slug in WIZARD_OPTIONAL_FLAGSHIP_SLUGS:
+        if not InstalledPlugin.query.filter_by(slug=slug).first():
+            _set_flagship_uninstalled(slug, True)
+
+
 def install_builtin_extension(slug, user_id=None):
     """Install a builtin extension by its slug (folder lookup)."""
     if not os.path.isdir(BUILTIN_EXTENSIONS_DIR):
@@ -1682,6 +1772,26 @@ def _seed_flagship_row(entry):
     return plugin
 
 
+def _wizard_optional_flagships_suppressed():
+    """True when wizard-optional flagships (WordPress) should NOT be boot-seeded:
+    a fresh install whose setup wizard hasn't completed (plan 47).
+
+    Bypassed under TESTING so the extensive WordPress test suite keeps its
+    seeded flagship; the real gate is exercised by dedicated proving tests that
+    toggle ``app.config['TESTING']``."""
+    try:
+        from flask import current_app
+        if current_app and current_app.config.get('TESTING'):
+            return False
+    except Exception:
+        pass
+    try:
+        from app.services.settings_service import SettingsService
+        return bool(SettingsService.needs_setup())
+    except Exception:
+        return False
+
+
 def seed_flagship_extensions():
     """Ensure bundled flagship extensions (D4) have an active row on EVERY panel
     — fresh AND upgrade — unless the user explicitly uninstalled them.
@@ -1690,9 +1800,15 @@ def seed_flagship_extensions():
     picks up the seeded row and registers the blueprints (in-place). Best-effort.
     """
     uninstalled = _flagship_uninstalled_set()
+    suppress_optional = _wizard_optional_flagships_suppressed()
     available = {e['slug']: e for e in list_builtin_extensions()}
     for slug in FLAGSHIP_SLUGS:
         if slug in uninstalled:
+            continue
+        # Fresh install (plan 47): don't seed wizard-optional flagships (WordPress)
+        # until the setup wizard installs them. Existing/completed-setup installs
+        # fall through and seed as before.
+        if suppress_optional and slug in WIZARD_OPTIONAL_FLAGSHIP_SLUGS:
             continue
         entry = available.get(slug)
         if not entry:

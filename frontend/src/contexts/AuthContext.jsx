@@ -105,8 +105,8 @@ export function AuthProvider({ children }) {
         return data;
     }
 
-    async function completeOnboarding(useCases) {
-        await api.completeOnboarding(useCases);
+    async function completeOnboarding(useCases, installedExtensions = []) {
+        await api.completeOnboarding(useCases, installedExtensions);
         // Tailor the initial sidebar to the use cases picked during setup, so a
         // fresh install opens focused instead of showing every item. Best-effort:
         // if it fails, the sidebar just falls back to the "Recommended" default.

@@ -103,6 +103,15 @@ export async function getBuiltinExtensions() {
     return this.request('/plugins/builtin');
 }
 
+// Setup wizard: extensions recommended for the selected onboarding use cases.
+// Returns { recommendations: [{ slug, display_name, description, category,
+// source: 'builtin'|'registry', installed, status }] }.
+export async function getRecommendedExtensions(useCases = []) {
+    const list = (useCases || []).filter(Boolean);
+    const q = list.length ? `?use_cases=${encodeURIComponent(list.join(','))}` : '';
+    return this.request(`/plugins/recommendations${q}`);
+}
+
 // One-click install for a bundled extension by slug.
 export async function installBuiltinExtension(slug) {
     return this.request(`/plugins/builtin/${encodeURIComponent(slug)}/install`, {

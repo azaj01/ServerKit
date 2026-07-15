@@ -336,6 +336,20 @@ def list_builtin():
     return jsonify({'builtin': list_builtin_extensions()})
 
 
+@plugins_bp.route('/recommendations', methods=['GET'])
+@jwt_required()
+def recommendations():
+    """Extensions recommended for the given onboarding use cases (setup wizard).
+
+    Query: ``?use_cases=wordpress,web-apps``. Returns each recommended
+    extension's real display_name/description + install source, so the wizard
+    can render checkboxes that install the actual extension on Finish."""
+    from app.services.plugin_service import recommend_extensions_for_use_cases
+    raw = request.args.get('use_cases', '')
+    use_cases = [u.strip() for u in raw.split(',') if u.strip()]
+    return jsonify({'recommendations': recommend_extensions_for_use_cases(use_cases)})
+
+
 @plugins_bp.route('/builtin/<slug>/install', methods=['POST'])
 @jwt_required()
 def install_builtin(slug):

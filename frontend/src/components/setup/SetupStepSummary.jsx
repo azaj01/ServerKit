@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useResourceTier } from '../../contexts/ResourceTierContext';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Check, Loader, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import api from '../../services/api';
 
 const USE_CASE_LABELS = {
     wordpress: 'WordPress Sites',
@@ -9,35 +11,79 @@ const USE_CASE_LABELS = {
     devops: 'DevOps & Monitoring',
 };
 
-const RECOMMENDATIONS = {
-    wordpress: ['WordPress', 'Nginx Proxy Manager', 'phpMyAdmin'],
-    'web-apps': ['Node.js App', 'Python App', 'Portainer'],
-    'self-hosted': ['Nextcloud', 'Vaultwarden', 'Wiki.js'],
-    devops: ['Grafana', 'Prometheus', 'Portainer'],
-};
-
-const DEFAULT_RECOMMENDATIONS = ['Portainer', 'Uptime Kuma', 'Nginx Proxy Manager'];
-
-function getRecommendations(useCases) {
-    if (!useCases || useCases.length === 0) return DEFAULT_RECOMMENDATIONS;
-
-    const seen = new Set();
-    const result = [];
-    for (const uc of useCases) {
-        const items = RECOMMENDATIONS[uc] || [];
-        for (const item of items) {
-            if (!seen.has(item)) {
-                seen.add(item);
-                result.push(item);
-            }
-        }
-    }
-    return result.length > 0 ? result.slice(0, 4) : DEFAULT_RECOMMENDATIONS;
-}
-
 const SetupStepSummary = ({ accountInfo, useCases, onFinish }) => {
     const { tier, specs, loading } = useResourceTier();
-    const recommendations = getRecommendations(useCases);
+
+    // Recommended extensions (real slugs from the backend), the checked set, and
+    // per-slug install status shown while finishing.
+    const [recommendations, setRecommendations] = useState([]);
+    const [recsLoading, setRecsLoading] = useState(true);
+    const [checked, setChecked] = useState(() => new Set());
+    const [installing, setInstalling] = useState(false);
+    const [installState, setInstallState] = useState({}); // slug -> 'installing'|'done'|'error'
+
+    useEffect(() => {
+        let active = true;
+        setRecsLoading(true);
+        api.getRecommendedExtensions(useCases)
+            .then((res) => {
+                if (!active) return;
+                const recs = res?.recommendations || [];
+                setRecommendations(recs);
+                // Default: everything checked ("lean" = uncheck what you don't want)
+                setChecked(new Set(recs.filter((r) => !r.installed).map((r) => r.slug)));
+            })
+            .catch(() => {
+                if (active) setRecommendations([]);
+            })
+            .finally(() => {
+                if (active) setRecsLoading(false);
+            });
+        return () => {
+            active = false;
+        };
+    }, [useCases]);
+
+    function toggle(slug) {
+        setChecked((prev) => {
+            const next = new Set(prev);
+            if (next.has(slug)) next.delete(slug);
+            else next.add(slug);
+            return next;
+        });
+    }
+
+    async function handleFinish() {
+        // Install the checked (not-already-installed) extensions, source-aware,
+        // one at a time with per-item progress. Fail-soft: an install failure is
+        // surfaced but never blocks completing onboarding.
+        const toInstall = recommendations.filter(
+            (r) => checked.has(r.slug) && !r.installed
+        );
+        const installedSlugs = recommendations
+            .filter((r) => r.installed && checked.has(r.slug))
+            .map((r) => r.slug);
+
+        if (toInstall.length > 0) {
+            setInstalling(true);
+            for (const rec of toInstall) {
+                setInstallState((s) => ({ ...s, [rec.slug]: 'installing' }));
+                try {
+                    if (rec.source === 'registry') {
+                        await api.installRegistryExtension(rec.slug);
+                    } else {
+                        await api.installBuiltinExtension(rec.slug);
+                    }
+                    installedSlugs.push(rec.slug);
+                    setInstallState((s) => ({ ...s, [rec.slug]: 'done' }));
+                } catch {
+                    setInstallState((s) => ({ ...s, [rec.slug]: 'error' }));
+                }
+            }
+        }
+
+        await onFinish(installedSlugs);
+    }
 
     function formatSpecs() {
         if (!specs) return 'Detecting...';
@@ -51,6 +97,25 @@ const SetupStepSummary = ({ accountInfo, useCases, onFinish }) => {
         if (loading) return 'Detecting...';
         if (!tier) return 'Unknown';
         return tier.charAt(0).toUpperCase() + tier.slice(1);
+    }
+
+    const anyError = Object.values(installState).some((v) => v === 'error');
+
+    function renderRecStatus(rec) {
+        if (rec.installed) {
+            return <span className="recommendation-item__status recommendation-item__status--installed">Installed</span>;
+        }
+        const state = installState[rec.slug];
+        if (state === 'installing') {
+            return <Loader size={15} className="recommendation-item__spinner" />;
+        }
+        if (state === 'done') {
+            return <Check size={15} className="recommendation-item__status--done" />;
+        }
+        if (state === 'error') {
+            return <AlertTriangle size={15} className="recommendation-item__status--error" />;
+        }
+        return null;
     }
 
     return (
@@ -102,24 +167,66 @@ const SetupStepSummary = ({ accountInfo, useCases, onFinish }) => {
                     </div>
                 </div>
 
-                <div className="summary-section">
-                    <div className="summary-section-title">
-                        <Sparkles size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
-                        Recommended for you
+                {(recsLoading || recommendations.length > 0) && (
+                    <div className="summary-section">
+                        <div className="summary-section-title">
+                            <Sparkles size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
+                            Recommended for you
+                        </div>
+                        {recsLoading ? (
+                            <div className="summary-row">
+                                <span className="summary-label">Loading recommendations...</span>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="recommendation-hint">
+                                    We&apos;ll install what you check. Uncheck anything you don&apos;t
+                                    need — you can add it later from Extensions.
+                                </p>
+                                <div className="recommendation-list">
+                                    {recommendations.map((rec) => (
+                                        <label key={rec.slug} className="recommendation-item">
+                                            <input
+                                                type="checkbox"
+                                                className="recommendation-item__check"
+                                                checked={rec.installed || checked.has(rec.slug)}
+                                                disabled={rec.installed || installing}
+                                                onChange={() => toggle(rec.slug)}
+                                            />
+                                            <span className="recommendation-item__body">
+                                                <span className="recommendation-item__name">
+                                                    {rec.display_name}
+                                                </span>
+                                                {rec.description && (
+                                                    <span className="recommendation-item__desc">
+                                                        {rec.description}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {renderRecStatus(rec)}
+                                        </label>
+                                    ))}
+                                </div>
+                                {anyError && (
+                                    <p className="recommendation-error">
+                                        Some extensions couldn&apos;t be installed. You can retry
+                                        from the <a href="/extensions">Extensions</a> page.
+                                    </p>
+                                )}
+                            </>
+                        )}
                     </div>
-                    <div className="recommendation-chips">
-                        {recommendations.map((name) => (
-                            <span key={name} className="recommendation-chip">
-                                {name}
-                            </span>
-                        ))}
-                    </div>
-                </div>
+                )}
             </div>
 
             <div className="wizard-nav" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
-                <button type="button" className="btn-wizard-next" onClick={onFinish}>
-                    Go to Dashboard
+                <button
+                    type="button"
+                    className="btn-wizard-next"
+                    onClick={handleFinish}
+                    disabled={installing}
+                >
+                    {installing ? 'Setting up...' : 'Go to Dashboard'}
                 </button>
             </div>
         </div>

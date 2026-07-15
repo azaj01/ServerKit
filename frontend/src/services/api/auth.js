@@ -25,10 +25,10 @@ export async function register(email, username, password, inviteToken) {
     return data;
 }
 
-export async function completeOnboarding(useCases) {
+export async function completeOnboarding(useCases, installedExtensions = []) {
     return this.request('/auth/complete-onboarding', {
         method: 'POST',
-        body: { use_cases: useCases },
+        body: { use_cases: useCases, installed_extensions: installedExtensions },
     });
 }
 

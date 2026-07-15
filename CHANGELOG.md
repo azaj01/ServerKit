@@ -20,6 +20,15 @@ awaiting a stable release:
 
 ### Added
 
+- **The setup wizard now installs what it recommends (lean by default).** The
+  onboarding "Recommended for you" step is no longer decorative — it renders
+  real extensions matched to the use cases you pick (e.g. WordPress → WordPress
+  flagship; DevOps → Kubernetes, Automations, Git) as checkboxes that install on
+  Finish. Uncheck everything for a lean install; failed installs never block
+  finishing setup and can be retried from Extensions. Fresh installs no longer
+  force-install WordPress — it's offered in the wizard when the WordPress use
+  case is selected. Existing installs keep WordPress untouched.
+
 - **Automations (tramo) replaces the Workflow Builder** — the drag-and-drop
   React-Flow Workflow Builder is retired in favour of **Automations**
   (`/automations`), an opt-in builtin extension that embeds
