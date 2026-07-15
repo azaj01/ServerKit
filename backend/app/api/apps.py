@@ -21,6 +21,8 @@ from app.services.container_registry_service import ContainerRegistryService
 from app.services.image_update_service import ImageUpdateService
 from app.services.container_sleep_service import ContainerSleepService
 from app.services.container_scale_service import ContainerScaleService
+from app.services.unit_compose_service import UnitComposeService
+from app.services.app_port_service import AppPortService
 from app.services.log_service import LogService
 from app.services.process_service import ProcessService
 from app.services.backup_policy_service import BackupPolicyService, BackupPolicyError
@@ -108,6 +110,45 @@ def _assert_managed_app_path(app_name):
     if app_path != base_dir and app_path.startswith(base_dir + os.sep):
         return app_path
     raise ValueError('Invalid application path')
+
+
+def _ensure_local_image_compose(app):
+    """Materialize a compose project for a local docker app that carries a
+    ``docker_image`` but has no source on disk yet.
+
+    A BYO-image app (e.g. an ``image:`` manifest service with no repository)
+    is created with ``docker_image`` set but ``root_path``/``compose_file``
+    NULL, so it has nothing to launch. Render a one-service compose from the
+    image and its typed ports, write it under APPS_DIR, and persist the paths;
+    the normal ``compose_up`` overlay then injects the app's effective env
+    (including resolved vault secrets), so nothing sensitive is written here.
+
+    No-op when a source already exists, the app has no image, or it targets a
+    remote server (the file must live where the deploy actually runs).
+    """
+    if app.root_path or not app.docker_image or app.server_id:
+        return
+    app_path = _assert_managed_app_path(app.name)
+    os.makedirs(app_path, exist_ok=True)
+
+    container = {'name': 'app', 'image': app.docker_image}
+    ports = AppPortService.get_ports(app)
+    if not ports and app.port:
+        ports = [{'host_port': app.port, 'container_port': app.port}]
+    if ports:
+        container['ports'] = ports
+    if app.healthcheck_path:
+        container['health_check'] = {'http_path': app.healthcheck_path}
+
+    compose_yaml = UnitComposeService.render_yaml(app.name, [container])
+    with open(os.path.join(app_path, 'docker-compose.yml'), 'w') as f:
+        f.write(compose_yaml)
+
+    app.root_path = app_path
+    app.compose_file = 'docker-compose.yml'
+    if not app.managed_by:
+        app.managed_by = 'docker_compose'
+    db.session.commit()
 
 
 def _safe_repo_url(repo_url):
@@ -1387,6 +1428,14 @@ def start_app(app_id):
 
     if not _can_edit_app(user, app):
         return jsonify({'error': 'Access denied'}), 403
+
+    # A local BYO-image docker app (image set, no source yet) has no compose to
+    # launch — materialize one on first start so it can actually run.
+    if app.app_type == 'docker' and not app.root_path and app.docker_image and not app.server_id:
+        try:
+            _ensure_local_image_compose(app)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
 
     # Handle Docker apps
     if app.app_type == 'docker' and app.root_path:
