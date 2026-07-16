@@ -9,9 +9,11 @@
 import {
     SiGithub, SiGitlab, SiBitbucket, SiCloudflare, SiDigitalocean,
     SiHetzner, SiVultr, SiAkamai, SiGodaddy, SiNamecheap, SiBackblaze, SiDocker,
-    SiDiscord, SiSlack, SiTelegram,
+    SiDiscord, SiTelegram,
 } from 'react-icons/si';
-import { FaAws } from 'react-icons/fa';
+// Slack pulled its brand from Simple Icons, so react-icons dropped SiSlack — use
+// Font Awesome's stable FaSlack (same pattern as route53's FaAws) instead.
+import { FaAws, FaSlack } from 'react-icons/fa';
 import { Mail, HardDrive, Plug, Webhook } from 'lucide-react';
 
 // provider id (matches providerCatalog) -> brand icon component. Several ids map
@@ -36,7 +38,7 @@ const PROVIDER_ICONS = {
     s3: HardDrive,
     b2: SiBackblaze,
     chat_discord: SiDiscord,
-    chat_slack: SiSlack,
+    chat_slack: FaSlack,
     chat_telegram: SiTelegram,
     chat_webhook: Webhook,
 };
