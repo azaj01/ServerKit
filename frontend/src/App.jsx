@@ -475,10 +475,13 @@ function AppRoutes() {
 function App() {
     return (
         <Router>
-            <PageTitleUpdater />
             <ThemeProvider>
                 <LayoutProvider>
                     <AuthProvider>
+                        {/* Inside AuthProvider — PageTitleUpdater reads panelTitle/
+                            publicTitle via useAuth (branding), so it must sit under
+                            the provider. It stays inside Router for useLocation. */}
+                        <PageTitleUpdater />
                         <ResourceTierProvider>
                             <ToastProvider>
                                 <NotificationsProvider>

@@ -25,6 +25,12 @@
         width: 48px;
         height: 48px;
         margin: 0 auto $space-4;
+        // ServerKitLogo renders its own gradient tile, so suppress the global
+        // .brand-logo tile (_sidebar.scss) here — otherwise the self-tiled logo
+        // sits inside a second tile (a purple-in-purple "logo inside a logo").
+        background: none;
+        box-shadow: none;
+        border-radius: 0;
     }
 
     h1 {
