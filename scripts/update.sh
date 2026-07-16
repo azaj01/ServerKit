@@ -2,10 +2,17 @@
 #
 # ServerKit updater — atomic blue/green, pre-flight checked, offline-capable.
 #
+# Updates default to a PRE-BUILT release tarball — the frontend is built once in
+# CI and shipped, so the server needs no Node/npm and no on-box SPA build (that's
+# what makes updates work uniformly on old distros, ARM/Pi, and tiny boxes). Opt
+# into an on-box source rebuild with --source / --branch / BUILD_FROM_SOURCE=1
+# (that path needs a compatible Node — see install.sh's node floor).
+#
 # Usage:
-#   bash /opt/serverkit/scripts/update.sh
+#   bash /opt/serverkit/scripts/update.sh                 # pre-built release (default, Node-free)
 #   bash /opt/serverkit/scripts/update.sh --dry-run
-#   bash /opt/serverkit/scripts/update.sh --branch dev
+#   bash /opt/serverkit/scripts/update.sh --source        # rebuild from main on this box (needs Node)
+#   bash /opt/serverkit/scripts/update.sh --branch dev    # rebuild from a branch on this box (needs Node)
 #   bash /opt/serverkit/scripts/update.sh --release [v1.7.0]
 #   SERVERKIT_OFFLINE_TARBALL=/tmp/serverkit-v1.7.0-linux-amd64.tar.gz bash /opt/serverkit/scripts/update.sh
 #
@@ -19,7 +26,10 @@ set -Eeuo pipefail
 DRY_RUN=0
 FORCE_UPDATE=0
 TARGET_BRANCH=""
-USE_RELEASE="${INSTALL_FROM_RELEASE:-0}"
+# Default to a pre-built release update (Node-free). --source / --branch /
+# BUILD_FROM_SOURCE=1 opt into an on-box source rebuild instead.
+USE_RELEASE="${INSTALL_FROM_RELEASE:-1}"
+[ "${BUILD_FROM_SOURCE:-0}" = "1" ] && USE_RELEASE=0
 RELEASE_VERSION="${SERVERKIT_VERSION:-}"
 
 # Captured before parsing so the self-update re-exec can forward them verbatim.
@@ -35,8 +45,16 @@ while [[ $# -gt 0 ]]; do
             FORCE_UPDATE=1
             shift
             ;;
+        --source|--main)
+            # Rebuild from the main branch on this box (needs a compatible Node).
+            USE_RELEASE=0
+            TARGET_BRANCH=""
+            shift
+            ;;
         --branch|-b)
+            # A branch update is an on-box source rebuild — override the release default.
             TARGET_BRANCH="$2"
+            USE_RELEASE=0
             shift 2
             ;;
         --release|-r)
@@ -55,8 +73,9 @@ Usage: update.sh [OPTIONS]
 Options:
   --dry-run, -n           Show what would happen without making changes
   --force, -f             Skip version comparison and update anyway
-  --branch <name>, -b     Update from a git branch instead of main
-  --release [version], -r Update from a release tarball
+  --release [version], -r Update from a pre-built release tarball (DEFAULT; Node-free)
+  --source, --main        Rebuild from the main branch on this box (needs Node)
+  --branch <name>, -b     Rebuild from a git branch on this box (needs Node)
   --help, -h              Show this help message
 
 Environment:

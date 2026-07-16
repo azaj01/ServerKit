@@ -187,6 +187,16 @@ awaiting a stable release:
 
 ### Changed
 
+- **`update.sh` now defaults to pre-built releases (Node-free updates).** The
+  frontend is compiled once in CI and shipped, so a normal `update.sh` no longer
+  rebuilds the SPA on the server — it fetches the pre-built release tarball,
+  meaning the server needs no Node/npm at all. This keeps updates working
+  uniformly on old distros, ARM/Raspberry Pi and tiny boxes. Opt into an on-box
+  source rebuild with `--source`, `--branch <name>`, or `BUILD_FROM_SOURCE=1`
+  (that path now requires Node 20.19+/22.12+ for the vite 8 toolchain; the
+  installer provisions Node 22 LTS and both scripts fail with a clear "upgrade
+  Node" message instead of a cryptic bundler error).
+
 - **UI consistency round (Jobs, Queue Bus, Email, Marketplace)** — brought four
   drifted pages back onto the shared host idiom. The **Jobs** page was rebuilt
   to the /servers–/domains table-with-search pattern (SegControl status filter,

@@ -1052,5 +1052,22 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# T35 — updates default to release-mode (pre-built, Node-free) so the server
+# never needs Node/npm; --source, --branch and BUILD_FROM_SOURCE=1 opt into an
+# on-box source rebuild. Re-source update.sh with args and read the resolved
+# (USE_RELEASE|TARGET_BRANCH) the deploy dispatch keys off (plan 47 / vite 8).
+# --------------------------------------------------------------------------
+_mode() { ( SERVERKIT_NO_SELF_UPDATE=1 source "$UPDATE_SH" "$@" >/dev/null 2>&1
+            printf '%s|%s' "$USE_RELEASE" "$TARGET_BRANCH" ); }
+d="$(_mode)"; s="$(_mode --source)"; b="$(_mode --branch dev)"; r="$(_mode --release)"
+bfs="$(BUILD_FROM_SOURCE=1 _mode)"
+if [ "$d" = "1|" ] && [ "$s" = "0|" ] && [ "$b" = "0|dev" ] \
+   && [ "$r" = "1|" ] && [ "$bfs" = "0|" ]; then
+    ok "update defaults to release (Node-free); --source/--branch/BUILD_FROM_SOURCE opt into on-box rebuild"
+else
+    bad "update mode mapping wrong: default=$d source=$s branch=$b release=$r build_from_source=$bfs"
+fi
+
+# --------------------------------------------------------------------------
 printf '\n%d passed, %d failed, %d skipped\n\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ]
