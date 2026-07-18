@@ -1,5 +1,6 @@
 import { Children, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { renderBones } from './renderBones';
 
 /**
  * SkeletonBoundary — paints a loading skeleton over the real content box.
@@ -25,8 +26,14 @@ import { cn } from '@/lib/utils';
  * `aria-hidden`. Shimmer and the optional fade honour `prefers-reduced-motion`
  * via `styles/components/_skeleton.scss`.
  *
+ * A captured bone layout (baked into `frontend/src/skeletons/*.json` by
+ * `npm run capture:skeletons`) can be passed as `bones` instead of composing a
+ * `skeleton` by hand — the boundary replays it via `renderBones`. `bones` wins
+ * over `skeleton` when both are given.
+ *
  * @param {boolean}        loading      Whether content is still loading.
  * @param {React.ReactNode} skeleton    Placeholder rendered while loading.
+ * @param {object}         [bones]      Captured SkeletonResult (`{width,height,bones}`); replaces `skeleton` when set.
  * @param {React.ReactNode} children    Real content (may be data-gated/absent).
  * @param {boolean}        [transition] Fade the skeleton out on load (~200ms, opacity only).
  * @param {string}         [as]         Container tag name (default 'div').
@@ -35,6 +42,7 @@ import { cn } from '@/lib/utils';
 export function SkeletonBoundary({
     loading,
     skeleton,
+    bones = null,
     children,
     transition = false,
     as: Tag = 'div',
@@ -60,6 +68,7 @@ export function SkeletonBoundary({
 
     // Overlay mode needs a real box to cover — only when in-flow children exist.
     const hasContent = Children.toArray(children).length > 0;
+    const skeletonContent = bones ? renderBones(bones) : skeleton;
 
     return (
         <Tag
@@ -79,7 +88,7 @@ export function SkeletonBoundary({
                     )}
                     aria-hidden="true"
                 >
-                    {skeleton}
+                    {skeletonContent}
                 </div>
             )}
         </Tag>

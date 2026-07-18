@@ -164,6 +164,18 @@
     }
 }
 
+// Captured-bone replay (renderBones): a positioned canvas of leaf placeholders
+// measured from the real layout. Each .skeleton-bone carries its own dynamic
+// left/top/width/height inline; the look comes from the shared .skeleton class.
+.skeleton-bones {
+    position: relative;
+    width: 100%;
+}
+
+.skeleton-bone {
+    position: absolute;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .skeleton::after {
         animation: none;

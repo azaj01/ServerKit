@@ -8,6 +8,7 @@
         "build": "vite build",
         "lint": "eslint . && node scripts/check-settings-index.mjs",
         "lint:settings-index": "node scripts/check-settings-index.mjs",
+        "capture:skeletons": "node scripts/capture-skeletons.mjs",
         "preview": "vite preview"
     },
     "optionalDependencies": {
@@ -51,6 +52,7 @@
         "@types/react": "^18.3.3",
         "@types/react-dom": "^18.3.0",
         "@vitejs/plugin-react": "^6.0.3",
+        "boneyard-js": "^1.9.0",
         "eslint": "^9.9.0",
         "eslint-plugin-react": "^7.35.0",
         "eslint-plugin-react-hooks": "^5.1.0-rc.0",
