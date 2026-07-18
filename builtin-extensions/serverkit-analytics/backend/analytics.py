@@ -4,25 +4,185 @@ Mounted under ``/api/v1/analytics`` via the manifest ``url_prefix``. Thin
 routing layer over the extension services:
 
 * ``ingest_service``      — validation, bot filter, visitor hashing, buffer+flush
-* ``report_service``      — rollup-backed dashboard queries
-* ``log_ingest_service``  — access-log parsing (apache/nginx combined)
-* ``wp_integration`` / ``nginx_integration`` — one-click tracker injection
+* ``report_service``      — rollup-backed dashboard queries (Phase 2)
+* ``log_ingest_service``  — access-log parsing (Phase 6)
+* ``wp_integration`` / ``nginx_integration`` — one-click tracker injection (Ph5)
 
 Auth split mirrors serverkit-tramo / serverkit-k8s: report reads need viewer,
-site mutations need admin. The TWO exceptions are the tracker surface — the
-public ``POST /collect`` and ``GET /tracker.js`` — which carry NO JWT because a
-tracked site's visitors have none. They authenticate per-site via the site_key
-(not a JWT) and are protected by rate limiting, a body-size cap, and bot
-filtering. The plugin-disabled 503 guard (attached by plugin_service) still runs
-on every route, so disabling the extension stops collection for free.
+site mutations need admin. The public tracker surface — ``POST /collect`` and
+``GET /tracker.js`` — carries NO JWT because a tracked site's visitors have
+none. It authenticates per-site via the ``site_key`` (not a JWT) and is
+protected by a body-size cap, per-site origin allowlist, an in-process token
+bucket, and bot/DNT filtering. The plugin-disabled 503 guard (attached by
+plugin_service) still runs on every route, so disabling the extension stops
+collection for free; the tracker fails silently on any non-2xx.
 """
+import json
 import logging
+import os
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, current_app, jsonify, request
+
+from app.utils.client_ip import get_client_ip
+
+from . import ingest_service
+from .config import cfg_bool
+from .ingest_service import MAX_BODY_BYTES, referrer_host
+from .models import AnalyticsSite
 
 logger = logging.getLogger(__name__)
 
 analytics_bp = Blueprint('analytics', __name__)
+
+_TRACKER_CACHE = {'js': None}
+
+
+# --------------------------------------------------------------------------- #
+# helpers
+# --------------------------------------------------------------------------- #
+def _plain(body='', status=204):
+    """A bare Response (empty by default) used for accept-and-drop / success."""
+    return current_app.make_response((body, status))
+
+
+def _origin_allowed(origin, allowed):
+    ohost = referrer_host(origin) or origin
+    for entry in allowed:
+        ehost = referrer_host(entry) or entry
+        if origin == entry or ohost == ehost:
+            return True
+    return False
+
+
+def _acao(site, origin):
+    """The Access-Control-Allow-Origin value for this site+origin, or None."""
+    if not origin:
+        return None
+    allowed = site.allowed_origin_list()
+    if allowed:
+        return origin if _origin_allowed(origin, allowed) else None
+    return origin  # default: reflect the origin (token already validated)
+
+
+def _cors(resp, site, origin):
+    acao = _acao(site, origin)
+    if acao:
+        resp.headers['Access-Control-Allow-Origin'] = acao
+        resp.headers['Vary'] = 'Origin'
+    return resp
+
+
+def _preflight(origin):
+    resp = _plain('', 204)
+    if origin:
+        resp.headers['Access-Control-Allow-Origin'] = origin
+        resp.headers['Vary'] = 'Origin'
+    resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    resp.headers['Access-Control-Max-Age'] = '86400'
+    return resp
+
+
+# --------------------------------------------------------------------------- #
+# public collector (NO auth — per-site token + rate limit + bot filter)
+# --------------------------------------------------------------------------- #
+@analytics_bp.route('/collect', methods=['POST', 'OPTIONS'])
+def collect():
+    origin = request.headers.get('Origin')
+    if request.method == 'OPTIONS':
+        return _preflight(origin)
+
+    # Body-size cap (declared length first, then actual bytes).
+    if request.content_length and request.content_length > MAX_BODY_BYTES:
+        return jsonify({'error': 'payload too large'}), 413
+    raw = request.get_data(cache=False) or b''
+    if len(raw) > MAX_BODY_BYTES:
+        return jsonify({'error': 'payload too large'}), 413
+
+    # Beacons send text/plain (a CORS-safelisted content-type) to avoid a
+    # preflight, so parse the body ourselves regardless of Content-Type.
+    try:
+        payload = json.loads(raw.decode('utf-8', 'ignore') or '{}')
+    except (ValueError, TypeError):
+        return jsonify({'error': 'invalid payload'}), 400
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'invalid payload'}), 400
+
+    site_key = payload.get('k') or payload.get('site_key')
+    if not site_key or not isinstance(site_key, str):
+        return jsonify({'error': 'missing site_key'}), 400
+
+    site = AnalyticsSite.query.filter_by(site_key=site_key).first()
+    if not site:
+        return jsonify({'error': 'unknown site'}), 404
+    if not site.enabled:
+        return jsonify({'error': 'site disabled'}), 403
+
+    # Per-site origin allowlist (empty list => reflect after token check).
+    allowed = site.allowed_origin_list()
+    if allowed and origin and not _origin_allowed(origin, allowed):
+        return jsonify({'error': 'origin not allowed'}), 403
+
+    ip = get_client_ip()
+    ua = request.headers.get('User-Agent', '') or ''
+
+    # Rate limit (per site_key AND per IP).
+    if not ingest_service.rate_ok(site_key, ip):
+        resp = jsonify({'error': 'rate limited'})
+        resp.status_code = 429
+        return _cors(resp, site, origin)
+
+    # Do Not Track — accepted but not stored (server double-checks the tracker).
+    honor_dnt = site.honor_dnt if site.honor_dnt is not None else cfg_bool('honor_dnt')
+    if honor_dnt and request.headers.get('DNT') == '1':
+        return _cors(_plain(), site, origin)
+
+    # Bot filter: known bots and empty-UA JS hits are silently dropped (204) so
+    # we never reveal filtering to an abuser.
+    if not ua or ingest_service.is_bot(ua):
+        return _cors(_plain(), site, origin)
+
+    event = ingest_service.build_event(site, payload, ip, ua)
+    if event is None:
+        return _cors(_plain(), site, origin)
+
+    ingest_service.record_event(event)
+    ingest_service.ensure_flush_thread(current_app._get_current_object())
+    return _cors(_plain(), site, origin)
+
+
+# --------------------------------------------------------------------------- #
+# public tracker script
+# --------------------------------------------------------------------------- #
+def _load_tracker_js():
+    """Return the tracker JS body. Prefers a checked-in minified artifact
+    (Phase 3 build output) and falls back to a tiny placeholder."""
+    if _TRACKER_CACHE['js'] is not None:
+        return _TRACKER_CACHE['js']
+    here = os.path.dirname(os.path.abspath(__file__))
+    for rel in (os.path.join('tracker', 'sk.min.js'),
+                os.path.join('tracker', 'sk.js')):
+        path = os.path.join(here, rel)
+        try:
+            with open(path, encoding='utf-8') as f:
+                _TRACKER_CACHE['js'] = f.read()
+                return _TRACKER_CACHE['js']
+        except OSError:
+            continue
+    _TRACKER_CACHE['js'] = (
+        '/* serverkit-analytics tracker (placeholder; real build in Phase 3) */\n'
+        '(function(){})();\n'
+    )
+    return _TRACKER_CACHE['js']
+
+
+@analytics_bp.route('/tracker.js', methods=['GET'])
+def tracker_js():
+    resp = current_app.make_response(_load_tracker_js())
+    resp.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['Access-Control-Allow-Origin'] = '*'  # a public static script
+    return resp
 
 
 @analytics_bp.route('/ping', methods=['GET'])
