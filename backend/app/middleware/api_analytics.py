@@ -46,11 +46,8 @@ def register_api_analytics(app):
             except Exception:
                 pass
 
-        ip_address = request.remote_addr
-        if request.headers.get('X-Forwarded-For'):
-            ip_address = request.headers.get('X-Forwarded-For').split(',')[0].strip()
-        elif request.headers.get('X-Real-IP'):
-            ip_address = request.headers.get('X-Real-IP')
+        from app.utils.client_ip import get_client_ip
+        ip_address = get_client_ip()
 
         log_entry = {
             'api_key_id': api_key.id if api_key else None,

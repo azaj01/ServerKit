@@ -57,10 +57,10 @@ def regenerate_token(host_id):
 # --- Update endpoint (public, token-authenticated) ---
 
 def _client_ip():
-    forwarded = request.headers.get('X-Forwarded-For', '')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
-    return request.remote_addr
+    # DDNS legitimately wants the real client IP — the same trusted seam every
+    # other consumer uses (ProxyFix-corrected remote_addr, see utils.client_ip).
+    from app.utils.client_ip import get_client_ip
+    return get_client_ip()
 
 
 @ddns_bp.route('/update', methods=['GET', 'POST'])

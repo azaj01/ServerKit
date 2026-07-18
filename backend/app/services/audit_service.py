@@ -25,12 +25,9 @@ class AuditService:
         if not has_request_context():
             return None, None
 
-        ip_address = request.remote_addr
-        # Handle proxy headers
-        if request.headers.get('X-Forwarded-For'):
-            ip_address = request.headers.get('X-Forwarded-For').split(',')[0].strip()
-        elif request.headers.get('X-Real-IP'):
-            ip_address = request.headers.get('X-Real-IP')
+        # Trusted client IP only — see app.utils.client_ip. Never hand-parse XFF.
+        from app.utils.client_ip import get_client_ip
+        ip_address = get_client_ip()
 
         user_agent = request.headers.get('User-Agent', '')[:500]
         return ip_address, user_agent

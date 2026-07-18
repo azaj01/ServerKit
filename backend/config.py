@@ -32,6 +32,23 @@ def is_insecure_secret(value):
     )
 
 
+def _env_bool(name, default=False):
+    """Parse a boolean env var. Accepts the usual truthy spellings; anything
+    else (including unset) falls back to ``default``."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _env_int(name, default):
+    """Parse an int env var, falling back to ``default`` on unset/garbage."""
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 def _resolve_ssl_mode():
     """Whether this deployment terminates real end-to-end HTTPS.
 
@@ -107,6 +124,22 @@ class Config:
     # still emits HSTS in its own secure server block independently of this.
     SSL_MODE = _resolve_ssl_mode()
     HSTS_ENABLED = SSL_MODE == 'secure'
+
+    # ── Trusted reverse-proxy client IP ─────────────────────────────────
+    # X-Forwarded-For is client-controlled: its leftmost token is whatever the
+    # caller chose, so hand-parsing split(',')[0] lets an attacker spoof the IP
+    # we key rate-limits, lockouts and audit logs on. When the panel runs behind
+    # its bundled nginx (the shipped deploy) the real client is appended to XFF
+    # and request.remote_addr is nginx's own address. Enabling TRUST_PROXY_HEADERS
+    # wraps the app in Werkzeug ProxyFix so remote_addr becomes the real client —
+    # the rightmost TRUSTED_PROXY_HOPS entries of XFF (the hops our own proxies
+    # appended); a forged leftmost value is discarded. Ship it TRUE only where a
+    # reverse proxy is guaranteed in front; keep it FALSE for a directly-exposed
+    # dev server so headers can't be forged. See docs/plans/48 and SECURITY.md.
+    TRUST_PROXY_HEADERS = _env_bool('TRUST_PROXY_HEADERS', False)
+    # Number of trusted reverse-proxy hops in front of Flask (bundled nginx = 1).
+    # Raise it only if you add another proxy (e.g. Cloudflare in front of nginx).
+    TRUSTED_PROXY_HOPS = _env_int('TRUSTED_PROXY_HOPS', 1)
 
     # ── Build packs ─────────────────────────────────────────────────────
     # Path to the optional nixpacks binary (used by build_service's opaque

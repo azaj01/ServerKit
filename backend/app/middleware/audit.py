@@ -198,8 +198,6 @@ def _is_sensitive_key(key):
 
 
 def _ip_address():
-    if request.headers.get('X-Forwarded-For'):
-        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
-    if request.headers.get('X-Real-IP'):
-        return request.headers.get('X-Real-IP')
-    return request.remote_addr
+    # Trusted client IP only — see app.utils.client_ip. Never hand-parse XFF.
+    from app.utils.client_ip import get_client_ip
+    return get_client_ip()

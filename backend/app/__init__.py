@@ -40,6 +40,17 @@ def create_app(config_name=None):
     )
     app.config.from_object(config[config_name])
 
+    # Trust the reverse proxy's forwarding headers to derive the real client IP
+    # (config-gated; default off). ProxyFix rewrites request.remote_addr from the
+    # rightmost TRUSTED_PROXY_HOPS entries of X-Forwarded-For — the hops our own
+    # proxies appended — so a client-forged leftmost value is ignored. Applied
+    # before the limiter and request handlers so every remote_addr consumer
+    # (flask-limiter's get_remote_address, get_client_ip(), audit logs) benefits.
+    if app.config.get('TRUST_PROXY_HEADERS'):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        hops = app.config.get('TRUSTED_PROXY_HOPS', 1)
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=1, x_host=0, x_port=0)
+
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)

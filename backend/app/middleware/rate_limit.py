@@ -1,5 +1,5 @@
 """Enhanced rate limiting with per-tier limits and response headers."""
-from flask import g, request
+from flask import g
 
 
 def get_rate_limit_key():
@@ -18,13 +18,10 @@ def get_rate_limit_key():
     except Exception:
         pass
 
-    # Fall back to IP
-    ip = request.remote_addr
-    if request.headers.get('X-Forwarded-For'):
-        ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
-    elif request.headers.get('X-Real-IP'):
-        ip = request.headers.get('X-Real-IP')
-    return f'ip:{ip}'
+    # Fall back to the trusted client IP (ProxyFix-corrected remote_addr; never
+    # a hand-parsed, client-forgeable X-Forwarded-For — see utils.client_ip).
+    from app.utils.client_ip import get_client_ip
+    return f'ip:{get_client_ip()}'
 
 
 def get_dynamic_limit():

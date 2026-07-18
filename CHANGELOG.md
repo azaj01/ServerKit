@@ -577,6 +577,16 @@ awaiting a stable release:
 
 ### Security
 
+- **Client IP is no longer spoofable behind the proxy.** Rate-limit buckets,
+  login lockout and audit-log source IPs previously trusted the *leftmost*
+  `X-Forwarded-For` token — a value the client fully controls, so an attacker
+  could rotate it to dodge per-IP limits or forge audit trails. ServerKit now
+  derives the client IP from one trusted seam (Werkzeug `ProxyFix`, gated by the
+  new `TRUST_PROXY_HEADERS` / `TRUSTED_PROXY_HOPS` settings), taking the
+  rightmost proxy-appended hop; a forged prefix is discarded. Enabled by default
+  in the shipped proxied deploy; off for a directly-exposed dev server. **Note:**
+  audit-log source IPs now record the real client instead of nginx's address —
+  update any dashboards/alerts built on the old values.
 - **Container CVE scanning & SBOM** — per-image vulnerability scans with grype
   and software bill-of-materials generation with syft.
 - **Optional, hardened TLS** — best-effort HTTPS that never blocks an install

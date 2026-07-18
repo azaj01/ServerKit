@@ -19,14 +19,9 @@ def register_api_key_auth(app):
         if not api_key:
             return jsonify({'error': 'Invalid or expired API key'}), 401
 
-        # Record usage
-        ip_address = request.remote_addr
-        if request.headers.get('X-Forwarded-For'):
-            ip_address = request.headers.get('X-Forwarded-For').split(',')[0].strip()
-        elif request.headers.get('X-Real-IP'):
-            ip_address = request.headers.get('X-Real-IP')
-
-        api_key.record_usage(ip_address)
+        # Record usage against the trusted client IP (see app.utils.client_ip).
+        from app.utils.client_ip import get_client_ip
+        api_key.record_usage(get_client_ip())
 
         from app import db
         db.session.commit()
