@@ -20,6 +20,23 @@ awaiting a stable release:
 
 ### Added
 
+- **Web Analytics — a native, privacy-first analytics extension
+  (`serverkit-analytics`).** Self-hosted, first-party website analytics for the
+  sites this panel manages, built on the extension platform. A cookieless
+  JavaScript tracker under 4 KB (`navigator.sendBeacon`, no cookies, no
+  localStorage, honors Do Not Track) and optional apache/nginx access-log
+  ingestion feed a persistent time series stored on your own server — nothing
+  leaves the box. Visitor identity is a daily-rotating salted hash of IP + user
+  agent (raw IPs are never stored). A dashboard at `/analytics` shows visitors,
+  pageviews, top pages, referrers, devices, and a live realtime counter, with
+  per-site tracking snippets you can one-click inject into managed WordPress
+  sites (a mu-plugin) or nginx-proxied apps (a validated `sub_filter`). The
+  public collector is protected by a per-site key, a token-bucket rate limit, an
+  8 KB body cap, per-site CORS, and bot filtering. Off by default; install it
+  from the Marketplace. See [docs/ANALYTICS.md](docs/ANALYTICS.md). The existing
+  Umami/Plausible/PostHog deploy templates remain for users who want a full
+  third-party stack.
+
 - **The setup wizard now installs what it recommends (lean by default).** The
   onboarding "Recommended for you" step is no longer decorative — it renders
   real extensions matched to the use cases you pick (e.g. WordPress → WordPress

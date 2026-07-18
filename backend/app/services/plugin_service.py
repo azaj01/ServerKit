@@ -1576,8 +1576,8 @@ def list_builtin_extensions():
 # point at a dead slug. Order within a use case is significant; the resolver
 # de-dupes across the selected use cases preserving first-seen order.
 RECOMMENDED_EXTENSIONS_BY_USE_CASE = {
-    'wordpress': ['serverkit-wordpress'],
-    'web-apps': ['serverkit-git', 'serverkit-status'],
+    'wordpress': ['serverkit-wordpress', 'serverkit-analytics'],
+    'web-apps': ['serverkit-git', 'serverkit-status', 'serverkit-analytics'],
     'self-hosted': ['serverkit-dns-server', 'serverkit-status', 'serverkit-mail'],
     'devops': ['serverkit-k8s', 'serverkit-tramo', 'serverkit-git'],
 }
