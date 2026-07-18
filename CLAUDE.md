@@ -127,3 +127,6 @@ ServerKit deploys on Linux (bare metal, VPS, or Docker). Development may happen 
 | `DATABASE_URL` | DB connection string (`sqlite:///...` or PostgreSQL) |
 | `CORS_ORIGINS` | Comma-separated allowed origins |
 | `FLASK_ENV` | `development` or `production` |
+| `TRUST_PROXY_HEADERS` | Trust the reverse proxy's forwarding headers to derive the real client IP (Werkzeug ProxyFix). `true` behind the shipped nginx; `false`/unset for a directly-exposed dev server. See SECURITY.md. |
+| `TRUSTED_PROXY_HOPS` | Number of trusted proxy hops in front of Flask (bundled nginx = `1`). |
+| `AUTH_IP_MAX_ATTEMPTS` / `AUTH_IP_WINDOW_MINUTES` / `AUTH_IP_BLOCK_MINUTES` | Per-IP login brute-force throttle (default `10`/`15`/`15`), complementing the per-user lockout. |

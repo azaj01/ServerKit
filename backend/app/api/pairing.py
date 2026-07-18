@@ -185,6 +185,8 @@ def claim():
             passphrase=passphrase,
             name=name,
             group_id=group_id,
+            # Recorded for the pairing audit trail — the real operator IP once
+            # TRUST_PROXY_HEADERS is on (ProxyFix-corrected), not nginx's (plan 48).
             ip_address=request.remote_addr,
         )
     except PairingError as exc:

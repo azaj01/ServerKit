@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # endpoint can call this concurrently, and an unlocked read-modify-write of a
 # shared dict races. Buckets are swept periodically so the dict can't grow
 # without bound from one-off IPs on an internet-facing gateway.
+# NOTE: request.remote_addr below is the ProxyFix-corrected real client IP when
+# TRUST_PROXY_HEADERS is on (plan 48). Before that fix, every agent behind nginx
+# shared nginx's address = one global bucket; now the throttle keys per-agent.
 _auth_attempts = defaultdict(list)
 _auth_attempts_lock = threading.Lock()
 _last_auth_sweep = 0.0

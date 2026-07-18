@@ -56,6 +56,42 @@ trust boundaries:
 For a detailed internal audit of the panel, see
 [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 
+## Client-IP Trust & Login Brute-Force
+
+The panel keys several security decisions — rate-limit buckets, login lockout,
+audit-log source IPs, API-key attribution, dynamic DNS — on the client's IP.
+Behind a reverse proxy the raw socket peer is the proxy, and the real client
+arrives in `X-Forwarded-For`. That header is **client-controlled**, so ServerKit
+never hand-parses it. Instead it derives the client IP through one trusted seam
+(Werkzeug `ProxyFix`, `app/utils/client_ip.py::get_client_ip`) gated by config:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `TRUST_PROXY_HEADERS` | `false` | Trust forwarding headers to derive the client IP. **Set `true` only where a reverse proxy is guaranteed in front** (the shipped nginx deploy sets it). Leave `false` for a directly-exposed server so headers can't be forged. |
+| `TRUSTED_PROXY_HOPS` | `1` | Number of trusted proxy hops in front of Flask (bundled nginx = 1). Raise it only if you add another proxy (e.g. Cloudflare on top). |
+
+With trust on, `ProxyFix` takes the **rightmost** `TRUSTED_PROXY_HOPS` entries of
+`X-Forwarded-For` — the hops your own proxies appended — so a forged *leftmost*
+value is discarded. Setting a hop count higher than the real number of proxies,
+or turning trust on for a directly-exposed panel, re-introduces spoofing — don't.
+
+> **Behavior change:** audit-log source IPs now record the real client IP
+> instead of the proxy's address. Update any dashboards or alerts that were built
+> on the old (proxy-IP-or-forged) values.
+
+On top of the per-user account lockout, a **per-IP login throttle** blocks a
+client IP after repeated failed logins (also covering login-link redeem and 2FA
+verification), returning `429` with `Retry-After`. This stops password-spraying
+across many usernames from one source and prevents a single attacker draining
+the shared login rate-limit for everyone. It is in-memory and relies on the
+single-worker deployment (see the Deployment Note below).
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `AUTH_IP_MAX_ATTEMPTS` | `10` | Failed auths from one IP within the window before it is blocked. |
+| `AUTH_IP_WINDOW_MINUTES` | `15` | Rolling window for counting failures. |
+| `AUTH_IP_BLOCK_MINUTES` | `15` | How long a blocked IP stays blocked. |
+
 ## Deployment Note
 
 The agent gateway keeps all connected-agent state in-memory in a single process.

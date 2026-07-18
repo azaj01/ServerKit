@@ -32,6 +32,8 @@ agent_poll_bp = Blueprint('agent_poll', __name__)
 
 
 def _client_ip():
+    # ProxyFix-corrected real client IP when TRUST_PROXY_HEADERS is on (plan 48),
+    # so the shared per-IP auth throttle keys on the real agent, not nginx.
     return request.remote_addr or 'unknown'
 
 

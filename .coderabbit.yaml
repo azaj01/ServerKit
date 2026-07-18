@@ -1,0 +1,197 @@
+# CodeRabbit configuration for ServerKit.
+#
+# The `path_instructions` below encode ServerKit-specific invariants that are
+# easy to violate and expensive to catch by hand — single-worker agent state,
+# the dual DNS provider layers, the copy-vs-source builtin extensions, SCSS-only
+# styling, the no-sidebar-submenus rule, and brand-neutral docs. Keep them in
+# sync with CLAUDE.md; that file is the source of truth for these conventions.
+
+reviews:
+  poem: false
+  sequence_diagrams: true
+  auto_review:
+    drafts: false
+    base_branches:
+      - main
+      - dev
+  path_filters:
+    - "!**/node_modules/**"
+    - "!backend/.venv-wsl/**"
+    - "!**/venv/**"
+    - "!frontend/dist/**"
+    - "!**/*.min.js"
+    - "!**/*.lock"
+    - "!frontend/package-lock.json"
+    - "!docs/screenshots/**"
+    - "!scripts/test/output/**"
+  path_instructions:
+    # ---- Backend API blueprints -------------------------------------------
+    - path: "backend/app/api/**/*.py"
+      instructions: |
+        1. Error responses must use the consistent JSON shape
+           `return jsonify({'error': 'message'}), status_code` — flag ad-hoc
+           error bodies (bare strings, `{'message': ...}`, `{'detail': ...}`).
+        2. Every route must be JWT-protected with `@jwt_required()` unless it is
+           deliberately public (auth, setup, health, agent-poll). Flag a new
+           route with no auth decorator and no explicit justification.
+        3. A NEW blueprint must be registered in `backend/app/__init__.py` with
+           `url_prefix='/api/v1/<feature>'`. Flag a new `Blueprint(...)` that is
+           not wired up there in the same PR.
+        4. Routes that expose secrets/tokens must respect the API scope +
+           masking middleware (`app/middleware/api_scope_middleware.py`,
+           `api_key_auth.py`). Flag returning raw credentials.
+
+    # ---- Backend services (shell / OS / Docker heavy) ---------------------
+    - path: "backend/app/services/**/*.py"
+      instructions: |
+        1. Subprocess calls must handle failure explicitly (no bare
+           `subprocess.run(...)` whose non-zero exit is ignored) and use `sudo`
+           where the operation needs root. Flag distro-specific commands with no
+           exception handling.
+        2. Do NOT call `apt`/`dpkg`/`dnf`/`yum` directly — use the helpers in
+           `backend/app/utils/system.py` (`get_package_manager`,
+           `is_package_installed`, `install_package`). Not every target is
+           Debian-based.
+        3. Platform-agnostic code (config, storage, API layer) must guard
+           Unix-only calls like `os.chmod`/`os.chown`/`pwd`/`grp` with
+           `if os.name != 'nt'` so the dev server still runs on Windows/macOS.
+           Pure service-layer code (nginx, systemctl, PHP-FPM) is Linux-only and
+           does not need guarding.
+        4. Services are stateless modules — flag new module-level mutable state
+           unless it is a deliberate singleton (see the agent-gateway note).
+
+    # ---- Dual DNS provider layers (must change together) ------------------
+    - path: "backend/app/services/dns_provider_service.py"
+      instructions: |
+        ServerKit has TWO parallel DNS integrations: `DNSProviderService` (this
+        file) and `DNSZoneService._cloudflare_sync` in `dns_zone_service.py`.
+        A provider-API change (auth, record CRUD, zone lookup) usually has to
+        land in BOTH. If this file changes provider behavior and
+        `dns_zone_service.py` is untouched (or vice-versa), flag the asymmetry
+        and ask whether the other layer needs the same change.
+    - path: "backend/app/services/dns_zone_service.py"
+      instructions: |
+        This file's `_cloudflare_sync` is one of the two parallel DNS layers;
+        the other is `DNSProviderService` in `dns_provider_service.py`. A
+        provider-API change here usually needs the mirror change there. Flag a
+        one-sided change.
+
+    # ---- Single-worker agent gateway (in-memory fleet state) --------------
+    - path: "backend/app/{agent_gateway,sockets}.py"
+      instructions: |
+        All connected-agent state lives IN-MEMORY in a single process
+        (`agent_registry.py` singleton). The panel MUST run one worker
+        (`gunicorn --workers 1 --threads N`). Flag any change that:
+        - assumes multiple workers or moves agent/registry state to per-request
+          scope,
+        - introduces process-local caches that would misroute across workers.
+        Socket.IO runs `async_mode='threading'`; do not switch handlers to a
+        model that assumes gevent monkey-patching without saying so.
+    - path: "backend/app/services/agent_registry.py"
+      instructions: |
+        In-memory singleton holding the whole agent fleet. Its state is valid
+        ONLY under a single worker. Flag anything that assumes horizontal
+        scaling. Note also that the Go agent lives in the separate
+        `serverkit-agent` repo, so panel↔agent PROTOCOL changes (auth/HMAC,
+        heartbeat, command envelope) are NOT atomic with the agent side — flag a
+        wire-format change that lacks a compatibility note.
+
+    # ---- Dockerfile: worker count is load-bearing -------------------------
+    - path: "**/Dockerfile*"
+      instructions: |
+        1. The Gunicorn CMD must keep `--workers 1`. More than one worker
+           silently misroutes agent commands (agent state is single-process).
+           Do NOT switch to a gevent-websocket worker class — it double-answers
+           the WS handshake against `async_mode='threading'`. Flag either change.
+        2. Prefer multi-stage builds, pinned base tags (never bare `:latest`),
+           and combined RUN steps that clean package caches.
+
+    # ---- Sidebar: no collapsible sub-menus --------------------------------
+    - path: "frontend/src/components/{Sidebar.jsx,sidebarItems.js}"
+      instructions: |
+        NEVER add collapsible `subItems` / nested sub-navigation to the sidebar.
+        Secondary navigation belongs in a top-bar tab group (see
+        `TabGroupLayout` / `useTopbarActions`). A new `subItems` array or a
+        nested/expandable sidebar entry is a regression — flag it.
+
+    # ---- Frontend React conventions ---------------------------------------
+    - path: "frontend/src/**/*.{jsx,js}"
+      instructions: |
+        1. Functional components with hooks ONLY — flag class components.
+        2. No inline styles, no Tailwind utility classes, no CSS-in-JS. Styling
+           goes through SCSS. Flag `style={{...}}` and `className` strings that
+           look like Tailwind (e.g. `flex items-center gap-2`).
+        3. PascalCase for component files/exports, camelCase for everything else.
+        4. Global state via Context API; prop-drilling is fine for 2–3 levels.
+
+    # ---- SCSS design system -----------------------------------------------
+    - path: "frontend/src/styles/**/*.scss"
+      instructions: |
+        Use existing design-system variables (`$bg-card`, `$primary-color`,
+        `$spacing-md`, etc.) and BEM-like naming
+        (`.block__element--modifier`). Flag hardcoded hex colors, px spacing, or
+        raw values where a token already exists. This is an SCSS-only codebase —
+        there is no Tailwind (`_utilities.scss` is only a compat shim).
+
+    # ---- Copy-vs-source builtin extensions --------------------------------
+    - path: "builtin-extensions/**"
+      instructions: |
+        Copy-install builtins (e.g. tramo, k8s) exist as SOURCE here AND as LIVE
+        COPIES under `backend/app/plugins/<slug>/` + `frontend/src/plugins/<slug>/`.
+        Editing only one side is a trap — a reinstall / `repair_missing_plugins()`
+        reverts the un-mirrored side. If a change touches a slug here without the
+        matching change under `backend/app/plugins/` or `frontend/src/plugins/`,
+        flag the drift.
+    - path: "backend/app/plugins/**"
+      instructions: |
+        These are LIVE COPIES of copy-install builtins whose source is in
+        `builtin-extensions/<slug>/`. Flag a change here that is not mirrored in
+        the source tree — it will be lost on reinstall.
+
+    # ---- Models & migrations ----------------------------------------------
+    - path: "backend/app/models/**/*.py"
+      instructions: |
+        Tables are auto-created via `db.create_all()` on startup, but EXISTING
+        databases are only altered by a migration. A new column / table / index
+        added here on a model that ships in a release needs a matching numbered
+        migration in `backend/migrations/` (e.g. `075_*.py`). Flag a schema
+        change with no accompanying migration.
+    - path: "backend/migrations/**/*.py"
+      instructions: |
+        Migrations are numbered and applied in order (head is the highest
+        number). Flag a new migration that skips or duplicates a number, or that
+        lacks a corresponding model change.
+
+    # ---- Shell scripts (installer / updater / lib) ------------------------
+    - path: "scripts/**/*.sh"
+      instructions: |
+        1. Require `set -euo pipefail`; flag unquoted variable expansions and
+           command substitutions used unquoted.
+        2. Be distro-aware — use the package-manager abstraction / `scripts/lib`
+           helpers rather than hardcoding `apt`/`dnf`. Targets span 7 distros.
+        3. Installer/updater steps should be idempotent and reversible.
+           `update.sh` has a source-able, unit-tested harness
+           (`scripts/test/test_update.sh`) — extend it when changing failure /
+           rollback behavior rather than adding untested branches.
+
+    # ---- Brand-neutral docs -----------------------------------------------
+    - path: "{README.md,docs/**/*.md,docs/plans/**}"
+      instructions: |
+        Docs, plans, and commit-facing text must stay brand-neutral: do NOT name
+        competitor products. Describe the capability or the differentiator (with
+        real numbers where possible) instead of naming a rival. Flag any
+        competitor product name.
+
+    # ---- CLI: keep --json parity ------------------------------------------
+    - path: "backend/cli.py"
+      instructions: |
+        Machine-readable `--json` output must go to STDOUT only (human log lines
+        to stderr). When adding a verb that returns data a script would consume,
+        prefer offering a `--json` flag for parity with the existing verbs. Flag
+        a new data-returning command with no `--json` option.
+
+    # ---- Generated / automated files --------------------------------------
+    - path: "{CHANGELOG.md,VERSION}"
+      instructions: |
+        Maintained by the version-bump workflow. Skip formatting/content review;
+        only flag entries that reference non-existent commits or issues.

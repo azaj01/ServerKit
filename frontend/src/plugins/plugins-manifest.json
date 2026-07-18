@@ -1,14 +1,6 @@
 {
   "plugins": [
     {
-      "name": "serverkit-wordpress",
-      "slug": "serverkit-wordpress",
-      "display_name": "WordPress",
-      "version": "1.0.0",
-      "frontend_entry": "",
-      "path": "serverkit-wordpress"
-    },
-    {
       "name": "serverkit-cloudflare-ops",
       "slug": "serverkit-cloudflare-ops",
       "display_name": "Cloudflare Zone Ops",
@@ -17,26 +9,12 @@
       "path": "serverkit-cloudflare-ops"
     },
     {
-      "name": "serverkit-tramo",
-      "slug": "serverkit-tramo",
-      "display_name": "Automations",
+      "name": "serverkit-wordpress",
+      "slug": "serverkit-wordpress",
+      "display_name": "WordPress",
       "version": "1.0.0",
       "frontend_entry": "",
-      "path": "serverkit-tramo",
-      "styles": [
-        "plugins/serverkit-tramo/styles/tramo-automations.scss"
-      ]
-    },
-    {
-      "name": "serverkit-k8s",
-      "slug": "serverkit-k8s",
-      "display_name": "Kubernetes",
-      "version": "1.0.0",
-      "frontend_entry": "",
-      "path": "serverkit-k8s",
-      "styles": [
-        "plugins/serverkit-k8s/styles/k8s.scss"
-      ]
+      "path": "serverkit-wordpress"
     }
   ]
 }
