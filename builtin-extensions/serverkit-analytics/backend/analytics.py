@@ -23,9 +23,10 @@ import os
 
 from flask import Blueprint, current_app, jsonify, request
 
+from app.middleware.rbac import admin_required, viewer_required
 from app.utils.client_ip import get_client_ip
 
-from . import ingest_service
+from . import ingest_service, report_service, rollup_service, site_service
 from .config import cfg_bool
 from .ingest_service import MAX_BODY_BYTES, referrer_host
 from .models import AnalyticsSite
@@ -189,3 +190,139 @@ def tracker_js():
 def ping():
     """Unauthenticated liveness probe (also proves the 503 status guard)."""
     return jsonify({'ok': True, 'plugin': 'serverkit-analytics'}), 200
+
+
+# --------------------------------------------------------------------------- #
+# site CRUD (JWT: viewer reads, admin mutations)
+# --------------------------------------------------------------------------- #
+def _site_or_404(site_id):
+    site = site_service.get_site(site_id)
+    if not site:
+        return None, (jsonify({'error': 'Site not found'}), 404)
+    return site, None
+
+
+@analytics_bp.route('/sites', methods=['GET'])
+@viewer_required
+def list_sites():
+    return jsonify({'sites': site_service.list_sites()}), 200
+
+
+@analytics_bp.route('/sites', methods=['POST'])
+@admin_required
+def create_site():
+    data = request.get_json(silent=True) or {}
+    try:
+        site = site_service.create_site(data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify(site.to_dict()), 201
+
+
+@analytics_bp.route('/sites/<int:site_id>', methods=['GET'])
+@viewer_required
+def get_site(site_id):
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    return jsonify(site.to_dict()), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>', methods=['PUT', 'PATCH'])
+@admin_required
+def update_site(site_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        site = site_service.update_site(site_id, data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    if not site:
+        return jsonify({'error': 'Site not found'}), 404
+    return jsonify(site.to_dict()), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>', methods=['DELETE'])
+@admin_required
+def delete_site(site_id):
+    if not site_service.delete_site(site_id):
+        return jsonify({'error': 'Site not found'}), 404
+    return jsonify({'deleted': True}), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>/rotate-key', methods=['POST'])
+@admin_required
+def rotate_key(site_id):
+    site = site_service.rotate_key(site_id)
+    if not site:
+        return jsonify({'error': 'Site not found'}), 404
+    return jsonify(site.to_dict()), 200
+
+
+# --------------------------------------------------------------------------- #
+# report queries (JWT: viewer)
+# --------------------------------------------------------------------------- #
+@analytics_bp.route('/sites/<int:site_id>/overview', methods=['GET'])
+@viewer_required
+def site_overview(site_id):
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    start, end = report_service.parse_range(request.args)
+    return jsonify(report_service.overview(site_id, start, end)), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>/timeseries', methods=['GET'])
+@viewer_required
+def site_timeseries(site_id):
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    start, end = report_service.parse_range(request.args)
+    return jsonify({'series': report_service.timeseries(site_id, start, end)}), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>/pages', methods=['GET'])
+@viewer_required
+def site_pages(site_id):
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    start, end = report_service.parse_range(request.args)
+    return jsonify(report_service.pages(site_id, start, end)), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>/referrers', methods=['GET'])
+@viewer_required
+def site_referrers(site_id):
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    start, end = report_service.parse_range(request.args)
+    return jsonify(report_service.referrers(site_id, start, end)), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>/devices', methods=['GET'])
+@viewer_required
+def site_devices(site_id):
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    start, end = report_service.parse_range(request.args)
+    return jsonify(report_service.devices(site_id, start, end)), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>/realtime', methods=['GET'])
+@viewer_required
+def site_realtime(site_id):
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    minutes = request.args.get('minutes', 30)
+    return jsonify(report_service.realtime(site_id, minutes)), 200
+
+
+@analytics_bp.route('/rollup', methods=['POST'])
+@admin_required
+def trigger_rollup():
+    """Run the rollup on demand (ops/testing convenience)."""
+    return jsonify(rollup_service.run_rollup()), 200

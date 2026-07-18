@@ -31,7 +31,8 @@ def _load_ext():
         f'builtin extension backend not importable from {EXT_DIR}')
     mods = {}
     for name in ('config', 'models', 'ingest_service', 'rollup_service',
-                 'lifecycle', 'jobs', 'analytics'):
+                 'report_service', 'site_service', 'lifecycle', 'jobs',
+                 'analytics'):
         mods[name] = importlib.import_module(f'app.plugins.{SLUG}.{name}')
     return mods
 
@@ -41,6 +42,8 @@ config_mod = _M['config']
 models_mod = _M['models']
 ingest_mod = _M['ingest_service']
 rollup_mod = _M['rollup_service']
+report_mod = _M['report_service']
+site_mod = _M['site_service']
 lifecycle_mod = _M['lifecycle']
 jobs_mod = _M['jobs']
 bp_mod = _M['analytics']
@@ -490,3 +493,199 @@ def test_retention_job_handler_never_raises(app):
     _mk_plugin_row()
     out = jobs_mod.retention_prune(job=None)
     assert 'deleted_events' in out or 'error' in out
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2: rollup + report API
+# --------------------------------------------------------------------------- #
+def _mk_event(site_id, visitor='v1', path='/home', ref=None, device='desktop',
+              browser='Chrome', os_family='Windows', country=None, load_ms=None,
+              days_ago=0, etype='pageview'):
+    from app import db
+    from datetime import datetime, timedelta
+    ev = AnalyticsEvent(
+        site_id=site_id, type=etype, url_path=path, referrer_host=ref,
+        visitor_hash=visitor, device_class=device, ua_family=browser,
+        os_family=os_family, country=country, load_ms=load_ms, source='js',
+        ts=datetime.utcnow() - timedelta(days=days_ago))
+    db.session.add(ev)
+    db.session.commit()
+    return ev
+
+
+def test_rollup_aggregates_overall(app):
+    site = _mk_site()
+    # Two visitors today: v1 has 2 pageviews (not a bounce), v2 has 1 (a bounce).
+    _mk_event(site.id, visitor='v1', path='/a', load_ms=100)
+    _mk_event(site.id, visitor='v1', path='/b', load_ms=200)
+    _mk_event(site.id, visitor='v2', path='/a', load_ms=300)
+    out = rollup_mod.run_rollup()
+    assert out['rows'] > 0
+    row = AnalyticsDaily.query.filter_by(site_id=site.id, dim_type='overall').one()
+    assert row.visitors == 2
+    assert row.pageviews == 3
+    assert row.bounces == 1              # only v2 had a single pageview
+    assert row.avg_load_ms == 200.0      # (100+200+300)/3
+
+
+def test_rollup_is_idempotent(app):
+    site = _mk_site()
+    _mk_event(site.id, visitor='v1', path='/a')
+    rollup_mod.run_rollup()
+    rollup_mod.run_rollup()  # second run must not double-count
+    row = AnalyticsDaily.query.filter_by(site_id=site.id, dim_type='overall').one()
+    assert row.pageviews == 1
+
+
+def test_rollup_dimensions(app):
+    site = _mk_site()
+    _mk_event(site.id, visitor='v1', path='/a', ref='google.com', device='mobile',
+              browser='Firefox', os_family='Android', country='US')
+    _mk_event(site.id, visitor='v2', path='/a', ref='google.com', device='desktop',
+              browser='Chrome', os_family='Windows', country='CA')
+    rollup_mod.run_rollup()
+    page = AnalyticsDaily.query.filter_by(site_id=site.id, dim_type='page',
+                                          dim_value='/a').one()
+    assert page.pageviews == 2 and page.visitors == 2
+    ref = AnalyticsDaily.query.filter_by(site_id=site.id, dim_type='referrer',
+                                         dim_value='google.com').one()
+    assert ref.pageviews == 2
+    countries = {r.dim_value for r in AnalyticsDaily.query.filter_by(
+        site_id=site.id, dim_type='country')}
+    assert countries == {'US', 'CA'}
+
+
+def test_report_overview_and_pages(app):
+    from datetime import datetime, timedelta
+    site = _mk_site()
+    _mk_event(site.id, visitor='v1', path='/a')
+    _mk_event(site.id, visitor='v2', path='/a')
+    _mk_event(site.id, visitor='v1', path='/b')
+    rollup_mod.run_rollup()
+    end = datetime.utcnow().date()
+    start = end - timedelta(days=6)
+    ov = report_mod.overview(site.id, start, end)
+    assert ov['totals']['pageviews'] == 3
+    assert ov['totals']['visitors'] == 2
+    assert len(ov['timeseries']) == 7             # zero-filled 7-day window
+    top = {p['value']: p['pageviews'] for p in ov['top_pages']}
+    assert top['/a'] == 2 and top['/b'] == 1
+
+
+def test_report_realtime_reads_raw_events(app):
+    site = _mk_site()
+    _mk_event(site.id, visitor='v1', path='/live')
+    _mk_event(site.id, visitor='v1', path='/live2')
+    _mk_event(site.id, visitor='v2', path='/live')
+    rt = report_mod.realtime(site.id, minutes=30)
+    assert rt['active_visitors'] == 2
+    assert rt['pageviews'] == 3
+    assert rt['recent'][0]['path'] in ('/live', '/live2')
+
+
+def test_parse_range_defaults_and_explicit():
+    from datetime import datetime
+    s, e = report_mod.parse_range({})
+    assert (e - s).days == 6                       # default 7d inclusive
+    s2, e2 = report_mod.parse_range({'range': '30d'})
+    assert (e2 - s2).days == 29
+    s3, e3 = report_mod.parse_range({'start': '2026-01-01', 'end': '2026-01-10'})
+    assert s3.isoformat() == '2026-01-01' and e3.isoformat() == '2026-01-10'
+
+
+# --- site CRUD + RBAC ---
+def test_sites_crud_flow(app, analytics_client):
+    admin = _auth(_mk_admin())
+    # create
+    r = analytics_client.post('/api/v1/analytics/sites', headers=admin,
+                              json={'name': 'Blog', 'hostnames': ['blog.example.com']})
+    assert r.status_code == 201
+    body = r.get_json()
+    sid = body['id']
+    assert body['site_key']
+    assert body['hostnames'] == ['blog.example.com']
+    # list
+    r = analytics_client.get('/api/v1/analytics/sites', headers=admin)
+    assert any(s['id'] == sid for s in r.get_json()['sites'])
+    # update
+    r = analytics_client.put(f'/api/v1/analytics/sites/{sid}', headers=admin,
+                             json={'enabled': False})
+    assert r.get_json()['enabled'] is False
+    # rotate key
+    old_key = body['site_key']
+    r = analytics_client.post(f'/api/v1/analytics/sites/{sid}/rotate-key', headers=admin)
+    assert r.get_json()['site_key'] != old_key
+    # delete
+    r = analytics_client.delete(f'/api/v1/analytics/sites/{sid}', headers=admin)
+    assert r.status_code == 200
+    assert AnalyticsSite.query.get(sid) is None
+
+
+def test_create_site_requires_name_400(app, analytics_client):
+    admin = _auth(_mk_admin())
+    r = analytics_client.post('/api/v1/analytics/sites', headers=admin, json={})
+    assert r.status_code == 400
+
+
+def test_reads_allow_viewer(app, analytics_client):
+    viewer = _auth(_mk_viewer())
+    site = _mk_site()
+    r = analytics_client.get('/api/v1/analytics/sites', headers=viewer)
+    assert r.status_code == 200
+    r = analytics_client.get(f'/api/v1/analytics/sites/{site.id}/overview',
+                             headers=viewer)
+    assert r.status_code == 200
+
+
+def test_mutations_deny_viewer_403(app, analytics_client):
+    viewer = _auth(_mk_viewer())
+    r = analytics_client.post('/api/v1/analytics/sites', headers=viewer,
+                              json={'name': 'x'})
+    assert r.status_code == 403
+
+
+def test_reports_require_auth_401(app, analytics_client):
+    site = _mk_site()
+    r = analytics_client.get(f'/api/v1/analytics/sites/{site.id}/overview')
+    assert r.status_code in (401, 422)  # missing/invalid JWT
+
+
+def test_overview_endpoint_shape(app, analytics_client):
+    admin = _auth(_mk_admin())
+    site = _mk_site()
+    _mk_event(site.id, visitor='v1', path='/a')
+    rollup_mod.run_rollup()
+    r = analytics_client.get(f'/api/v1/analytics/sites/{site.id}/overview?range=30d',
+                             headers=admin)
+    assert r.status_code == 200
+    body = r.get_json()
+    assert set(body) >= {'totals', 'timeseries', 'top_pages', 'top_referrers',
+                         'realtime', 'range'}
+
+
+def test_devices_endpoint(app, analytics_client):
+    admin = _auth(_mk_admin())
+    site = _mk_site()
+    _mk_event(site.id, visitor='v1', device='mobile', browser='Safari',
+              os_family='iOS', country='US')
+    rollup_mod.run_rollup()
+    r = analytics_client.get(f'/api/v1/analytics/sites/{site.id}/devices',
+                             headers=admin)
+    body = r.get_json()
+    assert body['device'][0]['value'] == 'mobile'
+    assert body['os'][0]['value'] == 'iOS'
+
+
+def test_rollup_endpoint_admin_only(app, analytics_client):
+    viewer = _auth(_mk_viewer())
+    assert analytics_client.post('/api/v1/analytics/rollup',
+                                 headers=viewer).status_code == 403
+    admin = _auth(_mk_admin())
+    assert analytics_client.post('/api/v1/analytics/rollup',
+                                 headers=admin).status_code == 200
+
+
+def test_rollup_job_handler_never_raises(app):
+    _mk_plugin_row()
+    out = jobs_mod.rollup(job=None)
+    assert 'rows' in out or 'error' in out or 'sites_dates' in out
