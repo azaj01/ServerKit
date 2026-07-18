@@ -112,7 +112,6 @@ async function main() {
                     ({ selector, key, fnSrc }) => {
                         const el = document.querySelector(selector);
                         if (!el) return null;
-                        // eslint-disable-next-line no-new-func
                         const fn = new Function(`return (${fnSrc})`)();
                         return fn(el, key);
                     },
