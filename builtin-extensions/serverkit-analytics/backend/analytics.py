@@ -27,8 +27,8 @@ from app.middleware.rbac import admin_required, viewer_required
 from app.utils.client_ip import get_client_ip
 
 from . import (
-    ingest_service, nginx_integration, report_service, rollup_service,
-    site_service, wp_integration,
+    ingest_service, log_ingest_service, nginx_integration, report_service,
+    rollup_service, site_service, wp_integration,
 )
 from .config import cfg_bool
 from .ingest_service import MAX_BODY_BYTES, referrer_host
@@ -408,3 +408,13 @@ def remove_nginx(site_id):
     if err:
         return err
     return jsonify(nginx_integration.remove(site)), 200
+
+
+@analytics_bp.route('/sites/<int:site_id>/ingest-logs', methods=['POST'])
+@admin_required
+def ingest_logs(site_id):
+    """Run server-log ingestion for one site on demand (ops/testing)."""
+    site, err = _site_or_404(site_id)
+    if err:
+        return err
+    return jsonify(log_ingest_service.ingest_site(site)), 200

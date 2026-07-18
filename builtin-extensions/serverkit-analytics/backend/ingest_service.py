@@ -352,7 +352,15 @@ def build_event(site, payload, ip, ua):
         'device_class': device,
         'screen_class': screen,
         'lang': lang,
-        'country': None,  # filled by geo in Phase 6 when a GeoLite2 DB is present
+        'country': _country(ip),  # None unless geo is enabled + a GeoLite2 DB is present
         'source': 'js',
         'load_ms': load_ms,
     }
+
+
+def _country(ip):
+    try:
+        from .geo import lookup_country
+        return lookup_country(ip)
+    except Exception:  # noqa: BLE001
+        return None

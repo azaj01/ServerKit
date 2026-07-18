@@ -32,7 +32,8 @@ def _load_ext():
     mods = {}
     for name in ('config', 'models', 'ingest_service', 'rollup_service',
                  'report_service', 'site_service', 'wp_integration',
-                 'nginx_integration', 'lifecycle', 'jobs', 'analytics'):
+                 'nginx_integration', 'log_ingest_service', 'geo', 'lifecycle',
+                 'jobs', 'analytics'):
         mods[name] = importlib.import_module(f'app.plugins.{SLUG}.{name}')
     return mods
 
@@ -46,6 +47,8 @@ report_mod = _M['report_service']
 site_mod = _M['site_service']
 wp_mod = _M['wp_integration']
 nginx_mod = _M['nginx_integration']
+log_mod = _M['log_ingest_service']
+geo_mod = _M['geo']
 lifecycle_mod = _M['lifecycle']
 jobs_mod = _M['jobs']
 bp_mod = _M['analytics']
@@ -925,3 +928,143 @@ def test_inject_endpoints_admin_gated(app, analytics_client, monkeypatch):
     r = analytics_client.post(f'/api/v1/analytics/sites/{site.id}/inject/wordpress',
                               headers=admin)
     assert r.status_code == 200 and r.get_json().get('success')
+
+
+# --------------------------------------------------------------------------- #
+# Phase 6: log ingestion + geo
+# --------------------------------------------------------------------------- #
+_LOG_LINE = (
+    '203.0.113.9 - - [10/Oct/2024:13:55:36 +0000] "GET /blog/post HTTP/1.1" '
+    '200 5120 "https://google.com/search" '
+    '"Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/120 Safari/537.36"'
+)
+_LOG_ASSET = (
+    '203.0.113.9 - - [10/Oct/2024:13:55:37 +0000] "GET /style.css HTTP/1.1" '
+    '200 1000 "-" "Mozilla/5.0 Chrome/120"'
+)
+_LOG_BOT = (
+    '203.0.113.9 - - [10/Oct/2024:13:55:38 +0000] "GET / HTTP/1.1" '
+    '200 1000 "-" "Googlebot/2.1"'
+)
+_LOG_POST = (
+    '203.0.113.9 - - [10/Oct/2024:13:55:39 +0000] "POST /wp-login.php HTTP/1.1" '
+    '200 1000 "-" "Mozilla/5.0 Chrome/120"'
+)
+
+
+def test_parse_combined_line():
+    p = log_mod.parse_combined_line(_LOG_LINE)
+    assert p['ip'] == '203.0.113.9'
+    assert p['path'] == '/blog/post'
+    assert p['status'] == '200'
+    assert 'google' in p['referer']
+    # assets, bots-by-request, and non-GET are filtered at parse time.
+    assert log_mod.parse_combined_line(_LOG_ASSET) is None   # asset
+    assert log_mod.parse_combined_line(_LOG_POST) is None    # non-GET
+    assert log_mod.parse_combined_line('garbage line') is None
+
+
+def test_ingest_lines_creates_log_events(app):
+    site = _mk_site()
+    written, max_ts = log_mod.ingest_lines(site, [_LOG_LINE, _LOG_ASSET, _LOG_BOT])
+    assert written == 1  # only the real pageview (asset + bot dropped)
+    ev = AnalyticsEvent.query.filter_by(site_id=site.id).one()
+    assert ev.source == 'log'
+    assert ev.url_path == '/blog/post'
+    assert ev.referrer_host == 'google.com'
+    assert ev.ua_family == 'Chrome'
+    assert ev.visitor_hash and '203.0.113.9' not in ev.visitor_hash
+
+
+def test_ingest_lines_dedup_by_since(app):
+    from datetime import datetime
+    site = _mk_site()
+    # since_ts at/after the line's ts => skipped.
+    boundary = datetime(2024, 10, 10, 14, 0, 0)
+    written, _ = log_mod.ingest_lines(site, [_LOG_LINE], since_ts=boundary)
+    assert written == 0
+
+
+def test_log_file_cursor_advances(app, tmp_path):
+    site = _mk_site()
+    logf = tmp_path / 'access.log'
+    logf.write_text(_LOG_LINE + '\n', encoding='utf-8')
+    site.update_settings(log_ingestion=True, log_source_kind='file',
+                         log_source_ref=str(logf))
+    from app import db
+    db.session.commit()
+
+    res1 = log_mod.ingest_site(site)
+    assert res1['written'] == 1
+    # Second run with no new lines writes nothing (cursor advanced).
+    res2 = log_mod.ingest_site(site)
+    assert res2['written'] == 0
+    # Append a new line -> ingested on the next run.
+    with open(logf, 'a', encoding='utf-8') as f:
+        f.write(_LOG_LINE.replace('/blog/post', '/blog/post2') + '\n')
+    res3 = log_mod.ingest_site(site)
+    assert res3['written'] == 1
+    assert AnalyticsEvent.query.filter_by(site_id=site.id).count() == 2
+
+
+def test_ingest_site_skips_when_disabled(app):
+    site = _mk_site()  # no log_ingestion setting
+    assert log_mod.ingest_site(site).get('skipped') is True
+
+
+def test_run_log_tail_iterates_enabled_sites(app, tmp_path):
+    _mk_plugin_row(config={'log_ingestion_enabled': True})
+    site = _mk_site()
+    logf = tmp_path / 'a.log'
+    logf.write_text(_LOG_LINE + '\n', encoding='utf-8')
+    site.update_settings(log_ingestion=True, log_source_kind='file',
+                         log_source_ref=str(logf))
+    from app import db
+    db.session.commit()
+    out = log_mod.run_log_tail()
+    assert out['sites'] == 1 and out['written'] == 1
+
+
+def test_run_log_tail_respects_global_toggle(app):
+    _mk_plugin_row(config={'log_ingestion_enabled': False})
+    out = log_mod.run_log_tail()
+    assert out.get('skipped') is True
+
+
+def test_log_tail_job_handler_never_raises(app):
+    _mk_plugin_row(config={'log_ingestion_enabled': False})
+    out = jobs_mod.log_tail(job=None)
+    assert 'skipped' in out or 'sites' in out or 'error' in out
+
+
+def test_ingest_logs_endpoint(app, analytics_client, tmp_path):
+    admin = _auth(_mk_admin())
+    site = _mk_site()
+    logf = tmp_path / 'x.log'
+    logf.write_text(_LOG_LINE + '\n', encoding='utf-8')
+    site.update_settings(log_ingestion=True, log_source_kind='file',
+                         log_source_ref=str(logf))
+    from app import db
+    db.session.commit()
+    r = analytics_client.post(f'/api/v1/analytics/sites/{site.id}/ingest-logs',
+                              headers=admin)
+    assert r.status_code == 200 and r.get_json()['written'] == 1
+
+
+# --- geo ---
+def test_geo_disabled_returns_none(app):
+    _mk_plugin_row(config={'geo_enabled': False})
+    assert geo_mod.lookup_country('8.8.8.8') is None
+
+
+def test_geo_enabled_but_no_db(app):
+    _mk_plugin_row(config={'geo_enabled': True, 'geo_db_path': '/nonexistent/GeoLite2.mmdb'})
+    geo_mod.reset()
+    assert geo_mod.lookup_country('8.8.8.8') is None
+
+
+def test_build_event_country_none_by_default(app):
+    site = _mk_site()
+    event = ingest_mod.build_event(site, {'k': site.site_key, 'p': '/x'},
+                                   '8.8.8.8', UA_CHROME)
+    assert event['country'] is None
