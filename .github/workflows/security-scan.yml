@@ -54,16 +54,60 @@ jobs:
             -f txt
 
   # ──────────────────────────────────────────────────────────────────
-  # Job 2: Safety — dependency vulnerability scanning
+  # Job 2: pip-audit — dependency vulnerability scanning (the gate)
+  #
+  # This is the blocking check. Unlike the Safety job below it needs no
+  # account, no API key and no network-fetched policy: it resolves the pinned
+  # requirements against the PyPI Advisory Database and fails on anything it
+  # finds. Every suppression therefore has to live in THIS file, in a diff a
+  # reviewer can see — which is the whole point. Safety was reporting
+  # "No issues found" while its Platform-side policy silently ignored four
+  # advisories, one of them a real, fixable CVE in a directly pinned package.
   # ──────────────────────────────────────────────────────────────────
-  safety:
-    name: Safety Dependency Scan
+  pip-audit:
+    name: pip-audit Dependency Scan
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      # No --ignore-vuln entries today. If one is ever needed, add it here with
+      # a comment saying which advisory, why it does not apply, and when to
+      # revisit — never by silencing the scanner globally.
+      - name: Audit backend requirements
+        run: pip-audit -r backend/requirements.txt --progress-spinner off
+
+      - name: Audit test-harness requirements
+        run: pip-audit -r scripts/test/harness/requirements.txt --progress-spinner off
+
+  # ──────────────────────────────────────────────────────────────────
+  # Job 3: Safety — advisory only
+  #
+  # Kept for the Safety Platform dashboard, but deliberately NOT a gate.
+  # The action shells out to a hosted service, and a service-side failure
+  # there (results upload erroring with "Sorry, something went wrong" while
+  # the scan itself reported clean) took CI red on 2026-07-20 with no repo
+  # change behind it — requirements had not moved since 2026-07-04. An
+  # outage at a third party should not block merges; pip-audit above is the
+  # check that actually has to pass.
+  # ──────────────────────────────────────────────────────────────────
+  safety:
+    name: Safety Dependency Scan (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Run Safety CLI to check for vulnerabilities
+        continue-on-error: true
         uses: pyupio/safety-action@v1
         with:
           api-key: ${{ secrets.SAFETY_API_KEY }}

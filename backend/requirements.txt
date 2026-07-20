@@ -42,7 +42,7 @@ tomli>=2.0.0; python_version < '3.11'
 Flask-Limiter==3.5.0
 
 # CLI
-click==8.1.7
+click==8.3.3
 
 schedule==1.2.2
 croniter==6.0.0
