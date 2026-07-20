@@ -42,9 +42,9 @@ Default dev credentials: `admin` / `admin`
 
 Flask app factory in `app/__init__.py` using `create_app()`. Three-layer architecture:
 
-- **`app/api/`** — Flask Blueprints, one file per feature (36 files). All routes prefixed `/api/v1/`. JWT-protected via `@jwt_required()`.
-- **`app/services/`** — Business logic (48 files). Services are stateless modules called by API routes. Heavy lifting (shell commands, Docker API, file operations) happens here.
-- **`app/models/`** — SQLAlchemy ORM models (15 files). Tables auto-created on startup via `db.create_all()`.
+- **`app/api/`** — Flask Blueprints, one file per feature (90+ files). All routes prefixed `/api/v1/`. JWT-protected via `@jwt_required()`.
+- **`app/services/`** — Business logic (165+ files). Services are stateless modules called by API routes. Heavy lifting (shell commands, Docker API, file operations) happens here.
+- **`app/models/`** — SQLAlchemy ORM models (80+ files). Schema is managed by Alembic migrations in `backend/migrations/versions/` — add a migration for every schema change; the app does not call `db.create_all()`.
 
 Other backend components:
 - `app/sockets.py` — Socket.IO event handlers for real-time metrics, logs, terminal
@@ -57,7 +57,7 @@ Other backend components:
 
 React 18 SPA with client-side routing:
 
-- **`pages/`** — Route-level components (~29 files). Each maps to a route in `App.jsx`.
+- **`pages/`** — Route-level components (60+ files). Each maps to a route in `App.jsx`.
 - **`components/`** — Reusable UI components shared across pages.
 - **`contexts/`** — React Context providers: `AuthContext` (JWT auth + token refresh), `ThemeContext`, `ToastContext`, `ResourceTierContext` (feature gating).
 - **`services/api.js`** — Centralized `ApiService` class handling all HTTP requests, token management, and auto-refresh.
@@ -73,7 +73,7 @@ Browser → Nginx (`:80`/`:443`) → proxy_pass to Docker containers (`:8001-899
 
 ### Production Build
 
-The Dockerfile is multi-stage: Node 20 builds frontend, Python 3.11 serves everything via Gunicorn with GeventWebSocket workers. Built frontend is served from Flask's static folder.
+The Dockerfile is multi-stage: Node 20 builds frontend, Python 3.11 serves everything via Gunicorn with a single plain threaded worker (`--workers 1 --threads 100`, no `--worker-class` — see the single-worker note above). Built frontend is served from Flask's static folder.
 
 ## Platform & Distro Awareness
 
@@ -164,3 +164,22 @@ usage; convert any you touch to the SCSS equivalents above.
 | `DATABASE_URL` | DB connection string (`sqlite:///...` or PostgreSQL) |
 | `CORS_ORIGINS` | Comma-separated allowed origins |
 | `FLASK_ENV` | `development` or `production` |
+
+## Builtin Extensions
+
+Extensions live in `builtin-extensions/<name>/` with a `plugin.json` manifest
+(required keys: `name`, `display_name`, `version`; `entry_point` as
+`module:attr`) and a `backend/` package (loaded as `app.plugins.<name>`).
+API-key auth: guard routes with `@auth_required()` / `@admin_required` from
+`app/middleware/rbac.py` — bare flask `@jwt_required()` rejects `X-API-Key`
+callers.
+
+- `serverkit-localkit` — API surface for the LocalKit desktop app, mounted at
+  `/api/v1/localkit` (`GET /pair`, `GET|POST /sites`, `POST /push/code`,
+  `POST /push/db`, `GET /pull/db`). It is the API-key-friendly surface for
+  WordPress automation (the hub `GET /api/v1/wordpress/sites` is JWT-only).
+  Reuses the `serverkit-wordpress` service layer (imported cross-extension via
+  `importlib` as `app.plugins.serverkit-wordpress.wordpress_service`) and
+  `DatabaseSyncService.import_to_container`/`export_from_container` for DB
+  push/pull; wp-content arrives as a tar.gz and is installed via `docker cp`.
+
