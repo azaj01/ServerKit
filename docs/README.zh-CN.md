@@ -1,8 +1,8 @@
 <div align="center">
 
-# ServerKit
+<img width="100%" alt="ServerKit — 部署、管理和监控服务器" src="screenshots/poster.png" />
 
-<img width="100%" alt="ServerKit — Deploy, manage, and monitor servers" src="screenshots/poster.png" />
+# ServerKit
 
 **部署、管理和监控服务器。**
 
@@ -18,6 +18,8 @@ Docker 容器和安全策略——无需 Kubernetes 的复杂性，
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 [![Discord](https://img.shields.io/discord/1470639209059455008?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.gg/ZKk6tkCQfG)
 
+[![GitHub Stars](https://img.shields.io/github/stars/jhd3197/ServerKit?style=flat-square&color=f5c542)](https://github.com/jhd3197/ServerKit/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/jhd3197/ServerKit/total?style=flat-square)](https://github.com/jhd3197/ServerKit/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![React](https://img.shields.io/badge/react-18-61DAFB.svg?style=flat-square&logo=react&logoColor=black)](https://reactjs.org)
@@ -27,79 +29,9 @@ Docker 容器和安全策略——无需 Kubernetes 的复杂性，
 
 <br>
 
-[功能特性](#-功能特性) · [快速开始](#-快速开始) · [截图预览](#-截图预览) · [系统架构](#-系统架构) · [路线图](#-路线图) · [文档](#-文档) · [参与贡献](#-参与贡献) · [社区](#-社区)
+[快速开始](#-快速开始) · [截图预览](#-截图预览) · [功能特性](#-功能特性) · [系统架构](#-系统架构) · [路线图](#-路线图) · [文档](#-文档) · [参与贡献](#-参与贡献) · [Discord](#-社区)
 
 </div>
-
----
-
-<p align="center">
-  <img alt="Dashboard" width="100%" src="https://github.com/user-attachments/assets/e4382ba7-7b3f-4175-baaf-cc9c782de067" />
-</p>
-
----
-
-## 🎯 功能特性
-
-### 应用与容器
-
-🐘 **PHP / WordPress** — PHP-FPM 8.x，支持一键安装 WordPress
-
-🐍 **Python 应用** — 使用 Gunicorn 部署 Flask 和 Django
-
-🟢 **Node.js** — PM2 进程管理，支持日志实时推送
-
-📦 **Manual & Zip Deploys** — 除 Git 和 Docker 源外，还支持从本地/手动路径或上传的 zip 包部署
-
-🐳 **Docker** — 全面的容器和 Docker Compose 管理
-
-♻️ **Container Lifecycle** — 镜像更新检测与一键应用、空闲容器自动休眠，以及基于 CPU 的水平自动扩缩容
-
-🔑 **环境变量** — 安全加密的应用级变量管理
-
-### 基础设施
-
-🌐 **域名管理** — Nginx 虚拟主机，配置简便
-
-🔒 **SSL / TLS** — Let's Encrypt 自动签发与自动续期、可选的（尽力而为）HTTPS（绝不阻断安装）、强化的 TLS 1.2+/AEAD 加密套件、Cloudflare 感知配置，以及自动 CAA 记录
-
-🗄️ **数据库** — 支持 MySQL/MariaDB 和 PostgreSQL
-
-🛡️ **防火墙 (UFW)** — 可视化防火墙规则管理
-
-⏰ **定时任务** — 可视化编辑器调度 Cron 任务
-
-📁 **文件管理器** — 通过 Web 界面浏览和编辑文件，包括浏览和预览 S3 / Backblaze B2 存储桶
-
-📡 **FTP 服务器** — 管理 vsftpd 用户和访问权限
-
-### 安全
-
-🔐 **双因素认证** — 基于 TOTP 的验证，支持备用恢复码
-
-🔑 **Passkeys / WebAuthn** — 无密码登录与二次验证，支持硬件密钥、Touch ID 和 Windows Hello
-
-🛡️ **Web Application Firewall** — 应用级 ModSecurity v3 + OWASP Core Rule Set，支持检测/拦截模式、可调偏执级别，以及审计日志事件
-
-🦠 **恶意软件扫描** — 集成 ClamAV，支持隔离处理
-
-📋 **文件完整性监控** — 检测未授权的文件变更
-
-🚨 **安全告警** — 实时威胁通知
-
-🧱 **Fail2ban 和 SSH** — 暴力破解防护与 SSH 密钥管理
-
-### 监控与告警
-
-📊 **实时指标** — 通过 WebSocket 监控 CPU、内存、磁盘、网络
-
-🎮 **GPU Monitoring** — NVIDIA GPU 利用率、显存、温度和功耗，支持按进程和按容器统计用量
-
-📈 **运行时间追踪** — 服务器历史在线率数据
-
-🔔 **通知推送** — 支持 Discord、Slack、Telegram 及通用 Webhook
-
-🖥️ **多服务器管理** — 基于 Agent 的远程服务器监控与管理
 
 ---
 
@@ -113,7 +45,19 @@ Docker 容器和安全策略——无需 Kubernetes 的复杂性，
 curl -fsSL https://serverkit.ai/install.sh | bash
 ```
 
-> 支持 Ubuntu 22.04+ 和 Debian 12+，自动完成所有配置。
+> 支持 Ubuntu 22.04+、Debian 12+、Fedora 以及 RHEL/Rocky/AlmaLinux 9+，自动完成所有配置。
+>
+> 可选项：`PANEL_DOMAIN=panel.example.com` 用于设置域名并尝试签发 Let's Encrypt 证书；`SERVERKIT_OFFLINE_TARBALL=...` 用于从本地 tarball 安装。
+
+### 更新
+
+```bash
+sudo serverkit update
+```
+
+原子化的蓝绿更新，包含预检、数据库备份、迁移以及自动回滚。
+使用 `--dry-run` 预览，`--branch dev` 安装开发版构建，
+或 `--release [version]` 安装发布版 tarball。
 
 ### 方式二：Docker
 
@@ -142,42 +86,146 @@ docker compose up -d       # 访问 http://localhost
 
 ## 📸 截图预览
 
-<p align="center">
+> 截图取自使用模拟数据的演示构建——下方所有主机名、IP、域名和指标均为虚构。
 
-![Workflow-Builder](https://github.com/user-attachments/assets/fc58beac-5e2c-487e-a37b-eaa6473eb325)
+|                            仪表盘                             |                            服务                            |
+| :--------------------------------------------------------------: | :------------------------------------------------------------: |
+|      ![Dashboard](screenshots/dashboard.png)       |      ![Services](screenshots/services.png)       |
+|   _实时服务器指标、KPI 卡片与近期活动_   |   _静态站点、Node.js、Python、PHP 与 Docker 应用_   |
 
-</p>
+|                             Docker                              |                           WordPress                            |
+| :-------------------------------------------------------------: | :------------------------------------------------------------: |
+|         ![Docker](screenshots/docker.png)         |      ![WordPress](screenshots/wordpress.png)     |
+| _容器、镜像、卷与网络，并实时显示 CPU/内存_ | _各站点状态、快捷操作与实时健康检查_ |
+
+|                           Agent 集群                            |                           应用市场                           |
+| :--------------------------------------------------------------: | :-------------------------------------------------------------: |
+|            ![Agent Fleet](screenshots/fleet.png)            |      ![Marketplace](screenshots/marketplace.png)      |
+|      _集群健康状况、版本灰度发布与命令队列_      |     _一键应用模板与可安装扩展_     |
+
+|                           监控                            |                            安全                             |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|      ![Monitoring](screenshots/monitoring.png)      |         ![Security](screenshots/security.png)         |
+|   _实时仪表盘、告警规则与通知渠道_   | _安全评分、ClamAV、文件完整性、防火墙、Fail2Ban_ |
 
 <details>
-<summary><strong>查看更多截图</strong></summary>
+<summary><strong>查看全部截图</strong></summary>
 
 <br>
 
-<p align="center">
-  <img alt="Docker" width="100%" src="https://github.com/user-attachments/assets/08fd47b9-778a-4170-8542-ed28579f8a12" />
-</p>
+|                          AI 助手                           |                          服务详情                          |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|            ![AI Assistant](screenshots/ai.png)             |   ![Service Detail](screenshots/service-detail.png)   |
+|     _由 Prompture 驱动、可在你的基础设施上调用工具的助手_     | _部署记录、Git 连接、实时用量、日志与设置_ |
 
-<p align="center">
-  <img width="100%" alt="Workflow Builder" src="https://github.com/user-attachments/assets/1271f01d-f666-4609-8bc0-22a22c81eaf3" />
-</p>
+|                            数据库                            |                           SQL 控制台                            |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|        ![Databases](screenshots/databases.png)        |            ![SQL Console](screenshots/sql.png)            |
+|   _带源码树的 MySQL / PostgreSQL / SQLite 浏览器_   |     _在浏览器中执行 SQL，并以带类型的结果表格展示_     |
 
-<p align="center">
-  <img width="100%" alt="Templates" src="https://github.com/user-attachments/assets/337bcf4a-d5aa-4496-b74a-b66e859304ad" />
-</p>
+|                             域名                             |                            DNS 区域                             |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|          ![Domains](screenshots/domains.png)          |              ![DNS Zones](screenshots/dns.png)              |
+|      _SSL 状态、到期追踪与自动续期_      | _Cloudflare、Route 53、DigitalOcean——完整记录编辑_ |
 
-<p align="center">
-  <img width="100%" alt="Applications" src="https://github.com/user-attachments/assets/b5bdf80c-4ce1-4de9-b8b9-ae069a17a2b3" />
-</p>
+|                             备份                             |                               邮件                               |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|          ![Backups](screenshots/backups.png)          |               ![Mail](screenshots/email.png)               |
+|     _定时备份，支持 S3/B2 同步与一键恢复_     |   _Postfix、Dovecot、OpenDKIM、SpamAssassin 与 Roundcube_   |
 
-<p align="center">
-  <img width="100%" alt="Applications Logs"  src="https://github.com/user-attachments/assets/3c397d1e-1452-4111-baae-452fb7bfbed7" />
-</p>
+|                            定时任务                            |                          文件管理器                           |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|            ![Cron Jobs](screenshots/cron.png)            |           ![File Manager](screenshots/files.png)           |
+|       _可视化 Cron 编辑器，时间表达式可读性强_       |    _浏览、编辑与上传文件，并按挂载点显示磁盘用量_    |
+
+|                         日志与终端                         |                             服务器                             |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|         ![Logs & Terminal](screenshots/terminal.png)         |           ![Servers](screenshots/servers.png)           |
+|      _日志查看器、进程列表、journald 与 SSH 会话_      |   _在同一面板中管理所有服务器，实时展示 CPU/内存/磁盘遥测_   |
+
+|                          远程访问                           |                             设置                            |
+| :--------------------------------------------------------------: | :-------------------------------------------------------------: |
+|    ![Remote Access](screenshots/remote-access.png)    |          ![Settings](screenshots/settings.png)          |
+| _通过 WireGuard 配对的 Agent 将 NAT 后的服务对外暴露_ |  _个人资料、外观/品牌、用户与连接_  |
+
+|                              登录                              |                                                                 |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|              ![Login](screenshots/login.png)              |                                                                 |
+|    _邮箱/密码登录，支持 SSO 与双因素认证_    |                                                                 |
 
 </details>
+
+## 🎯 功能特性
+
+> **核心功能已臻完备。** 新能力以可安装的**扩展**形式通过内置应用市场发布——核心保持精简稳定，后续工作聚焦于 UI 打磨与社区反馈的问题修复。
+
+### 🚀 应用与部署
+
+| | |
+|---|---|
+| **一键 WordPress**<br>PHP-FPM 8.x 站点发布在真实子域名上，支持 URL 替换预览、自定义域名与通配符 HTTPS。 | **任意技术栈**<br>基于 Gunicorn 的 Flask/Django、基于 PM2 的 Node.js、静态站点——支持从 Git、Docker、手动路径或 zip 上传部署。 |
+| **Docker 与 Compose**<br>镜像更新检测与一键应用、空闲容器自动休眠、基于 CPU 的自动扩缩容、实时日志与终端访问。 | **应用市场**<br>100+ 一键应用模板，基于声明式 schema，自动解析密钥、主机与 URL——没有任何硬编码。 |
+| **Build Packs**<br>零 Dockerfile 部署：检查代码仓库并依据构建计划生成 Dockerfile + compose。 | **自动化**<br>基于节点的可视化自动化，用于任务、部署与 CI/CD——支持 cron、Webhook 与事件触发，运行在托管容器中。以扩展形式发布。 |
+| **预览与快照**<br>临时的 PR 预览环境，以及不可变、密钥已脱敏的配置快照，支持差异对比与一键恢复。 | **项目与环境**<br>工作区 → 项目 → 环境的分组结构，并提供 WordPress 生产/预发/开发流水线，支持代码与数据库晋级。 |
+
+### 🏗️ 基础设施
+
+| | |
+|---|---|
+| **域名与 SSL**<br>Nginx 虚拟主机、自动签发与续期的 Let's Encrypt 证书、强化的 TLS 1.2+/AEAD、Cloudflare 感知配置、自动 CAA。 | **DNS 区域**<br>在 Cloudflare、Route 53 与 DigitalOcean 上进行完整记录管理——支持传播检查与应对 IP 变动的动态 DNS。 |
+| **数据库**<br>MySQL/MariaDB 与 PostgreSQL，支持用户管理、实时源码树与浏览器端 SQL 控制台。 | **云端开通**<br>在 DigitalOcean、Hetzner、Vultr 与 Linode 上创建服务器，并跟踪成本。 |
+| **连接中心**<br>Git 提供商、云平台、DNS、域名注册商、SMTP 中继与 S3/B2 存储——所有外部账户集中管理，静态加密存储。 | **备份**<br>将应用/数据库/文件定时备份到 S3、B2 或本地，支持保留策略、一键恢复与可选的客户端加密。 |
+| **文件、FTP 与 Cron**<br>Web 文件管理器，支持浏览 S3/B2 存储桶、vsftpd 用户管理以及可视化 Cron 编辑器。 | **邮件服务器**<br>Postfix + Dovecot，支持 DKIM/SPF/DMARC、SpamAssassin、Roundcube 网页邮箱与转发规则。 |
+
+### 🔒 安全
+
+| | |
+|---|---|
+| **Web 应用防火墙**<br>应用级 ModSecurity v3 + OWASP Core Rule Set，支持检测/拦截模式与可调偏执级别。 | **Passkeys 与双因素认证**<br>WebAuthn 无密码登录（硬件密钥、Touch ID、Windows Hello），以及带备用码的 TOTP。 |
+| **恶意软件与完整性**<br>ClamAV 扫描与隔离、文件完整性监控，以及 Lynis 漏洞审计。 | **SSH 与系统加固**<br>Fail2ban、SSH 密钥管理、IP 允许/阻止列表，以及自动操作系统安全更新。 |
+| **容器扫描**<br>使用 grype 进行逐镜像 CVE 扫描，并用 syft 生成 SBOM。 | **加密密钥**<br>提供商凭据与密钥使用 Fernet 加密封存，另有面向外部自动化的入站 Webhook 网关。 |
+
+### 🖥️ 多服务器
+
+| | |
+|---|---|
+| **跨平台 Agent**<br>适用于 Linux、Windows 和 macOS 的 Go Agent——通过实时 WebSocket 网关进行 HMAC-SHA256 认证。原生 Windows 服务 + MSI、`.deb`/`.rpm`、ARM64。[了解更多 →](https://github.com/jhd3197/serverkit-agent) | **集群管理**<br>资产清单、审批队列、分阶段版本灰度、局域网自动发现，以及离线命令队列。 |
+| **轻松接入**<br>带指纹校验的短码配对或预共享令牌；主机凭据以 AES-GCM 加密存储。[了解更多 →](pairing.md) | **集群监控**<br>跨服务器热力图、指标对比、告警阈值、异常检测与容量预测。 |
+| **服务器模板**<br>预期状态模板，支持漂移检测、合规仪表盘与自动修复。 | **远程访问隧道**<br>通过边缘服务器上由 Agent 托管的 WireGuard 暴露私有/NAT 后的服务——无需端口转发。 |
+| **引导式接入**<br>校验 → 前置依赖 → Docker → 配对 Agent，并提供实时进度日志。 | **按服务器代理**<br>可选为每台服务器启用 Docker 化的 Traefik 或 Caddy，并提供 compose 预览；主机 nginx 仍为默认方案。 |
+
+### 📊 监控与告警
+
+| | |
+|---|---|
+| **实时指标**<br>通过 WebSocket 监控 CPU、内存、磁盘与网络，并提供历史留存与运行时间追踪。 | **GPU 监控**<br>NVIDIA 利用率、显存、温度，以及按进程/按容器的用量统计。 |
+| **状态页**<br>公开状态页，支持 HTTP/TCP/DNS/Ping 检查、组件监控与事故管理。 | **通知推送**<br>Discord、Slack、Telegram、HTML 邮件与 Webhook——支持按用户配置渠道、严重级别过滤与免打扰时段。 |
+
+### 👥 团队与权限
+
+| | |
+|---|---|
+| **工作区**<br>多租户隔离，支持配额与成员管理。 | **RBAC**<br>管理员/开发者/查看者角色，支持按功能细分的读/写权限。 |
+| **SSO 与 OAuth**<br>Google、GitHub、OpenID Connect 与 SAML 2.0，支持账户关联。 | **API 密钥**<br>分级密钥，支持速率限制、细粒度作用域、用量分析与 OpenAPI 文档。 |
+| **审计日志**<br>记录每一次用户操作，并提供详细的活动仪表盘。 | **Webhook 与共享配置**<br>出站订阅，支持 HMAC 签名与重试，另有共享标签与变量组。 |
+
+### 🎨 自定义
+
+| | |
+|---|---|
+| **默认精简**<br>安装向导只安装与你的使用场景相匹配的扩展——随时可从应用市场添加更多。 | **侧边栏预设**<br>完整、Web 托管、邮件管理、DevOps 或极简视图，支持可折叠分组与按用户布局。 |
+| **你的品牌**<br>8 种预设主题色外加自定义 hex 取色器，以及白标 logo、名称或横幅。 | **仪表盘小组件**<br>可开关与重排小组件，以贴合你的工作流。 |
 
 ---
 
 ## 🏗️ 系统架构
+
+<img width="100%" alt="ServerKit 架构：客户端与公网访客先抵达 nginx 边缘层，由其将面板流量分发到 Flask API，将公开流量代理到应用容器；ServerKit 面板包含 React SPA、REST API、Socket.IO Agent 网关、服务层、模型层、任务、通知与扩展运行时；同一台服务器上的运行时层承载 Docker 应用容器、数据库与面板状态；远程 Go Agent 集群通过 /agent 命名空间回连。" src="images/architecture/system-overview.png" />
+
+**Nginx** 终止 TLS 并将流量一分为二：面板请求转发到 **Flask API**，其余请求代理到为该域名提供服务的 **Docker 容器**。面板将自身状态保存在 SQLite 或 PostgreSQL 中，通过任务调度器与通知总线运行后台工作，并从**扩展运行时**加载可选功能。远程服务器由 **Go Agent** 管理，它通过 Socket.IO 命名空间回连。
+
+<details>
+<summary><strong>查看 ASCII 图</strong></summary>
 
 ```
                           ┌──────────────────┐
@@ -192,61 +240,58 @@ docker compose up -d       # 访问 http://localhost
 │  │                      NGINX (Reverse Proxy)                          │ │
 │  │                         :80 / :443                                  │ │
 │  │                                                                     │ │
-│  │    app1.com ──┐      app2.com ──┐      api.app3.com ──┐            │ │
-│  └───────────────┼─────────────────┼─────────────────────┼─────────────┘ │
-│                  │ proxy_pass      │ proxy_pass          │ proxy_pass    │
-│                  ▼                 ▼                     ▼               │
-│  ┌─────────────────────────────────────────────────────────────────────┐ │
-│  │                      DOCKER CONTAINERS                              │ │
-│  │                                                                     │ │
-│  │    ┌───────────┐    ┌───────────┐    ┌───────────┐                 │ │
-│  │    │ WordPress │    │   Flask   │    │  Node.js  │    ...          │ │
-│  │    │   :8001   │    │   :8002   │    │   :8003   │                 │ │
-│  │    └─────┬─────┘    └───────────┘    └───────────┘                 │ │
-│  └──────────┼──────────────────────────────────────────────────────────┘ │
-│             │                                                            │
-│             ▼                                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐ │
-│  │                        DATABASES                                    │ │
-│  │    MySQL :3306    PostgreSQL :5432    Redis :6379                  │ │
-│  └─────────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────┘
+│  │    app1.com ──┐   app2.com ──┐   api.app3.com ──┐   /api/v1/ ──┐   │ │
+│  └───────────────┼──────────────┼──────────────────┼──────────────┼────┘ │
+│                  │ proxy_pass   │ proxy_pass       │ proxy_pass   │      │
+│                  ▼              ▼                  ▼              │      │
+│  ┌────────────────────────────────────────────────────────────┐  │      │
+│  │                    DOCKER CONTAINERS                       │  │      │
+│  │                                                            │  │      │
+│  │    ┌───────────┐    ┌───────────┐    ┌───────────┐        │  │      │
+│  │    │ WordPress │    │   Flask   │    │  Node.js  │  ...   │  │      │
+│  │    │   :8001   │    │   :8002   │    │   :8003   │        │  │      │
+│  │    └─────┬─────┘    └───────────┘    └───────────┘        │  │      │
+│  └──────────┼─────────────────────────────────────────────────┘  │      │
+│             │                                                     ▼      │
+│             │                        ┌─────────────────────────────────┐ │
+│             │                        │       SERVERKIT PANEL           │ │
+│             │                        │   React SPA · Flask REST API    │ │
+│             │                        │   Socket.IO · Jobs · Notify     │ │
+│             │                        │   Extension runtime             │ │
+│             │                        │   Gunicorn -w 1 (threaded)      │ │
+│             │                        └────────────────┬────────────────┘ │
+│             ▼                                         │                  │
+│  ┌──────────────────────────────────┐   ┌─────────────▼────────────────┐ │
+│  │            DATABASES             │   │        PANEL STATE           │ │
+│  │  MySQL :3306   PostgreSQL :5432  │   │  SQLite (default) or         │ │
+│  │  Redis :6379   MongoDB :27017    │   │  PostgreSQL · Alembic        │ │
+│  └──────────────────────────────────┘   └──────────────────────────────┘ │
+└───────────────────────────────────────────────────────┼──────────────────┘
+                                                        │
+                          Socket.IO /agent (HMAC)       │
+                          + HTTP long-poll fallback     ▼
+                       ┌──────────────────────────────────────┐
+                       │   REMOTE SERVERS — Go agent fleet    │
+                       │   server A  ·  server B  ·  server C │
+                       └──────────────────────────────────────┘
 ```
 
-**[查看完整架构文档 →](ARCHITECTURE.md)** — 请求流程、模板系统、端口分配、数据库关联及故障排查。
+</details>
+
+**[查看完整架构文档 →](ARCHITECTURE.md)** — 请求流程、扩展平台、模板系统、端口分配、任务、通知与 Agent 集群。
 
 ---
 
 ## 🗺️ 路线图
 
-- [x] 核心基础设施 — Flask + React + JWT + WebSocket
-- [x] 应用管理 — PHP、Python、Node.js、Docker
-- [x] 域名与 SSL — Nginx 虚拟主机、Let's Encrypt
-- [x] 数据库 — MySQL、PostgreSQL
-- [x] 文件与 FTP 管理
-- [x] 监控与告警 — 指标、Webhook、运行时间追踪
-- [x] 安全 — 双因素认证、ClamAV、文件完整性、Fail2ban
-- [x] 防火墙 — UFW 集成
-- [x] 多服务器管理 — Go Agent、集中式仪表盘
-- [x] Git 部署 — Webhook、自动部署、回滚、零停机
-- [ ] 备份与恢复 — S3、Backblaze B2、定时备份
-- [ ] 邮件服务器 — Postfix、Dovecot、DKIM/SPF/DMARC
-- [ ] 团队与权限 — RBAC、审计日志
-- [ ] 移动应用 — React Native，支持推送通知
-- [ ] 插件市场 — 扩展、自定义组件、主题
-- [x] Web 应用防火墙 — 应用级 ModSecurity v3 + OWASP CRS
-- [x] 容器安全 — 镜像 CVE 扫描（grype）+ SBOM（syft）
-- [x] 无密码认证 — WebAuthn / passkeys
-- [x] 动态 DNS — 基于令牌认证的 A/AAAA 更新
-- [x] GPU 监控 — NVIDIA 利用率、显存与进程
-- [x] 容器生命周期 — 镜像更新应用、自动休眠、水平自动扩缩容
-- [x] TLS 强化 — 可选 HTTPS、Cloudflare 感知配置、自动 CAA
-- [x] 密钥管理器与入站 Webhook 网关
-- [x] 远程访问 — 通过 Agent 托管的 WireGuard 隧道暴露私有/NAT 后的服务
-- [x] 连接中心 — 统一管理外部账户（源码、云、DNS、注册商、SMTP、存储）
-- [x] WordPress 发布 — 真实子域名、URL 替换、自定义域名、通配符 HTTPS
+**ServerKit 的核心功能已臻完备**——从最初的 Flask + React 基础设施，到多服务器集群、SSO、自动化引擎与扩展应用市场，所有规划中的核心阶段均已交付。
 
-完整详情：[ROADMAP.md](../ROADMAP.md)
+后续开发集中在两个方向：
+
+- **🧩 扩展** — 新功能以可安装扩展的形式通过应用市场发布（100+ 一键模板并持续增加）。核心保持精简；你只安装自己需要的部分。
+- **✨ 核心打磨** — 持续的 UI/UX 优化，以及针对社区反馈问题的修复。不再规划新的核心功能。
+
+完整历史：[ROADMAP.md](../ROADMAP.md)
 
 ---
 
@@ -257,8 +302,12 @@ docker compose up -d       # 访问 http://localhost
 | [系统架构](ARCHITECTURE.md) | 系统设计、请求流程、架构图 |
 | [安装指南](INSTALLATION.md) | 完整的安装配置说明 |
 | [部署指南](DEPLOYMENT.md) | CLI 命令与生产环境部署 |
+| [Agent](https://github.com/jhd3197/serverkit-agent) | 安装并运行多服务器 Agent（Linux/Windows/macOS）——独立仓库 |
+| [Agent 配对](pairing.md) | 安全的短码 Agent 接入 |
 | [API 参考](API.md) | REST API 接口文档 |
 | [新功能](NEW_FEATURES.md) | 最新 `dev` 功能的接口与页面参考 |
+| [增强能力](ENHANCEMENTS.md) | 十项开发者体验、团队/规模化、集群与安全能力的说明指南 |
+| [更新日志](../CHANGELOG.md) | 发布历史与重要变更 |
 | [路线图](../ROADMAP.md) | 开发路线图与规划功能 |
 | [参与贡献](../CONTRIBUTING.md) | 如何参与贡献 |
 
@@ -268,12 +317,15 @@ docker compose up -d       # 访问 http://localhost
 
 | 层级 | 技术 |
 |-------|------------|
-| 后端 | Python 3.11, Flask, SQLAlchemy, Flask-SocketIO |
-| 前端 | React 18, Vite, SCSS |
+| 后端 | Python 3.11, Flask, SQLAlchemy, Flask-SocketIO, Flask-Migrate |
+| 前端 | React 18, Vite, SCSS, Recharts |
 | 数据库 | SQLite / PostgreSQL |
-| Web 服务器 | Nginx, Gunicorn |
+| Web 服务器 | Nginx, Gunicorn（单进程多线程 worker —— `-w 1 --threads N`） |
 | 容器 | Docker, Docker Compose |
-| 安全 | ClamAV, TOTP (pyotp), Cryptography, ModSecurity v3 + OWASP CRS, grype, syft |
+| 安全 | ClamAV, Lynis, Fail2ban, ModSecurity v3 + OWASP CRS, grype, syft, TOTP (pyotp), Fernet 加密 |
+| 认证 | JWT, OAuth 2.0, OIDC, SAML 2.0, WebAuthn / passkeys |
+| 邮件 | Postfix, Dovecot, SpamAssassin, Roundcube |
+| Agent | Go（多服务器）, HMAC-SHA256, WebSocket |
 
 ---
 
@@ -282,10 +334,20 @@ docker compose up -d       # 访问 http://localhost
 欢迎贡献代码！请先阅读 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 ```
-Fork → 创建功能分支 → 提交代码 → 推送 → 发起 Pull Request
+fork → feature branch → commit → push → pull request
 ```
 
-**优先领域：** 备份功能实现、更多通知渠道、UI/UX 改进、文档完善。
+**优先领域：** 应用市场扩展、UI/UX 改进、文档完善、测试覆盖率。
+
+---
+
+## 💛 支持 ServerKit
+
+ServerKit 是免费且开源的。如果它为你节省了时间，你可以这样帮助它持续发展：
+
+- ⭐ [给仓库点个 Star](https://github.com/jhd3197/ServerKit) — 分文不花，却帮助很大
+- 💖 [GitHub Sponsors](https://github.com/sponsors/jhd3197)
+- ☕ [Buy Me a Coffee](https://buymeacoffee.com/jhd3197)
 
 ---
 
@@ -294,6 +356,10 @@ Fork → 创建功能分支 → 提交代码 → 推送 → 发起 Pull Request
 **[Faro](https://github.com/jhd3197/faro)** — 同一作者打造的现代桌面客户端，支持 SFTP、FTP、SSH 和兼容 S3 的存储。保存一次服务器后，即可在双面板视图中浏览其文件，并在同一 SSH 会话上打开终端 — 还支持拖放传输、单向目录同步以及原地编辑。它甚至内置 **Agent Bridge**，让 Claude Code（或任何 MCP 智能体）通过你已认证的会话在服务器上执行命令，逐条命令审批，且无需共享凭据。
 
 > ServerKit 在浏览器中管理你的服务器；Faro 则是桌面端的得力搭档，用于动手进行文件传输、终端操作以及跨服务器的临时任务。[获取构建版本 →](https://github.com/jhd3197/faro/releases/latest)
+
+**[LocalKit](https://github.com/jhd3197/LocalKit)** — 一键创建本地 WordPress 站点。每个站点都作为独立隔离的 Docker Compose 项目运行，你还可以通过 `serverkit-localkit` 扩展，直接把代码推送、或把数据库推送/拉取到你的 ServerKit 服务器。
+
+**[DeviceKit](https://github.com/jhd3197/DeviceKit)** — 统一的 Android 设备集群与测试自动化平台。在一个仪表盘中控制整个设备集群——运行自动化任务、实时串流屏幕、捕捉视觉回归，并借助 AI 驱动的分析排查故障。
 
 ---
 

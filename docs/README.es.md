@@ -1,8 +1,8 @@
 <div align="center">
 
-# ServerKit
+<img width="100%" alt="ServerKit — Despliega, gestiona y monitorea servidores" src="screenshots/poster.png" />
 
-<img width="100%" alt="ServerKit — Deploy, manage, and monitor servers" src="screenshots/poster.png" />
+# ServerKit
 
 **Despliega, gestiona y monitorea servidores.**
 
@@ -18,6 +18,8 @@ ni el coste de las plataformas gestionadas.
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 [![Discord](https://img.shields.io/discord/1470639209059455008?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.gg/ZKk6tkCQfG)
 
+[![GitHub Stars](https://img.shields.io/github/stars/jhd3197/ServerKit?style=flat-square&color=f5c542)](https://github.com/jhd3197/ServerKit/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/jhd3197/ServerKit/total?style=flat-square)](https://github.com/jhd3197/ServerKit/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![React](https://img.shields.io/badge/react-18-61DAFB.svg?style=flat-square&logo=react&logoColor=black)](https://reactjs.org)
@@ -27,79 +29,9 @@ ni el coste de las plataformas gestionadas.
 
 <br>
 
-[Funcionalidades](#-funcionalidades) · [Inicio Rápido](#-inicio-rápido) · [Capturas de Pantalla](#-capturas-de-pantalla) · [Arquitectura](#-arquitectura) · [Hoja de Ruta](#-hoja-de-ruta) · [Documentación](#-documentación) · [Contribuir](#-contribuir) · [Discord](#-comunidad)
+[Inicio Rápido](#-inicio-rápido) · [Capturas](#-capturas-de-pantalla) · [Funcionalidades](#-funcionalidades) · [Arquitectura](#-arquitectura) · [Hoja de Ruta](#-hoja-de-ruta) · [Documentación](#-documentación) · [Contribuir](#-contribuir) · [Discord](#-comunidad)
 
 </div>
-
----
-
-<p align="center">
-  <img alt="Dashboard" width="100%" src="https://github.com/user-attachments/assets/e4382ba7-7b3f-4175-baaf-cc9c782de067" />
-</p>
-
----
-
-## 🎯 Funcionalidades
-
-### Aplicaciones y Contenedores
-
-🐘 **PHP / WordPress** — PHP-FPM 8.x con instalación de WordPress en un clic
-
-🐍 **Aplicaciones Python** — Despliega Flask y Django con Gunicorn
-
-🟢 **Node.js** — Aplicaciones gestionadas con PM2 y transmisión de logs en tiempo real
-
-📦 **Despliegues Manuales y Zip** — Despliega desde una ruta local/manual o subiendo un zip, junto a los orígenes Git y Docker
-
-🐳 **Docker** — Gestión completa de contenedores y Docker Compose
-
-♻️ **Ciclo de Vida de Contenedores** — Detección de actualizaciones de imagen con aplicación en un clic, suspensión automática de contenedores inactivos y escalado horizontal automático según la CPU
-
-🔑 **Variables de Entorno** — Gestión segura y cifrada de variables por aplicación
-
-### Infraestructura
-
-🌐 **Gestión de Dominios** — Hosts virtuales Nginx con configuración sencilla
-
-🔒 **SSL / TLS** — Let's Encrypt automático con renovación automática, HTTPS opcional (en la medida de lo posible) que nunca bloquea una instalación, cifrados reforzados TLS 1.2+/AEAD, configuraciones compatibles con Cloudflare y registros CAA automáticos
-
-🗄️ **Bases de Datos** — Soporte para MySQL/MariaDB y PostgreSQL
-
-🛡️ **Firewall (UFW)** — Gestión visual de reglas de firewall
-
-⏰ **Tareas Programadas (Cron)** — Programa tareas con un editor visual
-
-📁 **Gestor de Archivos** — Navega y edita archivos desde la interfaz web, incluyendo la navegación y vista previa de buckets de S3 / Backblaze B2
-
-📡 **Servidor FTP** — Gestión de usuarios y accesos de vsftpd
-
-### Seguridad
-
-🔐 **Autenticación de Dos Factores** — Basada en TOTP con códigos de respaldo
-
-🔑 **Passkeys / WebAuthn** — Inicio de sesión sin contraseña y como segundo factor con llaves de hardware, Touch ID y Windows Hello
-
-🧱 **Firewall de Aplicaciones Web** — ModSecurity v3 + OWASP Core Rule Set por aplicación con modos de detección/bloqueo, paranoia ajustable y eventos en el registro de auditoría
-
-🦠 **Análisis de Malware** — Integración con ClamAV y cuarentena
-
-📋 **Monitorización de Integridad de Archivos** — Detecta cambios no autorizados en archivos
-
-🚨 **Alertas de Seguridad** — Notificaciones de amenazas en tiempo real
-
-🧱 **Fail2ban y SSH** — Protección contra fuerza bruta y gestión de claves SSH
-
-### Monitorización y Alertas
-
-📊 **Métricas en Tiempo Real** — Monitorización de CPU, RAM, disco y red vía WebSocket
-
-🎮 **Monitorización de GPU** — Utilización, memoria, temperatura y consumo de GPU NVIDIA, con uso por proceso y por contenedor
-
-📈 **Seguimiento de Disponibilidad** — Datos históricos de tiempo de actividad del servidor
-
-🔔 **Notificaciones** — Discord, Slack, Telegram y webhooks genéricos
-
-🖥️ **Multi-Servidor** — Monitorización y gestión remota de servidores basada en agentes
 
 ---
 
@@ -113,7 +45,19 @@ ni el coste de las plataformas gestionadas.
 curl -fsSL https://serverkit.ai/install.sh | bash
 ```
 
-> Funciona en Ubuntu 22.04+ y Debian 12+. Configura todo automáticamente.
+> Funciona en Ubuntu 22.04+, Debian 12+, Fedora y RHEL/Rocky/AlmaLinux 9+. Configura todo automáticamente.
+>
+> Opcional: `PANEL_DOMAIN=panel.example.com` establece el dominio e intenta obtener un certificado de Let's Encrypt; `SERVERKIT_OFFLINE_TARBALL=...` instala desde un tarball local.
+
+### Actualización
+
+```bash
+sudo serverkit update
+```
+
+Actualización atómica blue/green con comprobaciones previas, copia de seguridad de la
+base de datos, migración y rollback automático. Usa `--dry-run` para previsualizar,
+`--branch dev` para compilaciones de desarrollo o `--release [versión]` para tarballs de release.
 
 ### Opción 2: Docker
 
@@ -142,42 +86,146 @@ Consulta la [Guía de Instalación](INSTALLATION.md) para instrucciones paso a p
 
 ## 📸 Capturas de Pantalla
 
-<p align="center">
+> Capturadas desde una compilación de demostración con datos ficticios — todos los nombres de host, IP, dominios y métricas que se ven a continuación son inventados.
 
-![Workflow-Builder](https://github.com/user-attachments/assets/fc58beac-5e2c-487e-a37b-eaa6473eb325)
+|                            Panel Principal                             |                            Servicios                            |
+| :--------------------------------------------------------------: | :------------------------------------------------------------: |
+|      ![Panel Principal](screenshots/dashboard.png)       |      ![Servicios](screenshots/services.png)       |
+|   _Métricas del servidor en vivo, tarjetas KPI y actividad reciente_   |   _Aplicaciones estáticas, Node.js, Python, PHP y Docker_   |
 
-</p>
+|                             Docker                              |                           WordPress                            |
+| :-------------------------------------------------------------: | :------------------------------------------------------------: |
+|         ![Docker](screenshots/docker.png)         |      ![WordPress](screenshots/wordpress.png)     |
+| _Contenedores, imágenes, volúmenes y redes con CPU/RAM en vivo_ | _Estado por sitio, Acciones Rápidas y comprobaciones de salud en vivo_ |
+
+|                           Flota de Agentes                            |                           Marketplace                           |
+| :--------------------------------------------------------------: | :-------------------------------------------------------------: |
+|            ![Flota de Agentes](screenshots/fleet.png)            |      ![Marketplace](screenshots/marketplace.png)      |
+|      _Salud de la flota, despliegues de versiones y cola de comandos_      |     _Plantillas de aplicaciones en un clic y extensiones instalables_     |
+
+|                           Monitorización                            |                            Seguridad                             |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|      ![Monitorización](screenshots/monitoring.png)      |         ![Seguridad](screenshots/security.png)         |
+|   _Indicadores en vivo, reglas de alerta y canales de notificación_   | _Puntuación de postura, ClamAV, integridad de archivos, firewall, Fail2Ban_ |
 
 <details>
-<summary><strong>Ver Más Capturas</strong></summary>
+<summary><strong>Ver todas las capturas</strong></summary>
 
 <br>
 
-<p align="center">
-  <img alt="Docker" width="100%" src="https://github.com/user-attachments/assets/08fd47b9-778a-4170-8542-ed28579f8a12" />
-</p>
+|                          Asistente de IA                           |                          Detalle de Servicio                          |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|            ![Asistente de IA](screenshots/ai.png)             |   ![Detalle de Servicio](screenshots/service-detail.png)   |
+|     _Asistente impulsado por Prompture que ejecuta herramientas sobre tu infraestructura_     | _Despliegues, conexión con Git, uso en vivo, logs y ajustes_ |
 
-<p align="center">
-  <img width="100%" alt="Workflow Builder" src="https://github.com/user-attachments/assets/1271f01d-f666-4609-8bc0-22a22c81eaf3" />
-</p>
+|                            Bases de Datos                            |                           Consola SQL                            |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|        ![Bases de Datos](screenshots/databases.png)        |            ![Consola SQL](screenshots/sql.png)            |
+|   _Explorador de MySQL / PostgreSQL / SQLite con árbol de orígenes_   |     _Ejecuta SQL desde el navegador con una tabla de resultados tipada_     |
 
-<p align="center">
-  <img width="100%" alt="Templates" src="https://github.com/user-attachments/assets/337bcf4a-d5aa-4496-b74a-b66e859304ad" />
-</p>
+|                             Dominios                             |                            Zonas DNS                             |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|          ![Dominios](screenshots/domains.png)          |              ![Zonas DNS](screenshots/dns.png)              |
+|      _Estado SSL, seguimiento de caducidad y renovación automática_      | _Cloudflare, Route 53, DigitalOcean — edición completa de registros_ |
 
-<p align="center">
-  <img width="100%" alt="Applications" src="https://github.com/user-attachments/assets/b5bdf80c-4ce1-4de9-b8b9-ae069a17a2b3" />
-</p>
+|                             Copias de Seguridad                             |                               Correo                               |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------: |
+|          ![Copias de Seguridad](screenshots/backups.png)          |               ![Correo](screenshots/email.png)               |
+|     _Copias programadas con sincronización a S3/B2 y restauración en un clic_     |   _Postfix, Dovecot, OpenDKIM, SpamAssassin y Roundcube_   |
 
-<p align="center">
-  <img width="100%" alt="Applications Logs"  src="https://github.com/user-attachments/assets/3c397d1e-1452-4111-baae-452fb7bfbed7" />
-</p>
+|                            Tareas Programadas                            |                          Gestor de Archivos                           |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|            ![Tareas Programadas](screenshots/cron.png)            |           ![Gestor de Archivos](screenshots/files.png)           |
+|       _Editor visual de cron con horarios legibles por humanos_       |    _Navega, edita y sube archivos con uso de disco por punto de montaje_    |
+
+|                         Logs y Terminal                         |                             Servidores                             |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|         ![Logs y Terminal](screenshots/terminal.png)         |           ![Servidores](screenshots/servers.png)           |
+|      _Visor de logs, lista de procesos, journald y sesiones SSH_      |   _Todos los servidores en un panel con telemetría de CPU/RAM/disco en vivo_   |
+
+|                          Acceso Remoto                           |                             Ajustes                            |
+| :--------------------------------------------------------------: | :-------------------------------------------------------------: |
+|    ![Acceso Remoto](screenshots/remote-access.png)    |          ![Ajustes](screenshots/settings.png)          |
+| _Expón públicamente servicios tras NAT mediante agentes emparejados con WireGuard_ |  _Perfil, apariencia/marca, usuarios y conexiones_  |
+
+|                              Inicio de Sesión                              |                                                                 |
+| :-------------------------------------------------------------: | :-------------------------------------------------------------: |
+|              ![Inicio de Sesión](screenshots/login.png)              |                                                                 |
+|    _Acceso con email/contraseña, con soporte para SSO y 2FA_    |                                                                 |
 
 </details>
+
+## 🎯 Funcionalidades
+
+> **El núcleo está completo.** Las nuevas capacidades se distribuyen como **extensiones** instalables desde el Marketplace integrado — el núcleo se mantiene ligero y estable, y el trabajo en curso se centra en pulir la UI y corregir lo que reporta la comunidad.
+
+### 🚀 Aplicaciones y Despliegue
+
+| | |
+|---|---|
+| **WordPress en Un Clic**<br>Sitios PHP-FPM 8.x publicados en subdominios reales, con vistas previas mediante intercambio de URL, dominios personalizados y HTTPS comodín. | **Cualquier Stack**<br>Flask/Django sobre Gunicorn, Node.js sobre PM2, sitios estáticos — desde Git, Docker, una ruta manual o la subida de un zip. |
+| **Docker y Compose**<br>Detección de actualizaciones de imagen con aplicación en un clic, suspensión automática de contenedores inactivos, autoescalado según la CPU, logs en vivo y acceso a terminal. | **Marketplace**<br>Más de 100 plantillas de aplicaciones en un clic sobre un esquema declarativo con secretos, hosts y URLs resueltos automáticamente — nada codificado a mano. |
+| **Build Packs**<br>Despliegues sin Dockerfile: inspecciona un repositorio y genera un Dockerfile + compose a partir de un plan de compilación. | **Automatizaciones**<br>Automatización visual basada en nodos para tareas, despliegues y CI/CD — disparadores por cron, webhook y eventos, ejecutándose en un contenedor gestionado. Se distribuye como extensión. |
+| **Vistas Previas e Instantáneas**<br>Entornos de vista previa efímeros para PRs, además de instantáneas de configuración inmutables y con secretos enmascarados, con diff y restauración en un clic. | **Proyectos y Entornos**<br>Agrupación Espacio de trabajo → Proyecto → Entorno, y un flujo de WordPress prod/staging/dev con promoción de código y base de datos. |
+
+### 🏗️ Infraestructura
+
+| | |
+|---|---|
+| **Dominios y SSL**<br>Hosts virtuales Nginx, Let's Encrypt automático con renovación, TLS 1.2+/AEAD reforzado, configuraciones compatibles con Cloudflare y CAA automático. | **Zonas DNS**<br>Gestión completa de registros en Cloudflare, Route 53 y DigitalOcean — comprobaciones de propagación y DNS dinámico para IPs cambiantes. |
+| **Bases de Datos**<br>MySQL/MariaDB y PostgreSQL con gestión de usuarios, un árbol de orígenes en vivo y una consola SQL en el navegador. | **Aprovisionamiento en la Nube**<br>Levanta servidores en DigitalOcean, Hetzner, Vultr y Linode con seguimiento de costes. |
+| **Centro de Conexiones**<br>Proveedores Git, nubes, DNS, registradores, relés SMTP y almacenamiento S3/B2 — todas las cuentas externas en un solo lugar, cifradas en reposo. | **Copias de Seguridad**<br>Copias programadas de aplicaciones, bases de datos y archivos hacia S3, B2 o local, con políticas de retención, restauración en un clic y cifrado opcional en el cliente. |
+| **Archivos, FTP y Cron**<br>Gestor de archivos web con navegación de buckets S3/B2, gestión de usuarios de vsftpd y un editor visual de cron. | **Servidor de Correo**<br>Postfix + Dovecot con DKIM/SPF/DMARC, SpamAssassin, webmail Roundcube y reglas de reenvío. |
+
+### 🔒 Seguridad
+
+| | |
+|---|---|
+| **Firewall de Aplicaciones Web**<br>ModSecurity v3 + OWASP Core Rule Set por aplicación, con modos de detección/bloqueo y paranoia ajustable. | **Passkeys y 2FA**<br>Inicio de sesión sin contraseña con WebAuthn (llaves de hardware, Touch ID, Windows Hello) más TOTP con códigos de respaldo. |
+| **Malware e Integridad**<br>Análisis con ClamAV y cuarentena, monitorización de integridad de archivos y auditorías de vulnerabilidades con Lynis. | **SSH y Refuerzo**<br>Fail2ban, gestión de claves SSH, listas de IPs permitidas/bloqueadas y actualizaciones de seguridad automáticas del sistema. |
+| **Análisis de Contenedores**<br>Análisis de CVE por imagen con grype y generación de SBOM con syft. | **Secretos Cifrados**<br>Credenciales de proveedores y secretos sellados con Fernet, además de una pasarela de webhooks entrantes para automatización externa. |
+
+### 🖥️ Multi-Servidor
+
+| | |
+|---|---|
+| **Agente Multiplataforma**<br>Agente en Go para Linux, Windows y macOS — autenticación HMAC-SHA256 sobre una pasarela WebSocket en tiempo real. Servicio nativo de Windows + MSI, `.deb`/`.rpm`, ARM64. [Más →](https://github.com/jhd3197/serverkit-agent) | **Gestión de Flota**<br>Inventario, cola de aprobación, despliegues escalonados de versiones, descubrimiento automático en LAN y una cola de comandos sin conexión. |
+| **Enrolamiento Sencillo**<br>Emparejamiento con código corto y verificación de huella o tokens precompartidos; las credenciales del host se almacenan cifradas con AES-GCM. [Más →](pairing.md) | **Monitor de Flota**<br>Mapas de calor entre servidores, comparación de métricas, umbrales de alerta, detección de anomalías y previsión de capacidad. |
+| **Plantillas de Servidor**<br>Plantillas de estado esperado con detección de desviaciones, paneles de cumplimiento y auto-remediación. | **Túneles de Acceso Remoto**<br>Expón un servicio privado o tras NAT a través de un servidor de borde mediante WireGuard gestionado por el agente — sin redirección de puertos. |
+| **Onboarding Guiado**<br>Validar → prerrequisitos → Docker → emparejar agente, con un registro de progreso en vivo. | **Proxy por Servidor**<br>Traefik o Caddy dockerizados y opcionales por servidor, con vista previa del compose; el nginx del host sigue siendo el predeterminado. |
+
+### 📊 Monitorización y Alertas
+
+| | |
+|---|---|
+| **Métricas en Tiempo Real**<br>CPU, RAM, disco y red vía WebSocket, con retención histórica y seguimiento de disponibilidad. | **Monitorización de GPU**<br>Utilización, memoria y temperatura de NVIDIA, con uso por proceso y por contenedor. |
+| **Páginas de Estado**<br>Páginas públicas con comprobaciones HTTP/TCP/DNS/Ping, monitorización de componentes y gestión de incidentes. | **Notificaciones**<br>Discord, Slack, Telegram, email HTML y webhooks — canales por usuario, filtros de severidad y horas de silencio. |
+
+### 👥 Equipo y Acceso
+
+| | |
+|---|---|
+| **Espacios de Trabajo**<br>Aislamiento multi-inquilino con cuotas y gestión de miembros. | **RBAC**<br>Roles de administrador/desarrollador/observador con permisos granulares de lectura/escritura por funcionalidad. |
+| **SSO y OAuth**<br>Google, GitHub, OpenID Connect y SAML 2.0 con vinculación de cuentas. | **Claves de API**<br>Claves por niveles con limitación de tasa, ámbitos detallados, analíticas de uso y documentación OpenAPI. |
+| **Registro de Auditoría**<br>Cada acción de usuario queda registrada, con un panel de actividad detallado. | **Webhooks y Configuración Compartida**<br>Suscripciones salientes con firmas HMAC y reintentos, además de etiquetas y grupos de variables compartidos. |
+
+### 🎨 Personalización
+
+| | |
+|---|---|
+| **Ligero por Defecto**<br>El asistente de configuración instala solo las extensiones que encajan con tus casos de uso — añade más cuando quieras desde el Marketplace. | **Presets de Barra Lateral**<br>Vistas Completa, Hosting Web, Administración de Correo, DevOps o Mínima, con grupos plegables y diseños por usuario. |
+| **Tu Marca**<br>8 colores de acento predefinidos más un selector hexadecimal personalizado, y logotipo, nombre o banner de marca blanca. | **Widgets del Panel**<br>Activa y reordena widgets para adaptarlos a tu flujo de trabajo. |
 
 ---
 
 ## 🏗️ Arquitectura
+
+<img width="100%" alt="Arquitectura de ServerKit: los clientes y visitantes públicos llegan a una capa de borde nginx que dirige el tráfico del panel a la API de Flask y el tráfico público a los contenedores de aplicaciones; el panel de ServerKit contiene la SPA de React, la API REST, la pasarela de agentes Socket.IO, los servicios, modelos, trabajos, notificaciones y el runtime de extensiones; una capa de runtime en el mismo servidor alberga los contenedores Docker de aplicaciones, las bases de datos y el estado del panel; una flota remota de agentes en Go se conecta de vuelta a través del namespace /agent." src="images/architecture/system-overview.png" />
+
+**Nginx** termina TLS y divide el tráfico en dos: las peticiones del panel van a la **API de Flask** y todo lo demás se redirige al **contenedor Docker** que sirve ese dominio. El panel mantiene su propio estado en SQLite o PostgreSQL, ejecuta trabajo en segundo plano mediante un planificador de tareas y un bus de notificaciones, y carga funcionalidad opcional desde el **runtime de extensiones**. Los servidores remotos se gestionan con un **agente en Go** que se conecta de vuelta a través de un namespace de Socket.IO.
+
+<details>
+<summary><strong>Ver como diagrama ASCII</strong></summary>
 
 ```
                           ┌──────────────────┐
@@ -192,61 +240,58 @@ Consulta la [Guía de Instalación](INSTALLATION.md) para instrucciones paso a p
 │  │                      NGINX (Reverse Proxy)                          │ │
 │  │                         :80 / :443                                  │ │
 │  │                                                                     │ │
-│  │    app1.com ──┐      app2.com ──┐      api.app3.com ──┐            │ │
-│  └───────────────┼─────────────────┼─────────────────────┼─────────────┘ │
-│                  │ proxy_pass      │ proxy_pass          │ proxy_pass    │
-│                  ▼                 ▼                     ▼               │
-│  ┌─────────────────────────────────────────────────────────────────────┐ │
-│  │                      DOCKER CONTAINERS                              │ │
-│  │                                                                     │ │
-│  │    ┌───────────┐    ┌───────────┐    ┌───────────┐                 │ │
-│  │    │ WordPress │    │   Flask   │    │  Node.js  │    ...          │ │
-│  │    │   :8001   │    │   :8002   │    │   :8003   │                 │ │
-│  │    └─────┬─────┘    └───────────┘    └───────────┘                 │ │
-│  └──────────┼──────────────────────────────────────────────────────────┘ │
-│             │                                                            │
-│             ▼                                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐ │
-│  │                        DATABASES                                    │ │
-│  │    MySQL :3306    PostgreSQL :5432    Redis :6379                  │ │
-│  └─────────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────┘
+│  │    app1.com ──┐   app2.com ──┐   api.app3.com ──┐   /api/v1/ ──┐   │ │
+│  └───────────────┼──────────────┼──────────────────┼──────────────┼────┘ │
+│                  │ proxy_pass   │ proxy_pass       │ proxy_pass   │      │
+│                  ▼              ▼                  ▼              │      │
+│  ┌────────────────────────────────────────────────────────────┐  │      │
+│  │                    DOCKER CONTAINERS                       │  │      │
+│  │                                                            │  │      │
+│  │    ┌───────────┐    ┌───────────┐    ┌───────────┐        │  │      │
+│  │    │ WordPress │    │   Flask   │    │  Node.js  │  ...   │  │      │
+│  │    │   :8001   │    │   :8002   │    │   :8003   │        │  │      │
+│  │    └─────┬─────┘    └───────────┘    └───────────┘        │  │      │
+│  └──────────┼─────────────────────────────────────────────────┘  │      │
+│             │                                                     ▼      │
+│             │                        ┌─────────────────────────────────┐ │
+│             │                        │       SERVERKIT PANEL           │ │
+│             │                        │   React SPA · Flask REST API    │ │
+│             │                        │   Socket.IO · Jobs · Notify     │ │
+│             │                        │   Extension runtime             │ │
+│             │                        │   Gunicorn -w 1 (threaded)      │ │
+│             │                        └────────────────┬────────────────┘ │
+│             ▼                                         │                  │
+│  ┌──────────────────────────────────┐   ┌─────────────▼────────────────┐ │
+│  │            DATABASES             │   │        PANEL STATE           │ │
+│  │  MySQL :3306   PostgreSQL :5432  │   │  SQLite (default) or         │ │
+│  │  Redis :6379   MongoDB :27017    │   │  PostgreSQL · Alembic        │ │
+│  └──────────────────────────────────┘   └──────────────────────────────┘ │
+└───────────────────────────────────────────────────────┼──────────────────┘
+                                                        │
+                          Socket.IO /agent (HMAC)       │
+                          + HTTP long-poll fallback     ▼
+                       ┌──────────────────────────────────────┐
+                       │   REMOTE SERVERS — Go agent fleet    │
+                       │   server A  ·  server B  ·  server C │
+                       └──────────────────────────────────────┘
 ```
 
-**[Ver Documentación Completa de Arquitectura →](ARCHITECTURE.md)** — Flujo de peticiones, sistema de plantillas, asignación de puertos, vinculación de bases de datos y resolución de problemas.
+</details>
+
+**[Ver Documentación Completa de Arquitectura →](ARCHITECTURE.md)** — Flujo de peticiones, plataforma de extensiones, sistema de plantillas, asignación de puertos, trabajos, notificaciones y la flota de agentes.
 
 ---
 
 ## 🗺️ Hoja de Ruta
 
-- [x] Infraestructura base — Flask + React + JWT + WebSocket
-- [x] Gestión de aplicaciones — PHP, Python, Node.js, Docker
-- [x] Dominios y SSL — Hosts virtuales Nginx, Let's Encrypt
-- [x] Bases de datos — MySQL, PostgreSQL
-- [x] Gestión de archivos y FTP
-- [x] Monitorización y alertas — Métricas, webhooks, seguimiento de disponibilidad
-- [x] Seguridad — 2FA, ClamAV, integridad de archivos, Fail2ban
-- [x] Firewall — Integración con UFW
-- [x] Gestión multi-servidor — Agente en Go, panel centralizado
-- [x] Despliegue con Git — Webhooks, despliegue automático, rollback, sin tiempo de inactividad
-- [ ] Copias de seguridad y restauración — S3, Backblaze B2, copias programadas
-- [ ] Servidor de correo — Postfix, Dovecot, DKIM/SPF/DMARC
-- [ ] Equipos y permisos — RBAC, registro de auditoría
-- [ ] Aplicación móvil — React Native con notificaciones push
-- [ ] Marketplace de plugins — Extensiones, widgets personalizados, temas
-- [x] Firewall de Aplicaciones Web — ModSecurity v3 + OWASP CRS por aplicación
-- [x] Seguridad de contenedores — Análisis de CVE de imágenes (grype) + SBOM (syft)
-- [x] Autenticación sin contraseña — WebAuthn / passkeys
-- [x] DNS dinámico — Actualizaciones A/AAAA autenticadas por token
-- [x] Monitorización de GPU — Utilización, memoria y procesos de NVIDIA
-- [x] Ciclo de vida de contenedores — Aplicación de actualizaciones de imagen, suspensión automática, escalado horizontal automático
-- [x] Refuerzo de TLS — HTTPS opcional, configuraciones compatibles con Cloudflare, CAA automático
-- [x] Gestor de secretos y pasarela de webhooks entrantes
-- [x] Acceso remoto — Expón servicios privados/tras NAT mediante túneles WireGuard gestionados por el agente
-- [x] Centro de conexiones — Cuentas externas unificadas (origen, nube, DNS, registradores, SMTP, almacenamiento)
-- [x] Publicación de WordPress — Subdominios reales, intercambio de URL, dominios personalizados, HTTPS comodín
+**El núcleo de ServerKit está completo** — todas las fases previstas del núcleo se han entregado, desde la primera infraestructura Flask + React hasta las flotas multi-servidor, SSO, el motor de automatización y el marketplace de extensiones.
 
-Detalles completos: [ROADMAP.md](../ROADMAP.md)
+El desarrollo ocurre ahora en dos frentes:
+
+- **🧩 Extensiones** — la nueva funcionalidad se distribuye como extensiones instalables desde el Marketplace (más de 100 plantillas en un clic y creciendo). El núcleo se mantiene ligero; instalas solo lo que necesitas.
+- **✨ Pulido del núcleo** — refinamientos continuos de UI/UX y correcciones de problemas reportados por la comunidad. No hay nuevas funcionalidades de núcleo planificadas.
+
+Historial completo: [ROADMAP.md](../ROADMAP.md)
 
 ---
 
@@ -257,8 +302,12 @@ Detalles completos: [ROADMAP.md](../ROADMAP.md)
 | [Arquitectura](ARCHITECTURE.md) | Diseño del sistema, flujo de peticiones, diagramas |
 | [Guía de Instalación](INSTALLATION.md) | Instrucciones completas de configuración |
 | [Guía de Despliegue](DEPLOYMENT.md) | Comandos CLI y despliegue en producción |
+| [Agente](https://github.com/jhd3197/serverkit-agent) | Instala y ejecuta el agente multi-servidor (Linux/Windows/macOS) — repositorio aparte |
+| [Emparejamiento del Agente](pairing.md) | Enrolamiento seguro del agente con código corto |
 | [Referencia de la API](API.md) | Endpoints de la API REST |
 | [Nuevas Funcionalidades](NEW_FEATURES.md) | Referencia de endpoints y páginas de las últimas funcionalidades de `dev` |
+| [Mejoras](ENHANCEMENTS.md) | Guía de las diez capacidades de experiencia de desarrollo, equipo/escala, flota y seguridad |
+| [Registro de Cambios](../CHANGELOG.md) | Historial de versiones y cambios destacados |
 | [Hoja de Ruta](../ROADMAP.md) | Hoja de ruta de desarrollo y funcionalidades planificadas |
 | [Contribuir](../CONTRIBUTING.md) | Cómo contribuir |
 
@@ -268,12 +317,15 @@ Detalles completos: [ROADMAP.md](../ROADMAP.md)
 
 | Capa | Tecnología |
 |-------|------------|
-| Backend | Python 3.11, Flask, SQLAlchemy, Flask-SocketIO |
-| Frontend | React 18, Vite, SCSS |
+| Backend | Python 3.11, Flask, SQLAlchemy, Flask-SocketIO, Flask-Migrate |
+| Frontend | React 18, Vite, SCSS, Recharts |
 | Base de Datos | SQLite / PostgreSQL |
-| Servidor Web | Nginx, Gunicorn |
+| Servidor Web | Nginx, Gunicorn (worker único con hilos — `-w 1 --threads N`) |
 | Contenedores | Docker, Docker Compose |
-| Seguridad | ClamAV, ModSecurity v3 + OWASP CRS, grype, syft, TOTP (pyotp), Cryptography |
+| Seguridad | ClamAV, Lynis, Fail2ban, ModSecurity v3 + OWASP CRS, grype, syft, TOTP (pyotp), cifrado Fernet |
+| Autenticación | JWT, OAuth 2.0, OIDC, SAML 2.0, WebAuthn / passkeys |
+| Correo | Postfix, Dovecot, SpamAssassin, Roundcube |
+| Agente | Go (multi-servidor), HMAC-SHA256, WebSocket |
 
 ---
 
@@ -282,10 +334,20 @@ Detalles completos: [ROADMAP.md](../ROADMAP.md)
 ¡Las contribuciones son bienvenidas! Por favor, lee primero [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ```
-fork → rama de funcionalidad → commit → push → pull request
+fork → feature branch → commit → push → pull request
 ```
 
-**Áreas prioritarias:** Implementación de copias de seguridad, canales de notificación adicionales, mejoras de UI/UX, documentación.
+**Áreas prioritarias:** Extensiones para el Marketplace, mejoras de UI/UX, documentación, cobertura de tests.
+
+---
+
+## 💛 Apoya a ServerKit
+
+ServerKit es libre y de código abierto. Si te ahorra tiempo, puedes ayudar a mantenerlo en marcha:
+
+- ⭐ [Dale una estrella al repositorio](https://github.com/jhd3197/ServerKit) — no cuesta nada y ayuda mucho
+- 💖 [GitHub Sponsors](https://github.com/sponsors/jhd3197)
+- ☕ [Buy Me a Coffee](https://buymeacoffee.com/jhd3197)
 
 ---
 
@@ -294,6 +356,10 @@ fork → rama de funcionalidad → commit → push → pull request
 **[Faro](https://github.com/jhd3197/faro)** — Un cliente de escritorio moderno para SFTP, FTP, SSH y almacenamiento compatible con S3, del mismo autor. Guarda un servidor una vez y luego explora sus archivos en una vista de doble panel y abre una terminal sobre la misma sesión SSH — además de transferencias con arrastrar y soltar, sincronización de directorios en un sentido y edición in situ. Incluso tiene un **Agent Bridge** que permite a Claude Code (o cualquier agente MCP) ejecutar comandos en un servidor a través de tu sesión autenticada, con aprobación por comando y sin compartir credenciales.
 
 > ServerKit gestiona tus servidores desde el navegador; Faro es el compañero de escritorio para transferencias de archivos, shells y trabajo puntual en todos tus servidores. [Descarga una versión →](https://github.com/jhd3197/faro/releases/latest)
+
+**[LocalKit](https://github.com/jhd3197/LocalKit)** — Levanta sitios WordPress locales en un clic. Cada sitio se ejecuta como su propio proyecto aislado de Docker Compose, y puedes enviar código o enviar/traer bases de datos directamente a tu servidor ServerKit mediante la extensión `serverkit-localkit`.
+
+**[DeviceKit](https://github.com/jhd3197/DeviceKit)** — Una plataforma unificada de flota de dispositivos Android y automatización de pruebas. Controla una flota de dispositivos desde un solo panel — ejecuta automatizaciones, transmite pantallas en tiempo real, detecta regresiones visuales y depura fallos con análisis asistido por IA.
 
 ---
 
