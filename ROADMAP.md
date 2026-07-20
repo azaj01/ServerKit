@@ -1,5 +1,7 @@
 # ServerKit Roadmap
 
+> **Status: core feature-complete.** All planned core phases below have shipped. ServerKit no longer adds new features to the core — new functionality is developed as installable **extensions** distributed through the built-in Marketplace, and core development is limited to stability fixes and UI/UX polish (including issues reported by the community). This document is kept as the historical record of how the core was built out.
+
 This document outlines the development roadmap for ServerKit. Features are organized by phases and priority.
 
 ---
@@ -600,18 +602,17 @@ Spin up and manage cloud servers directly from the panel.
 Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 **Priority areas for contributions:**
-- Agent plugin SDK and example plugins
-- Fleet management and monitoring dashboard
-- DNS provider integrations (Cloudflare, Route53)
-- Status page and health check system
-- UI/UX improvements
+- New extensions and Marketplace templates
+- Extension SDK improvements and example plugins
+- UI/UX polish and fixes for reported issues
 - Documentation
+- Test coverage
 
 ---
 
 ## Feature Requests
 
-Have a feature idea? Open an issue on GitHub with the `enhancement` label.
+The core is no longer taking on new features. The best way to propose new functionality is as an **extension** — open an issue on GitHub with the `extension-idea` label, or build it yourself with the extension SDK. Core issues (bugs, UI polish) are always welcome with the `bug` label.
 
 ---
 
