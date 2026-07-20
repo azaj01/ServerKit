@@ -422,10 +422,9 @@ def create_app(config_name=None):
     from app.api.waf import waf_bp
     app.register_blueprint(waf_bp, url_prefix='/api/v1/waf')
 
-    # GPU monitoring moved to the serverkit-gpu builtin extension (plan 32 #7,
-    # first CORE_SLIM slice). Its blueprint now mounts at /api/v1/gpu via the
-    # builtin-extensions loader; the core app.api.gpu / app.services.gpu_service
-    # modules were removed.
+    # GPU monitoring lives in the standalone serverkit-gpu extension (own repo,
+    # installed from the registry). Its blueprint mounts at /api/v1/gpu when
+    # installed; the core app.api.gpu / app.services.gpu_service modules are gone.
 
     # Register blueprints - Nginx Advanced
     from app.api.nginx_advanced import nginx_advanced_bp

@@ -69,11 +69,11 @@ const AnalyticsTab = ({ siteId }) => {
                     <div className="wp-analytics-banner">
                         <LineChart size={16} />
                         <div className="wp-analytics-banner__text">
-                            <strong>Web Analytics is installed.</strong>
+                            <strong>Analytics is installed.</strong>
                             <span> Add this site there for persistent, cookieless visitor tracking with a full dashboard. The view below is parsed on demand from access logs.</span>
                         </div>
                         <Link to="/analytics/sites" className="wp-analytics-banner__link">
-                            Open Web Analytics <ExternalLink size={13} />
+                            Open Analytics <ExternalLink size={13} />
                         </Link>
                     </div>
                 )}

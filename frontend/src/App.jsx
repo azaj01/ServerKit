@@ -423,7 +423,7 @@ function AppRoutes() {
                     {groupRoutes.monitoring}
                 </Route>
                 <Route path="observability" element={<Navigate to="/monitoring" replace />} />
-                {/* /gpu is now the serverkit-gpu builtin extension. */}
+                {/* /gpu is contributed by the standalone serverkit-gpu extension. */}
                 <Route element={<TabGroupLayout tabs={BACKUP_TABS} />}>
                     <Route path="backups" element={<Backups />} />
                     <Route path="backups/:tab" element={<Backups />} />

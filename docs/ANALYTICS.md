@@ -1,12 +1,12 @@
-# Web Analytics (`serverkit-analytics`)
+# Analytics (`serverkit-analytics`)
 
 Native, privacy-first web analytics for the sites this panel manages. It is a
 built-in **extension** (opt-in) — install it from **Marketplace → Built-in →
-Web Analytics**, or `POST /api/v1/plugins/builtin/serverkit-analytics/install`.
+Analytics**, or `POST /api/v1/plugins/builtin/serverkit-analytics/install`.
 
 > **Two things share the name `serverkit-analytics`.** This document is about the
 > **panel extension** (the dashboard + collector). A separate **WordPress
-> companion plugin** of the same name (plan 50) auto-injects this extension's
+> companion plugin** of the same name (plan 51) auto-injects this extension's
 > tracker into WordPress sites. Until that ships, the panel injects a small
 > mu-plugin itself (see [WordPress](#wordpress)).
 
@@ -113,7 +113,7 @@ and UA churn make visitor counts close **approximations**, not exact identities.
 
 ## Configuration
 
-Marketplace → Installed → Web Analytics → **Configure**:
+Marketplace → Installed → Analytics → **Configure**:
 
 | Setting | Default | Purpose |
 |---|---|---|

@@ -460,4 +460,4 @@ class TestBackupScheduleHandler:
 # TestWorkflowEventDispatch removed in plan 45 Phase 4: the React-Flow Workflow
 # Builder engine (WorkflowEngine / WorkflowEventBus) was retired. Its four event
 # emitters were ported to EventService (health.check_failed, git.push,
-# monitor.high_cpu/high_memory); those are covered in test_tramo_extension.py.
+# monitor.high_cpu/high_memory); those are covered in test_tramo_panel_core.py.

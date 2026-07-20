@@ -165,3 +165,23 @@ docs/SERVICES_ROADMAP.md
 # Vite dependency pre-bundle cache (regenerated on every dev run; never commit)
 .vite/
 **/.vite/
+
+# Install artifacts of extensions that now live in their own repos.
+# The panel writes these when the extension is installed from the registry
+# (see PluginService._install_from_buffer). They must never be committed back
+# here — the source of truth is the extension's own repo, and vendoring a copy
+# guarantees the two drift apart.
+backend/app/plugins/serverkit-analytics/
+backend/app/plugins/serverkit-crowdsec/
+backend/app/plugins/serverkit-dns-server/
+backend/app/plugins/serverkit-gpu/
+backend/app/plugins/serverkit-k8s/
+backend/app/plugins/serverkit-mail/
+backend/app/plugins/serverkit-tramo/
+frontend/src/plugins/serverkit-analytics/
+frontend/src/plugins/serverkit-crowdsec/
+frontend/src/plugins/serverkit-dns-server/
+frontend/src/plugins/serverkit-gpu/
+frontend/src/plugins/serverkit-k8s/
+frontend/src/plugins/serverkit-mail/
+frontend/src/plugins/serverkit-tramo/

@@ -89,22 +89,11 @@ def _email_was_configured():
         return False
 
 
-def _gpu_present():
-    """True if this host has an NVIDIA GPU toolchain (nvidia-smi on PATH). Used to
-    gate serverkit-gpu auto-install so only panels on GPU hosts get it back
-    automatically; everyone else uses the Marketplace."""
-    try:
-        return shutil.which('nvidia-smi') is not None
-    except Exception:
-        return False
-
-
 # Builtins auto-installed on upgrade ONLY when a usage predicate says the panel
 # actually used the feature (D3/#34). Fresh installs and panels that never used
 # the feature just see it in the Marketplace.
 GATED_BUILTIN_SLUGS = {
     'serverkit-email': _email_was_configured,
-    'serverkit-gpu': _gpu_present,
 }
 
 _MARKER_KEY = 'extensions.auto_installed_slugs'

@@ -89,8 +89,9 @@ export const SIDEBAR_ITEMS = [
     // WordPress is now the serverkit-wordpress builtin extension (Phase 5 #38);
     // its sidebar item is contributed by the extension manifest (nav), so it
     // disappears cleanly when the extension is uninstalled.
-    // Automations (tramo) is a builtin extension (serverkit-tramo) that replaced
-    // the old Workflow Builder; its sidebar item comes from the extension manifest.
+    // Automations (tramo) is the standalone serverkit-tramo extension (own repo,
+    // registry-installed) that replaced the old Workflow Builder; its sidebar
+    // item comes from the extension manifest.
     {
         id: 'databases',
         label: 'Databases',
@@ -178,9 +179,9 @@ export const SIDEBAR_ITEMS = [
         category: 'system',
         icon: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>'
     },
-    // GPU Monitor is now the serverkit-gpu builtin extension; its sidebar item
-    // (still gated on gpuAvailable via requiresCondition) is contributed by the
-    // extension manifest.
+    // GPU Monitor lives in the standalone serverkit-gpu extension (own repo,
+    // registry-installed); its sidebar item (still gated on gpuAvailable via
+    // requiresCondition) is contributed by the extension manifest.
     {
         // Inbound webhook console. Secret storage ("Vaults") that used to share
         // this page now lives under the Organization tab group (/vaults); only
