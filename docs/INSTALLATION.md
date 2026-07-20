@@ -311,8 +311,8 @@ WorkingDirectory=/opt/ServerKit/backend
 Environment="PATH=/opt/ServerKit/venv/bin"
 Environment="FLASK_ENV=production"
 ExecStart=/opt/ServerKit/venv/bin/gunicorn \
-    --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
     --workers 1 \
+    --threads 100 \
     --bind 127.0.0.1:5000 \
     --timeout 120 \
     --access-logfile /var/log/serverkit/access.log \
@@ -324,6 +324,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 ```
+
+> **Keep `--workers 1` and do not set `--worker-class`.** The agent gateway holds
+> all connected-agent state in memory in one process, so extra workers silently
+> misroute agent commands. The app runs `async_mode='threading'`, where WebSocket
+> is served by `simple-websocket`; adding the gevent-websocket worker class makes
+> it double-answer the upgrade handshake, which browsers report as
+> "Invalid frame header." Scale with `--threads`, not `--workers`.
 
 Enable and start the service:
 
